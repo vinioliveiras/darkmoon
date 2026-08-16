@@ -166,6 +166,14 @@ class _EditorScreenState extends State<EditorScreen> {
   final Map<String, Uint8List> _neutralPreviews = {};
   bool _beforeAfterMode = false;
 
+  /// Opt-in full-native-resolution decode, computed lazily per photo —
+  /// pixel math over a full sensor's worth of megapixels instead of the
+  /// ~1.7M-pixel editing preview is a real cost, so this only happens when
+  /// the user explicitly asks for it. Dragging a slider still uses the
+  /// small "live" resolution regardless, for responsiveness.
+  final Map<String, EditSource> _fullQualitySources = {};
+  bool _fullQualityMode = false;
+
   final TransformationController _viewController = TransformationController();
   final GlobalKey _viewportKey = GlobalKey();
   double _zoomScale = 1.0;
@@ -346,6 +354,8 @@ class _EditorScreenState extends State<EditorScreen> {
       _histograms.clear();
       _neutralPreviews.clear();
       _beforeAfterMode = false;
+      _fullQualitySources.clear();
+      _fullQualityMode = false;
     });
     final files = await listRawFiles(folder);
     if (!mounted || generation != _folderGeneration) {
@@ -410,6 +420,9 @@ class _EditorScreenState extends State<EditorScreen> {
     if (_beforeAfterMode && !_neutralPreviews.containsKey(path)) {
       unawaited(_loadNeutralPreview(path));
     }
+    if (_fullQualityMode) {
+      unawaited(_loadFullQualityAndRender(path, _folderGeneration));
+    }
   }
 
   /// Decodes the full editable RAW buffer for [path] (unless already
@@ -436,7 +449,8 @@ class _EditorScreenState extends State<EditorScreen> {
   /// Renders [path]'s cached edit source with the current slider values and
   /// caches the resulting JPEG + histogram + filmstrip thumbnail. Uses the
   /// smaller "live" resolution while [live] is true (a slider is actively
-  /// being dragged) for speed.
+  /// being dragged) for speed — even in full-quality mode, since dragging
+  /// needs to stay responsive regardless.
   Future<void> _renderPreview(String path, {bool live = false}) async {
     final sources = _editSources[path];
     if (sources == null) {
@@ -455,8 +469,9 @@ class _EditorScreenState extends State<EditorScreen> {
         setState(() => _isRenderingSlow = true);
       }
     });
+    final fullQualitySource = _fullQualityMode ? _fullQualitySources[path] : null;
     final job = RenderJob(
-      source: live ? sources.live : sources.preview,
+      source: live ? sources.live : (fullQualitySource ?? sources.preview),
       params: RenderParams.fromValues(_paramValues),
     );
     final result = await compute(renderJobToJpeg, job);
@@ -498,6 +513,42 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _beforeAfterMode = !_beforeAfterMode);
     if (_beforeAfterMode && selected != null && !_neutralPreviews.containsKey(selected.path)) {
       unawaited(_loadNeutralPreview(selected.path));
+    }
+  }
+
+  /// Decodes [path] at full native resolution (unless already cached) and
+  /// re-renders once it's ready, replacing the downscaled preview. Guarded
+  /// by [generation] the same way as _loadEditSourceAndRender.
+  Future<void> _loadFullQualityAndRender(String path, int generation) async {
+    if (!_fullQualitySources.containsKey(path)) {
+      setState(() => _isDecodingPhoto = true);
+      final source = await compute(decodeFullQualitySource, path);
+      if (!mounted || generation != _folderGeneration) {
+        return;
+      }
+      setState(() => _isDecodingPhoto = false);
+      if (source == null) {
+        return;
+      }
+      setState(() => _fullQualitySources[path] = source);
+    }
+    if (_fullQualityMode) {
+      await _renderPreview(path);
+    }
+  }
+
+  void _toggleFullQuality() {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    setState(() => _fullQualityMode = !_fullQualityMode);
+    if (selected == null) {
+      return;
+    }
+    if (_fullQualityMode) {
+      unawaited(_loadFullQualityAndRender(selected.path, _folderGeneration));
+    } else {
+      // Switching back to the (already-decoded, so this is fast) downscaled
+      // preview.
+      unawaited(_renderPreview(selected.path));
     }
   }
 
@@ -676,6 +727,8 @@ class _EditorScreenState extends State<EditorScreen> {
                               onZoomOut: _zoomOut,
                               onZoomFit: _resetZoom,
                               onToggleBeforeAfter: selected == null ? null : _toggleBeforeAfter,
+                              fullQualityMode: _fullQualityMode,
+                              onToggleFullQuality: selected == null ? null : _toggleFullQuality,
                               onPointerSignal: _handlePointerSignal,
                             ),
                           ),
@@ -787,6 +840,8 @@ class _ImageArea extends StatelessWidget {
     required this.onZoomOut,
     required this.onZoomFit,
     required this.onToggleBeforeAfter,
+    required this.fullQualityMode,
+    required this.onToggleFullQuality,
     required this.onPointerSignal,
   });
 
@@ -802,6 +857,8 @@ class _ImageArea extends StatelessWidget {
   final VoidCallback onZoomOut;
   final VoidCallback onZoomFit;
   final VoidCallback? onToggleBeforeAfter;
+  final bool fullQualityMode;
+  final VoidCallback? onToggleFullQuality;
   final void Function(PointerSignalEvent) onPointerSignal;
 
   @override
@@ -818,14 +875,15 @@ class _ImageArea extends StatelessWidget {
           ),
         ),
         _ViewerToolbar(
-          zoomLabel: beforeAfterMode || zoomScale == 1.0 ? l10n.zoomFit : '${(zoomScale * 100).round()}%',
-          zoomEnabled: !beforeAfterMode,
+          zoomLabel: zoomScale == 1.0 ? l10n.zoomFit : '${(zoomScale * 100).round()}%',
           beforeAfterMode: beforeAfterMode,
           beforeAfterEnabled: onToggleBeforeAfter != null,
           onZoomIn: onZoomIn,
           onZoomOut: onZoomOut,
           onZoomFit: onZoomFit,
           onToggleBeforeAfter: onToggleBeforeAfter,
+          fullQualityMode: fullQualityMode,
+          onToggleFullQuality: onToggleFullQuality,
         ),
       ],
     );
@@ -850,16 +908,23 @@ class _ImageArea extends StatelessWidget {
       );
     }
     if (beforeAfterMode) {
+      // Both sides share the same viewController, so Ctrl+scroll/pan stays
+      // in sync between them instead of only working in the single-image
+      // view.
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Falls back to the edited image until the neutral render finishes.
-          Expanded(child: _labeledImage(l10n.beforeLabel, neutralPreview ?? bytes)),
+          Expanded(child: _zoomableLabeledImage(l10n.beforeLabel, neutralPreview ?? bytes)),
           Container(width: 1, color: DarkmoonColors.divider),
-          Expanded(child: _labeledImage(l10n.afterLabel, bytes)),
+          Expanded(child: _zoomableLabeledImage(l10n.afterLabel, bytes)),
         ],
       );
     }
+    return _zoomableImage(bytes);
+  }
+
+  Widget _zoomableImage(Uint8List bytes) {
     return Listener(
       onPointerSignal: onPointerSignal,
       child: InteractiveViewer(
@@ -871,21 +936,23 @@ class _ImageArea extends StatelessWidget {
     );
   }
 
-  Widget _labeledImage(String label, Uint8List bytes) {
+  Widget _zoomableLabeledImage(String label, Uint8List bytes) {
     return Stack(
       fit: StackFit.expand,
       children: [
-        _fittedImage(bytes),
+        _zoomableImage(bytes),
         Positioned(
           left: 8,
           top: 8,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(4),
+          child: IgnorePointer(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11)),
             ),
-            child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11)),
           ),
         ),
       ],
@@ -941,26 +1008,28 @@ class _LoadingOverlay extends StatelessWidget {
 class _ViewerToolbar extends StatelessWidget {
   const _ViewerToolbar({
     required this.zoomLabel,
-    required this.zoomEnabled,
     required this.beforeAfterMode,
     required this.beforeAfterEnabled,
     required this.onZoomIn,
     required this.onZoomOut,
     required this.onZoomFit,
     required this.onToggleBeforeAfter,
+    required this.fullQualityMode,
+    required this.onToggleFullQuality,
   });
 
   final String zoomLabel;
-  final bool zoomEnabled;
   final bool beforeAfterMode;
   final bool beforeAfterEnabled;
   final VoidCallback onZoomIn;
   final VoidCallback onZoomOut;
   final VoidCallback onZoomFit;
   final VoidCallback? onToggleBeforeAfter;
+  final bool fullQualityMode;
+  final VoidCallback? onToggleFullQuality;
 
   static final _compactButtonStyle = ElevatedButton.styleFrom(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
     textStyle: const TextStyle(fontSize: 12),
     minimumSize: Size.zero,
   );
@@ -976,17 +1045,17 @@ class _ViewerToolbar extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return Container(
       height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 6),
       color: DarkmoonColors.background,
       child: Row(
         children: [
           IconButton(
-            onPressed: zoomEnabled ? onZoomOut : null,
+            onPressed: onZoomOut,
             icon: const Icon(Icons.remove, size: 14),
             style: _compactIconButtonStyle,
           ),
           SizedBox(
-            width: 34,
+            width: 30,
             child: Text(
               zoomLabel,
               textAlign: TextAlign.center,
@@ -994,26 +1063,42 @@ class _ViewerToolbar extends StatelessWidget {
             ),
           ),
           IconButton(
-            onPressed: zoomEnabled ? onZoomIn : null,
+            onPressed: onZoomIn,
             icon: const Icon(Icons.add, size: 14),
             style: _compactIconButtonStyle,
           ),
-          const SizedBox(width: 6),
-          ElevatedButton(
-            onPressed: zoomEnabled ? onZoomFit : null,
-            style: _compactButtonStyle,
-            child: Text(l10n.fitToWindow),
+          const SizedBox(width: 4),
+          Flexible(
+            child: ElevatedButton(
+              onPressed: onZoomFit,
+              style: _compactButtonStyle,
+              child: Text(l10n.fitToWindow, overflow: TextOverflow.ellipsis, softWrap: false),
+            ),
           ),
           const Spacer(),
-          ElevatedButton.icon(
-            onPressed: onToggleBeforeAfter,
-            style: beforeAfterMode
-                ? _compactButtonStyle.copyWith(
-                    backgroundColor: const WidgetStatePropertyAll(DarkmoonColors.accent),
-                  )
-                : _compactButtonStyle,
-            icon: const Icon(Icons.compare, size: 14),
-            label: Text(l10n.beforeAfterButton),
+          Tooltip(
+            message: l10n.fullQualityButton,
+            child: IconButton(
+              onPressed: onToggleFullQuality,
+              style: fullQualityMode
+                  ? _compactIconButtonStyle.copyWith(
+                      backgroundColor: const WidgetStatePropertyAll(DarkmoonColors.accent),
+                    )
+                  : _compactIconButtonStyle,
+              icon: const Icon(Icons.hd_outlined, size: 16),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: ElevatedButton(
+              onPressed: onToggleBeforeAfter,
+              style: beforeAfterMode
+                  ? _compactButtonStyle.copyWith(
+                      backgroundColor: const WidgetStatePropertyAll(DarkmoonColors.accent),
+                    )
+                  : _compactButtonStyle,
+              child: Text(l10n.beforeAfterButton, overflow: TextOverflow.ellipsis, softWrap: false),
+            ),
           ),
         ],
       ),

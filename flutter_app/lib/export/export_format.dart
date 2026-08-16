@@ -1,9 +1,9 @@
 /// Output formats offered by the export dialog, mirroring the Python app's
-/// `ExportOptionsDialog.FORMATS`.
+/// `ExportOptionsDialog.FORMATS`. JPEG listed first since it's the default.
 enum ExportFormat {
+  jpeg('JPEG', 'jpg'),
   png('PNG', 'png'),
-  tiff('TIFF', 'tiff'),
-  jpeg('JPEG', 'jpg');
+  tiff('TIFF', 'tiff');
 
   const ExportFormat(this.label, this.extension);
 

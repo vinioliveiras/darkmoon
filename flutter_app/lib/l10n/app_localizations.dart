@@ -200,6 +200,12 @@ abstract class AppLocalizations {
   /// **'Before/After (\\)'**
   String get beforeAfterButton;
 
+  /// No description provided for @fullQualityButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Full Quality'**
+  String get fullQualityButton;
+
   /// No description provided for @exportPanelButton.
   ///
   /// In en, this message translates to:

@@ -65,6 +65,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get beforeAfterButton => 'Before/After (\\)';
 
   @override
+  String get fullQualityButton => 'Full Quality';
+
+  @override
   String get exportPanelButton => 'Export...';
 
   @override

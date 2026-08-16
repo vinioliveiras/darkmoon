@@ -66,3 +66,20 @@ EditSourcePair? decodeEditSources(String path) {
     live: EditSource(width: liveImage.width, height: liveImage.height, rgbBytes: _rgbBytes(liveImage)),
   );
 }
+
+/// Decodes the RAW file at [path] at full native resolution — no
+/// [previewMaxDimension] downscale, and (unlike [decodeEditSources])
+/// `halfSize: false` even on sensors where the fast half-size path would
+/// otherwise be usable, so "full quality" means the same thing regardless
+/// of camera. Backs the editor's opt-in full-quality view toggle: pixel
+/// math over 10s of megapixels instead of ~1.7M is a real cost, so this is
+/// only decoded when the user explicitly asks for it.
+///
+/// Designed to run via `compute()`.
+EditSource? decodeFullQualitySource(String path) {
+  final decoded = decodeRawImage(path, halfSize: false);
+  if (decoded == null) {
+    return null;
+  }
+  return EditSource(width: decoded.width, height: decoded.height, rgbBytes: decoded.rgbBytes);
+}

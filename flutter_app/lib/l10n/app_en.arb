@@ -27,6 +27,7 @@
   "zoomFit": "Fit",
   "fitToWindow": "Fit to window",
   "beforeAfterButton": "Before/After (\\)",
+  "fullQualityButton": "Full Quality",
 
   "exportPanelButton": "Export...",
   "exportingButton": "Exporting...",
