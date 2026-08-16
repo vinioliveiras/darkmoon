@@ -1,10 +1,19 @@
+import 'dart:async';
+
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import 'native/thumbnail_loader.dart';
 import 'raw_files.dart';
 import 'theme.dart';
 import 'widgets/slider_row.dart';
+
+/// How many thumbnails to decode concurrently (each on its own isolate via
+/// `compute`). Bounded so opening a folder with hundreds of RAWs doesn't
+/// spawn hundreds of isolates at once.
+const _maxConcurrentThumbnails = 4;
 
 class _SliderSpec {
   const _SliderSpec(this.name, this.min, this.max, this.defaultValue, {this.decimals = 2});
@@ -53,6 +62,8 @@ class _EditorScreenState extends State<EditorScreen> {
   List<RawFile> _files = const [];
   int? _selectedIndex;
   bool _loading = false;
+  final Map<String, Uint8List> _thumbnails = {};
+  int _folderGeneration = 0;
 
   Future<void> _openFolder() async {
     final folder = await FilePicker.getDirectoryPath(dialogTitle: 'Open Folder');
@@ -76,9 +87,13 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _loadFolder(String folder, {String? selectPath}) async {
-    setState(() => _loading = true);
+    final generation = ++_folderGeneration;
+    setState(() {
+      _loading = true;
+      _thumbnails.clear();
+    });
     final files = await listRawFiles(folder);
-    if (!mounted) {
+    if (!mounted || generation != _folderGeneration) {
       return;
     }
     final index = selectPath == null ? 0 : files.indexWhere((f) => f.path == selectPath);
@@ -87,6 +102,26 @@ class _EditorScreenState extends State<EditorScreen> {
       _selectedIndex = files.isEmpty ? null : (index < 0 ? 0 : index);
       _loading = false;
     });
+    unawaited(_loadThumbnails(files, generation));
+  }
+
+  Future<void> _loadThumbnails(List<RawFile> files, int generation) async {
+    final queue = List<RawFile>.from(files);
+
+    Future<void> worker() async {
+      while (queue.isNotEmpty) {
+        final file = queue.removeAt(0);
+        final bytes = await compute(decodeRawThumbnail, file.path);
+        if (!mounted || generation != _folderGeneration) {
+          return;
+        }
+        if (bytes != null) {
+          setState(() => _thumbnails[file.path] = bytes);
+        }
+      }
+    }
+
+    await Future.wait(List.generate(_maxConcurrentThumbnails, (_) => worker()));
   }
 
   void _selectIndex(int index) {
@@ -104,12 +139,23 @@ class _EditorScreenState extends State<EditorScreen> {
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(child: _ImageArea(selected: selected, loading: _loading)),
+                Expanded(
+                  child: _ImageArea(
+                    selected: selected,
+                    loading: _loading,
+                    thumbnail: selected == null ? null : _thumbnails[selected.path],
+                  ),
+                ),
                 const _ControlsPanel(),
               ],
             ),
           ),
-          _Filmstrip(files: _files, selectedIndex: _selectedIndex, onSelect: _selectIndex),
+          _Filmstrip(
+            files: _files,
+            selectedIndex: _selectedIndex,
+            thumbnails: _thumbnails,
+            onSelect: _selectIndex,
+          ),
         ],
       ),
     );
@@ -171,37 +217,49 @@ class _MenuBarLabel extends StatelessWidget {
 }
 
 class _ImageArea extends StatelessWidget {
-  const _ImageArea({required this.selected, required this.loading});
+  const _ImageArea({required this.selected, required this.loading, required this.thumbnail});
 
   final RawFile? selected;
   final bool loading;
+  final Uint8List? thumbnail;
 
   @override
   Widget build(BuildContext context) {
-    final String message;
-    if (loading) {
-      message = 'Loading folder...';
-    } else if (selected != null) {
-      message = '${selected!.name}\n(preview not implemented yet)';
-    } else {
-      message = 'Open a folder with RAW files to get started';
-    }
     return Column(
       children: [
         Expanded(
           child: Container(
             color: DarkmoonColors.canvas,
             alignment: Alignment.center,
-            child: Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(color: DarkmoonColors.textMuted),
-            ),
+            child: _buildContent(),
           ),
         ),
         const _ViewerToolbar(),
       ],
     );
+  }
+
+  Widget _buildContent() {
+    if (loading) {
+      return const Text('Loading folder...', style: TextStyle(color: DarkmoonColors.textMuted));
+    }
+    if (selected == null) {
+      return const Text(
+        'Open a folder with RAW files to get started',
+        textAlign: TextAlign.center,
+        style: TextStyle(color: DarkmoonColors.textMuted),
+      );
+    }
+    if (thumbnail == null) {
+      return Text(
+        '${selected!.name}\n(decoding thumbnail...)',
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: DarkmoonColors.textMuted),
+      );
+    }
+    // This is the embedded camera-generated thumbnail, shown as a fast stand-in
+    // — full RAW decoding (matching the current adjustments) isn't wired up yet.
+    return Image.memory(thumbnail!, fit: BoxFit.contain);
   }
 }
 
@@ -318,10 +376,16 @@ class _ControlsPanel extends StatelessWidget {
 }
 
 class _Filmstrip extends StatelessWidget {
-  const _Filmstrip({required this.files, required this.selectedIndex, required this.onSelect});
+  const _Filmstrip({
+    required this.files,
+    required this.selectedIndex,
+    required this.thumbnails,
+    required this.onSelect,
+  });
 
   final List<RawFile> files;
   final int? selectedIndex;
+  final Map<String, Uint8List> thumbnails;
   final ValueChanged<int> onSelect;
 
   @override
@@ -347,6 +411,7 @@ class _Filmstrip extends StatelessWidget {
         itemBuilder: (context, index) {
           final file = files[index];
           final isSelected = index == selectedIndex;
+          final thumbnail = thumbnails[file.path];
           return Padding(
             padding: const EdgeInsets.only(right: 6),
             child: GestureDetector(
@@ -361,13 +426,16 @@ class _Filmstrip extends StatelessWidget {
                 child: Column(
                   children: [
                     Expanded(
-                      child: Container(
-                        decoration: BoxDecoration(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          width: double.infinity,
                           color: const Color(0xFF26262A),
-                          borderRadius: BorderRadius.circular(6),
+                          alignment: Alignment.center,
+                          child: thumbnail == null
+                              ? const Icon(Icons.image_outlined, color: DarkmoonColors.textMuted, size: 22)
+                              : Image.memory(thumbnail, fit: BoxFit.cover),
                         ),
-                        alignment: Alignment.center,
-                        child: const Icon(Icons.image_outlined, color: DarkmoonColors.textMuted, size: 22),
                       ),
                     ),
                     const SizedBox(height: 3),

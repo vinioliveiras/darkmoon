@@ -81,6 +81,14 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# LibRaw (and its OpenMP runtime dependency), used for RAW decoding/thumbnail
+# extraction via Dart FFI. Same raw_r.dll build as the Python app's rawpy.
+install(FILES
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/raw_r.dll"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/vcomp140.dll"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
 if(PLUGIN_BUNDLED_LIBRARIES)
   install(FILES "${PLUGIN_BUNDLED_LIBRARIES}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
