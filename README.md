@@ -1,6 +1,6 @@
 # Darkmoon
 
-RAW photo editor for Windows, inspired by Lightroom and Photomator.
+RAW photo editor for Windows, inspired by Lightroom.
 
 ## Stack
 
