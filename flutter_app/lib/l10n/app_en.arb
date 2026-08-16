@@ -10,6 +10,11 @@
   "dialogOpenFileTitle": "Open RAW File",
 
   "loadingFolder": "Loading folder...",
+  "loadingImage": "Loading {name}...",
+  "@loadingImage": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "applyingAdjustments": "Applying adjustments...",
   "emptyStateOpenFolder": "Open a folder with RAW files to get started",
   "noFolderOpen": "No folder open",
   "decodingPhoto": "{name}\n(decoding...)",

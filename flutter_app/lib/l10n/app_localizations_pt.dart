@@ -30,6 +30,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get loadingFolder => 'Carregando pasta...';
 
   @override
+  String loadingImage(String name) {
+    return 'Carregando $name...';
+  }
+
+  @override
+  String get applyingAdjustments => 'Aplicando ajustes...';
+
+  @override
   String get emptyStateOpenFolder =>
       'Abra uma pasta com arquivos RAW para começar';
 

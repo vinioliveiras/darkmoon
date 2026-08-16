@@ -10,6 +10,8 @@
   "dialogOpenFileTitle": "Abrir arquivo RAW",
 
   "loadingFolder": "Carregando pasta...",
+  "loadingImage": "Carregando {name}...",
+  "applyingAdjustments": "Aplicando ajustes...",
   "emptyStateOpenFolder": "Abra uma pasta com arquivos RAW para começar",
   "noFolderOpen": "Nenhuma pasta aberta",
   "decodingPhoto": "{name}\n(decodificando...)",

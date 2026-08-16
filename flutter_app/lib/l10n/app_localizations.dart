@@ -140,6 +140,18 @@ abstract class AppLocalizations {
   /// **'Loading folder...'**
   String get loadingFolder;
 
+  /// No description provided for @loadingImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading {name}...'**
+  String loadingImage(String name);
+
+  /// No description provided for @applyingAdjustments.
+  ///
+  /// In en, this message translates to:
+  /// **'Applying adjustments...'**
+  String get applyingAdjustments;
+
   /// No description provided for @emptyStateOpenFolder.
   ///
   /// In en, this message translates to:

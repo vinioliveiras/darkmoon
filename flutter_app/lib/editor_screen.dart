@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import 'catalog/catalog_store.dart';
+import 'catalog/thumbnail_cache.dart';
 import 'catalog/thumbnail_cache_dir.dart';
 import 'export/export_job.dart';
 import 'l10n/app_localizations.dart';
@@ -175,6 +176,15 @@ class _EditorScreenState extends State<EditorScreen> {
   Timer? _renderDebounceTimer;
   int _renderRequestId = 0;
 
+  /// True while decoding a newly-selected photo's edit source (always
+  /// shown — this is the multi-second X-Trans-full-demosaic case). True
+  /// while a render is taking more than a second (e.g. Clarity/Dehaze at
+  /// full resolution) — gated by a delay so ordinary fast slider tweaks
+  /// never flash it.
+  bool _isDecodingPhoto = false;
+  bool _isRenderingSlow = false;
+  Timer? _slowRenderTimer;
+
   /// Saved slider values per photo (absolute path), persisted to disk.
   /// Loaded once at startup; not guarded against edits made before that
   /// finishes, since reading a small JSON file is effectively instant next
@@ -188,35 +198,40 @@ class _EditorScreenState extends State<EditorScreen> {
 
   late final AppLifecycleListener _lifecycleListener;
 
-  /// Resolved once at startup (path_provider isn't guaranteed safe to call
-  /// from the compute() isolates thumbnail decoding runs on) and handed to
-  /// each thumbnail request; null until that resolves, which just means
-  /// thumbnails decoded before then skip the cache for that one lookup.
-  String? _thumbnailCacheDir;
+  /// Main-isolate-only (path_provider isn't guaranteed safe to call from
+  /// the compute() isolates thumbnail decoding runs on, and it batches
+  /// writes per month file, which needs a single owner). Null until
+  /// resolveThumbnailCacheDir() resolves, which just means thumbnails
+  /// decoded before then skip the cache for that one lookup.
+  ThumbnailCacheManager? _thumbnailCache;
 
   @override
   void initState() {
     super.initState();
     unawaited(_loadEdits());
     unawaited(_loadSettings());
-    unawaited(_loadThumbnailCacheDir());
+    unawaited(_loadThumbnailCache());
     _lifecycleListener = AppLifecycleListener(onExitRequested: _handleExitRequested);
   }
 
-  Future<void> _loadThumbnailCacheDir() async {
+  Future<void> _loadThumbnailCache() async {
     final dir = await resolveThumbnailCacheDir();
     if (!mounted) {
       return;
     }
-    setState(() => _thumbnailCacheDir = dir);
+    setState(() => _thumbnailCache = ThumbnailCacheManager(dir));
   }
 
   /// Makes sure the current photo's edits are actually on disk before the
   /// window closes — the debounced/fire-and-forget save elsewhere in this
   /// file wouldn't necessarily finish in time for a save made in the last
-  /// moment before quitting.
+  /// moment before quitting. Also flushes any thumbnail cache writes that
+  /// haven't been persisted yet (best-effort — losing those just means
+  /// slower thumbnails next launch, not lost data, so this isn't awaited
+  /// as strictly).
   Future<AppExitResponse> _handleExitRequested() async {
     await _flushCurrentEdits();
+    await _thumbnailCache?.flush();
     return AppExitResponse.exit;
   }
 
@@ -256,6 +271,7 @@ class _EditorScreenState extends State<EditorScreen> {
   void dispose() {
     _renderDebounceTimer?.cancel();
     _catalogSaveTimer?.cancel();
+    _slowRenderTimer?.cancel();
     _viewController.dispose();
     _lifecycleListener.dispose();
     super.dispose();
@@ -352,22 +368,31 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Future<void> _loadThumbnails(List<RawFile> files, int generation) async {
     final queue = List<RawFile>.from(files);
+    final cache = _thumbnailCache;
 
     Future<void> worker() async {
       while (queue.isNotEmpty) {
         final file = queue.removeAt(0);
-        final request = ThumbnailRequest(path: file.path, cacheDir: _thumbnailCacheDir);
-        final bytes = await compute(decodeRawThumbnail, request);
+        // Cache lookup/store happens here in the main isolate (see
+        // ThumbnailCacheManager) — only the actual decode, on a cache
+        // miss, goes to a background isolate.
+        var bytes = await cache?.lookup(file.path);
+        final fromCache = bytes != null;
+        bytes ??= await compute(decodeRawThumbnail, file.path);
         if (!mounted || generation != _folderGeneration) {
           return;
         }
         if (bytes != null) {
-          setState(() => _thumbnails[file.path] = bytes);
+          setState(() => _thumbnails[file.path] = bytes!);
+          if (!fromCache) {
+            unawaited(cache?.store(file.path, bytes));
+          }
         }
       }
     }
 
     await Future.wait(List.generate(_settings.thumbnailConcurrency, (_) => worker()));
+    unawaited(cache?.flush());
   }
 
   void _selectIndex(int index) {
@@ -394,10 +419,12 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<void> _loadEditSourceAndRender(String path, int generation) async {
     var sources = _editSources[path];
     if (sources == null) {
+      setState(() => _isDecodingPhoto = true);
       sources = await compute(decodeEditSources, path);
       if (!mounted || generation != _folderGeneration) {
         return;
       }
+      setState(() => _isDecodingPhoto = false);
       if (sources == null) {
         return;
       }
@@ -407,28 +434,45 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   /// Renders [path]'s cached edit source with the current slider values and
-  /// caches the resulting JPEG + histogram. Uses the smaller "live"
-  /// resolution while [live] is true (a slider is actively being dragged)
-  /// for speed.
+  /// caches the resulting JPEG + histogram + filmstrip thumbnail. Uses the
+  /// smaller "live" resolution while [live] is true (a slider is actively
+  /// being dragged) for speed.
   Future<void> _renderPreview(String path, {bool live = false}) async {
     final sources = _editSources[path];
     if (sources == null) {
       return;
     }
     final requestId = ++_renderRequestId;
+    _slowRenderTimer?.cancel();
+    if (_isRenderingSlow) {
+      // A previous, slower render just got superseded by this one — clear
+      // the flag immediately; the timer below re-sets it if this render
+      // also turns out to take more than a second.
+      setState(() => _isRenderingSlow = false);
+    }
+    _slowRenderTimer = Timer(const Duration(seconds: 1), () {
+      if (mounted && requestId == _renderRequestId) {
+        setState(() => _isRenderingSlow = true);
+      }
+    });
     final job = RenderJob(
       source: live ? sources.live : sources.preview,
       params: RenderParams.fromValues(_paramValues),
     );
     final result = await compute(renderJobToJpeg, job);
+    _slowRenderTimer?.cancel();
     // A newer render (from further slider moves, or a different photo) has
     // since been requested — this result is stale, drop it.
     if (!mounted || requestId != _renderRequestId) {
       return;
     }
     setState(() {
+      _isRenderingSlow = false;
       _renderedPreviews[path] = result.jpegBytes;
       _histograms[path] = result.histogram;
+      // Keeps the filmstrip thumbnail in sync with the current edit
+      // instead of staying frozen at the camera-original preview.
+      _thumbnails[path] = result.thumbnailBytes;
     });
   }
 
@@ -588,6 +632,22 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
+  /// Which loading overlay message to show right now, if any — checked in
+  /// priority order since only one can be shown at a time.
+  String? _overlayMessage(BuildContext context, RawFile? selected) {
+    final l10n = AppLocalizations.of(context)!;
+    if (_loading) {
+      return l10n.loadingFolder;
+    }
+    if (_isDecodingPhoto && selected != null) {
+      return l10n.loadingImage(selected.name);
+    }
+    if (_isRenderingSlow) {
+      return l10n.applyingAdjustments;
+    }
+    return null;
+  }
+
   Widget _buildScaffold(RawFile? selected) {
     return Scaffold(
       body: Column(
@@ -639,7 +699,12 @@ class _EditorScreenState extends State<EditorScreen> {
                     ),
                   ],
                 ),
-                if (_loading) _LoadingOverlay(message: AppLocalizations.of(context)!.loadingFolder),
+                Builder(
+                  builder: (context) {
+                    final message = _overlayMessage(context, selected);
+                    return message == null ? const SizedBox.shrink() : _LoadingOverlay(message: message);
+                  },
+                ),
               ],
             ),
           ),
@@ -788,10 +853,10 @@ class _ImageArea extends StatelessWidget {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(child: _labeledImage(l10n.afterLabel, bytes)),
-          Container(width: 1, color: DarkmoonColors.divider),
           // Falls back to the edited image until the neutral render finishes.
           Expanded(child: _labeledImage(l10n.beforeLabel, neutralPreview ?? bytes)),
+          Container(width: 1, color: DarkmoonColors.divider),
+          Expanded(child: _labeledImage(l10n.afterLabel, bytes)),
         ],
       );
     }
@@ -989,23 +1054,30 @@ class _ControlsPanel extends StatelessWidget {
             Row(
               children: [
                 Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: exporting ? null : onExport,
-                    icon: exporting
-                        ? const SizedBox(
-                            width: 14,
-                            height: 14,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.file_download_outlined, size: 16),
-                    label: Text(exporting ? l10n.exportingButton : l10n.exportPanelButton),
+                  child: SizedBox(
+                    height: 40,
+                    child: ElevatedButton.icon(
+                      onPressed: exporting ? null : onExport,
+                      icon: exporting
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.file_download_outlined, size: 16),
+                      label: Text(exporting ? l10n.exportingButton : l10n.exportPanelButton),
+                    ),
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton(
-                  onPressed: onReset,
-                  tooltip: l10n.resetTooltip,
-                  icon: const Icon(Icons.refresh, size: 16),
+                SizedBox(
+                  height: 40,
+                  width: 40,
+                  child: IconButton(
+                    onPressed: onReset,
+                    tooltip: l10n.resetTooltip,
+                    icon: const Icon(Icons.refresh, size: 16),
+                  ),
                 ),
               ],
             ),
