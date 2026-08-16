@@ -153,7 +153,8 @@ RawImage? decodeRawImage(String path, {bool halfSize = true}) {
         return null;
       }
       try {
-        if (image.ref.type != LibRaw_image_formats.LIBRAW_IMAGE_BITMAP || image.ref.colors != 3) {
+        if (image.ref.type != LibRaw_image_formats.LIBRAW_IMAGE_BITMAP ||
+            image.ref.colors != 3) {
           return null;
         }
         return RawImage(

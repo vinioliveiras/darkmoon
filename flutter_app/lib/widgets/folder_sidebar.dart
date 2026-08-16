@@ -1,78 +1,141 @@
 import 'dart:io';
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import '../l10n/app_localizations.dart';
 import '../theme.dart';
 
-/// Left-hand folder tree, Lightroom/Photomator-style: one root per folder
-/// added via File > Add Folder (persisted in [AppSettings.libraryFolders]),
-/// each with subfolders expanded lazily on demand. Clicking a folder loads
-/// it into the main editor via [onSelect]; clicking the chevron only
-/// expands/collapses without reloading anything. Each root folder also
-/// gets a remove button, since only top-level added folders can be removed
-/// — subfolders are just navigation, not separately tracked.
+/// Left-hand library panel, Lightroom/Photomator-style: a flat "recent
+/// files" list (individual files opened via File > Open File) above a
+/// folder tree — one root per folder added via File > Add Folder
+/// (persisted in [AppSettings.libraryFolders]), each with subfolders
+/// expanded lazily on demand. Clicking a folder loads it into the main
+/// editor via [onSelect]; clicking the chevron only expands/collapses
+/// without reloading anything. Each root folder also gets a remove
+/// button, since only top-level added folders can be removed — subfolders
+/// are just navigation, not separately tracked.
 class FolderSidebar extends StatelessWidget {
   const FolderSidebar({
     super.key,
     required this.roots,
+    required this.recentFiles,
     required this.selectedPath,
     required this.onSelect,
     required this.onRemove,
+    required this.onSelectRecentFile,
   });
 
   final List<String> roots;
+  final List<String> recentFiles;
   final String? selectedPath;
   final ValueChanged<String> onSelect;
   final ValueChanged<String> onRemove;
+  final ValueChanged<String> onSelectRecentFile;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    if (roots.isEmpty && recentFiles.isEmpty) {
+      return Container(
+        width: 220,
+        color: DarkmoonColors.panel,
+        padding: const EdgeInsets.all(12),
+        alignment: Alignment.topLeft,
+        child: Text(
+          l10n.noFolderOpen,
+          style: const TextStyle(color: DarkmoonColors.textMuted, fontSize: 11),
+        ),
+      );
+    }
     return Container(
       width: 220,
       color: DarkmoonColors.panel,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-            child: Text(
-              l10n.sidebarFoldersSection,
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-          ),
-          Expanded(
-            child: roots.isEmpty
-                ? Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      l10n.noFolderOpen,
-                      style: const TextStyle(
-                        color: DarkmoonColors.textMuted,
-                        fontSize: 11,
-                      ),
-                    ),
-                  )
-                : SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        for (final root in roots)
-                          _FolderNode(
-                            key: ValueKey(root),
-                            path: root,
-                            depth: 0,
-                            selectedPath: selectedPath,
-                            onSelect: onSelect,
-                            onRemove: onRemove,
-                            initiallyExpanded: true,
-                          ),
-                      ],
-                    ),
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            if (recentFiles.isNotEmpty) ...[
+              _SidebarSectionHeader(l10n.sidebarRecentFilesSection),
+              for (final path in recentFiles)
+                _RecentFileRow(
+                  key: ValueKey(path),
+                  path: path,
+                  onTap: () => onSelectRecentFile(path),
+                ),
+              const SizedBox(height: 8),
+            ],
+            _SidebarSectionHeader(l10n.sidebarFoldersSection),
+            for (final root in roots)
+              _FolderNode(
+                key: ValueKey(root),
+                path: root,
+                depth: 0,
+                selectedPath: selectedPath,
+                onSelect: onSelect,
+                onRemove: onRemove,
+                initiallyExpanded: true,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _SidebarSectionHeader extends StatelessWidget {
+  const _SidebarSectionHeader(this.label);
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+      child: Text(label, style: Theme.of(context).textTheme.labelSmall),
+    );
+  }
+}
+
+class _RecentFileRow extends StatelessWidget {
+  const _RecentFileRow({super.key, required this.path, required this.onTap});
+
+  final String path;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+          child: Row(
+            children: [
+              const SizedBox(width: 18),
+              const SizedBox(width: 2),
+              const Icon(
+                CupertinoIcons.doc,
+                size: 14,
+                color: DarkmoonColors.textMuted,
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  p.basename(path),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: DarkmoonColors.textSecondary,
+                    fontSize: 12,
                   ),
+                ),
+              ),
+            ],
           ),
-        ],
+        ),
       ),
     );
   }
@@ -135,9 +198,7 @@ class _FolderNodeState extends State<_FolderNode> {
     try {
       final entries = await Directory(path).list().toList();
       final dirs = entries.whereType<Directory>().toList()
-        ..sort(
-          (a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()),
-        );
+        ..sort((a, b) => a.path.toLowerCase().compareTo(b.path.toLowerCase()));
       return dirs;
     } catch (_) {
       return const [];
@@ -181,17 +242,17 @@ class _FolderNodeState extends State<_FolderNode> {
                             )
                           : Icon(
                               _expanded
-                                  ? Icons.keyboard_arrow_down
-                                  : Icons.chevron_right,
-                              size: 16,
+                                  ? CupertinoIcons.chevron_down
+                                  : CupertinoIcons.chevron_right,
+                              size: 12,
                               color: DarkmoonColors.textMuted,
                             ),
                     ),
                   ),
                   const SizedBox(width: 2),
                   Icon(
-                    Icons.folder,
-                    size: 15,
+                    CupertinoIcons.folder,
+                    size: 14,
                     color: isSelected
                         ? DarkmoonColors.accent
                         : DarkmoonColors.textMuted,
@@ -219,8 +280,8 @@ class _FolderNodeState extends State<_FolderNode> {
                           context,
                         )!.sidebarRemoveFolderTooltip,
                         child: const Icon(
-                          Icons.close,
-                          size: 14,
+                          CupertinoIcons.xmark,
+                          size: 12,
                           color: DarkmoonColors.textMuted,
                         ),
                       ),

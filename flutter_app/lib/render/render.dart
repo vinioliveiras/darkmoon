@@ -1,9 +1,14 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'color_grading.dart';
+import 'color_mixer.dart';
 import 'dehaze.dart';
+import 'denoise.dart';
 import 'local_contrast.dart';
+import 'mask.dart';
 import 'render_params.dart';
+import 'tone_curve.dart';
 
 /// Absolute color temperature (Kelvin) treated as "no white-balance shift",
 /// matching the Python app's TEMPERATURE_NEUTRAL_KELVIN.
@@ -18,33 +23,138 @@ const double _temperatureNeutralKelvin = 5500.0;
 ///
 /// Designed to run via `compute()`: pure function over simple, isolate-
 /// transferable data.
-Uint8List renderRgb(int width, int height, Uint8List sourceRgb, RenderParams params) {
+Uint8List renderRgb(
+  int width,
+  int height,
+  Uint8List sourceRgb,
+  RenderParams params,
+) {
   final buffer = Float32List(sourceRgb.length);
   for (var i = 0; i < sourceRgb.length; i++) {
     buffer[i] = sourceRgb[i].toDouble();
   }
+  _applyAdjustmentSteps(buffer, width, height, params);
+  return _toUint8(buffer);
+}
 
+/// Renders [sourceRgb] with [globalParams] as the base layer, then
+/// composites each enabled mask in [masks] on top — each mask re-applies
+/// its own [MaskLayer.values] over the buffer as it stands *after* the
+/// previous layer (matching Lightroom/Photomator: masks stack, they
+/// don't each start over from the untouched source), blended in using
+/// that mask's own per-pixel alpha.
+///
+/// Designed to run via `compute()`: pure function over simple,
+/// isolate-transferable data.
+Uint8List renderRgbWithMasks(
+  int width,
+  int height,
+  Uint8List sourceRgb,
+  RenderParams globalParams,
+  List<MaskLayer> masks,
+) {
+  final buffer = Float32List(sourceRgb.length);
+  for (var i = 0; i < sourceRgb.length; i++) {
+    buffer[i] = sourceRgb[i].toDouble();
+  }
+  _applyAdjustmentSteps(buffer, width, height, globalParams);
+
+  for (final mask in masks) {
+    if (!mask.enabled) {
+      continue;
+    }
+    final layerBuffer = Float32List.fromList(buffer);
+    _applyAdjustmentSteps(
+      layerBuffer,
+      width,
+      height,
+      RenderParams.fromValues(mask.values),
+    );
+    final alpha = computeMaskAlpha(
+      mask,
+      width,
+      height,
+      sourceForColorRange: buffer,
+    );
+    var p = 0;
+    for (var pixel = 0; pixel < alpha.length; pixel++, p += 3) {
+      final a = alpha[pixel];
+      if (a <= 0) {
+        continue;
+      }
+      if (a >= 1) {
+        buffer[p] = layerBuffer[p];
+        buffer[p + 1] = layerBuffer[p + 1];
+        buffer[p + 2] = layerBuffer[p + 2];
+        continue;
+      }
+      buffer[p] = buffer[p] * (1 - a) + layerBuffer[p] * a;
+      buffer[p + 1] = buffer[p + 1] * (1 - a) + layerBuffer[p + 1] * a;
+      buffer[p + 2] = buffer[p + 2] * (1 - a) + layerBuffer[p + 2] * a;
+    }
+  }
+
+  return _toUint8(buffer);
+}
+
+void _applyAdjustmentSteps(
+  Float32List buffer,
+  int width,
+  int height,
+  RenderParams params,
+) {
   final pixelCount = width * height;
   _applyWhiteBalance(buffer, params.temperature, params.tint);
   _applyExposure(buffer, params.exposure);
   _applyBrightnessContrast(buffer, params.brightness, params.contrast);
-  _applyHighlightsShadows(buffer, pixelCount, params.highlights, params.shadows);
+  _applyHighlightsShadows(
+    buffer,
+    pixelCount,
+    params.highlights,
+    params.shadows,
+  );
   _applyWhitesBlacks(buffer, pixelCount, params.whites, params.blacks);
+  applyToneCurve(buffer, params.curves.tone);
+  applyColorCurves(
+    buffer,
+    params.curves.red,
+    params.curves.green,
+    params.curves.blue,
+  );
+  applyColorMixer(buffer, params.colorMixer);
+  applyColorGrading(buffer, params.colorGrading);
+  applyDenoise(buffer, width, height, params.denoise);
   applyLocalContrast(buffer, width, height, params.texture, 3);
-  applyLocalContrast(buffer, width, height, params.clarity, 25, protectMidtones: true);
+  applyLocalContrast(
+    buffer,
+    width,
+    height,
+    params.clarity,
+    25,
+    protectMidtones: true,
+  );
   applyDehaze(buffer, width, height, params.dehaze);
   _applyVibrance(buffer, pixelCount, params.vibrance);
   _applySaturation(buffer, pixelCount, params.saturation);
+}
 
-  final out = Uint8List(sourceRgb.length);
+Uint8List _toUint8(Float32List buffer) {
+  final out = Uint8List(buffer.length);
   for (var i = 0; i < buffer.length; i++) {
     out[i] = buffer[i].clamp(0.0, 255.0).round();
   }
   return out;
 }
 
-void _applyWhiteBalance(Float32List img, double temperatureKelvin, double tint) {
-  final delta = (temperatureKelvin - _temperatureNeutralKelvin) / _temperatureNeutralKelvin * 100.0;
+void _applyWhiteBalance(
+  Float32List img,
+  double temperatureKelvin,
+  double tint,
+) {
+  final delta =
+      (temperatureKelvin - _temperatureNeutralKelvin) /
+      _temperatureNeutralKelvin *
+      100.0;
   if (delta == 0 && tint == 0) {
     return;
   }
@@ -68,7 +178,11 @@ void _applyExposure(Float32List img, double exposure) {
   }
 }
 
-void _applyBrightnessContrast(Float32List img, double brightness, double contrast) {
+void _applyBrightnessContrast(
+  Float32List img,
+  double brightness,
+  double contrast,
+) {
   if (brightness == 0 && contrast == 0) {
     return;
   }
@@ -78,7 +192,12 @@ void _applyBrightnessContrast(Float32List img, double brightness, double contras
   }
 }
 
-void _applyHighlightsShadows(Float32List img, int pixelCount, double highlights, double shadows) {
+void _applyHighlightsShadows(
+  Float32List img,
+  int pixelCount,
+  double highlights,
+  double shadows,
+) {
   if (highlights == 0 && shadows == 0) {
     return;
   }
@@ -105,7 +224,12 @@ void _applyHighlightsShadows(Float32List img, int pixelCount, double highlights,
   }
 }
 
-void _applyWhitesBlacks(Float32List img, int pixelCount, double whites, double blacks) {
+void _applyWhitesBlacks(
+  Float32List img,
+  int pixelCount,
+  double whites,
+  double blacks,
+) {
   if (whites == 0 && blacks == 0) {
     return;
   }

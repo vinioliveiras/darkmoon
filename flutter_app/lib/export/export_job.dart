@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:image/image.dart' as img;
 
 import '../native/libraw.dart';
+import '../render/mask.dart';
 import '../render/render.dart';
 import '../render/render_params.dart';
 import 'export_format.dart';
@@ -14,12 +15,14 @@ class ExportRequest {
     required this.params,
     required this.format,
     required this.quality,
+    this.masks = const [],
   });
 
   final String sourcePath;
   final String destPath;
   final RenderParams params;
   final ExportFormat format;
+  final List<MaskLayer> masks;
 
   /// JPEG quality (1-100). Ignored for other formats.
   final int quality;
@@ -29,13 +32,9 @@ class ExportRequest {
 /// caller as the original exception object, so failures are reported as a
 /// plain message instead.
 class ExportResult {
-  const ExportResult.success(String path)
-      : destPath = path,
-        error = null;
+  const ExportResult.success(String path) : destPath = path, error = null;
 
-  const ExportResult.failure(String message)
-      : destPath = null,
-        error = message;
+  const ExportResult.failure(String message) : destPath = null, error = message;
 
   final String? destPath;
   final String? error;
@@ -56,7 +55,20 @@ ExportResult exportPhoto(ExportRequest request) {
     if (decoded == null) {
       return ExportResult.failure('Could not decode ${request.sourcePath}');
     }
-    final rendered = renderRgb(decoded.width, decoded.height, decoded.rgbBytes, request.params);
+    final rendered = request.masks.isEmpty
+        ? renderRgb(
+            decoded.width,
+            decoded.height,
+            decoded.rgbBytes,
+            request.params,
+          )
+        : renderRgbWithMasks(
+            decoded.width,
+            decoded.height,
+            decoded.rgbBytes,
+            request.params,
+            request.masks,
+          );
     final image = img.Image.fromBytes(
       width: decoded.width,
       height: decoded.height,

@@ -12,13 +12,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get menuFile => 'Arquivo';
 
   @override
-  String get menuOpenFile => 'Abrir arquivo...';
+  String get menuOpenFile => 'Abrir arquivo';
 
   @override
-  String get menuOpenFolder => 'Adicionar pasta...';
+  String get menuOpenFolder => 'Adicionar pasta';
 
   @override
-  String get menuSettings => 'Configurações...';
+  String get menuSettings => 'Configurações';
 
   @override
   String get dialogOpenFolderTitle => 'Adicionar pasta';
@@ -28,6 +28,11 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get loadingFolder => 'Carregando pasta...';
+
+  @override
+  String loadingPhotos(int loaded, int total) {
+    return 'Carregando fotos... ($loaded/$total)';
+  }
 
   @override
   String loadingImage(String name) {
@@ -50,10 +55,75 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get sidebarRecentFilesSection => 'ARQUIVOS RECENTES';
+
+  @override
   String get sidebarFoldersSection => 'PASTAS';
 
   @override
   String get sidebarRemoveFolderTooltip => 'Remover pasta';
+
+  @override
+  String get sidebarPresetsSection => 'PRESETS';
+
+  @override
+  String get presetImportTooltip => 'Importar presets (.xmp ou .zip)';
+
+  @override
+  String get presetSaveNewTooltip => 'Salvar edições atuais como preset';
+
+  @override
+  String get presetEmptyHint => 'Nenhum preset ainda';
+
+  @override
+  String get presetRenameLabel => 'Renomear';
+
+  @override
+  String get presetExportLabel => 'Exportar';
+
+  @override
+  String get presetDeleteLabel => 'Excluir';
+
+  @override
+  String get presetSaveLabel => 'Salvar';
+
+  @override
+  String get presetSaveNewTitle => 'Salvar preset';
+
+  @override
+  String get presetRenameTitle => 'Renomear preset';
+
+  @override
+  String get presetExportDialogTitle => 'Exportar preset';
+
+  @override
+  String get presetImportDialogTitle => 'Importar presets';
+
+  @override
+  String presetDeleteConfirmMessage(String name) {
+    return 'Excluir o preset \"$name\"? Essa ação não pode ser desfeita.';
+  }
+
+  @override
+  String presetDeleteManyConfirmMessage(int count) {
+    return 'Excluir $count presets? Essa ação não pode ser desfeita.';
+  }
+
+  @override
+  String get presetSelectTooltip => 'Selecionar presets';
+
+  @override
+  String presetSelectedCount(int count) {
+    return '$count selecionado(s)';
+  }
+
+  @override
+  String get presetUnsupportedTitle => 'Alguns ajustes não foram aplicados';
+
+  @override
+  String presetUnsupportedMessage(String name) {
+    return 'O preset \"$name\" tem ajustes que este app ainda não suporta, então foram ignorados:';
+  }
 
   @override
   String get beforeLabel => 'Antes';
@@ -74,7 +144,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get fullQualityButton => 'Qualidade Máxima';
 
   @override
-  String get exportPanelButton => 'Exportar...';
+  String get fullQualityShortLabel => 'HD';
+
+  @override
+  String get exportPanelButton => 'Exportar';
 
   @override
   String get exportingButton => 'Exportando...';
@@ -135,6 +208,37 @@ class AppLocalizationsPt extends AppLocalizations {
       'Threads de carregamento de miniaturas';
 
   @override
+  String get settingsUserDataSection => 'DADOS DO USUÁRIO';
+
+  @override
+  String get settingsClearThumbnailsButton => 'Limpar cache de miniaturas';
+
+  @override
+  String get settingsClearRecentFilesButton =>
+      'Limpar histórico de arquivos recentes';
+
+  @override
+  String get settingsClearCatalogButton => 'Limpar catálogo (todas as edições)';
+
+  @override
+  String get confirmClearTitle => 'Limpar dados?';
+
+  @override
+  String get confirmClearThumbnailsMessage =>
+      'Isso apaga todas as miniaturas em cache. Elas serão geradas novamente na próxima vez que você abrir uma pasta.';
+
+  @override
+  String get confirmClearRecentFilesMessage =>
+      'Isso limpa sua lista de arquivos recentes. As pastas que você adicionou não são afetadas.';
+
+  @override
+  String get confirmClearCatalogMessage =>
+      'Isso apaga permanentemente todas as edições salvas de todas as fotos. Essa ação não pode ser desfeita.';
+
+  @override
+  String get clearButton => 'Limpar';
+
+  @override
   String get closeButton => 'Fechar';
 
   @override
@@ -145,6 +249,105 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get sectionPresence => 'PRESENÇA';
+
+  @override
+  String get sectionDetail => 'DETALHE';
+
+  @override
+  String get sectionToneCurve => 'CURVA DE TOM';
+
+  @override
+  String get sectionColorCurve => 'CURVA DE COR';
+
+  @override
+  String get sectionColorMixer => 'MIXAGEM DE COR';
+
+  @override
+  String get sectionColorGrading => 'GRADAÇÃO DE COR';
+
+  @override
+  String get gradeRangeMidtones => 'Meios-tons';
+
+  @override
+  String get maskImageLayer => 'Imagem';
+
+  @override
+  String get maskLinearGradient => 'Gradiente Linear';
+
+  @override
+  String get maskRadialGradient => 'Gradiente Radial';
+
+  @override
+  String get maskBrush => 'Pincel';
+
+  @override
+  String get maskAddTooltip => 'Adicionar máscara';
+
+  @override
+  String get maskEnabledLabel => 'Ativada';
+
+  @override
+  String get maskInvertLabel => 'Inverter';
+
+  @override
+  String get maskDeleteTooltip => 'Excluir máscara';
+
+  @override
+  String get maskBrushSizeLabel => 'Tamanho';
+
+  @override
+  String get maskBrushHardnessLabel => 'Dureza';
+
+  @override
+  String get maskBrushEraseLabel => 'Apagar';
+
+  @override
+  String get maskUndoStrokeTooltip => 'Desfazer último traço';
+
+  @override
+  String get maskColorRange => 'Faixa de Cor';
+
+  @override
+  String get colorRangeToleranceLabel => 'Tolerância';
+
+  @override
+  String get colorRangeFeatherLabel => 'Suavização';
+
+  @override
+  String get colorRangeHint => 'Toque na imagem para escolher uma cor';
+
+  @override
+  String get colorChannelRed => 'Vermelho';
+
+  @override
+  String get colorChannelOrange => 'Laranja';
+
+  @override
+  String get colorChannelYellow => 'Amarelo';
+
+  @override
+  String get colorChannelGreen => 'Verde';
+
+  @override
+  String get colorChannelAqua => 'Água-marinha';
+
+  @override
+  String get colorChannelBlue => 'Azul';
+
+  @override
+  String get colorChannelPurple => 'Roxo';
+
+  @override
+  String get colorChannelMagenta => 'Magenta';
+
+  @override
+  String get mixerHueLabel => 'Matiz';
+
+  @override
+  String get mixerSaturationLabel => 'Saturação';
+
+  @override
+  String get mixerLuminanceLabel => 'Luminância';
 
   @override
   String get sliderTemperature => 'Temperatura';
@@ -187,4 +390,22 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get sliderSaturation => 'Saturação';
+
+  @override
+  String get sliderDenoiseLuminance => 'Luminância';
+
+  @override
+  String get sliderDenoiseLuminanceDetail => 'Detalhe de Luminância';
+
+  @override
+  String get sliderDenoiseLuminanceContrast => 'Contraste de Luminância';
+
+  @override
+  String get sliderDenoiseColor => 'Cor';
+
+  @override
+  String get sliderDenoiseColorDetail => 'Detalhe de Cor';
+
+  @override
+  String get sliderDenoiseColorSmoothness => 'Suavidade de Cor';
 }

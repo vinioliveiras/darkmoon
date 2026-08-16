@@ -1,32 +1,50 @@
 import 'dart:async';
-import 'dart:io' show File;
+import 'dart:io' show Directory, File;
 import 'dart:ui' show AppExitResponse;
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
 import 'catalog/catalog_store.dart';
+import 'catalog/curve_store.dart';
+import 'catalog/mask_store.dart';
 import 'catalog/thumbnail_cache.dart';
 import 'catalog/thumbnail_cache_dir.dart';
 import 'export/export_job.dart';
 import 'l10n/app_localizations.dart';
 import 'native/edit_source.dart';
 import 'native/thumbnail_loader.dart';
+import 'presets/preset.dart';
+import 'presets/preset_store.dart';
+import 'presets/preset_xmp.dart';
+import 'presets/preset_zip.dart';
 import 'raw_files.dart';
 import 'render/histogram.dart';
+import 'render/mask.dart';
 import 'render/render_job.dart';
 import 'render/render_params.dart';
+import 'render/tone_curve.dart';
 import 'settings/app_settings.dart';
 import 'theme.dart';
+import 'widgets/brush_mask_overlay.dart';
+import 'widgets/color_range_overlay.dart';
+import 'widgets/color_wheel.dart';
 import 'widgets/export_dialog.dart';
 import 'widgets/folder_sidebar.dart';
+import 'widgets/gradient_mask_overlay.dart';
 import 'widgets/histogram_view.dart';
+import 'widgets/mask_selector.dart';
+import 'widgets/preset_panel.dart';
 import 'widgets/settings_dialog.dart';
 import 'widgets/slider_row.dart';
+import 'widgets/text_prompt_dialog.dart';
+import 'widgets/tone_curve_editor.dart';
 
 /// Maps a slider's stable internal key (also used for _paramValues,
 /// RenderParams.fromValues, and catalog storage — must NOT be translated)
@@ -61,6 +79,18 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderVibrance;
     case 'Saturation':
       return l10n.sliderSaturation;
+    case 'DenoiseLuminance':
+      return l10n.sliderDenoiseLuminance;
+    case 'DenoiseLuminanceDetail':
+      return l10n.sliderDenoiseLuminanceDetail;
+    case 'DenoiseLuminanceContrast':
+      return l10n.sliderDenoiseLuminanceContrast;
+    case 'DenoiseColor':
+      return l10n.sliderDenoiseColor;
+    case 'DenoiseColorDetail':
+      return l10n.sliderDenoiseColorDetail;
+    case 'DenoiseColorSmoothness':
+      return l10n.sliderDenoiseColorSmoothness;
     default:
       return key;
   }
@@ -76,6 +106,8 @@ String _sectionLabel(AppLocalizations l10n, String key) {
       return l10n.sectionTone;
     case 'PRESENCE':
       return l10n.sectionPresence;
+    case 'DETAIL':
+      return l10n.sectionDetail;
     default:
       return key;
   }
@@ -103,7 +135,8 @@ class _SliderSpec {
     this.min,
     this.max,
     this.defaultValue, {
-    this.decimals = 2,
+    this.decimals = 0,
+    this.gradientColors,
   });
 
   final String name;
@@ -111,15 +144,32 @@ class _SliderSpec {
   final double max;
   final double defaultValue;
   final int decimals;
+
+  /// Track gradient for color-affecting controls, Lightroom-style — null
+  /// for everything else, which keeps the plain theme track.
+  final List<Color>? gradientColors;
 }
 
 const _sections = <String, List<_SliderSpec>>{
   'WHITE BALANCE': [
-    _SliderSpec('Temperature', 2000, 50000, 5500, decimals: 0),
-    _SliderSpec('Tint', -100, 100, 0),
+    _SliderSpec(
+      'Temperature',
+      2000,
+      50000,
+      5500,
+      decimals: 0,
+      gradientColors: [Color(0xFF4FA6FF), Color(0xFFFFB454)],
+    ),
+    _SliderSpec(
+      'Tint',
+      -100,
+      100,
+      0,
+      gradientColors: [Color(0xFF3DD16B), Color(0xFFE362D8)],
+    ),
   ],
   'TONE': [
-    _SliderSpec('Exposure', -100, 100, 0),
+    _SliderSpec('Exposure', -100, 100, 0, decimals: 1),
     _SliderSpec('Brightness', -100, 100, 0),
     _SliderSpec('Contrast', -100, 100, 0),
     _SliderSpec('Highlights', -100, 100, 0),
@@ -131,8 +181,28 @@ const _sections = <String, List<_SliderSpec>>{
     _SliderSpec('Texture', -100, 100, 0),
     _SliderSpec('Clarity', -100, 100, 0),
     _SliderSpec('Dehaze', -100, 100, 0),
-    _SliderSpec('Vibrance', -100, 100, 0),
-    _SliderSpec('Saturation', -100, 100, 0),
+    _SliderSpec(
+      'Vibrance',
+      -100,
+      100,
+      0,
+      gradientColors: [Color(0xFF9AA0A8), Color(0xFFE0483C)],
+    ),
+    _SliderSpec(
+      'Saturation',
+      -100,
+      100,
+      0,
+      gradientColors: [Color(0xFF9AA0A8), Color(0xFFE0483C)],
+    ),
+  ],
+  'DETAIL': [
+    _SliderSpec('DenoiseLuminance', 0, 100, 0),
+    _SliderSpec('DenoiseLuminanceDetail', 0, 100, 50),
+    _SliderSpec('DenoiseLuminanceContrast', 0, 100, 0),
+    _SliderSpec('DenoiseColor', 0, 100, 0),
+    _SliderSpec('DenoiseColorDetail', 0, 100, 50),
+    _SliderSpec('DenoiseColorSmoothness', 0, 100, 50),
   ],
 };
 
@@ -207,12 +277,53 @@ class _EditorScreenState extends State<EditorScreen> {
   Timer? _slowRenderTimer;
   static const _slowRenderThreshold = Duration(seconds: 3);
 
+  /// Real progress for the loading overlay while a folder's thumbnails are
+  /// being decoded — [_thumbnailsTotal] is 0 until the file list is known.
+  int _thumbnailsLoaded = 0;
+  int _thumbnailsTotal = 0;
+
   /// Saved slider values per photo (absolute path), persisted to disk.
   /// Loaded once at startup; not guarded against edits made before that
   /// finishes, since reading a small JSON file is effectively instant next
   /// to how long opening a folder via a native file dialog takes.
   Map<String, Map<String, double>> _edits = {};
   Timer? _catalogSaveTimer;
+
+  /// Saved Tone Curve + Color Curve control points per photo, persisted
+  /// separately from [_edits] since a curve is a list of points, not a
+  /// single double.
+  Map<String, PhotoCurves> _photoCurves = {};
+
+  /// The curves for whichever photo is selected — either that photo's
+  /// saved curves from [_photoCurves], or the identity (no-op) curves.
+  /// Mirrors how [_paramValues] tracks the selected photo's slider values.
+  PhotoCurves _currentCurves = identityPhotoCurves;
+
+  /// Saved mask stacks (Linear/Radial Gradient) per photo, persisted
+  /// separately since a mask is structured data, not a single double.
+  Map<String, List<MaskLayer>> _photoMasks = {};
+
+  /// The mask stack for whichever photo is selected. Mirrors
+  /// [_paramValues]/[_currentCurves]'s "live copy of the saved value"
+  /// pattern.
+  List<MaskLayer> _currentMasks = [];
+
+  /// Which layer the controls panel is currently editing —
+  /// [imageMaskId] (the whole photo, i.e. the existing global
+  /// adjustments) or one of [_currentMasks]'s ids.
+  String _activeMaskId = imageMaskId;
+
+  /// Current brush tool settings — transient, not per-mask, matching how
+  /// most paint tools keep one "current brush" you dab with (each stroke
+  /// bakes in whatever these were at the time, so past strokes keep their
+  /// own size/hardness/erase even after these change).
+  double _brushRadius = 0.05;
+  double _brushHardness = 0.5;
+  bool _brushErase = false;
+
+  /// The user's saved preset library — not per-photo, applies to whatever
+  /// photo is selected when the user picks one.
+  List<Preset> _presets = [];
 
   bool _exporting = false;
 
@@ -231,6 +342,9 @@ class _EditorScreenState extends State<EditorScreen> {
   void initState() {
     super.initState();
     unawaited(_loadEdits());
+    unawaited(_loadPhotoCurves());
+    unawaited(_loadPhotoMasks());
+    unawaited(_loadPresetsState());
     unawaited(_loadSettings());
     unawaited(_loadThumbnailCache());
     _lifecycleListener = AppLifecycleListener(
@@ -267,12 +381,301 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _edits = edits);
   }
 
+  Future<void> _loadPhotoCurves() async {
+    final curves = await loadPhotoCurves();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _photoCurves = curves);
+  }
+
+  PhotoCurves _curvesFor(String path) =>
+      _photoCurves[path] ?? identityPhotoCurves;
+
+  Future<void> _loadPhotoMasks() async {
+    final masks = await loadPhotoMasks();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _photoMasks = masks);
+  }
+
+  List<MaskLayer> _masksFor(String path) => _photoMasks[path] ?? const [];
+
+  Future<void> _loadPresetsState() async {
+    final presets = await loadPresets();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _presets = presets);
+  }
+
+  /// Applies [preset]'s slider values and curves to the selected photo —
+  /// like every other adjustment, this only touches the global ("Image")
+  /// layer, never the active mask, matching how real Lightroom presets
+  /// don't carry local adjustments either.
+  void _applyPreset(Preset preset) {
+    if (_selectedIndex == null) {
+      return;
+    }
+    setState(() {
+      _paramValues = {..._defaultParamValues(), ...preset.values};
+      _currentCurves = preset.curves;
+    });
+    _scheduleRender(live: false);
+    unawaited(_flushCurrentEdits());
+    if (preset.unsupportedAttributes.isNotEmpty) {
+      unawaited(_showUnsupportedPresetAttributes(preset));
+    }
+  }
+
+  Future<void> _showUnsupportedPresetAttributes(Preset preset) async {
+    final l10n = AppLocalizations.of(context)!;
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: DarkmoonColors.surfaceRaised,
+        title: Text(l10n.presetUnsupportedTitle),
+        content: SizedBox(
+          width: 320,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.presetUnsupportedMessage(preset.name)),
+              const SizedBox(height: 12),
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 200),
+                child: SingleChildScrollView(
+                  child: Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (final attribute in preset.unsupportedAttributes)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: DarkmoonColors.panel,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Text(
+                            attribute,
+                            style: const TextStyle(fontSize: 11.5),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: Text(l10n.closeButton),
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Whether [preset] is exactly what's currently applied to the selected
+  /// photo — recomputed from the live values/curves rather than tracked
+  /// separately, so it naturally clears the moment the user tweaks
+  /// anything after applying, and never goes stale across photo switches.
+  bool _matchesAppliedPreset(Preset preset) {
+    final merged = {..._defaultParamValues(), ...preset.values};
+    if (!mapEquals(_paramValues, merged)) {
+      return false;
+    }
+    return listEquals(_currentCurves.tone, preset.curves.tone) &&
+        listEquals(_currentCurves.red, preset.curves.red) &&
+        listEquals(_currentCurves.green, preset.curves.green) &&
+        listEquals(_currentCurves.blue, preset.curves.blue);
+  }
+
+  Future<void> _saveCurrentAsPreset() async {
+    if (_selectedIndex == null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final name = await showTextPromptDialog(
+      context,
+      title: l10n.presetSaveNewTitle,
+    );
+    if (name == null || !mounted) {
+      return;
+    }
+    final preset = Preset(
+      id: 'preset_${DateTime.now().microsecondsSinceEpoch}',
+      name: name,
+      values: Map<String, double>.from(_paramValues),
+      curves: _currentCurves,
+    );
+    setState(() => _presets = [..._presets, preset]);
+    unawaited(savePresets(_presets));
+  }
+
+  Future<void> _renamePreset(Preset preset) async {
+    final l10n = AppLocalizations.of(context)!;
+    final name = await showTextPromptDialog(
+      context,
+      title: l10n.presetRenameTitle,
+      initialValue: preset.name,
+    );
+    if (name == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _presets = [
+        for (final p in _presets)
+          if (p.id == preset.id) p.copyWith(name: name) else p,
+      ];
+    });
+    unawaited(savePresets(_presets));
+  }
+
+  Future<void> _deletePreset(Preset preset) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: DarkmoonColors.surfaceRaised,
+        title: Text(l10n.confirmClearTitle),
+        content: Text(l10n.presetDeleteConfirmMessage(preset.name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.cancelButton),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.presetDeleteLabel),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    setState(() {
+      _presets = [
+        for (final p in _presets)
+          if (p.id != preset.id) p,
+      ];
+    });
+    unawaited(savePresets(_presets));
+  }
+
+  Future<void> _deletePresets(List<Preset> presets) async {
+    if (presets.isEmpty) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: DarkmoonColors.surfaceRaised,
+        title: Text(l10n.confirmClearTitle),
+        content: Text(l10n.presetDeleteManyConfirmMessage(presets.length)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.cancelButton),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.presetDeleteLabel),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    final ids = {for (final preset in presets) preset.id};
+    setState(() {
+      _presets = [
+        for (final p in _presets)
+          if (!ids.contains(p.id)) p,
+      ];
+    });
+    unawaited(savePresets(_presets));
+  }
+
+  Future<void> _exportPreset(Preset preset) async {
+    final l10n = AppLocalizations.of(context)!;
+    final destPath = await FilePicker.saveFile(
+      dialogTitle: l10n.presetExportDialogTitle,
+      fileName: '${preset.name}.xmp',
+      type: FileType.custom,
+      allowedExtensions: ['xmp'],
+    );
+    if (destPath == null) {
+      return;
+    }
+    await File(destPath).writeAsString(xmpFromPreset(preset));
+  }
+
+  /// Imports one or more `.xmp` presets, or `.zip` bundles of them (how
+  /// Lightroom exports multiple presets at once) — each zip is unpacked
+  /// and every `.xmp` inside it imported the same way a standalone file
+  /// would be.
+  Future<void> _importPresets() async {
+    final l10n = AppLocalizations.of(context)!;
+    final result = await FilePicker.pickFiles(
+      dialogTitle: l10n.presetImportDialogTitle,
+      type: FileType.custom,
+      allowedExtensions: ['xmp', 'zip'],
+      allowMultiple: true,
+    );
+    if (result == null) {
+      return;
+    }
+    final imported = <Preset>[];
+    for (final file in result.files) {
+      final path = file.path;
+      if (path == null) {
+        continue;
+      }
+      if (path.toLowerCase().endsWith('.zip')) {
+        imported.addAll(await presetsFromZip(path));
+        continue;
+      }
+      try {
+        final xmlSource = await File(path).readAsString();
+        final preset = presetFromXmp(
+          xmlSource,
+          fallbackName: p.basenameWithoutExtension(path),
+        );
+        if (preset != null) {
+          imported.add(preset);
+        }
+      } catch (_) {
+        // Skip files that aren't readable/valid XMP — best effort import.
+      }
+    }
+    if (imported.isEmpty || !mounted) {
+      return;
+    }
+    setState(() => _presets = [..._presets, ...imported]);
+    unawaited(savePresets(_presets));
+  }
+
   Future<void> _loadSettings() async {
     final settings = await loadSettings();
     if (!mounted) {
       return;
     }
     setState(() => _settings = settings);
+    final lastFolder = settings.lastActiveFolder;
+    if (lastFolder != null && await Directory(lastFolder).exists()) {
+      unawaited(_loadFolder(lastFolder));
+    }
   }
 
   void _openSettings() {
@@ -287,8 +690,49 @@ class _EditorScreenState extends State<EditorScreen> {
           setState(() => _settings = next);
           unawaited(saveSettings(next));
         },
+        onClearThumbnails: () => unawaited(_clearThumbnailCache()),
+        onClearCatalog: () => unawaited(_clearCatalogData()),
       ),
     );
+  }
+
+  /// Deletes every cached thumbnail (disk + in-memory) and re-decodes the
+  /// currently-open folder's, so the effect is visible right away instead
+  /// of only affecting future folder opens.
+  Future<void> _clearThumbnailCache() async {
+    await _thumbnailCache?.clearAll();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _thumbnails.clear());
+    if (_files.isNotEmpty) {
+      unawaited(_loadThumbnails(_files, _folderGeneration));
+    }
+  }
+
+  /// Deletes every saved per-photo edit and resets the currently-open
+  /// photo (if any) back to its defaults, so the effect is visible right
+  /// away instead of only affecting the next app launch.
+  Future<void> _clearCatalogData() async {
+    await clearCatalog();
+    await clearPhotoCurves();
+    await clearPhotoMasks();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _edits = {};
+      _photoCurves = {};
+      _photoMasks = {};
+      _paramValues = _defaultParamValues();
+      _currentCurves = identityPhotoCurves;
+      _currentMasks = [];
+      _activeMaskId = imageMaskId;
+    });
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected != null) {
+      unawaited(_renderPreview(selected.path));
+    }
   }
 
   @override
@@ -301,13 +745,17 @@ class _EditorScreenState extends State<EditorScreen> {
     super.dispose();
   }
 
+  /// Merges [path]'s saved values over the defaults rather than just
+  /// picking out the default-slider keys, so keys the sliders in
+  /// [_sections] don't know about — Color Mixer's 24 and Color Grading's
+  /// 9, both keyed straight into this same flat map — survive a reload
+  /// instead of being silently dropped.
   Map<String, double> _paramValuesFor(String path) {
     final saved = _edits[path];
     if (saved == null) {
       return _defaultParamValues();
     }
-    final defaults = _defaultParamValues();
-    return {for (final key in defaults.keys) key: saved[key] ?? defaults[key]!};
+    return {..._defaultParamValues(), ...saved};
   }
 
   /// Writes the currently-selected photo's slider values into [_edits] and
@@ -321,7 +769,11 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     _edits[selected.path] = Map<String, double>.from(_paramValues);
+    _photoCurves[selected.path] = _currentCurves;
+    _photoMasks[selected.path] = _currentMasks;
     await saveCatalog(_edits);
+    await savePhotoCurves(_photoCurves);
+    await savePhotoMasks(_photoMasks);
   }
 
   void _scheduleCatalogSave() {
@@ -332,7 +784,11 @@ class _EditorScreenState extends State<EditorScreen> {
     _catalogSaveTimer?.cancel();
     _catalogSaveTimer = Timer(_catalogSaveDebounce, () {
       _edits[selected.path] = Map<String, double>.from(_paramValues);
+      _photoCurves[selected.path] = _currentCurves;
+      _photoMasks[selected.path] = _currentMasks;
       unawaited(saveCatalog(_edits));
+      unawaited(savePhotoCurves(_photoCurves));
+      unawaited(savePhotoMasks(_photoMasks));
     });
   }
 
@@ -370,12 +826,13 @@ class _EditorScreenState extends State<EditorScreen> {
   /// it), since its files are no longer reachable from the tree.
   void _removeLibraryFolder(String folder) {
     final next = _settings.copyWith(
-      libraryFolders:
-          _settings.libraryFolders.where((f) => f != folder).toList(),
+      libraryFolders: _settings.libraryFolders
+          .where((f) => f != folder)
+          .toList(),
     );
     final current = _currentFolder;
-    final showingRemoved = current != null &&
-        (current == folder || p.isWithin(folder, current));
+    final showingRemoved =
+        current != null && (current == folder || p.isWithin(folder, current));
     setState(() {
       _settings = next;
       if (showingRemoved) {
@@ -409,6 +866,18 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     await _loadSingleFile(path);
+    final next = _settings.withRecentFile(path);
+    setState(() => _settings = next);
+    unawaited(saveSettings(next));
+  }
+
+  /// Loads a single recently-opened file from the sidebar (moves it back to
+  /// the front of the recent list rather than duplicating the entry).
+  Future<void> _selectRecentFile(String path) async {
+    await _loadSingleFile(path);
+    final next = _settings.withRecentFile(path);
+    setState(() => _settings = next);
+    unawaited(saveSettings(next));
   }
 
   Future<void> _loadFolder(String folder, {String? selectPath}) async {
@@ -416,6 +885,11 @@ class _EditorScreenState extends State<EditorScreen> {
     final generation = ++_folderGeneration;
     _beginLoadingFiles();
     _currentFolder = folder;
+    if (_settings.lastActiveFolder != folder) {
+      final next = _settings.copyWith(lastActiveFolder: folder);
+      _settings = next;
+      unawaited(saveSettings(next));
+    }
     final files = await listRawFiles(folder);
     if (!mounted || generation != _folderGeneration) {
       return;
@@ -424,7 +898,7 @@ class _EditorScreenState extends State<EditorScreen> {
         ? 0
         : files.indexWhere((f) => f.path == selectPath);
     final selectedIndex = files.isEmpty ? null : (index < 0 ? 0 : index);
-    _applyFiles(files, selectedIndex, generation);
+    await _applyFiles(files, selectedIndex, generation);
   }
 
   Future<void> _loadSingleFile(String path) async {
@@ -443,7 +917,7 @@ class _EditorScreenState extends State<EditorScreen> {
     if (!mounted || generation != _folderGeneration) {
       return;
     }
-    _applyFiles([RawFile(path, modified)], 0, generation);
+    await _applyFiles([RawFile(path, modified)], 0, generation);
   }
 
   void _beginLoadingFiles() {
@@ -457,20 +931,54 @@ class _EditorScreenState extends State<EditorScreen> {
       _beforeAfterMode = false;
       _fullQualitySources.clear();
       _fullQualityMode = _settings.alwaysFullQuality;
+      _thumbnailsLoaded = 0;
+      _thumbnailsTotal = 0;
     });
   }
 
-  void _applyFiles(List<RawFile> files, int? selectedIndex, int generation) {
+  /// Cancels whatever's currently loading — folder scan, thumbnail batch,
+  /// photo decode, or a slow render — by invalidating the generation/
+  /// request tokens those operations already check, so in-flight work
+  /// discards its result instead of applying it once it (eventually)
+  /// resolves, and resets the overlay state immediately.
+  void _cancelLoading() {
+    _folderGeneration++;
+    _renderRequestId++;
+    _slowRenderTimer?.cancel();
+    setState(() {
+      _loading = false;
+      _isDecodingPhoto = false;
+      _isRenderingSlow = false;
+      _thumbnailsLoaded = 0;
+      _thumbnailsTotal = 0;
+    });
+  }
+
+  /// Applies a freshly-listed folder/file set, kicks off thumbnail loading
+  /// (awaited, so the loading overlay's real progress reflects it) and the
+  /// selected photo's decode/render (unawaited, so it proceeds in parallel
+  /// rather than waiting behind the thumbnail batch).
+  Future<void> _applyFiles(
+    List<RawFile> files,
+    int? selectedIndex,
+    int generation,
+  ) async {
     _resetZoom();
     setState(() {
       _files = files;
       _selectedIndex = selectedIndex;
-      _loading = false;
+      _thumbnailsTotal = files.length;
       _paramValues = selectedIndex == null
           ? _defaultParamValues()
           : _paramValuesFor(files[selectedIndex].path);
+      _currentCurves = selectedIndex == null
+          ? identityPhotoCurves
+          : _curvesFor(files[selectedIndex].path);
+      _currentMasks = selectedIndex == null
+          ? []
+          : _masksFor(files[selectedIndex].path);
+      _activeMaskId = imageMaskId;
     });
-    unawaited(_loadThumbnails(files, generation));
     if (selectedIndex != null) {
       unawaited(
         _loadEditSourceAndRender(files[selectedIndex].path, generation),
@@ -481,6 +989,11 @@ class _EditorScreenState extends State<EditorScreen> {
         );
       }
     }
+    await _loadThumbnails(files, generation);
+    if (!mounted || generation != _folderGeneration) {
+      return;
+    }
+    setState(() => _loading = false);
   }
 
   Future<void> _loadThumbnails(List<RawFile> files, int generation) async {
@@ -499,11 +1012,14 @@ class _EditorScreenState extends State<EditorScreen> {
         if (!mounted || generation != _folderGeneration) {
           return;
         }
-        if (bytes != null) {
-          setState(() => _thumbnails[file.path] = bytes!);
-          if (!fromCache) {
-            unawaited(cache?.store(file.path, bytes));
+        setState(() {
+          _thumbnailsLoaded++;
+          if (bytes != null) {
+            _thumbnails[file.path] = bytes;
           }
+        });
+        if (bytes != null && !fromCache) {
+          unawaited(cache?.store(file.path, bytes));
         }
       }
     }
@@ -524,6 +1040,9 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() {
       _selectedIndex = index;
       _paramValues = _paramValuesFor(path);
+      _currentCurves = _curvesFor(path);
+      _currentMasks = _masksFor(path);
+      _activeMaskId = imageMaskId;
     });
     unawaited(_loadEditSourceAndRender(path, _folderGeneration));
     if (_beforeAfterMode && !_neutralPreviews.containsKey(path)) {
@@ -583,7 +1102,8 @@ class _EditorScreenState extends State<EditorScreen> {
         : null;
     final job = RenderJob(
       source: live ? sources.live : (fullQualitySource ?? sources.preview),
-      params: RenderParams.fromValues(_paramValues),
+      params: RenderParams.fromValues(_paramValues, curves: _currentCurves),
+      masks: _currentMasks,
     );
     final result = await compute(renderJobToJpeg, job);
     _slowRenderTimer?.cancel();
@@ -713,10 +1233,269 @@ class _EditorScreenState extends State<EditorScreen> {
     _scheduleCatalogSave();
   }
 
+  void _onToneCurveChanged(List<CurvePoint> points) {
+    setState(() => _currentCurves = _currentCurves.copyWith(tone: points));
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onToneCurveChangeEnd(List<CurvePoint> points) {
+    setState(() => _currentCurves = _currentCurves.copyWith(tone: points));
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  PhotoCurves _withChannelCurve(String channel, List<CurvePoint> points) {
+    switch (channel) {
+      case 'red':
+        return _currentCurves.copyWith(red: points);
+      case 'green':
+        return _currentCurves.copyWith(green: points);
+      case 'blue':
+        return _currentCurves.copyWith(blue: points);
+    }
+    throw ArgumentError.value(channel, 'channel');
+  }
+
+  void _onColorCurveChanged(String channel, List<CurvePoint> points) {
+    setState(() => _currentCurves = _withChannelCurve(channel, points));
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onColorCurveChangeEnd(String channel, List<CurvePoint> points) {
+    setState(() => _currentCurves = _withChannelCurve(channel, points));
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
   void _resetParams() {
-    setState(() => _paramValues = _defaultParamValues());
+    setState(() {
+      _paramValues = _defaultParamValues();
+      _currentCurves = identityPhotoCurves;
+    });
     _scheduleRender(live: false);
     unawaited(_flushCurrentEdits());
+  }
+
+  /// The slider values the panel should currently show/edit — the global
+  /// ones, or (when a mask is being edited) just that mask's own.
+  Map<String, double> get _activeValues {
+    if (_activeMaskId == imageMaskId) {
+      return _paramValues;
+    }
+    return _activeMask?.values ?? const {};
+  }
+
+  MaskLayer? get _activeMask =>
+      _currentMasks.where((m) => m.id == _activeMaskId).firstOrNull;
+
+  void _onActiveChanged(String name, double value) {
+    if (_activeMaskId == imageMaskId) {
+      _onParamChanged(name, value);
+      return;
+    }
+    _updateActiveMask(
+      (mask) => mask.copyWith(values: {...mask.values, name: value}),
+    );
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onActiveChangeEnd(String name, double value) {
+    if (_activeMaskId == imageMaskId) {
+      _onParamChangeEnd(name, value);
+      return;
+    }
+    _updateActiveMask(
+      (mask) => mask.copyWith(values: {...mask.values, name: value}),
+    );
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  /// Resets whatever's currently being edited — the global adjustments +
+  /// curves when on the Image layer, or just the active mask's own
+  /// values when one is selected.
+  void _resetActive() {
+    if (_activeMaskId == imageMaskId) {
+      _resetParams();
+      return;
+    }
+    _updateActiveMask((mask) => mask.copyWith(values: const {}));
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  void _updateActiveMask(MaskLayer Function(MaskLayer mask) update) {
+    setState(() {
+      _currentMasks = [
+        for (final mask in _currentMasks)
+          if (mask.id == _activeMaskId) update(mask) else mask,
+      ];
+    });
+  }
+
+  void _selectMask(String id) {
+    setState(() => _activeMaskId = id);
+  }
+
+  void _addMask(MaskType type) {
+    final l10n = AppLocalizations.of(context)!;
+    final countOfType = _currentMasks.where((m) => m.type == type).length + 1;
+    final baseName = switch (type) {
+      MaskType.linearGradient => l10n.maskLinearGradient,
+      MaskType.radialGradient => l10n.maskRadialGradient,
+      MaskType.brush => l10n.maskBrush,
+      MaskType.colorRange => l10n.maskColorRange,
+    };
+    final mask = MaskLayer(
+      id: 'mask_${DateTime.now().microsecondsSinceEpoch}',
+      name: '$baseName $countOfType',
+      type: type,
+    );
+    setState(() {
+      _currentMasks = [..._currentMasks, mask];
+      _activeMaskId = mask.id;
+    });
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  void _toggleActiveMaskEnabled() {
+    _updateActiveMask((mask) => mask.copyWith(enabled: !mask.enabled));
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  void _toggleActiveMaskInverted() {
+    _updateActiveMask((mask) => mask.copyWith(inverted: !mask.inverted));
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  void _deleteActiveMask() {
+    setState(() {
+      _currentMasks = [
+        for (final mask in _currentMasks)
+          if (mask.id != _activeMaskId) mask,
+      ];
+      _activeMaskId = imageMaskId;
+    });
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  void _onMaskGeometryChanged(MaskLayer updated) {
+    setState(() {
+      _currentMasks = [
+        for (final mask in _currentMasks)
+          if (mask.id == updated.id) updated else mask,
+      ];
+    });
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onMaskGeometryChangeEnd(MaskLayer updated) {
+    setState(() {
+      _currentMasks = [
+        for (final mask in _currentMasks)
+          if (mask.id == updated.id) updated else mask,
+      ];
+    });
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  void _setBrushRadius(double value) {
+    setState(() => _brushRadius = value);
+  }
+
+  void _setBrushHardness(double value) {
+    setState(() => _brushHardness = value);
+  }
+
+  void _toggleBrushErase() {
+    setState(() => _brushErase = !_brushErase);
+  }
+
+  /// Drops the active brush mask's last stroke — the brush equivalent of
+  /// undo, since strokes are kept as vector data rather than baked into a
+  /// fixed bitmap.
+  void _undoLastStroke() {
+    final mask = _activeMask;
+    if (mask == null || mask.brush.strokes.isEmpty) {
+      return;
+    }
+    _updateActiveMask(
+      (m) => m.copyWith(
+        brush: m.brush.copyWith(
+          strokes: m.brush.strokes.sublist(0, m.brush.strokes.length - 1),
+        ),
+      ),
+    );
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  void _onColorRangeToleranceChanged(double value) {
+    _updateActiveMask(
+      (m) => m.copyWith(colorRange: m.colorRange.copyWith(tolerance: value)),
+    );
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onColorRangeToleranceChangeEnd(double value) {
+    _updateActiveMask(
+      (m) => m.copyWith(colorRange: m.colorRange.copyWith(tolerance: value)),
+    );
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  void _onColorRangeFeatherChanged(double value) {
+    _updateActiveMask(
+      (m) => m.copyWith(colorRange: m.colorRange.copyWith(feather: value)),
+    );
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onColorRangeFeatherChangeEnd(double value) {
+    _updateActiveMask(
+      (m) => m.copyWith(colorRange: m.colorRange.copyWith(feather: value)),
+    );
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  /// Samples the currently-rendered preview at normalized ([nx], [ny]) and
+  /// sets it as the active Color Range mask's reference color — "what you
+  /// see is what you pick", matching the eyedropper's own preview surface.
+  void _onSampleMaskColor(double nx, double ny) {
+    final mask = _activeMask;
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (mask == null || mask.type != MaskType.colorRange || selected == null) {
+      return;
+    }
+    final bytes = _renderedPreviews[selected.path];
+    if (bytes == null) {
+      return;
+    }
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) {
+      return;
+    }
+    final px = (nx * (decoded.width - 1)).round().clamp(0, decoded.width - 1);
+    final py = (ny * (decoded.height - 1)).round().clamp(0, decoded.height - 1);
+    final pixel = decoded.getPixel(px, py);
+    _updateActiveMask(
+      (m) => m.copyWith(
+        colorRange: m.colorRange.copyWith(
+          r: pixel.r.toDouble(),
+          g: pixel.g.toDouble(),
+          b: pixel.b.toDouble(),
+        ),
+      ),
+    );
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
   }
 
   void _scheduleRender({required bool live}) {
@@ -760,7 +1539,8 @@ class _EditorScreenState extends State<EditorScreen> {
       ExportRequest(
         sourcePath: selected.path,
         destPath: destPath,
-        params: RenderParams.fromValues(_paramValues),
+        params: RenderParams.fromValues(_paramValues, curves: _currentCurves),
+        masks: _currentMasks,
         format: options.format,
         quality: options.quality,
       ),
@@ -795,18 +1575,25 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  /// Which loading overlay message to show right now, if any — checked in
-  /// priority order since only one can be shown at a time.
-  String? _overlayMessage(BuildContext context, RawFile? selected) {
+  /// What the loading overlay should show right now, if anything — checked
+  /// in priority order since only one can be shown at a time.
+  _LoadingInfo? _overlayInfo(BuildContext context, RawFile? selected) {
     final l10n = AppLocalizations.of(context)!;
     if (_loading) {
-      return l10n.loadingFolder;
+      return _LoadingInfo(
+        message: _thumbnailsTotal > 0
+            ? l10n.loadingPhotos(_thumbnailsLoaded, _thumbnailsTotal)
+            : l10n.loadingFolder,
+        progress: _thumbnailsTotal > 0
+            ? _thumbnailsLoaded / _thumbnailsTotal
+            : null,
+      );
     }
     if (_isDecodingPhoto && selected != null) {
-      return l10n.loadingImage(selected.name);
+      return _LoadingInfo(message: l10n.loadingImage(selected.name));
     }
     if (_isRenderingSlow) {
-      return l10n.applyingAdjustments;
+      return _LoadingInfo(message: l10n.applyingAdjustments);
     }
     return null;
   }
@@ -829,12 +1616,59 @@ class _EditorScreenState extends State<EditorScreen> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          FolderSidebar(
-                            roots: _settings.libraryFolders,
-                            selectedPath: _currentFolder,
-                            onSelect: (path) =>
-                                unawaited(_selectSidebarFolder(path)),
-                            onRemove: _removeLibraryFolder,
+                          SizedBox(
+                            width: 220,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                Expanded(
+                                  child: FolderSidebar(
+                                    roots: _settings.libraryFolders,
+                                    recentFiles: _settings.recentFiles,
+                                    selectedPath: _currentFolder,
+                                    onSelect: (path) =>
+                                        unawaited(_selectSidebarFolder(path)),
+                                    onRemove: _removeLibraryFolder,
+                                    onSelectRecentFile: (path) =>
+                                        unawaited(_selectRecentFile(path)),
+                                  ),
+                                ),
+                                Container(
+                                  height: 1,
+                                  color: DarkmoonColors.divider,
+                                ),
+                                // Same flex as the FolderSidebar above —
+                                // a fixed 50/50 split of the sidebar's
+                                // height rather than growing with the
+                                // preset count, with its own scroll once
+                                // the list outgrows its half.
+                                Expanded(
+                                  child: SingleChildScrollView(
+                                    child: Container(
+                                      color: DarkmoonColors.panel,
+                                      child: PresetPanel(
+                                        presets: _presets,
+                                        enabled: selected != null,
+                                        isApplied: _matchesAppliedPreset,
+                                        onApply: _applyPreset,
+                                        onSaveNew: () =>
+                                            unawaited(_saveCurrentAsPreset()),
+                                        onImport: () =>
+                                            unawaited(_importPresets()),
+                                        onRename: (preset) =>
+                                            unawaited(_renamePreset(preset)),
+                                        onExport: (preset) =>
+                                            unawaited(_exportPreset(preset)),
+                                        onDelete: (preset) =>
+                                            unawaited(_deletePreset(preset)),
+                                        onDeleteMany: (presets) =>
+                                            unawaited(_deletePresets(presets)),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
                           Expanded(
                             child: _ImageArea(
@@ -863,18 +1697,59 @@ class _EditorScreenState extends State<EditorScreen> {
                                   ? null
                                   : _toggleFullQuality,
                               onPointerSignal: _handlePointerSignal,
+                              editingMask:
+                                  (_beforeAfterMode || selected == null)
+                                  ? null
+                                  : _activeMask,
+                              editingSource: selected == null
+                                  ? null
+                                  : _editSources[selected.path]?.preview,
+                              onMaskGeometryChanged: _onMaskGeometryChanged,
+                              onMaskGeometryChangeEnd: _onMaskGeometryChangeEnd,
+                              brushRadius: _brushRadius,
+                              brushHardness: _brushHardness,
+                              brushErase: _brushErase,
+                              onSampleColor: _onSampleMaskColor,
                             ),
                           ),
                           _ControlsPanel(
-                            values: _paramValues,
+                            values: _activeValues,
                             histogram: selected == null
                                 ? null
                                 : _histograms[selected.path],
-                            onChanged: _onParamChanged,
-                            onChangeEnd: _onParamChangeEnd,
-                            onReset: _resetParams,
+                            onChanged: _onActiveChanged,
+                            onChangeEnd: _onActiveChangeEnd,
+                            onReset: _resetActive,
                             onExport: selected == null ? null : _exportCurrent,
                             exporting: _exporting,
+                            enabled: selected != null,
+                            curves: _currentCurves,
+                            onToneCurveChanged: _onToneCurveChanged,
+                            onToneCurveChangeEnd: _onToneCurveChangeEnd,
+                            onColorCurveChanged: _onColorCurveChanged,
+                            onColorCurveChangeEnd: _onColorCurveChangeEnd,
+                            masks: _currentMasks,
+                            activeMaskId: _activeMaskId,
+                            onSelectMask: _selectMask,
+                            onAddMask: _addMask,
+                            onToggleMaskEnabled: _toggleActiveMaskEnabled,
+                            onToggleMaskInverted: _toggleActiveMaskInverted,
+                            onDeleteMask: _deleteActiveMask,
+                            brushRadius: _brushRadius,
+                            brushHardness: _brushHardness,
+                            brushErase: _brushErase,
+                            onBrushRadiusChanged: _setBrushRadius,
+                            onBrushHardnessChanged: _setBrushHardness,
+                            onToggleBrushErase: _toggleBrushErase,
+                            onUndoStroke: _undoLastStroke,
+                            onColorRangeToleranceChanged:
+                                _onColorRangeToleranceChanged,
+                            onColorRangeToleranceChangeEnd:
+                                _onColorRangeToleranceChangeEnd,
+                            onColorRangeFeatherChanged:
+                                _onColorRangeFeatherChanged,
+                            onColorRangeFeatherChangeEnd:
+                                _onColorRangeFeatherChangeEnd,
                           ),
                         ],
                       ),
@@ -889,10 +1764,10 @@ class _EditorScreenState extends State<EditorScreen> {
                 ),
                 Builder(
                   builder: (context) {
-                    final message = _overlayMessage(context, selected);
-                    return message == null
+                    final info = _overlayInfo(context, selected);
+                    return info == null
                         ? const SizedBox.shrink()
-                        : _LoadingOverlay(message: message);
+                        : _LoadingOverlay(info: info, onCancel: _cancelLoading);
                   },
                 ),
               ],
@@ -993,6 +1868,14 @@ class _ImageArea extends StatelessWidget {
     required this.fullQualityMode,
     required this.onToggleFullQuality,
     required this.onPointerSignal,
+    required this.editingMask,
+    required this.editingSource,
+    required this.onMaskGeometryChanged,
+    required this.onMaskGeometryChangeEnd,
+    required this.brushRadius,
+    required this.brushHardness,
+    required this.brushErase,
+    required this.onSampleColor,
   });
 
   final RawFile? selected;
@@ -1010,6 +1893,28 @@ class _ImageArea extends StatelessWidget {
   final bool fullQualityMode;
   final VoidCallback? onToggleFullQuality;
   final void Function(PointerSignalEvent) onPointerSignal;
+
+  /// The mask currently being edited (Linear/Radial Gradient), if any —
+  /// draws its draggable handles over the image. Null outside of
+  /// Before/After mode having a real mask (not the "Image" layer)
+  /// selected.
+  final MaskLayer? editingMask;
+
+  /// The currently-decoded edit source backing [preview] — only its
+  /// width/height are used, to work out where `BoxFit.contain` placed the
+  /// image so the mask handles line up with it.
+  final EditSource? editingSource;
+  final ValueChanged<MaskLayer> onMaskGeometryChanged;
+  final ValueChanged<MaskLayer> onMaskGeometryChangeEnd;
+
+  /// Current brush tool settings, used when [editingMask] is a Brush mask.
+  final double brushRadius;
+  final double brushHardness;
+  final bool brushErase;
+
+  /// Fires with normalized image coordinates when the user taps the image
+  /// while a Color Range mask is active.
+  final void Function(double nx, double ny) onSampleColor;
 
   @override
   Widget build(BuildContext context) {
@@ -1131,43 +2036,147 @@ class _ImageArea extends StatelessWidget {
   // always fits against the same fixed box — without this, the displayed
   // image visibly shrank and grew back as the source resolution changed.
   Widget _fittedImage(Uint8List bytes) {
+    final mask = editingMask;
+    final source = editingSource;
     return SizedBox.expand(
-      child: Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true),
+      child: mask == null || source == null
+          ? Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true)
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final containerSize = Size(
+                  constraints.maxWidth,
+                  constraints.maxHeight,
+                );
+                return Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    Image.memory(
+                      bytes,
+                      fit: BoxFit.contain,
+                      gaplessPlayback: true,
+                    ),
+                    if (mask.type == MaskType.brush)
+                      BrushMaskOverlay(
+                        containerSize: containerSize,
+                        imageWidth: source.width,
+                        imageHeight: source.height,
+                        mask: mask,
+                        brushRadius: brushRadius,
+                        brushHardness: brushHardness,
+                        brushErase: brushErase,
+                        onChanged: onMaskGeometryChanged,
+                        onChangeEnd: onMaskGeometryChangeEnd,
+                      )
+                    else if (mask.type == MaskType.colorRange)
+                      ColorRangeOverlay(
+                        containerSize: containerSize,
+                        imageWidth: source.width,
+                        imageHeight: source.height,
+                        onSample: onSampleColor,
+                      )
+                    else
+                      GradientMaskOverlay(
+                        containerSize: containerSize,
+                        imageWidth: source.width,
+                        imageHeight: source.height,
+                        mask: mask,
+                        onChanged: onMaskGeometryChanged,
+                        onChangeEnd: onMaskGeometryChangeEnd,
+                      ),
+                  ],
+                );
+              },
+            ),
     );
   }
 }
 
-/// A dark scrim with a thin indeterminate progress bar and message, shown
-/// over the whole editor area (below the menu bar) during long operations
-/// like opening a folder.
-class _LoadingOverlay extends StatelessWidget {
-  const _LoadingOverlay({required this.message});
+/// What the loading overlay shows: a message, an optional real progress
+/// fraction (null means indeterminate — no measurable sub-steps yet).
+class _LoadingInfo {
+  const _LoadingInfo({required this.message, this.progress});
 
   final String message;
+  final double? progress;
+}
+
+/// A dark scrim with a centered card, shown over the whole editor area
+/// (below the menu bar) during long operations like opening a folder —
+/// real progress when [info.progress] is known, an indeterminate bar
+/// otherwise, plus a way to cancel out of whatever's running.
+class _LoadingOverlay extends StatelessWidget {
+  const _LoadingOverlay({required this.info, required this.onCancel});
+
+  final _LoadingInfo info;
+  final VoidCallback onCancel;
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final progress = info.progress;
     return Positioned.fill(
       child: Container(
         color: Colors.black.withValues(alpha: 0.55),
         alignment: Alignment.center,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const SizedBox(
-              width: 220,
-              height: 2,
-              child: LinearProgressIndicator(
-                backgroundColor: Colors.white24,
-                valueColor: AlwaysStoppedAnimation(Colors.white),
+        child: Container(
+          width: 280,
+          padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
+          decoration: BoxDecoration(
+            color: DarkmoonColors.surfaceRaised,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: DarkmoonColors.border),
+            boxShadow: const [
+              BoxShadow(color: Colors.black45, blurRadius: 24, spreadRadius: 2),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const SizedBox(
+                width: 28,
+                height: 28,
+                child: CircularProgressIndicator(strokeWidth: 2.5),
               ),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              message,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-            ),
-          ],
+              const SizedBox(height: 14),
+              Text(
+                info.message,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  color: DarkmoonColors.textPrimary,
+                  fontSize: 13,
+                ),
+              ),
+              const SizedBox(height: 14),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: SizedBox(
+                  height: 4,
+                  child: progress == null
+                      ? const LinearProgressIndicator(
+                          backgroundColor: DarkmoonColors.border,
+                          valueColor: AlwaysStoppedAnimation(
+                            DarkmoonColors.accent,
+                          ),
+                        )
+                      : LinearProgressIndicator(
+                          value: progress,
+                          backgroundColor: DarkmoonColors.border,
+                          valueColor: const AlwaysStoppedAnimation(
+                            DarkmoonColors.accent,
+                          ),
+                        ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton(
+                  onPressed: onCancel,
+                  child: Text(l10n.cancelButton),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -1197,91 +2206,52 @@ class _ViewerToolbar extends StatelessWidget {
   final bool fullQualityMode;
   final VoidCallback? onToggleFullQuality;
 
-  static final _compactButtonStyle = ElevatedButton.styleFrom(
-    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 6),
-    textStyle: const TextStyle(fontSize: 12),
-    minimumSize: Size.zero,
-  );
-
-  static final _compactIconButtonStyle = IconButton.styleFrom(
-    padding: EdgeInsets.zero,
-    minimumSize: const Size(26, 26),
-    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-  );
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Container(
-      height: 40,
-      padding: const EdgeInsets.symmetric(horizontal: 6),
+      height: 44,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       color: DarkmoonColors.background,
       child: Row(
         children: [
-          IconButton(
-            onPressed: onZoomOut,
-            icon: const Icon(Icons.remove, size: 14),
-            style: _compactIconButtonStyle,
+          // Not Flexible: every segment inside is either an icon or the
+          // fixed-width zoom-percent readout, neither of which has any
+          // room to give — letting this pill shrink would only crush the
+          // percentage text unreadable, never actually save space.
+          _ToolbarPill(
+            children: [
+              _ToolbarSegment(icon: CupertinoIcons.minus, onTap: onZoomOut),
+              _ToolbarSegment(label: zoomLabel, width: 40, padded: false),
+              _ToolbarSegment(icon: CupertinoIcons.add, onTap: onZoomIn),
+            ],
           ),
-          SizedBox(
-            width: 30,
-            child: Text(
-              zoomLabel,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                color: DarkmoonColors.textSecondary,
-                fontSize: 11.5,
+          const SizedBox(width: 6),
+          _ToolbarPill(
+            children: [
+              _ToolbarSegment(
+                icon: CupertinoIcons.arrow_up_left_arrow_down_right,
+                onTap: onZoomFit,
+                tooltip: l10n.fitToWindow,
               ),
-            ),
-          ),
-          IconButton(
-            onPressed: onZoomIn,
-            icon: const Icon(Icons.add, size: 14),
-            style: _compactIconButtonStyle,
-          ),
-          const SizedBox(width: 4),
-          Flexible(
-            child: ElevatedButton(
-              onPressed: onZoomFit,
-              style: _compactButtonStyle,
-              child: Text(
-                l10n.fitToWindow,
-                overflow: TextOverflow.ellipsis,
-                softWrap: false,
-              ),
-            ),
+            ],
           ),
           const Spacer(),
-          Tooltip(
-            message: l10n.fullQualityButton,
-            child: IconButton(
-              onPressed: onToggleFullQuality,
-              style: fullQualityMode
-                  ? _compactIconButtonStyle.copyWith(
-                      backgroundColor: const WidgetStatePropertyAll(
-                        DarkmoonColors.accent,
-                      ),
-                    )
-                  : _compactIconButtonStyle,
-              icon: const Icon(Icons.hd_outlined, size: 16),
-            ),
-          ),
-          const SizedBox(width: 4),
           Flexible(
-            child: ElevatedButton(
-              onPressed: onToggleBeforeAfter,
-              style: beforeAfterMode
-                  ? _compactButtonStyle.copyWith(
-                      backgroundColor: const WidgetStatePropertyAll(
-                        DarkmoonColors.accent,
-                      ),
-                    )
-                  : _compactButtonStyle,
-              child: Text(
-                l10n.beforeAfterButton,
-                overflow: TextOverflow.ellipsis,
-                softWrap: false,
-              ),
+            child: _ToolbarPill(
+              children: [
+                _ToolbarSegment(
+                  label: l10n.beforeAfterButton,
+                  selected: beforeAfterMode,
+                  onTap: onToggleBeforeAfter,
+                ),
+                _ToolbarSegment(
+                  label: l10n.fullQualityShortLabel,
+                  selected: fullQualityMode,
+                  onTap: onToggleFullQuality,
+                  tooltip: l10n.fullQualityButton,
+                ),
+              ],
             ),
           ),
         ],
@@ -1290,7 +2260,176 @@ class _ViewerToolbar extends StatelessWidget {
   }
 }
 
-class _ControlsPanel extends StatelessWidget {
+/// A macOS-style segmented-control shell: a single rounded, bordered pill
+/// containing [children] (usually [_ToolbarSegment]s) laid out edge to
+/// edge with hairline dividers between them, rather than each control
+/// being its own separately-chromed Material button.
+class _ToolbarPill extends StatelessWidget {
+  const _ToolbarPill({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 28,
+      decoration: BoxDecoration(
+        color: DarkmoonColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(7),
+        border: Border.all(color: DarkmoonColors.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < children.length; i++) ...[
+            if (i > 0) Container(width: 1, color: DarkmoonColors.border),
+            // Each segment decides for itself whether it can afford to
+            // shrink (see _ToolbarSegment) — a blanket Flexible here would
+            // give every segment equal shrink priority regardless of
+            // whether it actually has room to give, which is exactly what
+            // crushed the zoom percentage readout down to unreadable
+            // before this while "Fit to window" barely budged.
+            children[i],
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+/// One segment of a [_ToolbarPill] — an icon or short label, flat-filled
+/// with the accent color when [selected] rather than boxed in its own
+/// bordered button. Plain [GestureDetector] rather than [InkWell]: the
+/// selected fill is the only feedback state this needs, and skipping
+/// Material's splash keeps it feeling like a native toggle instead of an
+/// Android ripple.
+class _ToolbarSegment extends StatelessWidget {
+  const _ToolbarSegment({
+    this.icon,
+    this.label,
+    this.selected = false,
+    this.onTap,
+    this.tooltip,
+    this.width,
+    this.padded = true,
+  });
+
+  final IconData? icon;
+  final String? label;
+  final bool selected;
+  final VoidCallback? onTap;
+  final String? tooltip;
+  final double? width;
+  // A fixed-[width] segment (e.g. the zoom-percent readout) already sizes
+  // itself to fit its content exactly — adding the usual label padding on
+  // top would eat into that same fixed width and leave too little room for
+  // the text, so callers with a known-tight width opt out of it here.
+  final bool padded;
+
+  @override
+  Widget build(BuildContext context) {
+    final foreground = selected
+        ? DarkmoonColors.background
+        : (onTap == null
+              ? DarkmoonColors.textMuted
+              : DarkmoonColors.textSecondary);
+    final content = Container(
+      width: width,
+      height: double.infinity,
+      alignment: Alignment.center,
+      padding: padded
+          ? EdgeInsets.symmetric(horizontal: label != null ? 10 : 7)
+          : EdgeInsets.zero,
+      color: selected ? DarkmoonColors.accent : Colors.transparent,
+      child: icon != null
+          ? Icon(icon, size: 14, color: foreground)
+          : Text(
+              label!,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: TextStyle(fontSize: 11.5, color: foreground),
+            ),
+    );
+    final tappable = onTap == null
+        ? content
+        : MouseRegion(
+            cursor: SystemMouseCursors.click,
+            child: GestureDetector(
+              onTap: onTap,
+              behavior: HitTestBehavior.opaque,
+              child: content,
+            ),
+          );
+    final result = tooltip == null
+        ? tappable
+        : Tooltip(message: tooltip!, child: tappable);
+    // Only a plain (non-fixed-width) label can safely give up space —
+    // icons and the zoom-percent readout have nothing left to trim
+    // without becoming unreadable/clipped, so only *this* case opts into
+    // shrinking (and ellipsizing) inside its [_ToolbarPill].
+    return icon == null && width == null ? Flexible(child: result) : result;
+  }
+}
+
+/// A clickable section header with a chevron — Lightroom-style
+/// collapse/expand toggle, shared by every panel section (sliders and
+/// the Tone Curve alike).
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({
+    required this.label,
+    required this.collapsed,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool collapsed;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      // Spacing lives here, outside the InkWell, so hovering/clicking the
+      // gap above and below the header box doesn't register as a tap on
+      // it — only the visible rectangle itself should react.
+      padding: const EdgeInsets.only(top: 14, bottom: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: DarkmoonColors.surfaceRaised,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: DarkmoonColors.border),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
+                ),
+                Icon(
+                  collapsed
+                      ? CupertinoIcons.chevron_right
+                      : CupertinoIcons.chevron_down,
+                  size: 13,
+                  color: DarkmoonColors.textMuted,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ControlsPanel extends StatefulWidget {
   const _ControlsPanel({
     required this.values,
     required this.histogram,
@@ -1299,6 +2438,30 @@ class _ControlsPanel extends StatelessWidget {
     required this.onReset,
     required this.onExport,
     required this.exporting,
+    required this.enabled,
+    required this.curves,
+    required this.onToneCurveChanged,
+    required this.onToneCurveChangeEnd,
+    required this.onColorCurveChanged,
+    required this.onColorCurveChangeEnd,
+    required this.masks,
+    required this.activeMaskId,
+    required this.onSelectMask,
+    required this.onAddMask,
+    required this.onToggleMaskEnabled,
+    required this.onToggleMaskInverted,
+    required this.onDeleteMask,
+    required this.brushRadius,
+    required this.brushHardness,
+    required this.brushErase,
+    required this.onBrushRadiusChanged,
+    required this.onBrushHardnessChanged,
+    required this.onToggleBrushErase,
+    required this.onUndoStroke,
+    required this.onColorRangeToleranceChanged,
+    required this.onColorRangeToleranceChangeEnd,
+    required this.onColorRangeFeatherChanged,
+    required this.onColorRangeFeatherChangeEnd,
   });
 
   final Map<String, double> values;
@@ -1309,78 +2472,754 @@ class _ControlsPanel extends StatelessWidget {
   final VoidCallback? onExport;
   final bool exporting;
 
+  /// False when no photo is loaded — every control (sliders, reset,
+  /// export) is locked rather than acting on a placeholder value.
+  final bool enabled;
+
+  final PhotoCurves curves;
+  final ValueChanged<List<CurvePoint>> onToneCurveChanged;
+  final ValueChanged<List<CurvePoint>> onToneCurveChangeEnd;
+  final void Function(String channel, List<CurvePoint> points)
+  onColorCurveChanged;
+  final void Function(String channel, List<CurvePoint> points)
+  onColorCurveChangeEnd;
+
+  final List<MaskLayer> masks;
+  final String activeMaskId;
+  final ValueChanged<String> onSelectMask;
+  final ValueChanged<MaskType> onAddMask;
+  final VoidCallback onToggleMaskEnabled;
+  final VoidCallback onToggleMaskInverted;
+  final VoidCallback onDeleteMask;
+
+  final double brushRadius;
+  final double brushHardness;
+  final bool brushErase;
+  final ValueChanged<double> onBrushRadiusChanged;
+  final ValueChanged<double> onBrushHardnessChanged;
+  final VoidCallback onToggleBrushErase;
+  final VoidCallback onUndoStroke;
+
+  final ValueChanged<double> onColorRangeToleranceChanged;
+  final ValueChanged<double> onColorRangeToleranceChangeEnd;
+  final ValueChanged<double> onColorRangeFeatherChanged;
+  final ValueChanged<double> onColorRangeFeatherChangeEnd;
+
+  @override
+  State<_ControlsPanel> createState() => _ControlsPanelState();
+}
+
+class _ControlsPanelState extends State<_ControlsPanel> {
+  /// Section names the user has collapsed, Lightroom-style — every section
+  /// starts expanded, matching the panel's previous (always-open) layout.
+  final Set<String> _collapsed = {};
+
+  /// Which Color Curve channel is currently shown in the editor — only one
+  /// at a time, switched via the R/G/B tabs, matching Lightroom.
+  String _activeColorChannel = 'red';
+
+  /// Which Color Mixer band is currently shown — one of the 8 capitalized
+  /// channel names used in the "Mixer" + channel + "Hue/Saturation/
+  /// Luminance" slider keys (e.g. `'Red'`), switched via the dot picker.
+  String _activeMixerChannel = 'Red';
+
+  /// Which Color Grading range's wheel is currently shown — one of
+  /// 'Shadows', 'Midtones', 'Highlights' (the "Grade" + range +
+  /// "Hue/Saturation/Luminance" slider key prefix), switched via tabs.
+  String _activeGradeRange = 'Shadows';
+
+  void _toggleSection(String section) {
+    setState(() {
+      if (!_collapsed.add(section)) {
+        _collapsed.remove(section);
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
+    final values = widget.values;
+    final histogram = widget.histogram;
+    final onChanged = widget.onChanged;
+    final onChangeEnd = widget.onChangeEnd;
+    final onReset = widget.onReset;
+    final onExport = widget.onExport;
+    final exporting = widget.exporting;
+    final enabled = widget.enabled;
+    final curves = widget.curves;
+    final onToneCurveChanged = widget.onToneCurveChanged;
+    final onToneCurveChangeEnd = widget.onToneCurveChangeEnd;
+    final onColorCurveChanged = widget.onColorCurveChanged;
+    final onColorCurveChangeEnd = widget.onColorCurveChangeEnd;
+    final isMaskActive = widget.activeMaskId != imageMaskId;
+    final activeMask = widget.masks
+        .where((m) => m.id == widget.activeMaskId)
+        .firstOrNull;
+    final isBrushActive = activeMask?.type == MaskType.brush;
+    final isColorRangeActive = activeMask?.type == MaskType.colorRange;
     final l10n = AppLocalizations.of(context)!;
     return Container(
       width: 280,
       color: DarkmoonColors.panel,
-      child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Row(
+      child: IgnorePointer(
+        ignoring: !enabled,
+        child: Opacity(
+          opacity: enabled ? 1 : 0.45,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 40,
-                    child: ElevatedButton.icon(
-                      onPressed: exporting ? null : onExport,
-                      icon: exporting
-                          ? const SizedBox(
-                              width: 14,
-                              height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.file_download_outlined, size: 16),
-                      label: Text(
-                        exporting
-                            ? l10n.exportingButton
-                            : l10n.exportPanelButton,
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 40,
+                        child: ElevatedButton.icon(
+                          onPressed: exporting ? null : onExport,
+                          style: ElevatedButton.styleFrom(
+                            side: const BorderSide(
+                              color: DarkmoonColors.accent,
+                              width: 1.4,
+                            ),
+                          ),
+                          icon: exporting
+                              ? const SizedBox(
+                                  width: 14,
+                                  height: 14,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(
+                                  CupertinoIcons.square_arrow_down,
+                                  size: 16,
+                                ),
+                          label: Text(
+                            exporting
+                                ? l10n.exportingButton
+                                : l10n.exportPanelButton,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 40,
+                      width: 40,
+                      child: IconButton(
+                        onPressed: onReset,
+                        tooltip: l10n.resetTooltip,
+                        icon: const Icon(
+                          CupertinoIcons.arrow_2_circlepath,
+                          size: 16,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                MaskSelector(
+                  masks: widget.masks,
+                  activeId: widget.activeMaskId,
+                  onSelect: widget.onSelectMask,
+                  onAdd: widget.onAddMask,
+                  onToggleEnabled: widget.onToggleMaskEnabled,
+                  onToggleInverted: widget.onToggleMaskInverted,
+                  onDelete: widget.onDeleteMask,
+                ),
+                if (isBrushActive) ...[
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SliderRow(
+                      name: l10n.maskBrushSizeLabel,
+                      min: 0.01,
+                      max: 0.4,
+                      value: widget.brushRadius,
+                      decimals: 2,
+                      onChanged: widget.onBrushRadiusChanged,
+                      onChangeEnd: widget.onBrushRadiusChanged,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SliderRow(
+                      name: l10n.maskBrushHardnessLabel,
+                      min: 0,
+                      max: 1,
+                      value: widget.brushHardness,
+                      decimals: 2,
+                      onChanged: widget.onBrushHardnessChanged,
+                      onChangeEnd: widget.onBrushHardnessChanged,
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          l10n.maskBrushEraseLabel,
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                      Switch(
+                        value: widget.brushErase,
+                        onChanged: (_) => widget.onToggleBrushErase(),
+                      ),
+                      const SizedBox(width: 6),
+                      SizedBox(
+                        height: 32,
+                        width: 32,
+                        child: IconButton(
+                          tooltip: l10n.maskUndoStrokeTooltip,
+                          onPressed: widget.onUndoStroke,
+                          icon: const Icon(
+                            CupertinoIcons.arrow_uturn_left,
+                            size: 15,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+                if (isColorRangeActive) ...[
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: Color.fromARGB(
+                            255,
+                            activeMask!.colorRange.r.round().clamp(0, 255),
+                            activeMask.colorRange.g.round().clamp(0, 255),
+                            activeMask.colorRange.b.round().clamp(0, 255),
+                          ),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: DarkmoonColors.border),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          l10n.colorRangeHint,
+                          style: const TextStyle(
+                            color: DarkmoonColors.textMuted,
+                            fontSize: 11,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SliderRow(
+                      name: l10n.colorRangeToleranceLabel,
+                      min: 0,
+                      max: 100,
+                      value: activeMask.colorRange.tolerance,
+                      onChanged: widget.onColorRangeToleranceChanged,
+                      onChangeEnd: widget.onColorRangeToleranceChangeEnd,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: SliderRow(
+                      name: l10n.colorRangeFeatherLabel,
+                      min: 0,
+                      max: 100,
+                      value: activeMask.colorRange.feather,
+                      onChanged: widget.onColorRangeFeatherChanged,
+                      onChangeEnd: widget.onColorRangeFeatherChangeEnd,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 10),
+                HistogramView(histogram: histogram),
+                for (final entry in _sections.entries) ...[
+                  const SizedBox(height: 10),
+                  if (entry.key != _sections.keys.first) const Divider(),
+                  _SectionHeader(
+                    label: _sectionLabel(l10n, entry.key),
+                    collapsed: _collapsed.contains(entry.key),
+                    onTap: () => _toggleSection(entry.key),
+                  ),
+                  if (!_collapsed.contains(entry.key))
+                    for (final spec in entry.value)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: SliderRow(
+                          name: _sliderLabel(l10n, spec.name),
+                          min: spec.min,
+                          max: spec.max,
+                          value: values[spec.name] ?? spec.defaultValue,
+                          decimals: spec.decimals,
+                          defaultValue: spec.defaultValue,
+                          trackColors: spec.gradientColors,
+                          onChanged: (v) => onChanged(spec.name, v),
+                          onChangeEnd: (v) => onChangeEnd(spec.name, v),
+                        ),
+                      ),
+                  // Tone Curve/Color Curve/Color Mixer/Color Grading are
+                  // global-only for now — masks support the basic 19
+                  // sliders (White Balance/Tone/Presence/Detail) only.
+                  // Placed after Detail rather than interleaved with the
+                  // _sections loop, so Presence/Detail stay right after
+                  // Tone, ahead of the advanced color tools.
+                  if (entry.key == 'DETAIL' && !isMaskActive) ...[
+                    const Divider(),
+                    _SectionHeader(
+                      label: l10n.sectionToneCurve,
+                      collapsed: _collapsed.contains('TONE CURVE'),
+                      onTap: () => _toggleSection('TONE CURVE'),
+                    ),
+                    if (!_collapsed.contains('TONE CURVE'))
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: ToneCurveEditor(
+                          points: curves.tone,
+                          onChanged: onToneCurveChanged,
+                          onChangeEnd: onToneCurveChangeEnd,
+                        ),
+                      ),
+                    const Divider(),
+                    _SectionHeader(
+                      label: l10n.sectionColorCurve,
+                      collapsed: _collapsed.contains('COLOR CURVE'),
+                      onTap: () => _toggleSection('COLOR CURVE'),
+                    ),
+                    if (!_collapsed.contains('COLOR CURVE')) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4, bottom: 8),
+                        child: _ColorChannelTabs(
+                          active: _activeColorChannel,
+                          onSelect: (channel) =>
+                              setState(() => _activeColorChannel = channel),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: ToneCurveEditor(
+                          key: ValueKey(_activeColorChannel),
+                          points: _channelPoints(curves, _activeColorChannel),
+                          lineColor: _channelColor(_activeColorChannel),
+                          onChanged: (points) =>
+                              onColorCurveChanged(_activeColorChannel, points),
+                          onChangeEnd: (points) => onColorCurveChangeEnd(
+                            _activeColorChannel,
+                            points,
+                          ),
+                        ),
+                      ),
+                    ],
+                    const Divider(),
+                    _SectionHeader(
+                      label: l10n.sectionColorMixer,
+                      collapsed: _collapsed.contains('COLOR MIXER'),
+                      onTap: () => _toggleSection('COLOR MIXER'),
+                    ),
+                    if (!_collapsed.contains('COLOR MIXER')) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6, bottom: 10),
+                        child: _MixerChannelDots(
+                          active: _activeMixerChannel,
+                          onSelect: (channel) =>
+                              setState(() => _activeMixerChannel = channel),
+                        ),
+                      ),
+                      for (final suffix in const [
+                        'Hue',
+                        'Saturation',
+                        'Luminance',
+                      ])
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: SliderRow(
+                            name: _mixerSliderLabel(l10n, suffix),
+                            min: -100,
+                            max: 100,
+                            value:
+                                values['Mixer$_activeMixerChannel$suffix'] ?? 0,
+                            defaultValue: 0,
+                            trackColors: [
+                              DarkmoonColors.textMuted,
+                              _mixerChannelColor(_activeMixerChannel),
+                            ],
+                            onChanged: (v) => onChanged(
+                              'Mixer$_activeMixerChannel$suffix',
+                              v,
+                            ),
+                            onChangeEnd: (v) => onChangeEnd(
+                              'Mixer$_activeMixerChannel$suffix',
+                              v,
+                            ),
+                          ),
+                        ),
+                    ],
+                    const Divider(),
+                    _SectionHeader(
+                      label: l10n.sectionColorGrading,
+                      collapsed: _collapsed.contains('COLOR GRADING'),
+                      onTap: () => _toggleSection('COLOR GRADING'),
+                    ),
+                    if (!_collapsed.contains('COLOR GRADING')) ...[
+                      Padding(
+                        padding: const EdgeInsets.only(top: 6, bottom: 10),
+                        child: _GradeRangeTabs(
+                          active: _activeGradeRange,
+                          onSelect: (range) =>
+                              setState(() => _activeGradeRange = range),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Center(
+                          child: SizedBox(
+                            width: 160,
+                            child: ColorWheel(
+                              key: ValueKey(_activeGradeRange),
+                              hue: values['Grade${_activeGradeRange}Hue'] ?? 0,
+                              saturation:
+                                  values['Grade${_activeGradeRange}Saturation'] ??
+                                  0,
+                              onChanged: (hue, sat) {
+                                onChanged('Grade${_activeGradeRange}Hue', hue);
+                                onChanged(
+                                  'Grade${_activeGradeRange}Saturation',
+                                  sat,
+                                );
+                              },
+                              onChangeEnd: (hue, sat) {
+                                onChangeEnd(
+                                  'Grade${_activeGradeRange}Hue',
+                                  hue,
+                                );
+                                onChangeEnd(
+                                  'Grade${_activeGradeRange}Saturation',
+                                  sat,
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: SliderRow(
+                          name: l10n.mixerLuminanceLabel,
+                          min: -100,
+                          max: 100,
+                          value:
+                              values['Grade${_activeGradeRange}Luminance'] ?? 0,
+                          defaultValue: 0,
+                          onChanged: (v) => onChanged(
+                            'Grade${_activeGradeRange}Luminance',
+                            v,
+                          ),
+                          onChangeEnd: (v) => onChangeEnd(
+                            'Grade${_activeGradeRange}Luminance',
+                            v,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+List<CurvePoint> _channelPoints(PhotoCurves curves, String channel) {
+  switch (channel) {
+    case 'red':
+      return curves.red;
+    case 'green':
+      return curves.green;
+    case 'blue':
+      return curves.blue;
+  }
+  throw ArgumentError.value(channel, 'channel');
+}
+
+Color _channelColor(String channel) {
+  switch (channel) {
+    case 'red':
+      return const Color(0xFFE0483C);
+    case 'green':
+      return const Color(0xFF3DD16B);
+    case 'blue':
+      return const Color(0xFF4FA6FF);
+  }
+  throw ArgumentError.value(channel, 'channel');
+}
+
+/// The 8 Color Mixer bands, in hue order — matches
+/// [ColorMixerValues]'s channel order.
+const _mixerChannels = [
+  'Red',
+  'Orange',
+  'Yellow',
+  'Green',
+  'Aqua',
+  'Blue',
+  'Purple',
+  'Magenta',
+];
+
+Color _mixerChannelColor(String channel) {
+  switch (channel) {
+    case 'Red':
+      return const Color(0xFFE0483C);
+    case 'Orange':
+      return const Color(0xFFE8873C);
+    case 'Yellow':
+      return const Color(0xFFE0C93C);
+    case 'Green':
+      return const Color(0xFF3DD16B);
+    case 'Aqua':
+      return const Color(0xFF3CC9D1);
+    case 'Blue':
+      return const Color(0xFF4FA6FF);
+    case 'Purple':
+      return const Color(0xFF9B6FE0);
+    case 'Magenta':
+      return const Color(0xFFE362D8);
+  }
+  throw ArgumentError.value(channel, 'channel');
+}
+
+String _mixerChannelLabel(AppLocalizations l10n, String channel) {
+  switch (channel) {
+    case 'Red':
+      return l10n.colorChannelRed;
+    case 'Orange':
+      return l10n.colorChannelOrange;
+    case 'Yellow':
+      return l10n.colorChannelYellow;
+    case 'Green':
+      return l10n.colorChannelGreen;
+    case 'Aqua':
+      return l10n.colorChannelAqua;
+    case 'Blue':
+      return l10n.colorChannelBlue;
+    case 'Purple':
+      return l10n.colorChannelPurple;
+    case 'Magenta':
+      return l10n.colorChannelMagenta;
+  }
+  throw ArgumentError.value(channel, 'channel');
+}
+
+String _mixerSliderLabel(AppLocalizations l10n, String suffix) {
+  switch (suffix) {
+    case 'Hue':
+      return l10n.mixerHueLabel;
+    case 'Saturation':
+      return l10n.mixerSaturationLabel;
+    case 'Luminance':
+      return l10n.mixerLuminanceLabel;
+  }
+  throw ArgumentError.value(suffix, 'suffix');
+}
+
+/// The Color Mixer's 8-band channel picker — small colored dots (one per
+/// hue band) rather than text tabs, since 8 text labels wouldn't fit the
+/// panel's width. Matches Lightroom's own dot-based channel selector.
+class _MixerChannelDots extends StatelessWidget {
+  const _MixerChannelDots({required this.active, required this.onSelect});
+
+  final String active;
+  final ValueChanged<String> onSelect;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        for (final channel in _mixerChannels)
+          Tooltip(
+            message: _mixerChannelLabel(l10n, channel),
+            child: GestureDetector(
+              onTap: () => onSelect(channel),
+              child: Container(
+                width: 22,
+                height: 22,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: _mixerChannelColor(channel),
+                  border: Border.all(
+                    color: channel == active
+                        ? DarkmoonColors.textPrimary
+                        : Colors.transparent,
+                    width: 2,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+String _gradeRangeLabel(AppLocalizations l10n, String range) {
+  switch (range) {
+    case 'Shadows':
+      return l10n.sliderShadows;
+    case 'Midtones':
+      return l10n.gradeRangeMidtones;
+    case 'Highlights':
+      return l10n.sliderHighlights;
+  }
+  throw ArgumentError.value(range, 'range');
+}
+
+/// Shadows/Midtones/Highlights tab strip for the Color Grading panel —
+/// one range's wheel is edited at a time, matching Lightroom.
+class _GradeRangeTabs extends StatelessWidget {
+  const _GradeRangeTabs({required this.active, required this.onSelect});
+
+  final String active;
+  final ValueChanged<String> onSelect;
+
+  static const _ranges = ['Shadows', 'Midtones', 'Highlights'];
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Row(
+      children: [
+        for (final range in _ranges)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Material(
+                color: range == active
+                    ? DarkmoonColors.accent.withValues(alpha: 0.22)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => onSelect(range),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: range == active
+                            ? DarkmoonColors.accent
+                            : DarkmoonColors.border,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      _gradeRangeLabel(l10n, range),
+                      style: TextStyle(
+                        color: range == active
+                            ? DarkmoonColors.accent
+                            : DarkmoonColors.textSecondary,
+                        fontSize: 11,
+                        fontWeight: range == active
+                            ? FontWeight.w600
+                            : FontWeight.normal,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                SizedBox(
-                  height: 40,
-                  width: 40,
-                  child: IconButton(
-                    onPressed: onReset,
-                    tooltip: l10n.resetTooltip,
-                    icon: const Icon(Icons.refresh, size: 16),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            HistogramView(histogram: histogram),
-            for (final entry in _sections.entries) ...[
-              const SizedBox(height: 10),
-              if (entry.key != _sections.keys.first) const Divider(),
-              Padding(
-                padding: const EdgeInsets.only(top: 14, bottom: 2),
-                child: Text(
-                  _sectionLabel(l10n, entry.key),
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
               ),
-              for (final spec in entry.value)
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: SliderRow(
-                    name: _sliderLabel(l10n, spec.name),
-                    min: spec.min,
-                    max: spec.max,
-                    value: values[spec.name] ?? spec.defaultValue,
-                    decimals: spec.decimals,
-                    onChanged: (v) => onChanged(spec.name, v),
-                    onChangeEnd: (v) => onChangeEnd(spec.name, v),
-                  ),
-                ),
-            ],
-          ],
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+/// R/G/B tab strip for the Color Curve panel — one channel's curve is
+/// edited at a time, matching Lightroom's per-channel Point Curve tabs.
+class _ColorChannelTabs extends StatelessWidget {
+  const _ColorChannelTabs({required this.active, required this.onSelect});
+
+  final String active;
+  final ValueChanged<String> onSelect;
+
+  static const _channels = ['red', 'green', 'blue'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        for (final channel in _channels)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: _ColorChannelTab(
+                channel: channel,
+                selected: channel == active,
+                onTap: () => onSelect(channel),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+class _ColorChannelTab extends StatelessWidget {
+  const _ColorChannelTab({
+    required this.channel,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String channel;
+  final bool selected;
+  final VoidCallback onTap;
+
+  String _label(AppLocalizations l10n) {
+    switch (channel) {
+      case 'red':
+        return l10n.colorChannelRed;
+      case 'green':
+        return l10n.colorChannelGreen;
+      case 'blue':
+        return l10n.colorChannelBlue;
+    }
+    throw ArgumentError.value(channel, 'channel');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _channelColor(channel);
+    final l10n = AppLocalizations.of(context)!;
+    return Material(
+      color: selected ? color.withValues(alpha: 0.22) : Colors.transparent,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: selected ? color : DarkmoonColors.border),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            _label(l10n),
+            style: TextStyle(
+              color: selected ? color : DarkmoonColors.textSecondary,
+              fontSize: 11,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+            ),
+          ),
         ),
       ),
     );
@@ -1455,66 +3294,72 @@ class _FilmstripState extends State<_Filmstrip> {
       color: DarkmoonColors.filmstrip,
       child: Listener(
         onPointerSignal: _handleWheel,
-        child: ListView.builder(
+        child: Scrollbar(
           controller: _scrollController,
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.all(8),
-          itemCount: files.length,
-          itemBuilder: (context, index) {
-            final file = files[index];
-            final isSelected = index == selectedIndex;
-            final thumbnail = thumbnails[file.path];
-            return Padding(
-              padding: const EdgeInsets.only(right: 6),
-              child: GestureDetector(
-                onTap: () => onSelect(index),
-                child: Container(
-                  width: 104,
-                  padding: const EdgeInsets.all(4),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? DarkmoonColors.accent.withValues(alpha: 0.28)
-                        : Colors.transparent,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    children: [
-                      Expanded(
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(6),
-                          child: Container(
-                            width: double.infinity,
-                            color: const Color(0xFF26262A),
-                            alignment: Alignment.center,
-                            child: thumbnail == null
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: DarkmoonColors.textMuted,
-                                    ),
-                                  )
-                                : Image.memory(thumbnail, fit: BoxFit.cover),
+          thumbVisibility: true,
+          trackVisibility: true,
+          interactive: true,
+          child: ListView.builder(
+            controller: _scrollController,
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.all(8),
+            itemCount: files.length,
+            itemBuilder: (context, index) {
+              final file = files[index];
+              final isSelected = index == selectedIndex;
+              final thumbnail = thumbnails[file.path];
+              return Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: GestureDetector(
+                  onTap: () => onSelect(index),
+                  child: Container(
+                    width: 104,
+                    padding: const EdgeInsets.all(4),
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? DarkmoonColors.accent.withValues(alpha: 0.28)
+                          : Colors.transparent,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              width: double.infinity,
+                              color: const Color(0xFF26262A),
+                              alignment: Alignment.center,
+                              child: thumbnail == null
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                        color: DarkmoonColors.textMuted,
+                                      ),
+                                    )
+                                  : Image.memory(thumbnail, fit: BoxFit.cover),
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        file.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: DarkmoonColors.textSecondary,
-                          fontSize: 10,
+                        const SizedBox(height: 3),
+                        Text(
+                          file.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: DarkmoonColors.textSecondary,
+                            fontSize: 10,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

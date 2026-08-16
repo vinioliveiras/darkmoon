@@ -21,7 +21,11 @@ const int livePreviewMaxDimension = 800;
 /// One decoded working-resolution RGB buffer (packed, 3 bytes/pixel) that
 /// the render pipeline reads from.
 class EditSource {
-  const EditSource({required this.width, required this.height, required this.rgbBytes});
+  const EditSource({
+    required this.width,
+    required this.height,
+    required this.rgbBytes,
+  });
 
   final int width;
   final int height;
@@ -36,7 +40,8 @@ class EditSourcePair {
   final EditSource live;
 }
 
-Uint8List _rgbBytes(img.Image image) => image.getBytes(order: img.ChannelOrder.rgb);
+Uint8List _rgbBytes(img.Image image) =>
+    image.getBytes(order: img.ChannelOrder.rgb);
 
 /// Fully decodes the RAW file at [path] once and derives the two working
 /// resolutions the editor renders against, so later adjustments only need
@@ -63,7 +68,11 @@ EditSourcePair? decodeEditSources(String path) {
       height: previewImage.height,
       rgbBytes: _rgbBytes(previewImage),
     ),
-    live: EditSource(width: liveImage.width, height: liveImage.height, rgbBytes: _rgbBytes(liveImage)),
+    live: EditSource(
+      width: liveImage.width,
+      height: liveImage.height,
+      rgbBytes: _rgbBytes(liveImage),
+    ),
   );
 }
 
@@ -81,5 +90,9 @@ EditSource? decodeFullQualitySource(String path) {
   if (decoded == null) {
     return null;
   }
-  return EditSource(width: decoded.width, height: decoded.height, rgbBytes: decoded.rgbBytes);
+  return EditSource(
+    width: decoded.width,
+    height: decoded.height,
+    rgbBytes: decoded.rgbBytes,
+  );
 }

@@ -2,7 +2,16 @@ import 'dart:io';
 
 import 'package:path/path.dart' as p;
 
-const rawExtensions = {'.cr2', '.cr3', '.nef', '.arw', '.dng', '.raf', '.orf', '.rw2'};
+const rawExtensions = {
+  '.cr2',
+  '.cr3',
+  '.nef',
+  '.arw',
+  '.dng',
+  '.raf',
+  '.orf',
+  '.rw2',
+};
 
 /// A RAW photo file found on disk. Mirrors the Python app's list_raw_files:
 /// no decoding happens here, just filesystem metadata.

@@ -38,7 +38,12 @@ void applyDehaze(Float32List img, int width, int height, double amount) {
   }
   final strength = amount / 100.0;
 
-  final darkChannel = minFilter(_minAcrossChannels(norm, pixelCount), width, height, 15);
+  final darkChannel = minFilter(
+    _minAcrossChannels(norm, pixelCount),
+    width,
+    height,
+    15,
+  );
 
   // Atmospheric light: per-channel max among the 0.1% of pixels with the
   // largest dark-channel value (the pixels least likely to be in shadow or
@@ -65,7 +70,12 @@ void applyDehaze(Float32List img, int width, int height, double amount) {
     normalizedByAtm[i + 1] = norm[i + 1] / atmosphericLight[1];
     normalizedByAtm[i + 2] = norm[i + 2] / atmosphericLight[2];
   }
-  final normalizedDark = minFilter(_minAcrossChannels(normalizedByAtm, pixelCount), width, height, 15);
+  final normalizedDark = minFilter(
+    _minAcrossChannels(normalizedByAtm, pixelCount),
+    width,
+    height,
+    15,
+  );
 
   final preTransmission = Float32List(pixelCount);
   for (var p = 0; p < pixelCount; p++) {
@@ -80,17 +90,30 @@ void applyDehaze(Float32List img, int width, int height, double amount) {
     for (var p = 0; p < pixelCount; p++) {
       final t = 1.0 - strength * (1.0 - transmission[p]);
       final i = p * 3;
-      img[i] = ((norm[i] - atmosphericLight[0]) / t + atmosphericLight[0]) * 255.0;
-      img[i + 1] = ((norm[i + 1] - atmosphericLight[1]) / t + atmosphericLight[1]) * 255.0;
-      img[i + 2] = ((norm[i + 2] - atmosphericLight[2]) / t + atmosphericLight[2]) * 255.0;
+      img[i] =
+          ((norm[i] - atmosphericLight[0]) / t + atmosphericLight[0]) * 255.0;
+      img[i + 1] =
+          ((norm[i + 1] - atmosphericLight[1]) / t + atmosphericLight[1]) *
+          255.0;
+      img[i + 2] =
+          ((norm[i + 2] - atmosphericLight[2]) / t + atmosphericLight[2]) *
+          255.0;
     }
   } else {
     final hazeAmount = -strength;
     for (var p = 0; p < pixelCount; p++) {
       final i = p * 3;
-      img[i] = (norm[i] * (1.0 - hazeAmount) + atmosphericLight[0] * hazeAmount) * 255.0;
-      img[i + 1] = (norm[i + 1] * (1.0 - hazeAmount) + atmosphericLight[1] * hazeAmount) * 255.0;
-      img[i + 2] = (norm[i + 2] * (1.0 - hazeAmount) + atmosphericLight[2] * hazeAmount) * 255.0;
+      img[i] =
+          (norm[i] * (1.0 - hazeAmount) + atmosphericLight[0] * hazeAmount) *
+          255.0;
+      img[i + 1] =
+          (norm[i + 1] * (1.0 - hazeAmount) +
+              atmosphericLight[1] * hazeAmount) *
+          255.0;
+      img[i + 2] =
+          (norm[i + 2] * (1.0 - hazeAmount) +
+              atmosphericLight[2] * hazeAmount) *
+          255.0;
     }
   }
 }

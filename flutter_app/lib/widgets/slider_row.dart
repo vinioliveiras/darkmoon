@@ -34,6 +34,8 @@ class SliderRow extends StatefulWidget {
     required this.onChanged,
     this.onChangeEnd,
     this.decimals = 2,
+    this.defaultValue,
+    this.trackColors,
   });
 
   final String name;
@@ -43,6 +45,17 @@ class SliderRow extends StatefulWidget {
   final ValueChanged<double> onChanged;
   final ValueChanged<double>? onChangeEnd;
   final int decimals;
+
+  /// Double-tapping the track resets to this value, if set — matches
+  /// Lightroom's double-click-to-reset. Null (the default) disables the
+  /// gesture rather than silently resetting to some arbitrary value.
+  final double? defaultValue;
+
+  /// When set, the track is painted as a left-to-right gradient through
+  /// these colors instead of the theme's flat active/inactive colors —
+  /// used for color-affecting controls (Temperature, Tint, Vibrance,
+  /// Saturation) so the track itself hints at the effect, Lightroom-style.
+  final List<Color>? trackColors;
 
   @override
   State<SliderRow> createState() => _SliderRowState();
@@ -69,14 +82,13 @@ class _SliderRowState extends State<SliderRow> {
   double? _dragValue;
   Timer? _propagateTimer;
 
-  // decimals - 1 (not decimals) as the precision exponent: 0.01/pixel felt
-  // too slow to cover any real range, 0.1/pixel lands on one decimal place
-  // per pixel while still reaching the full range in a reasonable drag
-  // distance. Floored at 0 so 0-decimal sliders (Temperature) are
-  // unaffected — they were already fine at the coarser rate.
+  // decimals doubles as the drag step: most sliders use decimals: 0, so
+  // this lands on exactly 1 unit/pixel (20, 21, 22, ...) — the old stock
+  // Slider-like feel. Exposure is the one control with decimals: 1, which
+  // steps by 0.1/pixel instead.
   double get _unitsPerPixel {
-    final precisionExponent = math.max(0, widget.decimals - 1);
-    return (widget.max - widget.min) / (_referenceTrackWidth * math.pow(10, precisionExponent));
+    return (widget.max - widget.min) /
+        (_referenceTrackWidth * math.pow(10, widget.decimals));
   }
 
   @override
@@ -102,7 +114,10 @@ class _SliderRowState extends State<SliderRow> {
     setState(() => _editing = true);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _focusNode.requestFocus();
-      _controller.selection = TextSelection(baseOffset: 0, extentOffset: _controller.text.length);
+      _controller.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: _controller.text.length,
+      );
     });
   }
 
@@ -129,7 +144,10 @@ class _SliderRowState extends State<SliderRow> {
 
   void _onDragUpdate(double deltaX) {
     final current = _dragValue ?? widget.value;
-    final next = (current + deltaX * _unitsPerPixel).clamp(widget.min, widget.max);
+    final next = (current + deltaX * _unitsPerPixel).clamp(
+      widget.min,
+      widget.max,
+    );
     _scheduleUpdate(next);
   }
 
@@ -144,21 +162,41 @@ class _SliderRowState extends State<SliderRow> {
     }
   }
 
+  void _onDoubleTap() {
+    final reset = widget.defaultValue;
+    if (reset == null) {
+      return;
+    }
+    _propagateTimer?.cancel();
+    _propagateTimer = null;
+    setState(() => _dragValue = null);
+    widget.onChanged(reset);
+    widget.onChangeEnd?.call(reset);
+  }
+
   @override
   Widget build(BuildContext context) {
-    final displayValue = (_dragValue ?? widget.value).clamp(widget.min, widget.max);
+    final displayValue = (_dragValue ?? widget.value).clamp(
+      widget.min,
+      widget.max,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
           children: [
             Expanded(
-              child: Text(widget.name, style: Theme.of(context).textTheme.bodyMedium),
+              child: Text(
+                widget.name,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             ),
             SizedBox(
               width: 52,
               height: 18,
-              child: _editing ? _buildEditField() : _buildValueLabel(displayValue),
+              child: _editing
+                  ? _buildEditField()
+                  : _buildValueLabel(displayValue),
             ),
           ],
         ),
@@ -167,10 +205,13 @@ class _SliderRowState extends State<SliderRow> {
           onHorizontalDragUpdate: (details) => _onDragUpdate(details.delta.dx),
           onHorizontalDragEnd: (_) => _onDragEnd(),
           onHorizontalDragCancel: _onDragEnd,
+          onDoubleTap: _onDoubleTap,
           child: IgnorePointer(
             child: SliderTheme(
               data: SliderTheme.of(context).copyWith(
-                trackShape: const RectangularSliderTrackShape(),
+                trackShape: widget.trackColors == null
+                    ? const RectangularSliderTrackShape()
+                    : _GradientSliderTrackShape(widget.trackColors!),
               ),
               child: Slider(
                 min: widget.min,
@@ -194,7 +235,10 @@ class _SliderRowState extends State<SliderRow> {
           alignment: Alignment.centerRight,
           child: Text(
             displayValue.toStringAsFixed(widget.decimals),
-            style: const TextStyle(color: DarkmoonColors.textMuted, fontSize: 11.5),
+            style: const TextStyle(
+              color: DarkmoonColors.textMuted,
+              fontSize: 11.5,
+            ),
           ),
         ),
       ),
@@ -213,9 +257,53 @@ class _SliderRowState extends State<SliderRow> {
         contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
         border: OutlineInputBorder(),
       ),
-      keyboardType: const TextInputType.numberWithOptions(decimal: true, signed: true),
-      inputFormatters: [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,\-]'))],
+      keyboardType: const TextInputType.numberWithOptions(
+        decimal: true,
+        signed: true,
+      ),
+      inputFormatters: [
+        FilteringTextInputFormatter.allow(RegExp(r'[0-9.,\-]')),
+      ],
       onSubmitted: (_) => _commit(),
+    );
+  }
+}
+
+/// Paints the whole track as one gradient (ignoring the usual active/
+/// inactive split) so the color relationship stays visible across the
+/// full range regardless of where the thumb currently sits — matching
+/// Lightroom's Temperature/Tint/Vibrance/Saturation track style.
+class _GradientSliderTrackShape extends RoundedRectSliderTrackShape {
+  const _GradientSliderTrackShape(this.colors);
+
+  final List<Color> colors;
+
+  @override
+  void paint(
+    PaintingContext context,
+    Offset offset, {
+    required RenderBox parentBox,
+    required SliderThemeData sliderTheme,
+    required Animation<double> enableAnimation,
+    required Offset thumbCenter,
+    required TextDirection textDirection,
+    Offset? secondaryOffset,
+    bool isDiscrete = false,
+    bool isEnabled = false,
+    double additionalActiveTrackHeight = 2,
+  }) {
+    final trackRect = getPreferredRect(
+      parentBox: parentBox,
+      offset: offset,
+      sliderTheme: sliderTheme,
+      isEnabled: isEnabled,
+      isDiscrete: isDiscrete,
+    );
+    final paint = Paint()
+      ..shader = LinearGradient(colors: colors).createShader(trackRect);
+    context.canvas.drawRRect(
+      RRect.fromRectAndRadius(trackRect, const Radius.circular(1)),
+      paint,
     );
   }
 }

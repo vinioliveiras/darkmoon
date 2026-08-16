@@ -5,6 +5,7 @@ import 'package:image/image.dart' as img;
 import '../native/edit_source.dart';
 import '../native/image_utils.dart';
 import 'histogram.dart';
+import 'mask.dart';
 import 'render.dart';
 import 'render_params.dart';
 
@@ -13,18 +14,27 @@ import 'render_params.dart';
 /// for one number.
 const int _filmstripThumbnailMaxDimension = 200;
 
-/// A single `compute()` request: apply [params] to [source] and encode the
-/// result as JPEG. Bundled into one object because `compute()` only takes
-/// one argument.
+/// A single `compute()` request: apply [params] (and any [masks], stacked
+/// on top) to [source] and encode the result as JPEG. Bundled into one
+/// object because `compute()` only takes one argument.
 class RenderJob {
-  const RenderJob({required this.source, required this.params});
+  const RenderJob({
+    required this.source,
+    required this.params,
+    this.masks = const [],
+  });
 
   final EditSource source;
   final RenderParams params;
+  final List<MaskLayer> masks;
 }
 
 class RenderResult {
-  const RenderResult({required this.jpegBytes, required this.histogram, required this.thumbnailBytes});
+  const RenderResult({
+    required this.jpegBytes,
+    required this.histogram,
+    required this.thumbnailBytes,
+  });
 
   final Uint8List jpegBytes;
   final Histogram histogram;
@@ -42,7 +52,20 @@ class RenderResult {
 ///
 /// Designed to run via `compute()`.
 RenderResult renderJobToJpeg(RenderJob job) {
-  final rendered = renderRgb(job.source.width, job.source.height, job.source.rgbBytes, job.params);
+  final rendered = job.masks.isEmpty
+      ? renderRgb(
+          job.source.width,
+          job.source.height,
+          job.source.rgbBytes,
+          job.params,
+        )
+      : renderRgbWithMasks(
+          job.source.width,
+          job.source.height,
+          job.source.rgbBytes,
+          job.params,
+          job.masks,
+        );
   final histogram = computeHistogram(rendered);
   final image = img.Image.fromBytes(
     width: job.source.width,
@@ -53,6 +76,12 @@ RenderResult renderJobToJpeg(RenderJob job) {
   );
   final jpegBytes = Uint8List.fromList(img.encodeJpg(image, quality: 90));
   final thumbnail = fitToMaxDimension(image, _filmstripThumbnailMaxDimension);
-  final thumbnailBytes = Uint8List.fromList(img.encodeJpg(thumbnail, quality: 85));
-  return RenderResult(jpegBytes: jpegBytes, histogram: histogram, thumbnailBytes: thumbnailBytes);
+  final thumbnailBytes = Uint8List.fromList(
+    img.encodeJpg(thumbnail, quality: 85),
+  );
+  return RenderResult(
+    jpegBytes: jpegBytes,
+    histogram: histogram,
+    thumbnailBytes: thumbnailBytes,
+  );
 }

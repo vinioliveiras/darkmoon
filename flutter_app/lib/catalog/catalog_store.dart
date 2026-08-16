@@ -56,3 +56,13 @@ Future<void> saveCatalog(Map<String, Map<String, double>> edits) async {
   await tmp.writeAsString(jsonEncode(edits));
   await tmp.rename(file.path);
 }
+
+/// Deletes every saved per-photo edit — used by the Settings "clear
+/// catalog" action. Every photo reverts to its default slider values next
+/// time it's opened.
+Future<void> clearCatalog() async {
+  final file = await _catalogFile();
+  if (await file.exists()) {
+    await file.delete();
+  }
+}

@@ -35,19 +35,26 @@ class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
         borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: DarkmoonColors.border),
       ),
-      title: Text(l10n.exportPhotoDialogTitle, style: const TextStyle(color: DarkmoonColors.textPrimary, fontSize: 16)),
+      title: Text(
+        l10n.exportPhotoDialogTitle,
+        style: const TextStyle(color: DarkmoonColors.textPrimary, fontSize: 16),
+      ),
       content: SizedBox(
         width: 300,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(l10n.exportFormatLabel, style: Theme.of(context).textTheme.labelSmall),
+            Text(
+              l10n.exportFormatLabel,
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
             const SizedBox(height: 8),
             Row(
               children: [
                 for (final format in ExportFormat.values) ...[
-                  if (format != ExportFormat.values.first) const SizedBox(width: 8),
+                  if (format != ExportFormat.values.first)
+                    const SizedBox(width: 8),
                   Expanded(
                     child: _FormatChip(
                       label: format.label,
@@ -62,12 +69,25 @@ class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
               const SizedBox(height: 18),
               Row(
                 children: [
-                  Expanded(child: Text(l10n.exportQualityLabel, style: Theme.of(context).textTheme.bodyMedium)),
-                  Text('$_quality%', style: const TextStyle(color: DarkmoonColors.textMuted, fontSize: 11.5)),
+                  Expanded(
+                    child: Text(
+                      l10n.exportQualityLabel,
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ),
+                  Text(
+                    '$_quality%',
+                    style: const TextStyle(
+                      color: DarkmoonColors.textMuted,
+                      fontSize: 11.5,
+                    ),
+                  ),
                 ],
               ),
               SliderTheme(
-                data: SliderTheme.of(context).copyWith(trackShape: const RectangularSliderTrackShape()),
+                data: SliderTheme.of(
+                  context,
+                ).copyWith(trackShape: const RectangularSliderTrackShape()),
                 child: Slider(
                   min: 1,
                   max: 100,
@@ -81,9 +101,14 @@ class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(l10n.cancelButton)),
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: Text(l10n.cancelButton),
+        ),
         FilledButton(
-          onPressed: () => Navigator.of(context).pop(ExportOptions(format: _format, quality: _quality)),
+          onPressed: () => Navigator.of(
+            context,
+          ).pop(ExportOptions(format: _format, quality: _quality)),
           child: Text(l10n.exportDialogConfirm),
         ),
       ],
@@ -92,7 +117,11 @@ class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
 }
 
 class _FormatChip extends StatelessWidget {
-  const _FormatChip({required this.label, required this.selected, required this.onTap});
+  const _FormatChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   final String label;
   final bool selected;
@@ -107,13 +136,17 @@ class _FormatChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: selected ? DarkmoonColors.accent : DarkmoonColors.canvas,
           borderRadius: BorderRadius.circular(7),
-          border: Border.all(color: selected ? DarkmoonColors.accent : DarkmoonColors.border),
+          border: Border.all(
+            color: selected ? DarkmoonColors.accent : DarkmoonColors.border,
+          ),
         ),
         alignment: Alignment.center,
         child: Text(
           label,
           style: TextStyle(
-            color: selected ? Colors.white : DarkmoonColors.textSecondary,
+            color: selected
+                ? DarkmoonColors.background
+                : DarkmoonColors.textSecondary,
             fontSize: 12.5,
             fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
           ),

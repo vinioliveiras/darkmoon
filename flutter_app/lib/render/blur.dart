@@ -7,7 +7,12 @@ import 'dart:typed_data';
 /// (the Python app's scipy filters use 'reflect'/'nearest' — close enough
 /// visually for a photo preview that this doesn't need to match exactly).
 
-Float32List _boxBlurHorizontal(Float32List src, int width, int height, int radius) {
+Float32List _boxBlurHorizontal(
+  Float32List src,
+  int width,
+  int height,
+  int radius,
+) {
   final out = Float32List(src.length);
   final windowSize = radius * 2 + 1;
   for (var y = 0; y < height; y++) {
@@ -26,7 +31,12 @@ Float32List _boxBlurHorizontal(Float32List src, int width, int height, int radiu
   return out;
 }
 
-Float32List _boxBlurVertical(Float32List src, int width, int height, int radius) {
+Float32List _boxBlurVertical(
+  Float32List src,
+  int width,
+  int height,
+  int radius,
+) {
   final out = Float32List(src.length);
   final windowSize = radius * 2 + 1;
   for (var x = 0; x < width; x++) {
@@ -47,11 +57,21 @@ Float32List _boxBlurVertical(Float32List src, int width, int height, int radius)
 /// Exact box (mean) blur with the given [radius] (window size `2*radius+1`),
 /// via a separable sliding-window sum — O(width*height) regardless of
 /// radius.
-Float32List boxBlurMean(Float32List channel, int width, int height, int radius) {
+Float32List boxBlurMean(
+  Float32List channel,
+  int width,
+  int height,
+  int radius,
+) {
   if (radius <= 0) {
     return Float32List.fromList(channel);
   }
-  return _boxBlurVertical(_boxBlurHorizontal(channel, width, height, radius), width, height, radius);
+  return _boxBlurVertical(
+    _boxBlurHorizontal(channel, width, height, radius),
+    width,
+    height,
+    radius,
+  );
 }
 
 /// Box radii for a 3-pass box-blur approximation of a Gaussian with the
@@ -70,7 +90,8 @@ List<int> _boxRadiiForGauss(double sigma, int passes) {
   }
   final wu = wl + 2;
   final mIdeal =
-      (12 * sigma * sigma - passes * wl * wl - 4 * passes * wl - 3 * passes) / (-4 * wl - 4);
+      (12 * sigma * sigma - passes * wl * wl - 4 * passes * wl - 3 * passes) /
+      (-4 * wl - 4);
   final m = mIdeal.round();
   return [for (var i = 0; i < passes; i++) ((i < m ? wl : wu) - 1) ~/ 2];
 }
@@ -78,7 +99,12 @@ List<int> _boxRadiiForGauss(double sigma, int passes) {
 /// Approximate Gaussian blur (3-pass box blur) matching scipy's
 /// `gaussian_filter(..., sigma=sigma)` closely enough for a tone-mapping
 /// preview effect.
-Float32List gaussianBlurChannel(Float32List channel, int width, int height, double sigma) {
+Float32List gaussianBlurChannel(
+  Float32List channel,
+  int width,
+  int height,
+  double sigma,
+) {
   if (sigma <= 0) {
     return Float32List.fromList(channel);
   }
@@ -89,7 +115,12 @@ Float32List gaussianBlurChannel(Float32List channel, int width, int height, doub
   return result;
 }
 
-Float32List _minFilterHorizontal(Float32List src, int width, int height, int radius) {
+Float32List _minFilterHorizontal(
+  Float32List src,
+  int width,
+  int height,
+  int radius,
+) {
   final out = Float32List(src.length);
   for (var y = 0; y < height; y++) {
     final rowStart = y * width;
@@ -109,7 +140,12 @@ Float32List _minFilterHorizontal(Float32List src, int width, int height, int rad
   return out;
 }
 
-Float32List _minFilterVertical(Float32List src, int width, int height, int radius) {
+Float32List _minFilterVertical(
+  Float32List src,
+  int width,
+  int height,
+  int radius,
+) {
   final out = Float32List(src.length);
   for (var x = 0; x < width; x++) {
     for (var y = 0; y < height; y++) {
@@ -136,5 +172,10 @@ Float32List minFilter(Float32List channel, int width, int height, int size) {
   if (radius <= 0) {
     return Float32List.fromList(channel);
   }
-  return _minFilterVertical(_minFilterHorizontal(channel, width, height, radius), width, height, radius);
+  return _minFilterVertical(
+    _minFilterHorizontal(channel, width, height, radius),
+    width,
+    height,
+    radius,
+  );
 }

@@ -10,6 +10,10 @@ import 'package:path_provider/path_provider.dart';
 /// scheduling overhead without much extra throughput.
 int _defaultThumbnailConcurrency() => Platform.numberOfProcessors.clamp(2, 8);
 
+/// Recent single-file opens are capped so the sidebar list doesn't grow
+/// unbounded over months of use.
+const _maxRecentFiles = 15;
+
 /// App-wide settings, mirroring the Python app's `DEFAULT_SETTINGS` (minus
 /// the thumbnail disk cache setting, since this port's cache doesn't have
 /// a size/eviction knob yet to expose).
@@ -20,6 +24,8 @@ class AppSettings {
     this.thumbnailConcurrency = 4,
     this.alwaysFullQuality = false,
     this.libraryFolders = const [],
+    this.recentFiles = const [],
+    this.lastActiveFolder,
   });
 
   /// 'auto' (follow the system language), 'en', or 'pt'.
@@ -43,20 +49,43 @@ class AppSettings {
   /// order (most-recently-added last).
   final List<String> libraryFolders;
 
+  /// Individual files opened via File > Open File, most-recently-opened
+  /// first — a separate, flat list from [libraryFolders] since opening one
+  /// file shouldn't pull its whole containing folder into the library.
+  final List<String> recentFiles;
+
+  /// The last folder shown in the main view, restored automatically on
+  /// the next launch so the app reopens where you left off.
+  final String? lastActiveFolder;
+
   AppSettings copyWith({
     String? language,
     bool? fastPreview,
     int? thumbnailConcurrency,
     bool? alwaysFullQuality,
     List<String>? libraryFolders,
-  }) =>
-      AppSettings(
-        language: language ?? this.language,
-        fastPreview: fastPreview ?? this.fastPreview,
-        thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
-        alwaysFullQuality: alwaysFullQuality ?? this.alwaysFullQuality,
-        libraryFolders: libraryFolders ?? this.libraryFolders,
-      );
+    List<String>? recentFiles,
+    String? lastActiveFolder,
+  }) => AppSettings(
+    language: language ?? this.language,
+    fastPreview: fastPreview ?? this.fastPreview,
+    thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
+    alwaysFullQuality: alwaysFullQuality ?? this.alwaysFullQuality,
+    libraryFolders: libraryFolders ?? this.libraryFolders,
+    recentFiles: recentFiles ?? this.recentFiles,
+    lastActiveFolder: lastActiveFolder ?? this.lastActiveFolder,
+  );
+
+  /// [path] moved (or added) to the front of [recentFiles], deduplicated
+  /// and capped at [_maxRecentFiles].
+  AppSettings withRecentFile(String path) {
+    final next = [path, ...recentFiles.where((f) => f != path)];
+    return copyWith(
+      recentFiles: next.length > _maxRecentFiles
+          ? next.sublist(0, _maxRecentFiles)
+          : next,
+    );
+  }
 }
 
 Future<File> _settingsFile() async {
@@ -80,9 +109,17 @@ Future<AppSettings> loadSettings() async {
     return AppSettings(
       language: raw['language'] as String? ?? defaults.language,
       fastPreview: raw['fastPreview'] as bool? ?? defaults.fastPreview,
-      thumbnailConcurrency: (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
-      alwaysFullQuality: raw['alwaysFullQuality'] as bool? ?? defaults.alwaysFullQuality,
-      libraryFolders: (raw['libraryFolders'] as List?)?.cast<String>() ?? defaults.libraryFolders,
+      thumbnailConcurrency:
+          (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
+      alwaysFullQuality:
+          raw['alwaysFullQuality'] as bool? ?? defaults.alwaysFullQuality,
+      libraryFolders:
+          (raw['libraryFolders'] as List?)?.cast<String>() ??
+          defaults.libraryFolders,
+      recentFiles:
+          (raw['recentFiles'] as List?)?.cast<String>() ?? defaults.recentFiles,
+      lastActiveFolder:
+          raw['lastActiveFolder'] as String? ?? defaults.lastActiveFolder,
     );
   } catch (_) {
     return AppSettings(thumbnailConcurrency: defaultConcurrency);
@@ -99,6 +136,8 @@ Future<void> saveSettings(AppSettings settings) async {
       'thumbnailConcurrency': settings.thumbnailConcurrency,
       'alwaysFullQuality': settings.alwaysFullQuality,
       'libraryFolders': settings.libraryFolders,
+      'recentFiles': settings.recentFiles,
+      'lastActiveFolder': settings.lastActiveFolder,
     }),
   );
   await tmp.rename(file.path);

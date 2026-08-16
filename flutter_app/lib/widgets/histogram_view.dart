@@ -69,5 +69,6 @@ class _HistogramPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _HistogramPainter oldDelegate) => oldDelegate.histogram != histogram;
+  bool shouldRepaint(covariant _HistogramPainter oldDelegate) =>
+      oldDelegate.histogram != histogram;
 }

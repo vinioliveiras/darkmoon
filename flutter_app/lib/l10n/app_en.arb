@@ -2,14 +2,18 @@
   "@@locale": "en",
 
   "menuFile": "File",
-  "menuOpenFile": "Open File...",
-  "menuOpenFolder": "Add Folder...",
-  "menuSettings": "Settings...",
+  "menuOpenFile": "Open File",
+  "menuOpenFolder": "Add Folder",
+  "menuSettings": "Settings",
 
   "dialogOpenFolderTitle": "Add Folder",
   "dialogOpenFileTitle": "Open RAW File",
 
   "loadingFolder": "Loading folder...",
+  "loadingPhotos": "Loading photos... ({loaded}/{total})",
+  "@loadingPhotos": {
+    "placeholders": { "loaded": {"type": "int"}, "total": {"type": "int"} }
+  },
   "loadingImage": "Loading {name}...",
   "@loadingImage": {
     "placeholders": { "name": {"type": "String"} }
@@ -21,17 +25,49 @@
   "@decodingPhoto": {
     "placeholders": { "name": {"type": "String"} }
   },
+  "sidebarRecentFilesSection": "RECENT FILES",
   "sidebarFoldersSection": "FOLDERS",
   "sidebarRemoveFolderTooltip": "Remove folder",
+  "sidebarPresetsSection": "PRESETS",
+  "presetImportTooltip": "Import presets (.xmp or .zip)",
+  "presetSaveNewTooltip": "Save current edits as a preset",
+  "presetEmptyHint": "No presets yet",
+  "presetRenameLabel": "Rename",
+  "presetExportLabel": "Export",
+  "presetDeleteLabel": "Delete",
+  "presetSaveLabel": "Save",
+  "presetSaveNewTitle": "Save preset",
+  "presetRenameTitle": "Rename preset",
+  "presetExportDialogTitle": "Export preset",
+  "presetImportDialogTitle": "Import presets",
+  "presetDeleteConfirmMessage": "Delete the preset \"{name}\"? This can't be undone.",
+  "@presetDeleteConfirmMessage": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "presetDeleteManyConfirmMessage": "Delete {count} presets? This can't be undone.",
+  "@presetDeleteManyConfirmMessage": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "presetSelectTooltip": "Select presets",
+  "presetSelectedCount": "{count} selected",
+  "@presetSelectedCount": {
+    "placeholders": { "count": {"type": "int"} }
+  },
+  "presetUnsupportedTitle": "Some settings weren't applied",
+  "presetUnsupportedMessage": "The preset \"{name}\" has settings this app doesn't support yet, so they were skipped:",
+  "@presetUnsupportedMessage": {
+    "placeholders": { "name": {"type": "String"} }
+  },
 
   "beforeLabel": "Before",
   "afterLabel": "After",
   "zoomFit": "Fit",
   "fitToWindow": "Fit to window",
-  "beforeAfterButton": "Before/After (\\)",
+  "beforeAfterButton": "Before/After",
   "fullQualityButton": "Full Quality",
+  "fullQualityShortLabel": "HD",
 
-  "exportPanelButton": "Export...",
+  "exportPanelButton": "Export",
   "exportingButton": "Exporting...",
   "exportPhotoDialogTitle": "Export Photo",
   "exportFormatLabel": "Format",
@@ -57,11 +93,54 @@
   "settingsFastPreviewLabel": "Fast preview while dragging sliders",
   "settingsAlwaysFullQualityLabel": "Always open photos in full quality",
   "settingsThumbnailThreadsLabel": "Thumbnail loading threads",
+  "settingsUserDataSection": "USER DATA",
+  "settingsClearThumbnailsButton": "Clear thumbnail cache",
+  "settingsClearRecentFilesButton": "Clear recent files list",
+  "settingsClearCatalogButton": "Clear catalog (all edits)",
+  "confirmClearTitle": "Clear data?",
+  "confirmClearThumbnailsMessage": "This deletes every cached thumbnail. They'll be regenerated next time you open a folder.",
+  "confirmClearRecentFilesMessage": "This clears your recent files list. Folders you've added stay untouched.",
+  "confirmClearCatalogMessage": "This permanently deletes every saved edit for every photo. This can't be undone.",
+  "clearButton": "Clear",
   "closeButton": "Close",
 
   "sectionWhiteBalance": "WHITE BALANCE",
   "sectionTone": "TONE",
   "sectionPresence": "PRESENCE",
+  "sectionDetail": "DETAIL",
+  "sectionToneCurve": "TONE CURVE",
+  "sectionColorCurve": "COLOR CURVE",
+  "sectionColorMixer": "COLOR MIXER",
+  "sectionColorGrading": "COLOR GRADING",
+  "gradeRangeMidtones": "Midtones",
+
+  "maskImageLayer": "Image",
+  "maskLinearGradient": "Linear Gradient",
+  "maskRadialGradient": "Radial Gradient",
+  "maskBrush": "Brush",
+  "maskAddTooltip": "Add mask",
+  "maskEnabledLabel": "Enabled",
+  "maskInvertLabel": "Invert",
+  "maskDeleteTooltip": "Delete mask",
+  "maskBrushSizeLabel": "Size",
+  "maskBrushHardnessLabel": "Hardness",
+  "maskBrushEraseLabel": "Erase",
+  "maskUndoStrokeTooltip": "Undo last stroke",
+  "maskColorRange": "Color Range",
+  "colorRangeToleranceLabel": "Tolerance",
+  "colorRangeFeatherLabel": "Feather",
+  "colorRangeHint": "Tap the image to pick a color",
+  "colorChannelRed": "Red",
+  "colorChannelOrange": "Orange",
+  "colorChannelYellow": "Yellow",
+  "colorChannelGreen": "Green",
+  "colorChannelAqua": "Aqua",
+  "colorChannelBlue": "Blue",
+  "colorChannelPurple": "Purple",
+  "colorChannelMagenta": "Magenta",
+  "mixerHueLabel": "Hue",
+  "mixerSaturationLabel": "Saturation",
+  "mixerLuminanceLabel": "Luminance",
 
   "sliderTemperature": "Temperature",
   "sliderTint": "Tint",
@@ -76,5 +155,12 @@
   "sliderClarity": "Clarity",
   "sliderDehaze": "Dehaze",
   "sliderVibrance": "Vibrance",
-  "sliderSaturation": "Saturation"
+  "sliderSaturation": "Saturation",
+
+  "sliderDenoiseLuminance": "Luminance",
+  "sliderDenoiseLuminanceDetail": "Luminance Detail",
+  "sliderDenoiseLuminanceContrast": "Luminance Contrast",
+  "sliderDenoiseColor": "Color",
+  "sliderDenoiseColorDetail": "Color Detail",
+  "sliderDenoiseColorSmoothness": "Color Smoothness"
 }

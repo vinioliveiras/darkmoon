@@ -89,6 +89,27 @@ class ThumbnailCacheManager {
   }
 
   File _monthFile(String monthKey) => File(p.join(cacheDir, '$monthKey.cache'));
+
+  /// Deletes every cached thumbnail, in memory and on disk — used by the
+  /// Settings "clear thumbnail cache" action. Subsequent lookups miss and
+  /// fall back to decoding straight from the RAW file again.
+  Future<void> clearAll() async {
+    _months.clear();
+    _dirtyMonths.clear();
+    final dir = Directory(cacheDir);
+    if (!await dir.exists()) {
+      return;
+    }
+    await for (final entity in dir.list()) {
+      if (entity is File && entity.path.endsWith('.cache')) {
+        try {
+          await entity.delete();
+        } catch (_) {
+          // Best-effort — a locked/already-gone file shouldn't block the rest.
+        }
+      }
+    }
+  }
 }
 
 String _monthKey(DateTime modified) {
@@ -146,11 +167,13 @@ Future<Map<String, Uint8List>> _readMonthFile(File file) async {
 
 Future<void> _writeMonthFile(File file, Map<String, Uint8List> entries) async {
   final builder = BytesBuilder();
-  final countHeader = ByteData(_headerCountBytes)..setUint32(0, entries.length, Endian.little);
+  final countHeader = ByteData(_headerCountBytes)
+    ..setUint32(0, entries.length, Endian.little);
   builder.add(countHeader.buffer.asUint8List());
   for (final entry in entries.entries) {
     builder.add(ascii.encode(entry.key));
-    final lengthHeader = ByteData(_lengthBytes)..setUint32(0, entry.value.length, Endian.little);
+    final lengthHeader = ByteData(_lengthBytes)
+      ..setUint32(0, entry.value.length, Endian.little);
     builder.add(lengthHeader.buffer.asUint8List());
   }
   for (final value in entries.values) {
