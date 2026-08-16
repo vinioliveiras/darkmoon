@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import 'catalog/catalog_store.dart';
+import 'catalog/thumbnail_cache_dir.dart';
 import 'export/export_job.dart';
 import 'native/edit_source.dart';
 import 'native/thumbnail_loader.dart';
@@ -129,12 +130,27 @@ class _EditorScreenState extends State<EditorScreen> {
 
   late final AppLifecycleListener _lifecycleListener;
 
+  /// Resolved once at startup (path_provider isn't guaranteed safe to call
+  /// from the compute() isolates thumbnail decoding runs on) and handed to
+  /// each thumbnail request; null until that resolves, which just means
+  /// thumbnails decoded before then skip the cache for that one lookup.
+  String? _thumbnailCacheDir;
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadEdits());
     unawaited(_loadSettings());
+    unawaited(_loadThumbnailCacheDir());
     _lifecycleListener = AppLifecycleListener(onExitRequested: _handleExitRequested);
+  }
+
+  Future<void> _loadThumbnailCacheDir() async {
+    final dir = await resolveThumbnailCacheDir();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _thumbnailCacheDir = dir);
   }
 
   /// Makes sure the current photo's edits are actually on disk before the
@@ -277,7 +293,8 @@ class _EditorScreenState extends State<EditorScreen> {
     Future<void> worker() async {
       while (queue.isNotEmpty) {
         final file = queue.removeAt(0);
-        final bytes = await compute(decodeRawThumbnail, file.path);
+        final request = ThumbnailRequest(path: file.path, cacheDir: _thumbnailCacheDir);
+        final bytes = await compute(decodeRawThumbnail, request);
         if (!mounted || generation != _folderGeneration) {
           return;
         }
