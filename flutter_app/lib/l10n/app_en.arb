@@ -53,6 +53,7 @@
   "settingsLanguageEnglish": "English",
   "settingsLanguagePortuguese": "Portuguese",
   "settingsFastPreviewLabel": "Fast preview while dragging sliders",
+  "settingsAlwaysFullQualityLabel": "Always open photos in full quality",
   "settingsThumbnailThreadsLabel": "Thumbnail loading threads",
   "closeButton": "Close",
 

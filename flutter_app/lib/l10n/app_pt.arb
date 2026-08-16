@@ -41,6 +41,7 @@
   "settingsLanguageEnglish": "English",
   "settingsLanguagePortuguese": "Português",
   "settingsFastPreviewLabel": "Preview rápido ao arrastar os sliders",
+  "settingsAlwaysFullQualityLabel": "Sempre abrir fotos em qualidade máxima",
   "settingsThumbnailThreadsLabel": "Threads de carregamento de miniaturas",
   "closeButton": "Fechar",
 

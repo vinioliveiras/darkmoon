@@ -121,6 +121,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Preview rápido ao arrastar os sliders';
 
   @override
+  String get settingsAlwaysFullQualityLabel =>
+      'Sempre abrir fotos em qualidade máxima';
+
+  @override
   String get settingsThumbnailThreadsLabel =>
       'Threads de carregamento de miniaturas';
 

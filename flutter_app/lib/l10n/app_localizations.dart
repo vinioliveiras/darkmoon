@@ -302,6 +302,12 @@ abstract class AppLocalizations {
   /// **'Fast preview while dragging sliders'**
   String get settingsFastPreviewLabel;
 
+  /// No description provided for @settingsAlwaysFullQualityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Always open photos in full quality'**
+  String get settingsAlwaysFullQualityLabel;
+
   /// No description provided for @settingsThumbnailThreadsLabel.
   ///
   /// In en, this message translates to:

@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io' show File;
 import 'dart:ui' show AppExitResponse;
 
 import 'package:file_picker/file_picker.dart';
@@ -96,7 +97,13 @@ const _renderDebounce = Duration(milliseconds: 25);
 const _catalogSaveDebounce = Duration(milliseconds: 800);
 
 class _SliderSpec {
-  const _SliderSpec(this.name, this.min, this.max, this.defaultValue, {this.decimals = 2});
+  const _SliderSpec(
+    this.name,
+    this.min,
+    this.max,
+    this.defaultValue, {
+    this.decimals = 2,
+  });
 
   final String name;
   final double min;
@@ -186,12 +193,13 @@ class _EditorScreenState extends State<EditorScreen> {
 
   /// True while decoding a newly-selected photo's edit source (always
   /// shown — this is the multi-second X-Trans-full-demosaic case). True
-  /// while a render is taking more than a second (e.g. Clarity/Dehaze at
-  /// full resolution) — gated by a delay so ordinary fast slider tweaks
-  /// never flash it.
+  /// while a render is taking more than [_slowRenderThreshold] (e.g.
+  /// Clarity/Dehaze at full resolution) — gated by a delay so ordinary
+  /// fast slider tweaks never flash it.
   bool _isDecodingPhoto = false;
   bool _isRenderingSlow = false;
   Timer? _slowRenderTimer;
+  static const _slowRenderThreshold = Duration(seconds: 3);
 
   /// Saved slider values per photo (absolute path), persisted to disk.
   /// Loaded once at startup; not guarded against edits made before that
@@ -219,7 +227,9 @@ class _EditorScreenState extends State<EditorScreen> {
     unawaited(_loadEdits());
     unawaited(_loadSettings());
     unawaited(_loadThumbnailCache());
-    _lifecycleListener = AppLifecycleListener(onExitRequested: _handleExitRequested);
+    _lifecycleListener = AppLifecycleListener(
+      onExitRequested: _handleExitRequested,
+    );
   }
 
   Future<void> _loadThumbnailCache() async {
@@ -322,13 +332,18 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Future<void> _openFolder() async {
     final l10n = AppLocalizations.of(context)!;
-    final folder = await FilePicker.getDirectoryPath(dialogTitle: l10n.dialogOpenFolderTitle);
+    final folder = await FilePicker.getDirectoryPath(
+      dialogTitle: l10n.dialogOpenFolderTitle,
+    );
     if (folder == null) {
       return;
     }
     await _loadFolder(folder);
   }
 
+  /// Opens just the one selected file — no folder scan, so the filmstrip
+  /// only shows this single photo (unlike Open Folder, or a version of
+  /// this that loaded the whole containing folder with focus on the file).
   Future<void> _openFile() async {
     final l10n = AppLocalizations.of(context)!;
     final result = await FilePicker.pickFiles(
@@ -340,12 +355,44 @@ class _EditorScreenState extends State<EditorScreen> {
     if (path == null) {
       return;
     }
-    await _loadFolder(p.dirname(path), selectPath: path);
+    await _loadSingleFile(path);
   }
 
   Future<void> _loadFolder(String folder, {String? selectPath}) async {
     unawaited(_flushCurrentEdits());
     final generation = ++_folderGeneration;
+    _beginLoadingFiles();
+    final files = await listRawFiles(folder);
+    if (!mounted || generation != _folderGeneration) {
+      return;
+    }
+    final index = selectPath == null
+        ? 0
+        : files.indexWhere((f) => f.path == selectPath);
+    final selectedIndex = files.isEmpty ? null : (index < 0 ? 0 : index);
+    _applyFiles(files, selectedIndex, generation);
+  }
+
+  Future<void> _loadSingleFile(String path) async {
+    unawaited(_flushCurrentEdits());
+    final generation = ++_folderGeneration;
+    _beginLoadingFiles();
+    DateTime modified;
+    try {
+      modified = (await File(path).stat()).modified;
+    } catch (_) {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+      return;
+    }
+    if (!mounted || generation != _folderGeneration) {
+      return;
+    }
+    _applyFiles([RawFile(path, modified)], 0, generation);
+  }
+
+  void _beginLoadingFiles() {
     setState(() {
       _loading = true;
       _thumbnails.clear();
@@ -355,24 +402,30 @@ class _EditorScreenState extends State<EditorScreen> {
       _neutralPreviews.clear();
       _beforeAfterMode = false;
       _fullQualitySources.clear();
-      _fullQualityMode = false;
+      _fullQualityMode = _settings.alwaysFullQuality;
     });
-    final files = await listRawFiles(folder);
-    if (!mounted || generation != _folderGeneration) {
-      return;
-    }
-    final index = selectPath == null ? 0 : files.indexWhere((f) => f.path == selectPath);
-    final selectedIndex = files.isEmpty ? null : (index < 0 ? 0 : index);
+  }
+
+  void _applyFiles(List<RawFile> files, int? selectedIndex, int generation) {
     _resetZoom();
     setState(() {
       _files = files;
       _selectedIndex = selectedIndex;
       _loading = false;
-      _paramValues = selectedIndex == null ? _defaultParamValues() : _paramValuesFor(files[selectedIndex].path);
+      _paramValues = selectedIndex == null
+          ? _defaultParamValues()
+          : _paramValuesFor(files[selectedIndex].path);
     });
     unawaited(_loadThumbnails(files, generation));
     if (selectedIndex != null) {
-      unawaited(_loadEditSourceAndRender(files[selectedIndex].path, generation));
+      unawaited(
+        _loadEditSourceAndRender(files[selectedIndex].path, generation),
+      );
+      if (_fullQualityMode) {
+        unawaited(
+          _loadFullQualityAndRender(files[selectedIndex].path, generation),
+        );
+      }
     }
   }
 
@@ -401,7 +454,9 @@ class _EditorScreenState extends State<EditorScreen> {
       }
     }
 
-    await Future.wait(List.generate(_settings.thumbnailConcurrency, (_) => worker()));
+    await Future.wait(
+      List.generate(_settings.thumbnailConcurrency, (_) => worker()),
+    );
     unawaited(cache?.flush());
   }
 
@@ -464,12 +519,14 @@ class _EditorScreenState extends State<EditorScreen> {
       // also turns out to take more than a second.
       setState(() => _isRenderingSlow = false);
     }
-    _slowRenderTimer = Timer(const Duration(seconds: 1), () {
+    _slowRenderTimer = Timer(_slowRenderThreshold, () {
       if (mounted && requestId == _renderRequestId) {
         setState(() => _isRenderingSlow = true);
       }
     });
-    final fullQualitySource = _fullQualityMode ? _fullQualitySources[path] : null;
+    final fullQualitySource = _fullQualityMode
+        ? _fullQualitySources[path]
+        : null;
     final job = RenderJob(
       source: live ? sources.live : (fullQualitySource ?? sources.preview),
       params: RenderParams.fromValues(_paramValues),
@@ -511,7 +568,9 @@ class _EditorScreenState extends State<EditorScreen> {
   void _toggleBeforeAfter() {
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
     setState(() => _beforeAfterMode = !_beforeAfterMode);
-    if (_beforeAfterMode && selected != null && !_neutralPreviews.containsKey(selected.path)) {
+    if (_beforeAfterMode &&
+        selected != null &&
+        !_neutralPreviews.containsKey(selected.path)) {
       unawaited(_loadNeutralPreview(selected.path));
     }
   }
@@ -564,7 +623,8 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     final box = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
-    final center = anchor ?? (box != null ? box.size.center(Offset.zero) : Offset.zero);
+    final center =
+        anchor ?? (box != null ? box.size.center(Offset.zero) : Offset.zero);
     final matrix = Matrix4.copy(_viewController.value)
       ..translateByDouble(center.dx, center.dy, 0, 1)
       ..scaleByDouble(effectiveFactor, effectiveFactor, effectiveFactor, 1)
@@ -580,7 +640,8 @@ class _EditorScreenState extends State<EditorScreen> {
   /// Ctrl+scroll zooms (anchored at the cursor); plain scroll does nothing,
   /// matching the Python app's wheelEvent behavior.
   void _handlePointerSignal(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent || !HardwareKeyboard.instance.isControlPressed) {
+    if (event is! PointerScrollEvent ||
+        !HardwareKeyboard.instance.isControlPressed) {
       return;
     }
     final factor = event.scrollDelta.dy < 0 ? _zoomStep : 1 / _zoomStep;
@@ -676,10 +737,7 @@ class _EditorScreenState extends State<EditorScreen> {
           }
         },
       },
-      child: Focus(
-        autofocus: true,
-        child: _buildScaffold(selected),
-      ),
+      child: Focus(autofocus: true, child: _buildScaffold(selected)),
     );
   }
 
@@ -703,7 +761,11 @@ class _EditorScreenState extends State<EditorScreen> {
     return Scaffold(
       body: Column(
         children: [
-          _TopMenuBar(onOpenFile: _openFile, onOpenFolder: _openFolder, onOpenSettings: _openSettings),
+          _TopMenuBar(
+            onOpenFile: _openFile,
+            onOpenFolder: _openFolder,
+            onOpenSettings: _openSettings,
+          ),
           Expanded(
             child: Stack(
               children: [
@@ -716,9 +778,15 @@ class _EditorScreenState extends State<EditorScreen> {
                           Expanded(
                             child: _ImageArea(
                               selected: selected,
-                              thumbnail: selected == null ? null : _thumbnails[selected.path],
-                              preview: selected == null ? null : _renderedPreviews[selected.path],
-                              neutralPreview: selected == null ? null : _neutralPreviews[selected.path],
+                              thumbnail: selected == null
+                                  ? null
+                                  : _thumbnails[selected.path],
+                              preview: selected == null
+                                  ? null
+                                  : _renderedPreviews[selected.path],
+                              neutralPreview: selected == null
+                                  ? null
+                                  : _neutralPreviews[selected.path],
                               beforeAfterMode: _beforeAfterMode,
                               viewController: _viewController,
                               viewportKey: _viewportKey,
@@ -726,15 +794,21 @@ class _EditorScreenState extends State<EditorScreen> {
                               onZoomIn: _zoomIn,
                               onZoomOut: _zoomOut,
                               onZoomFit: _resetZoom,
-                              onToggleBeforeAfter: selected == null ? null : _toggleBeforeAfter,
+                              onToggleBeforeAfter: selected == null
+                                  ? null
+                                  : _toggleBeforeAfter,
                               fullQualityMode: _fullQualityMode,
-                              onToggleFullQuality: selected == null ? null : _toggleFullQuality,
+                              onToggleFullQuality: selected == null
+                                  ? null
+                                  : _toggleFullQuality,
                               onPointerSignal: _handlePointerSignal,
                             ),
                           ),
                           _ControlsPanel(
                             values: _paramValues,
-                            histogram: selected == null ? null : _histograms[selected.path],
+                            histogram: selected == null
+                                ? null
+                                : _histograms[selected.path],
                             onChanged: _onParamChanged,
                             onChangeEnd: _onParamChangeEnd,
                             onReset: _resetParams,
@@ -755,7 +829,9 @@ class _EditorScreenState extends State<EditorScreen> {
                 Builder(
                   builder: (context) {
                     final message = _overlayMessage(context, selected);
-                    return message == null ? const SizedBox.shrink() : _LoadingOverlay(message: message);
+                    return message == null
+                        ? const SizedBox.shrink()
+                        : _LoadingOverlay(message: message);
                   },
                 ),
               ],
@@ -768,7 +844,11 @@ class _EditorScreenState extends State<EditorScreen> {
 }
 
 class _TopMenuBar extends StatelessWidget {
-  const _TopMenuBar({required this.onOpenFile, required this.onOpenFolder, required this.onOpenSettings});
+  const _TopMenuBar({
+    required this.onOpenFile,
+    required this.onOpenFolder,
+    required this.onOpenSettings,
+  });
 
   final VoidCallback onOpenFile;
   final VoidCallback onOpenFolder;
@@ -796,7 +876,10 @@ class _TopMenuBar extends StatelessWidget {
             ),
             itemBuilder: (context) => [
               PopupMenuItem(value: onOpenFile, child: Text(l10n.menuOpenFile)),
-              PopupMenuItem(value: onOpenFolder, child: Text(l10n.menuOpenFolder)),
+              PopupMenuItem(
+                value: onOpenFolder,
+                child: Text(l10n.menuOpenFolder),
+              ),
             ],
             onSelected: (callback) => callback(),
             child: _MenuBarLabel(l10n.menuFile),
@@ -821,7 +904,13 @@ class _MenuBarLabel extends StatelessWidget {
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Text(text, style: const TextStyle(color: DarkmoonColors.textSecondary, fontSize: 12.5)),
+      child: Text(
+        text,
+        style: const TextStyle(
+          color: DarkmoonColors.textSecondary,
+          fontSize: 12.5,
+        ),
+      ),
     );
   }
 }
@@ -875,7 +964,9 @@ class _ImageArea extends StatelessWidget {
           ),
         ),
         _ViewerToolbar(
-          zoomLabel: zoomScale == 1.0 ? l10n.zoomFit : '${(zoomScale * 100).round()}%',
+          zoomLabel: zoomScale == 1.0
+              ? l10n.zoomFit
+              : '${(zoomScale * 100).round()}%',
           beforeAfterMode: beforeAfterMode,
           beforeAfterEnabled: onToggleBeforeAfter != null,
           onZoomIn: onZoomIn,
@@ -915,7 +1006,12 @@ class _ImageArea extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Falls back to the edited image until the neutral render finishes.
-          Expanded(child: _zoomableLabeledImage(l10n.beforeLabel, neutralPreview ?? bytes)),
+          Expanded(
+            child: _zoomableLabeledImage(
+              l10n.beforeLabel,
+              neutralPreview ?? bytes,
+            ),
+          ),
           Container(width: 1, color: DarkmoonColors.divider),
           Expanded(child: _zoomableLabeledImage(l10n.afterLabel, bytes)),
         ],
@@ -951,7 +1047,10 @@ class _ImageArea extends StatelessWidget {
                 color: Colors.black.withValues(alpha: 0.55),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11)),
+              child: Text(
+                label,
+                style: const TextStyle(color: Colors.white, fontSize: 11),
+              ),
             ),
           ),
         ),
@@ -997,7 +1096,10 @@ class _LoadingOverlay extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 12),
-            Text(message, style: const TextStyle(color: Colors.white, fontSize: 13)),
+            Text(
+              message,
+              style: const TextStyle(color: Colors.white, fontSize: 13),
+            ),
           ],
         ),
       ),
@@ -1059,7 +1161,10 @@ class _ViewerToolbar extends StatelessWidget {
             child: Text(
               zoomLabel,
               textAlign: TextAlign.center,
-              style: const TextStyle(color: DarkmoonColors.textSecondary, fontSize: 11.5),
+              style: const TextStyle(
+                color: DarkmoonColors.textSecondary,
+                fontSize: 11.5,
+              ),
             ),
           ),
           IconButton(
@@ -1072,7 +1177,11 @@ class _ViewerToolbar extends StatelessWidget {
             child: ElevatedButton(
               onPressed: onZoomFit,
               style: _compactButtonStyle,
-              child: Text(l10n.fitToWindow, overflow: TextOverflow.ellipsis, softWrap: false),
+              child: Text(
+                l10n.fitToWindow,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+              ),
             ),
           ),
           const Spacer(),
@@ -1082,7 +1191,9 @@ class _ViewerToolbar extends StatelessWidget {
               onPressed: onToggleFullQuality,
               style: fullQualityMode
                   ? _compactIconButtonStyle.copyWith(
-                      backgroundColor: const WidgetStatePropertyAll(DarkmoonColors.accent),
+                      backgroundColor: const WidgetStatePropertyAll(
+                        DarkmoonColors.accent,
+                      ),
                     )
                   : _compactIconButtonStyle,
               icon: const Icon(Icons.hd_outlined, size: 16),
@@ -1094,10 +1205,16 @@ class _ViewerToolbar extends StatelessWidget {
               onPressed: onToggleBeforeAfter,
               style: beforeAfterMode
                   ? _compactButtonStyle.copyWith(
-                      backgroundColor: const WidgetStatePropertyAll(DarkmoonColors.accent),
+                      backgroundColor: const WidgetStatePropertyAll(
+                        DarkmoonColors.accent,
+                      ),
                     )
                   : _compactButtonStyle,
-              child: Text(l10n.beforeAfterButton, overflow: TextOverflow.ellipsis, softWrap: false),
+              child: Text(
+                l10n.beforeAfterButton,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+              ),
             ),
           ),
         ],
@@ -1150,7 +1267,11 @@ class _ControlsPanel extends StatelessWidget {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.file_download_outlined, size: 16),
-                      label: Text(exporting ? l10n.exportingButton : l10n.exportPanelButton),
+                      label: Text(
+                        exporting
+                            ? l10n.exportingButton
+                            : l10n.exportPanelButton,
+                      ),
                     ),
                   ),
                 ),
@@ -1173,7 +1294,10 @@ class _ControlsPanel extends StatelessWidget {
               if (entry.key != _sections.keys.first) const Divider(),
               Padding(
                 padding: const EdgeInsets.only(top: 14, bottom: 2),
-                child: Text(_sectionLabel(l10n, entry.key), style: Theme.of(context).textTheme.labelSmall),
+                child: Text(
+                  _sectionLabel(l10n, entry.key),
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
               ),
               for (final spec in entry.value)
                 Padding(
@@ -1196,7 +1320,7 @@ class _ControlsPanel extends StatelessWidget {
   }
 }
 
-class _Filmstrip extends StatelessWidget {
+class _Filmstrip extends StatefulWidget {
   const _Filmstrip({
     required this.files,
     required this.selectedIndex,
@@ -1210,7 +1334,44 @@ class _Filmstrip extends StatelessWidget {
   final ValueChanged<int> onSelect;
 
   @override
+  State<_Filmstrip> createState() => _FilmstripState();
+}
+
+class _FilmstripState extends State<_Filmstrip> {
+  final _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  // Mouse wheels report vertical scroll delta by default, but this list
+  // scrolls horizontally — without this, plain wheel scroll over the
+  // filmstrip does nothing (Flutter doesn't remap the axis on its own).
+  // Ctrl+scroll is reserved for image zoom, so this only acts without it.
+  void _handleWheel(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent ||
+        HardwareKeyboard.instance.isControlPressed ||
+        !_scrollController.hasClients) {
+      return;
+    }
+    final delta = event.scrollDelta.dy != 0
+        ? event.scrollDelta.dy
+        : event.scrollDelta.dx;
+    final target = (_scrollController.offset + delta).clamp(
+      _scrollController.position.minScrollExtent,
+      _scrollController.position.maxScrollExtent,
+    );
+    _scrollController.jumpTo(target);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final files = widget.files;
+    final selectedIndex = widget.selectedIndex;
+    final thumbnails = widget.thumbnails;
+    final onSelect = widget.onSelect;
     if (files.isEmpty) {
       return Container(
         height: 114,
@@ -1225,53 +1386,66 @@ class _Filmstrip extends StatelessWidget {
     return Container(
       height: 114,
       color: DarkmoonColors.filmstrip,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.all(8),
-        itemCount: files.length,
-        itemBuilder: (context, index) {
-          final file = files[index];
-          final isSelected = index == selectedIndex;
-          final thumbnail = thumbnails[file.path];
-          return Padding(
-            padding: const EdgeInsets.only(right: 6),
-            child: GestureDetector(
-              onTap: () => onSelect(index),
-              child: Container(
-                width: 104,
-                padding: const EdgeInsets.all(4),
-                decoration: BoxDecoration(
-                  color: isSelected ? DarkmoonColors.accent.withValues(alpha: 0.28) : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(6),
-                        child: Container(
-                          width: double.infinity,
-                          color: const Color(0xFF26262A),
-                          alignment: Alignment.center,
-                          child: thumbnail == null
-                              ? const Icon(Icons.image_outlined, color: DarkmoonColors.textMuted, size: 22)
-                              : Image.memory(thumbnail, fit: BoxFit.cover),
+      child: Listener(
+        onPointerSignal: _handleWheel,
+        child: ListView.builder(
+          controller: _scrollController,
+          scrollDirection: Axis.horizontal,
+          padding: const EdgeInsets.all(8),
+          itemCount: files.length,
+          itemBuilder: (context, index) {
+            final file = files[index];
+            final isSelected = index == selectedIndex;
+            final thumbnail = thumbnails[file.path];
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: GestureDetector(
+                onTap: () => onSelect(index),
+                child: Container(
+                  width: 104,
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: isSelected
+                        ? DarkmoonColors.accent.withValues(alpha: 0.28)
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Container(
+                            width: double.infinity,
+                            color: const Color(0xFF26262A),
+                            alignment: Alignment.center,
+                            child: thumbnail == null
+                                ? const Icon(
+                                    Icons.image_outlined,
+                                    color: DarkmoonColors.textMuted,
+                                    size: 22,
+                                  )
+                                : Image.memory(thumbnail, fit: BoxFit.cover),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      file.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(color: DarkmoonColors.textSecondary, fontSize: 10),
-                    ),
-                  ],
+                      const SizedBox(height: 3),
+                      Text(
+                        file.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          color: DarkmoonColors.textSecondary,
+                          fontSize: 10,
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }

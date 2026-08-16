@@ -4,6 +4,12 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+/// Cap concurrency at 8 even on many-core machines — thumbnail decode is
+/// bottlenecked on the same LibRaw/JPEG-decode work per photo regardless
+/// of core count, and spawning too many isolates at once just adds
+/// scheduling overhead without much extra throughput.
+int _defaultThumbnailConcurrency() => Platform.numberOfProcessors.clamp(2, 8);
+
 /// App-wide settings, mirroring the Python app's `DEFAULT_SETTINGS` (minus
 /// the thumbnail disk cache setting, since this port's cache doesn't have
 /// a size/eviction knob yet to expose).
@@ -12,6 +18,7 @@ class AppSettings {
     this.language = 'auto',
     this.fastPreview = true,
     this.thumbnailConcurrency = 4,
+    this.alwaysFullQuality = false,
   });
 
   /// 'auto' (follow the system language), 'en', or 'pt'.
@@ -25,10 +32,22 @@ class AppSettings {
   /// How many thumbnails to decode concurrently when a folder is opened.
   final int thumbnailConcurrency;
 
-  AppSettings copyWith({String? language, bool? fastPreview, int? thumbnailConcurrency}) => AppSettings(
+  /// When true, every photo opens in the full-native-resolution view by
+  /// default instead of the downscaled editing preview (still overridable
+  /// per-session via the viewer's Full Quality toggle).
+  final bool alwaysFullQuality;
+
+  AppSettings copyWith({
+    String? language,
+    bool? fastPreview,
+    int? thumbnailConcurrency,
+    bool? alwaysFullQuality,
+  }) =>
+      AppSettings(
         language: language ?? this.language,
         fastPreview: fastPreview ?? this.fastPreview,
         thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
+        alwaysFullQuality: alwaysFullQuality ?? this.alwaysFullQuality,
       );
 }
 
@@ -42,20 +61,22 @@ Future<File> _settingsFile() async {
 }
 
 Future<AppSettings> loadSettings() async {
+  final defaultConcurrency = _defaultThumbnailConcurrency();
   try {
     final file = await _settingsFile();
     if (!await file.exists()) {
-      return const AppSettings();
+      return AppSettings(thumbnailConcurrency: defaultConcurrency);
     }
     final raw = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     const defaults = AppSettings();
     return AppSettings(
       language: raw['language'] as String? ?? defaults.language,
       fastPreview: raw['fastPreview'] as bool? ?? defaults.fastPreview,
-      thumbnailConcurrency: (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaults.thumbnailConcurrency,
+      thumbnailConcurrency: (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
+      alwaysFullQuality: raw['alwaysFullQuality'] as bool? ?? defaults.alwaysFullQuality,
     );
   } catch (_) {
-    return const AppSettings();
+    return AppSettings(thumbnailConcurrency: defaultConcurrency);
   }
 }
 
@@ -67,6 +88,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'language': settings.language,
       'fastPreview': settings.fastPreview,
       'thumbnailConcurrency': settings.thumbnailConcurrency,
+      'alwaysFullQuality': settings.alwaysFullQuality,
     }),
   );
   await tmp.rename(file.path);

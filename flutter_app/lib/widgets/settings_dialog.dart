@@ -57,6 +57,12 @@ class _SettingsDialogState extends State<SettingsDialog> {
             value: _settings.fastPreview,
             onChanged: (v) => _update(_settings.copyWith(fastPreview: v)),
           ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: Text(l10n.settingsAlwaysFullQualityLabel),
+            value: _settings.alwaysFullQuality,
+            onChanged: (v) => _update(_settings.copyWith(alwaysFullQuality: v)),
+          ),
           const SizedBox(height: 8),
           Row(
             children: [

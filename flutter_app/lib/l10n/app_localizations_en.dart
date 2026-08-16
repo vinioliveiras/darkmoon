@@ -120,6 +120,10 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsFastPreviewLabel => 'Fast preview while dragging sliders';
 
   @override
+  String get settingsAlwaysFullQualityLabel =>
+      'Always open photos in full quality';
+
+  @override
   String get settingsThumbnailThreadsLabel => 'Thumbnail loading threads';
 
   @override
