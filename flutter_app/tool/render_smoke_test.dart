@@ -53,4 +53,8 @@ void main(List<String> args) {
       saturation: 15,
     ),
   );
+  renderAndSave('texture', const RenderParams(texture: 100));
+  renderAndSave('clarity', const RenderParams(clarity: 100));
+  renderAndSave('dehaze_positive', const RenderParams(dehaze: 80));
+  renderAndSave('dehaze_negative', const RenderParams(dehaze: -60));
 }

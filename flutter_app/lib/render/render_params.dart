@@ -1,10 +1,6 @@
 /// The current value of every adjustment slider, passed into [renderRgb].
 ///
-/// Field names mirror the Python app's `params` dict keys. Texture, Clarity
-/// and Dehaze are carried here for forward compatibility with the sliders
-/// already in the UI, but [renderRgb] doesn't apply them yet — they need
-/// blur-based local contrast / a dark-channel haze model, which is a
-/// separate step.
+/// Field names mirror the Python app's `params` dict keys.
 class RenderParams {
   const RenderParams({
     this.temperature = 5500,

@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'dehaze.dart';
+import 'local_contrast.dart';
 import 'render_params.dart';
 
 /// Absolute color temperature (Kelvin) treated as "no white-balance shift",
@@ -12,9 +14,7 @@ const double _temperatureNeutralKelvin = 5500.0;
 /// the same shape.
 ///
 /// This is a straight port of the Python app's `render()` — same order of
-/// operations, same per-step math — minus Texture, Clarity and Dehaze,
-/// which aren't implemented yet (those sliders are accepted but have no
-/// effect for now).
+/// operations, same per-step math.
 ///
 /// Designed to run via `compute()`: pure function over simple, isolate-
 /// transferable data.
@@ -30,6 +30,9 @@ Uint8List renderRgb(int width, int height, Uint8List sourceRgb, RenderParams par
   _applyBrightnessContrast(buffer, params.brightness, params.contrast);
   _applyHighlightsShadows(buffer, pixelCount, params.highlights, params.shadows);
   _applyWhitesBlacks(buffer, pixelCount, params.whites, params.blacks);
+  applyLocalContrast(buffer, width, height, params.texture, 3);
+  applyLocalContrast(buffer, width, height, params.clarity, 25, protectMidtones: true);
+  applyDehaze(buffer, width, height, params.dehaze);
   _applyVibrance(buffer, pixelCount, params.vibrance);
   _applySaturation(buffer, pixelCount, params.saturation);
 
