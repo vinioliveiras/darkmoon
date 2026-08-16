@@ -17,12 +17,13 @@ import '../theme.dart';
 /// so no amount of value precision in the code could make it feel fine-
 /// grained; the track itself is just too physically narrow for that
 /// range. Here, dragging by one pixel moves the value by an amount scaled
-/// to the slider's own decimal precision (0.01 units/pixel for a 2-decimal,
-/// -100..100 slider — enough to actually land on hundredths — much
-/// coarser for Temperature's 0-decimal, 48000-wide range, where fine
-/// per-pixel control isn't the point). The thumb still renders at its
-/// proportional min-max position for "where am I" feedback; it just no
-/// longer jumps to follow the cursor 1:1.
+/// to the slider's own decimal precision (0.1 units/pixel for a 2-decimal,
+/// -100..100 slider — landing on tenths per pixel while still covering the
+/// full range in a reasonable drag distance — much coarser for
+/// Temperature's 0-decimal, 48000-wide range, where fine per-pixel control
+/// isn't the point). The thumb still renders at its proportional min-max
+/// position for "where am I" feedback; it just no longer jumps to follow
+/// the cursor 1:1.
 class SliderRow extends StatefulWidget {
   const SliderRow({
     super.key,
@@ -68,7 +69,15 @@ class _SliderRowState extends State<SliderRow> {
   double? _dragValue;
   Timer? _propagateTimer;
 
-  double get _unitsPerPixel => (widget.max - widget.min) / (_referenceTrackWidth * math.pow(10, widget.decimals));
+  // decimals - 1 (not decimals) as the precision exponent: 0.01/pixel felt
+  // too slow to cover any real range, 0.1/pixel lands on one decimal place
+  // per pixel while still reaching the full range in a reasonable drag
+  // distance. Floored at 0 so 0-decimal sliders (Temperature) are
+  // unaffected — they were already fine at the coarser rate.
+  double get _unitsPerPixel {
+    final precisionExponent = math.max(0, widget.decimals - 1);
+    return (widget.max - widget.min) / (_referenceTrackWidth * math.pow(10, precisionExponent));
+  }
 
   @override
   void initState() {
