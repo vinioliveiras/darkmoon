@@ -2,7 +2,7 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
-import 'libraw_ffi.dart';
+import 'libraw.dart';
 
 /// Embedded camera preview JPEGs are often nearly full-resolution (multiple
 /// megapixels) — way more than a filmstrip thumbnail needs. Downscaling

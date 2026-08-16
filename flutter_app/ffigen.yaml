@@ -1,0 +1,56 @@
+%YAML 1.1
+---
+# Generates lib/native/libraw_bindings.dart from LibRaw's public C headers
+# (vendored under third_party/libraw_headers — see that folder's note on
+# where they came from and how to refresh them).
+#
+# libraw.h mixes a C++ convenience class with the plain C API we actually
+# bind against, and the installed ffigen (20.1.1) only parses C — so the
+# entry point is third_party/libraw_headers/libraw_c_api.h, a small
+# hand-written header that includes libraw_types.h (pure C structs/enums)
+# directly and declares just the extern "C" functions we call, instead of
+# pulling in libraw.h itself.
+name: LibRawBindings
+description: Minimal FFI bindings for RAW decoding (not just thumbnails).
+output: 'lib/native/libraw_bindings.dart'
+headers:
+  entry-points:
+    - 'third_party/libraw_headers/libraw_c_api.h'
+  include-directives:
+    - 'third_party/libraw_headers/**'
+compiler-opts:
+  - '-Ithird_party/libraw_headers'
+functions:
+  include:
+    - 'libraw_init'
+    - 'libraw_open_wfile'
+    - 'libraw_unpack'
+    - 'libraw_unpack_thumb'
+    - 'libraw_dcraw_process'
+    - 'libraw_dcraw_make_mem_image'
+    - 'libraw_dcraw_make_mem_thumb'
+    - 'libraw_dcraw_clear_mem'
+    - 'libraw_close'
+    - 'libraw_recycle'
+    - 'libraw_strerror'
+structs:
+  include:
+    - 'libraw_data_t'
+    - 'libraw_output_params_t'
+    - 'libraw_processed_image_t'
+    - 'libraw_.*' # pull in whatever nested structs those two transitively need
+  dependency-only: opaque
+unions:
+  include:
+    - '.*'
+  dependency-only: opaque
+enums:
+  include:
+    - 'LibRaw_image_formats'
+    - 'LibRaw_.*'
+# Windows/MSVC (what raw_r.dll is built with) always sizes plain enums as
+# `int` (4 bytes), matching ffigen's Windows default — safe to silence.
+silence-enum-warning: true
+preamble: |
+  // GENERATED FILE — do not edit by hand.
+  // Regenerate with: dart run ffigen --config ffigen.yaml
