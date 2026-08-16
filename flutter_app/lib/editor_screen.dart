@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import 'catalog/catalog_store.dart';
 import 'native/edit_source.dart';
 import 'native/thumbnail_loader.dart';
 import 'raw_files.dart';
@@ -17,6 +18,12 @@ import 'widgets/slider_row.dart';
 /// re-rendering, restarted on every change — matches the Python app's
 /// DEBOUNCE_MS. Keeps a fast slider drag from queuing a render per frame.
 const _renderDebounce = Duration(milliseconds: 25);
+
+/// How long to wait after the last slider change before writing the
+/// catalog to disk, restarted on every change — matches the Python app's
+/// CATALOG_SAVE_DEBOUNCE_MS. Switching photos or folders flushes
+/// immediately instead of waiting for this.
+const _catalogSaveDebounce = Duration(milliseconds: 800);
 
 /// How many thumbnails to decode concurrently (each on its own isolate via
 /// `compute`). Bounded so opening a folder with hundreds of RAWs doesn't
@@ -83,17 +90,72 @@ class _EditorScreenState extends State<EditorScreen> {
   final Map<String, Uint8List> _renderedPreviews = {};
   int _folderGeneration = 0;
 
-  /// Current slider values for whichever photo is selected. Reset to
-  /// defaults on every selection change — persisting per-photo edits is a
-  /// later step.
+  /// Current slider values for whichever photo is selected — either that
+  /// photo's saved edits from [_edits], or defaults if it has none yet.
   Map<String, double> _paramValues = _defaultParamValues();
   Timer? _renderDebounceTimer;
   int _renderRequestId = 0;
 
+  /// Saved slider values per photo (absolute path), persisted to disk.
+  /// Loaded once at startup; not guarded against edits made before that
+  /// finishes, since reading a small JSON file is effectively instant next
+  /// to how long opening a folder via a native file dialog takes.
+  Map<String, Map<String, double>> _edits = {};
+  Timer? _catalogSaveTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadEdits());
+  }
+
+  Future<void> _loadEdits() async {
+    final edits = await loadCatalog();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _edits = edits);
+  }
+
   @override
   void dispose() {
     _renderDebounceTimer?.cancel();
+    _catalogSaveTimer?.cancel();
     super.dispose();
+  }
+
+  Map<String, double> _paramValuesFor(String path) {
+    final saved = _edits[path];
+    if (saved == null) {
+      return _defaultParamValues();
+    }
+    final defaults = _defaultParamValues();
+    return {for (final key in defaults.keys) key: saved[key] ?? defaults[key]!};
+  }
+
+  /// Writes the currently-selected photo's slider values into [_edits] and
+  /// saves the catalog immediately, bypassing the debounce — used when
+  /// navigating away from a photo so its edits are never lost.
+  void _flushCurrentEdits() {
+    _catalogSaveTimer?.cancel();
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null) {
+      return;
+    }
+    _edits[selected.path] = Map<String, double>.from(_paramValues);
+    unawaited(saveCatalog(_edits));
+  }
+
+  void _scheduleCatalogSave() {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null) {
+      return;
+    }
+    _catalogSaveTimer?.cancel();
+    _catalogSaveTimer = Timer(_catalogSaveDebounce, () {
+      _edits[selected.path] = Map<String, double>.from(_paramValues);
+      unawaited(saveCatalog(_edits));
+    });
   }
 
   Future<void> _openFolder() async {
@@ -118,6 +180,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _loadFolder(String folder, {String? selectPath}) async {
+    _flushCurrentEdits();
     final generation = ++_folderGeneration;
     setState(() {
       _loading = true;
@@ -130,15 +193,16 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     final index = selectPath == null ? 0 : files.indexWhere((f) => f.path == selectPath);
+    final selectedIndex = files.isEmpty ? null : (index < 0 ? 0 : index);
     setState(() {
       _files = files;
-      _selectedIndex = files.isEmpty ? null : (index < 0 ? 0 : index);
+      _selectedIndex = selectedIndex;
       _loading = false;
-      _paramValues = _defaultParamValues();
+      _paramValues = selectedIndex == null ? _defaultParamValues() : _paramValuesFor(files[selectedIndex].path);
     });
     unawaited(_loadThumbnails(files, generation));
-    if (_selectedIndex != null) {
-      unawaited(_loadEditSourceAndRender(files[_selectedIndex!].path, generation));
+    if (selectedIndex != null) {
+      unawaited(_loadEditSourceAndRender(files[selectedIndex].path, generation));
     }
   }
 
@@ -162,11 +226,16 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   void _selectIndex(int index) {
+    if (index == _selectedIndex) {
+      return;
+    }
+    _flushCurrentEdits();
+    final path = _files[index].path;
     setState(() {
       _selectedIndex = index;
-      _paramValues = _defaultParamValues();
+      _paramValues = _paramValuesFor(path);
     });
-    unawaited(_loadEditSourceAndRender(_files[index].path, _folderGeneration));
+    unawaited(_loadEditSourceAndRender(path, _folderGeneration));
   }
 
   /// Decodes the full editable RAW buffer for [path] (unless already
@@ -213,15 +282,18 @@ class _EditorScreenState extends State<EditorScreen> {
   void _onParamChanged(String name, double value) {
     setState(() => _paramValues[name] = value);
     _scheduleRender(live: true);
+    _scheduleCatalogSave();
   }
 
   void _onParamChangeEnd(String name, double value) {
     _scheduleRender(live: false);
+    _scheduleCatalogSave();
   }
 
   void _resetParams() {
     setState(() => _paramValues = _defaultParamValues());
     _scheduleRender(live: false);
+    _flushCurrentEdits();
   }
 
   void _scheduleRender({required bool live}) {
