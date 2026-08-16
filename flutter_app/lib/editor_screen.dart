@@ -12,8 +12,10 @@ import 'native/thumbnail_loader.dart';
 import 'raw_files.dart';
 import 'render/render_job.dart';
 import 'render/render_params.dart';
+import 'settings/app_settings.dart';
 import 'theme.dart';
 import 'widgets/export_dialog.dart';
+import 'widgets/settings_dialog.dart';
 import 'widgets/slider_row.dart';
 
 /// How long to wait after the last slider change before actually
@@ -26,11 +28,6 @@ const _renderDebounce = Duration(milliseconds: 25);
 /// CATALOG_SAVE_DEBOUNCE_MS. Switching photos or folders flushes
 /// immediately instead of waiting for this.
 const _catalogSaveDebounce = Duration(milliseconds: 800);
-
-/// How many thumbnails to decode concurrently (each on its own isolate via
-/// `compute`). Bounded so opening a folder with hundreds of RAWs doesn't
-/// spawn hundreds of isolates at once.
-const _maxConcurrentThumbnails = 4;
 
 class _SliderSpec {
   const _SliderSpec(this.name, this.min, this.max, this.defaultValue, {this.decimals = 2});
@@ -107,10 +104,13 @@ class _EditorScreenState extends State<EditorScreen> {
 
   bool _exporting = false;
 
+  AppSettings _settings = const AppSettings();
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadEdits());
+    unawaited(_loadSettings());
   }
 
   Future<void> _loadEdits() async {
@@ -119,6 +119,27 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     setState(() => _edits = edits);
+  }
+
+  Future<void> _loadSettings() async {
+    final settings = await loadSettings();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _settings = settings);
+  }
+
+  void _openSettings() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => SettingsDialog(
+        settings: _settings,
+        onChanged: (next) {
+          setState(() => _settings = next);
+          unawaited(saveSettings(next));
+        },
+      ),
+    );
   }
 
   @override
@@ -226,7 +247,7 @@ class _EditorScreenState extends State<EditorScreen> {
       }
     }
 
-    await Future.wait(List.generate(_maxConcurrentThumbnails, (_) => worker()));
+    await Future.wait(List.generate(_settings.thumbnailConcurrency, (_) => worker()));
   }
 
   void _selectIndex(int index) {
@@ -285,7 +306,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _onParamChanged(String name, double value) {
     setState(() => _paramValues[name] = value);
-    _scheduleRender(live: true);
+    _scheduleRender(live: _settings.fastPreview);
     _scheduleCatalogSave();
   }
 
@@ -362,35 +383,45 @@ class _EditorScreenState extends State<EditorScreen> {
     return Scaffold(
       body: Column(
         children: [
-          _TopMenuBar(onOpenFile: _openFile, onOpenFolder: _openFolder),
+          _TopMenuBar(onOpenFile: _openFile, onOpenFolder: _openFolder, onOpenSettings: _openSettings),
           Expanded(
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            child: Stack(
               children: [
-                Expanded(
-                  child: _ImageArea(
-                    selected: selected,
-                    loading: _loading,
-                    thumbnail: selected == null ? null : _thumbnails[selected.path],
-                    preview: selected == null ? null : _renderedPreviews[selected.path],
-                  ),
+                Column(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          Expanded(
+                            child: _ImageArea(
+                              selected: selected,
+                              thumbnail: selected == null ? null : _thumbnails[selected.path],
+                              preview: selected == null ? null : _renderedPreviews[selected.path],
+                            ),
+                          ),
+                          _ControlsPanel(
+                            values: _paramValues,
+                            onChanged: _onParamChanged,
+                            onChangeEnd: _onParamChangeEnd,
+                            onReset: _resetParams,
+                            onExport: selected == null ? null : _exportCurrent,
+                            exporting: _exporting,
+                          ),
+                        ],
+                      ),
+                    ),
+                    _Filmstrip(
+                      files: _files,
+                      selectedIndex: _selectedIndex,
+                      thumbnails: _thumbnails,
+                      onSelect: _selectIndex,
+                    ),
+                  ],
                 ),
-                _ControlsPanel(
-                  values: _paramValues,
-                  onChanged: _onParamChanged,
-                  onChangeEnd: _onParamChangeEnd,
-                  onReset: _resetParams,
-                  onExport: selected == null ? null : _exportCurrent,
-                  exporting: _exporting,
-                ),
+                if (_loading) const _LoadingOverlay(message: 'Loading folder...'),
               ],
             ),
-          ),
-          _Filmstrip(
-            files: _files,
-            selectedIndex: _selectedIndex,
-            thumbnails: _thumbnails,
-            onSelect: _selectIndex,
           ),
         ],
       ),
@@ -399,10 +430,11 @@ class _EditorScreenState extends State<EditorScreen> {
 }
 
 class _TopMenuBar extends StatelessWidget {
-  const _TopMenuBar({required this.onOpenFile, required this.onOpenFolder});
+  const _TopMenuBar({required this.onOpenFile, required this.onOpenFolder, required this.onOpenSettings});
 
   final VoidCallback onOpenFile;
   final VoidCallback onOpenFolder;
+  final VoidCallback onOpenSettings;
 
   @override
   Widget build(BuildContext context) {
@@ -431,7 +463,10 @@ class _TopMenuBar extends StatelessWidget {
             child: const _MenuBarLabel('File'),
           ),
           const SizedBox(width: 4),
-          const _MenuBarLabel('Settings...'),
+          GestureDetector(
+            onTap: onOpenSettings,
+            child: const _MenuBarLabel('Settings...'),
+          ),
         ],
       ),
     );
@@ -455,13 +490,11 @@ class _MenuBarLabel extends StatelessWidget {
 class _ImageArea extends StatelessWidget {
   const _ImageArea({
     required this.selected,
-    required this.loading,
     required this.thumbnail,
     required this.preview,
   });
 
   final RawFile? selected;
-  final bool loading;
   final Uint8List? thumbnail;
   final Uint8List? preview;
 
@@ -482,9 +515,6 @@ class _ImageArea extends StatelessWidget {
   }
 
   Widget _buildContent() {
-    if (loading) {
-      return const Text('Loading folder...', style: TextStyle(color: DarkmoonColors.textMuted));
-    }
     if (selected == null) {
       return const Text(
         'Open a folder with RAW files to get started',
@@ -505,6 +535,40 @@ class _ImageArea extends StatelessWidget {
     // gaplessPlayback avoids a flash back to empty when the thumbnail is
     // swapped out for the full preview once it finishes decoding.
     return Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true);
+  }
+}
+
+/// A dark scrim with a thin indeterminate progress bar and message, shown
+/// over the whole editor area (below the menu bar) during long operations
+/// like opening a folder.
+class _LoadingOverlay extends StatelessWidget {
+  const _LoadingOverlay({required this.message});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned.fill(
+      child: Container(
+        color: Colors.black.withValues(alpha: 0.55),
+        alignment: Alignment.center,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 220,
+              height: 2,
+              child: LinearProgressIndicator(
+                backgroundColor: Colors.white24,
+                valueColor: AlwaysStoppedAnimation(Colors.white),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(message, style: const TextStyle(color: Colors.white, fontSize: 13)),
+          ],
+        ),
+      ),
+    );
   }
 }
 
