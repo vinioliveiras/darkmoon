@@ -131,7 +131,15 @@ RawImage? decodeRawImage(String path, {bool halfSize = true}) {
     final params = lr.ref.params;
     params.use_camera_wb = 1;
     params.output_bps = 8;
-    params.half_size = halfSize ? 1 : 0;
+    // half_size does a crude 2x2-block average instead of real demosaicing.
+    // That's a fine trade for speed on standard Bayer sensors, but Fujifilm
+    // X-Trans sensors use a 6x6 color filter pattern (LibRaw's `filters ==
+    // 9` sentinel) that doesn't reduce to 2x2 blocks — half_size produces
+    // visible false-color (red/green) noise on those. Fall back to a full
+    // demosaic for X-Trans even though it's much slower (seconds instead of
+    // well under a second).
+    final isXTrans = lr.ref.idata.filters == 9;
+    params.half_size = (halfSize && !isXTrans) ? 1 : 0;
     params.user_flip = -1;
 
     if (lib.libraw_dcraw_process(lr) != 0) {
