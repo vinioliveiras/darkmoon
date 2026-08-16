@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' show AppExitResponse;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
@@ -126,11 +127,23 @@ class _EditorScreenState extends State<EditorScreen> {
 
   AppSettings _settings = const AppSettings();
 
+  late final AppLifecycleListener _lifecycleListener;
+
   @override
   void initState() {
     super.initState();
     unawaited(_loadEdits());
     unawaited(_loadSettings());
+    _lifecycleListener = AppLifecycleListener(onExitRequested: _handleExitRequested);
+  }
+
+  /// Makes sure the current photo's edits are actually on disk before the
+  /// window closes — the debounced/fire-and-forget save elsewhere in this
+  /// file wouldn't necessarily finish in time for a save made in the last
+  /// moment before quitting.
+  Future<AppExitResponse> _handleExitRequested() async {
+    await _flushCurrentEdits();
+    return AppExitResponse.exit;
   }
 
   Future<void> _loadEdits() async {
@@ -167,6 +180,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _renderDebounceTimer?.cancel();
     _catalogSaveTimer?.cancel();
     _viewController.dispose();
+    _lifecycleListener.dispose();
     super.dispose();
   }
 
@@ -181,15 +195,16 @@ class _EditorScreenState extends State<EditorScreen> {
 
   /// Writes the currently-selected photo's slider values into [_edits] and
   /// saves the catalog immediately, bypassing the debounce — used when
-  /// navigating away from a photo so its edits are never lost.
-  void _flushCurrentEdits() {
+  /// navigating away from a photo (fire-and-forget) and when the app is
+  /// about to quit (awaited, so the write actually finishes before exit).
+  Future<void> _flushCurrentEdits() async {
     _catalogSaveTimer?.cancel();
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
     if (selected == null) {
       return;
     }
     _edits[selected.path] = Map<String, double>.from(_paramValues);
-    unawaited(saveCatalog(_edits));
+    await saveCatalog(_edits);
   }
 
   void _scheduleCatalogSave() {
@@ -226,7 +241,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _loadFolder(String folder, {String? selectPath}) async {
-    _flushCurrentEdits();
+    unawaited(_flushCurrentEdits());
     final generation = ++_folderGeneration;
     setState(() {
       _loading = true;
@@ -279,7 +294,7 @@ class _EditorScreenState extends State<EditorScreen> {
     if (index == _selectedIndex) {
       return;
     }
-    _flushCurrentEdits();
+    unawaited(_flushCurrentEdits());
     final path = _files[index].path;
     _resetZoom();
     setState(() {
@@ -411,7 +426,7 @@ class _EditorScreenState extends State<EditorScreen> {
   void _resetParams() {
     setState(() => _paramValues = _defaultParamValues());
     _scheduleRender(live: false);
-    _flushCurrentEdits();
+    unawaited(_flushCurrentEdits());
   }
 
   void _scheduleRender({required bool live}) {
@@ -651,7 +666,7 @@ class _ImageArea extends StatelessWidget {
           ),
         ),
         _ViewerToolbar(
-          zoomLabel: beforeAfterMode ? 'Fit' : '${(zoomScale * 100).round()}%',
+          zoomLabel: beforeAfterMode || zoomScale == 1.0 ? 'Fit' : '${(zoomScale * 100).round()}%',
           zoomEnabled: !beforeAfterMode,
           beforeAfterMode: beforeAfterMode,
           beforeAfterEnabled: onToggleBeforeAfter != null,
