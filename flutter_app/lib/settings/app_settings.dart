@@ -19,6 +19,7 @@ class AppSettings {
     this.fastPreview = true,
     this.thumbnailConcurrency = 4,
     this.alwaysFullQuality = false,
+    this.libraryFolders = const [],
   });
 
   /// 'auto' (follow the system language), 'en', or 'pt'.
@@ -37,17 +38,24 @@ class AppSettings {
   /// per-session via the viewer's Full Quality toggle).
   final bool alwaysFullQuality;
 
+  /// Folders added to the sidebar's folder tree via File > Add Folder,
+  /// persisted so they're still there next launch. Order is insertion
+  /// order (most-recently-added last).
+  final List<String> libraryFolders;
+
   AppSettings copyWith({
     String? language,
     bool? fastPreview,
     int? thumbnailConcurrency,
     bool? alwaysFullQuality,
+    List<String>? libraryFolders,
   }) =>
       AppSettings(
         language: language ?? this.language,
         fastPreview: fastPreview ?? this.fastPreview,
         thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
         alwaysFullQuality: alwaysFullQuality ?? this.alwaysFullQuality,
+        libraryFolders: libraryFolders ?? this.libraryFolders,
       );
 }
 
@@ -74,6 +82,7 @@ Future<AppSettings> loadSettings() async {
       fastPreview: raw['fastPreview'] as bool? ?? defaults.fastPreview,
       thumbnailConcurrency: (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
       alwaysFullQuality: raw['alwaysFullQuality'] as bool? ?? defaults.alwaysFullQuality,
+      libraryFolders: (raw['libraryFolders'] as List?)?.cast<String>() ?? defaults.libraryFolders,
     );
   } catch (_) {
     return AppSettings(thumbnailConcurrency: defaultConcurrency);
@@ -89,6 +98,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'fastPreview': settings.fastPreview,
       'thumbnailConcurrency': settings.thumbnailConcurrency,
       'alwaysFullQuality': settings.alwaysFullQuality,
+      'libraryFolders': settings.libraryFolders,
     }),
   );
   await tmp.rename(file.path);

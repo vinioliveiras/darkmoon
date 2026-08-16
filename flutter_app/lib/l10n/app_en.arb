@@ -3,10 +3,10 @@
 
   "menuFile": "File",
   "menuOpenFile": "Open File...",
-  "menuOpenFolder": "Open Folder...",
+  "menuOpenFolder": "Add Folder...",
   "menuSettings": "Settings...",
 
-  "dialogOpenFolderTitle": "Open Folder",
+  "dialogOpenFolderTitle": "Add Folder",
   "dialogOpenFileTitle": "Open RAW File",
 
   "loadingFolder": "Loading folder...",
@@ -21,6 +21,8 @@
   "@decodingPhoto": {
     "placeholders": { "name": {"type": "String"} }
   },
+  "sidebarFoldersSection": "FOLDERS",
+  "sidebarRemoveFolderTooltip": "Remove folder",
 
   "beforeLabel": "Before",
   "afterLabel": "After",

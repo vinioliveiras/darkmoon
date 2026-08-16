@@ -113,7 +113,7 @@ abstract class AppLocalizations {
   /// No description provided for @menuOpenFolder.
   ///
   /// In en, this message translates to:
-  /// **'Open Folder...'**
+  /// **'Add Folder...'**
   String get menuOpenFolder;
 
   /// No description provided for @menuSettings.
@@ -125,7 +125,7 @@ abstract class AppLocalizations {
   /// No description provided for @dialogOpenFolderTitle.
   ///
   /// In en, this message translates to:
-  /// **'Open Folder'**
+  /// **'Add Folder'**
   String get dialogOpenFolderTitle;
 
   /// No description provided for @dialogOpenFileTitle.
@@ -169,6 +169,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{name}\n(decoding...)'**
   String decodingPhoto(String name);
+
+  /// No description provided for @sidebarFoldersSection.
+  ///
+  /// In en, this message translates to:
+  /// **'FOLDERS'**
+  String get sidebarFoldersSection;
+
+  /// No description provided for @sidebarRemoveFolderTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove folder'**
+  String get sidebarRemoveFolderTooltip;
 
   /// No description provided for @beforeLabel.
   ///

@@ -15,13 +15,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuOpenFile => 'Open File...';
 
   @override
-  String get menuOpenFolder => 'Open Folder...';
+  String get menuOpenFolder => 'Add Folder...';
 
   @override
   String get menuSettings => 'Settings...';
 
   @override
-  String get dialogOpenFolderTitle => 'Open Folder';
+  String get dialogOpenFolderTitle => 'Add Folder';
 
   @override
   String get dialogOpenFileTitle => 'Open RAW File';
@@ -48,6 +48,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String decodingPhoto(String name) {
     return '$name\n(decoding...)';
   }
+
+  @override
+  String get sidebarFoldersSection => 'FOLDERS';
+
+  @override
+  String get sidebarRemoveFolderTooltip => 'Remove folder';
 
   @override
   String get beforeLabel => 'Before';

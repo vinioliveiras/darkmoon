@@ -23,6 +23,7 @@ import 'render/render_params.dart';
 import 'settings/app_settings.dart';
 import 'theme.dart';
 import 'widgets/export_dialog.dart';
+import 'widgets/folder_sidebar.dart';
 import 'widgets/histogram_view.dart';
 import 'widgets/settings_dialog.dart';
 import 'widgets/slider_row.dart';
@@ -161,6 +162,11 @@ class _EditorScreenState extends State<EditorScreen> {
   List<RawFile> _files = const [];
   int? _selectedIndex;
   bool _loading = false;
+
+  /// Whichever folder is actually loaded into [_files] right now — may be
+  /// one of [AppSettings.libraryFolders] or one of its subfolders. Used to
+  /// highlight the active folder in the sidebar.
+  String? _currentFolder;
   final Map<String, Uint8List> _thumbnails = {};
   final Map<String, EditSourcePair> _editSources = {};
   final Map<String, Uint8List> _renderedPreviews = {};
@@ -330,6 +336,8 @@ class _EditorScreenState extends State<EditorScreen> {
     });
   }
 
+  /// Adds a folder to the sidebar's persistent library (File > Add Folder)
+  /// and loads it into the main view.
   Future<void> _openFolder() async {
     final l10n = AppLocalizations.of(context)!;
     final folder = await FilePicker.getDirectoryPath(
@@ -338,7 +346,52 @@ class _EditorScreenState extends State<EditorScreen> {
     if (folder == null) {
       return;
     }
+    if (!_settings.libraryFolders.contains(folder)) {
+      final next = _settings.copyWith(
+        libraryFolders: [..._settings.libraryFolders, folder],
+      );
+      setState(() => _settings = next);
+      unawaited(saveSettings(next));
+    }
     await _loadFolder(folder);
+  }
+
+  /// Navigates the main view to [folder] from a sidebar click, without
+  /// touching the persisted library list (unlike [_openFolder]).
+  Future<void> _selectSidebarFolder(String folder) async {
+    if (folder == _currentFolder) {
+      return;
+    }
+    await _loadFolder(folder);
+  }
+
+  /// Removes [folder] from the sidebar's library and persists the change.
+  /// Clears the main view if it was showing that folder (or a subfolder of
+  /// it), since its files are no longer reachable from the tree.
+  void _removeLibraryFolder(String folder) {
+    final next = _settings.copyWith(
+      libraryFolders:
+          _settings.libraryFolders.where((f) => f != folder).toList(),
+    );
+    final current = _currentFolder;
+    final showingRemoved = current != null &&
+        (current == folder || p.isWithin(folder, current));
+    setState(() {
+      _settings = next;
+      if (showingRemoved) {
+        _files = const [];
+        _selectedIndex = null;
+        _currentFolder = null;
+        _thumbnails.clear();
+        _editSources.clear();
+        _renderedPreviews.clear();
+        _histograms.clear();
+        _neutralPreviews.clear();
+        _beforeAfterMode = false;
+        _fullQualitySources.clear();
+      }
+    });
+    unawaited(saveSettings(next));
   }
 
   /// Opens just the one selected file — no folder scan, so the filmstrip
@@ -362,6 +415,7 @@ class _EditorScreenState extends State<EditorScreen> {
     unawaited(_flushCurrentEdits());
     final generation = ++_folderGeneration;
     _beginLoadingFiles();
+    _currentFolder = folder;
     final files = await listRawFiles(folder);
     if (!mounted || generation != _folderGeneration) {
       return;
@@ -775,6 +829,13 @@ class _EditorScreenState extends State<EditorScreen> {
                       child: Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          FolderSidebar(
+                            roots: _settings.libraryFolders,
+                            selectedPath: _currentFolder,
+                            onSelect: (path) =>
+                                unawaited(_selectSidebarFolder(path)),
+                            onRemove: _removeLibraryFolder,
+                          ),
                           Expanded(
                             child: _ImageArea(
                               selected: selected,
@@ -1426,10 +1487,13 @@ class _FilmstripState extends State<_Filmstrip> {
                             color: const Color(0xFF26262A),
                             alignment: Alignment.center,
                             child: thumbnail == null
-                                ? const Icon(
-                                    Icons.image_outlined,
-                                    color: DarkmoonColors.textMuted,
-                                    size: 22,
+                                ? const SizedBox(
+                                    width: 18,
+                                    height: 18,
+                                    child: CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                      color: DarkmoonColors.textMuted,
+                                    ),
                                   )
                                 : Image.memory(thumbnail, fit: BoxFit.cover),
                           ),

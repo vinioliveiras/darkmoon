@@ -15,13 +15,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get menuOpenFile => 'Abrir arquivo...';
 
   @override
-  String get menuOpenFolder => 'Abrir pasta...';
+  String get menuOpenFolder => 'Adicionar pasta...';
 
   @override
   String get menuSettings => 'Configurações...';
 
   @override
-  String get dialogOpenFolderTitle => 'Abrir pasta';
+  String get dialogOpenFolderTitle => 'Adicionar pasta';
 
   @override
   String get dialogOpenFileTitle => 'Abrir arquivo RAW';
@@ -48,6 +48,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String decodingPhoto(String name) {
     return '$name\n(decodificando...)';
   }
+
+  @override
+  String get sidebarFoldersSection => 'PASTAS';
+
+  @override
+  String get sidebarRemoveFolderTooltip => 'Remover pasta';
 
   @override
   String get beforeLabel => 'Antes';

@@ -3,10 +3,10 @@
 
   "menuFile": "Arquivo",
   "menuOpenFile": "Abrir arquivo...",
-  "menuOpenFolder": "Abrir pasta...",
+  "menuOpenFolder": "Adicionar pasta...",
   "menuSettings": "Configurações...",
 
-  "dialogOpenFolderTitle": "Abrir pasta",
+  "dialogOpenFolderTitle": "Adicionar pasta",
   "dialogOpenFileTitle": "Abrir arquivo RAW",
 
   "loadingFolder": "Carregando pasta...",
@@ -15,6 +15,8 @@
   "emptyStateOpenFolder": "Abra uma pasta com arquivos RAW para começar",
   "noFolderOpen": "Nenhuma pasta aberta",
   "decodingPhoto": "{name}\n(decodificando...)",
+  "sidebarFoldersSection": "PASTAS",
+  "sidebarRemoveFolderTooltip": "Remover pasta",
 
   "beforeLabel": "Antes",
   "afterLabel": "Depois",
