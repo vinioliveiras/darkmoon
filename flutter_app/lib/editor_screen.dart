@@ -473,6 +473,22 @@ class _EditorScreenState extends State<EditorScreen> {
   @override
   Widget build(BuildContext context) {
     final selected = _selectedIndex != null ? _files[_selectedIndex!] : null;
+    return CallbackShortcuts(
+      bindings: {
+        const SingleActivator(LogicalKeyboardKey.backslash): () {
+          if (selected != null) {
+            _toggleBeforeAfter();
+          }
+        },
+      },
+      child: Focus(
+        autofocus: true,
+        child: _buildScaffold(selected),
+      ),
+    );
+  }
+
+  Widget _buildScaffold(RawFile? selected) {
     return Scaffold(
       body: Column(
         children: [
