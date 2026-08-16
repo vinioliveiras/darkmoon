@@ -1,0 +1,71 @@
+{
+  "@@locale": "en",
+
+  "menuFile": "File",
+  "menuOpenFile": "Open File...",
+  "menuOpenFolder": "Open Folder...",
+  "menuSettings": "Settings...",
+
+  "dialogOpenFolderTitle": "Open Folder",
+  "dialogOpenFileTitle": "Open RAW File",
+
+  "loadingFolder": "Loading folder...",
+  "emptyStateOpenFolder": "Open a folder with RAW files to get started",
+  "noFolderOpen": "No folder open",
+  "decodingPhoto": "{name}\n(decoding...)",
+  "@decodingPhoto": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+
+  "beforeLabel": "Before",
+  "afterLabel": "After",
+  "zoomFit": "Fit",
+  "fitToWindow": "Fit to window",
+  "beforeAfterButton": "Before/After (\\)",
+
+  "exportPanelButton": "Export...",
+  "exportingButton": "Exporting...",
+  "exportPhotoDialogTitle": "Export Photo",
+  "exportFormatLabel": "Format",
+  "exportQualityLabel": "Quality",
+  "exportDialogConfirm": "Export",
+  "cancelButton": "Cancel",
+  "exportSuccessMessage": "Exported to {path}",
+  "@exportSuccessMessage": {
+    "placeholders": { "path": {"type": "String"} }
+  },
+  "exportFailureMessage": "Export failed: {error}",
+  "@exportFailureMessage": {
+    "placeholders": { "error": {"type": "String"} }
+  },
+
+  "resetTooltip": "Reset adjustments",
+
+  "settingsDialogTitle": "Settings",
+  "settingsLanguageLabel": "Language",
+  "settingsLanguageAuto": "Automatic (system)",
+  "settingsLanguageEnglish": "English",
+  "settingsLanguagePortuguese": "Portuguese",
+  "settingsFastPreviewLabel": "Fast preview while dragging sliders",
+  "settingsThumbnailThreadsLabel": "Thumbnail loading threads",
+  "closeButton": "Close",
+
+  "sectionWhiteBalance": "WHITE BALANCE",
+  "sectionTone": "TONE",
+  "sectionPresence": "PRESENCE",
+
+  "sliderTemperature": "Temperature",
+  "sliderTint": "Tint",
+  "sliderExposure": "Exposure",
+  "sliderBrightness": "Brightness",
+  "sliderContrast": "Contrast",
+  "sliderHighlights": "Highlights",
+  "sliderShadows": "Shadows",
+  "sliderWhites": "Whites",
+  "sliderBlacks": "Blacks",
+  "sliderTexture": "Texture",
+  "sliderClarity": "Clarity",
+  "sliderDehaze": "Dehaze",
+  "sliderVibrance": "Vibrance",
+  "sliderSaturation": "Saturation"
+}

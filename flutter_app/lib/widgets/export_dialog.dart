@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../export/export_format.dart';
+import '../l10n/app_localizations.dart';
 import '../theme.dart';
 
 class ExportOptions {
@@ -26,16 +27,17 @@ class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
       backgroundColor: DarkmoonColors.surfaceRaised,
-      title: const Text('Export Photo'),
+      title: Text(l10n.exportPhotoDialogTitle),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              const Expanded(child: Text('Format')),
+              Expanded(child: Text(l10n.exportFormatLabel)),
               DropdownButton<ExportFormat>(
                 value: _format,
                 items: [
@@ -49,7 +51,7 @@ class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
           const SizedBox(height: 12),
           Row(
             children: [
-              const Expanded(child: Text('Quality')),
+              Expanded(child: Text(l10n.exportQualityLabel)),
               SizedBox(
                 width: 160,
                 child: Slider(
@@ -67,10 +69,10 @@ class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
         ],
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('Cancel')),
+        TextButton(onPressed: () => Navigator.of(context).pop(), child: Text(l10n.cancelButton)),
         FilledButton(
           onPressed: () => Navigator.of(context).pop(ExportOptions(format: _format, quality: _quality)),
-          child: const Text('Export'),
+          child: Text(l10n.exportDialogConfirm),
         ),
       ],
     );

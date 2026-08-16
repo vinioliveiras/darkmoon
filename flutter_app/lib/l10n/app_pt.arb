@@ -1,0 +1,62 @@
+{
+  "@@locale": "pt",
+
+  "menuFile": "Arquivo",
+  "menuOpenFile": "Abrir arquivo...",
+  "menuOpenFolder": "Abrir pasta...",
+  "menuSettings": "Configurações...",
+
+  "dialogOpenFolderTitle": "Abrir pasta",
+  "dialogOpenFileTitle": "Abrir arquivo RAW",
+
+  "loadingFolder": "Carregando pasta...",
+  "emptyStateOpenFolder": "Abra uma pasta com arquivos RAW para começar",
+  "noFolderOpen": "Nenhuma pasta aberta",
+  "decodingPhoto": "{name}\n(decodificando...)",
+
+  "beforeLabel": "Antes",
+  "afterLabel": "Depois",
+  "zoomFit": "Ajustar",
+  "fitToWindow": "Ajustar à janela",
+  "beforeAfterButton": "Antes/Depois (\\)",
+
+  "exportPanelButton": "Exportar...",
+  "exportingButton": "Exportando...",
+  "exportPhotoDialogTitle": "Exportar foto",
+  "exportFormatLabel": "Formato",
+  "exportQualityLabel": "Qualidade",
+  "exportDialogConfirm": "Exportar",
+  "cancelButton": "Cancelar",
+  "exportSuccessMessage": "Exportado para {path}",
+  "exportFailureMessage": "Falha ao exportar: {error}",
+
+  "resetTooltip": "Redefinir ajustes",
+
+  "settingsDialogTitle": "Configurações",
+  "settingsLanguageLabel": "Idioma",
+  "settingsLanguageAuto": "Automático (sistema)",
+  "settingsLanguageEnglish": "English",
+  "settingsLanguagePortuguese": "Português",
+  "settingsFastPreviewLabel": "Preview rápido ao arrastar os sliders",
+  "settingsThumbnailThreadsLabel": "Threads de carregamento de miniaturas",
+  "closeButton": "Fechar",
+
+  "sectionWhiteBalance": "BALANÇO DE BRANCO",
+  "sectionTone": "TOM",
+  "sectionPresence": "PRESENÇA",
+
+  "sliderTemperature": "Temperatura",
+  "sliderTint": "Matiz",
+  "sliderExposure": "Exposição",
+  "sliderBrightness": "Brilho",
+  "sliderContrast": "Contraste",
+  "sliderHighlights": "Realces",
+  "sliderShadows": "Sombras",
+  "sliderWhites": "Brancos",
+  "sliderBlacks": "Pretos",
+  "sliderTexture": "Textura",
+  "sliderClarity": "Claridade",
+  "sliderDehaze": "Remoção de Neblina",
+  "sliderVibrance": "Vibração",
+  "sliderSaturation": "Saturação"
+}

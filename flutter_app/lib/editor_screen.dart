@@ -11,6 +11,7 @@ import 'package:path/path.dart' as p;
 import 'catalog/catalog_store.dart';
 import 'catalog/thumbnail_cache_dir.dart';
 import 'export/export_job.dart';
+import 'l10n/app_localizations.dart';
 import 'native/edit_source.dart';
 import 'native/thumbnail_loader.dart';
 import 'raw_files.dart';
@@ -23,6 +24,59 @@ import 'widgets/export_dialog.dart';
 import 'widgets/histogram_view.dart';
 import 'widgets/settings_dialog.dart';
 import 'widgets/slider_row.dart';
+
+/// Maps a slider's stable internal key (also used for _paramValues,
+/// RenderParams.fromValues, and catalog storage — must NOT be translated)
+/// to its localized display label.
+String _sliderLabel(AppLocalizations l10n, String key) {
+  switch (key) {
+    case 'Temperature':
+      return l10n.sliderTemperature;
+    case 'Tint':
+      return l10n.sliderTint;
+    case 'Exposure':
+      return l10n.sliderExposure;
+    case 'Brightness':
+      return l10n.sliderBrightness;
+    case 'Contrast':
+      return l10n.sliderContrast;
+    case 'Highlights':
+      return l10n.sliderHighlights;
+    case 'Shadows':
+      return l10n.sliderShadows;
+    case 'Whites':
+      return l10n.sliderWhites;
+    case 'Blacks':
+      return l10n.sliderBlacks;
+    case 'Texture':
+      return l10n.sliderTexture;
+    case 'Clarity':
+      return l10n.sliderClarity;
+    case 'Dehaze':
+      return l10n.sliderDehaze;
+    case 'Vibrance':
+      return l10n.sliderVibrance;
+    case 'Saturation':
+      return l10n.sliderSaturation;
+    default:
+      return key;
+  }
+}
+
+/// Maps a section's stable internal key to its localized display label —
+/// same reasoning as [_sliderLabel].
+String _sectionLabel(AppLocalizations l10n, String key) {
+  switch (key) {
+    case 'WHITE BALANCE':
+      return l10n.sectionWhiteBalance;
+    case 'TONE':
+      return l10n.sectionTone;
+    case 'PRESENCE':
+      return l10n.sectionPresence;
+    default:
+      return key;
+  }
+}
 
 /// Zoom bounds and step, matching the Python app's MIN_ZOOM/MAX_ZOOM/ZOOM_STEP.
 const double _minZoom = 0.1;
@@ -85,7 +139,11 @@ Map<String, double> _defaultParamValues() {
 /// its full RAW preview in the background (showing the fast embedded
 /// thumbnail in the meantime).
 class EditorScreen extends StatefulWidget {
-  const EditorScreen({super.key});
+  const EditorScreen({super.key, required this.onLanguageChanged});
+
+  /// Applies a language change immediately app-wide — owned by DarkmoonApp
+  /// since it controls MaterialApp's `locale`, not this screen.
+  final ValueChanged<String> onLanguageChanged;
 
   @override
   State<EditorScreen> createState() => _EditorScreenState();
@@ -184,6 +242,9 @@ class _EditorScreenState extends State<EditorScreen> {
       builder: (_) => SettingsDialog(
         settings: _settings,
         onChanged: (next) {
+          if (next.language != _settings.language) {
+            widget.onLanguageChanged(next.language);
+          }
           setState(() => _settings = next);
           unawaited(saveSettings(next));
         },
@@ -236,7 +297,8 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _openFolder() async {
-    final folder = await FilePicker.getDirectoryPath(dialogTitle: 'Open Folder');
+    final l10n = AppLocalizations.of(context)!;
+    final folder = await FilePicker.getDirectoryPath(dialogTitle: l10n.dialogOpenFolderTitle);
     if (folder == null) {
       return;
     }
@@ -244,8 +306,9 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Future<void> _openFile() async {
+    final l10n = AppLocalizations.of(context)!;
     final result = await FilePicker.pickFiles(
-      dialogTitle: 'Open RAW File',
+      dialogTitle: l10n.dialogOpenFileTitle,
       type: FileType.custom,
       allowedExtensions: rawExtensions.map((ext) => ext.substring(1)).toList(),
     );
@@ -462,6 +525,7 @@ class _EditorScreenState extends State<EditorScreen> {
     if (selected == null || _exporting) {
       return;
     }
+    final l10n = AppLocalizations.of(context)!;
     final options = await showDialog<ExportOptions>(
       context: context,
       builder: (_) => const ExportOptionsDialog(),
@@ -471,7 +535,7 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     final baseName = p.basenameWithoutExtension(selected.path);
     final destPath = await FilePicker.saveFile(
-      dialogTitle: 'Export Photo',
+      dialogTitle: l10n.exportPhotoDialogTitle,
       fileName: '${baseName}_edit.${options.format.extension}',
       type: FileType.custom,
       allowedExtensions: [options.format.extension],
@@ -497,7 +561,11 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _exporting = false);
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(result.success ? 'Exported to ${result.destPath}' : 'Export failed: ${result.error}'),
+        content: Text(
+          result.success
+              ? l10n.exportSuccessMessage(result.destPath!)
+              : l10n.exportFailureMessage(result.error!),
+        ),
       ),
     );
   }
@@ -571,7 +639,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     ),
                   ],
                 ),
-                if (_loading) const _LoadingOverlay(message: 'Loading folder...'),
+                if (_loading) _LoadingOverlay(message: AppLocalizations.of(context)!.loadingFolder),
               ],
             ),
           ),
@@ -590,6 +658,7 @@ class _TopMenuBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -608,16 +677,16 @@ class _TopMenuBar extends StatelessWidget {
               side: const BorderSide(color: DarkmoonColors.border),
             ),
             itemBuilder: (context) => [
-              PopupMenuItem(value: onOpenFile, child: const Text('Open File...')),
-              PopupMenuItem(value: onOpenFolder, child: const Text('Open Folder...')),
+              PopupMenuItem(value: onOpenFile, child: Text(l10n.menuOpenFile)),
+              PopupMenuItem(value: onOpenFolder, child: Text(l10n.menuOpenFolder)),
             ],
             onSelected: (callback) => callback(),
-            child: const _MenuBarLabel('File'),
+            child: _MenuBarLabel(l10n.menuFile),
           ),
           const SizedBox(width: 4),
           GestureDetector(
             onTap: onOpenSettings,
-            child: const _MenuBarLabel('Settings...'),
+            child: _MenuBarLabel(l10n.menuSettings),
           ),
         ],
       ),
@@ -672,6 +741,7 @@ class _ImageArea extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Column(
       children: [
         Expanded(
@@ -679,11 +749,11 @@ class _ImageArea extends StatelessWidget {
             key: viewportKey,
             color: DarkmoonColors.canvas,
             alignment: Alignment.center,
-            child: _buildContent(),
+            child: _buildContent(l10n),
           ),
         ),
         _ViewerToolbar(
-          zoomLabel: beforeAfterMode || zoomScale == 1.0 ? 'Fit' : '${(zoomScale * 100).round()}%',
+          zoomLabel: beforeAfterMode || zoomScale == 1.0 ? l10n.zoomFit : '${(zoomScale * 100).round()}%',
           zoomEnabled: !beforeAfterMode,
           beforeAfterMode: beforeAfterMode,
           beforeAfterEnabled: onToggleBeforeAfter != null,
@@ -696,12 +766,12 @@ class _ImageArea extends StatelessWidget {
     );
   }
 
-  Widget _buildContent() {
+  Widget _buildContent(AppLocalizations l10n) {
     if (selected == null) {
-      return const Text(
-        'Open a folder with RAW files to get started',
+      return Text(
+        l10n.emptyStateOpenFolder,
         textAlign: TextAlign.center,
-        style: TextStyle(color: DarkmoonColors.textMuted),
+        style: const TextStyle(color: DarkmoonColors.textMuted),
       );
     }
     // Prefer the full RAW decode; fall back to the fast embedded thumbnail
@@ -709,7 +779,7 @@ class _ImageArea extends StatelessWidget {
     final bytes = preview ?? thumbnail;
     if (bytes == null) {
       return Text(
-        '${selected!.name}\n(decoding...)',
+        l10n.decodingPhoto(selected!.name),
         textAlign: TextAlign.center,
         style: const TextStyle(color: DarkmoonColors.textMuted),
       );
@@ -718,10 +788,10 @@ class _ImageArea extends StatelessWidget {
       return Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(child: _labeledImage('After', bytes)),
+          Expanded(child: _labeledImage(l10n.afterLabel, bytes)),
           Container(width: 1, color: DarkmoonColors.divider),
           // Falls back to the edited image until the neutral render finishes.
-          Expanded(child: _labeledImage('Before', neutralPreview ?? bytes)),
+          Expanded(child: _labeledImage(l10n.beforeLabel, neutralPreview ?? bytes)),
         ],
       );
     }
@@ -838,6 +908,7 @@ class _ViewerToolbar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       height: 40,
       padding: const EdgeInsets.symmetric(horizontal: 8),
@@ -866,7 +937,7 @@ class _ViewerToolbar extends StatelessWidget {
           ElevatedButton(
             onPressed: zoomEnabled ? onZoomFit : null,
             style: _compactButtonStyle,
-            child: const Text('Fit to window'),
+            child: Text(l10n.fitToWindow),
           ),
           const Spacer(),
           ElevatedButton.icon(
@@ -877,7 +948,7 @@ class _ViewerToolbar extends StatelessWidget {
                   )
                 : _compactButtonStyle,
             icon: const Icon(Icons.compare, size: 14),
-            label: const Text('Before/After (\\)'),
+            label: Text(l10n.beforeAfterButton),
           ),
         ],
       ),
@@ -906,6 +977,7 @@ class _ControlsPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     return Container(
       width: 280,
       color: DarkmoonColors.panel,
@@ -926,11 +998,15 @@ class _ControlsPanel extends StatelessWidget {
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
                         : const Icon(Icons.file_download_outlined, size: 16),
-                    label: Text(exporting ? 'Exporting...' : 'Export...'),
+                    label: Text(exporting ? l10n.exportingButton : l10n.exportPanelButton),
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton(onPressed: onReset, icon: const Icon(Icons.refresh, size: 16)),
+                IconButton(
+                  onPressed: onReset,
+                  tooltip: l10n.resetTooltip,
+                  icon: const Icon(Icons.refresh, size: 16),
+                ),
               ],
             ),
             const SizedBox(height: 10),
@@ -940,13 +1016,13 @@ class _ControlsPanel extends StatelessWidget {
               if (entry.key != _sections.keys.first) const Divider(),
               Padding(
                 padding: const EdgeInsets.only(top: 14, bottom: 2),
-                child: Text(entry.key, style: Theme.of(context).textTheme.labelSmall),
+                child: Text(_sectionLabel(l10n, entry.key), style: Theme.of(context).textTheme.labelSmall),
               ),
               for (final spec in entry.value)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 12),
                   child: SliderRow(
-                    name: spec.name,
+                    name: _sliderLabel(l10n, spec.name),
                     min: spec.min,
                     max: spec.max,
                     value: values[spec.name] ?? spec.defaultValue,
@@ -983,9 +1059,9 @@ class _Filmstrip extends StatelessWidget {
         height: 114,
         color: DarkmoonColors.filmstrip,
         alignment: Alignment.center,
-        child: const Text(
-          'No folder open',
-          style: TextStyle(color: DarkmoonColors.textMuted, fontSize: 11),
+        child: Text(
+          AppLocalizations.of(context)!.noFolderOpen,
+          style: const TextStyle(color: DarkmoonColors.textMuted, fontSize: 11),
         ),
       );
     }

@@ -4,12 +4,18 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
-/// App-wide settings, mirroring the meaningfully portable subset of the
-/// Python app's `DEFAULT_SETTINGS` — the rest (language, thumbnail disk
-/// cache) don't apply yet since this port has neither i18n nor a
-/// persistent thumbnail cache.
+/// App-wide settings, mirroring the Python app's `DEFAULT_SETTINGS` (minus
+/// the thumbnail disk cache setting, since this port's cache doesn't have
+/// a size/eviction knob yet to expose).
 class AppSettings {
-  const AppSettings({this.fastPreview = true, this.thumbnailConcurrency = 4});
+  const AppSettings({
+    this.language = 'auto',
+    this.fastPreview = true,
+    this.thumbnailConcurrency = 4,
+  });
+
+  /// 'auto' (follow the system language), 'en', or 'pt'.
+  final String language;
 
   /// While true, actively dragging a slider re-renders against the smaller
   /// "live" resolution for speed; while false, every render uses full
@@ -19,7 +25,8 @@ class AppSettings {
   /// How many thumbnails to decode concurrently when a folder is opened.
   final int thumbnailConcurrency;
 
-  AppSettings copyWith({bool? fastPreview, int? thumbnailConcurrency}) => AppSettings(
+  AppSettings copyWith({String? language, bool? fastPreview, int? thumbnailConcurrency}) => AppSettings(
+        language: language ?? this.language,
         fastPreview: fastPreview ?? this.fastPreview,
         thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
       );
@@ -43,6 +50,7 @@ Future<AppSettings> loadSettings() async {
     final raw = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     const defaults = AppSettings();
     return AppSettings(
+      language: raw['language'] as String? ?? defaults.language,
       fastPreview: raw['fastPreview'] as bool? ?? defaults.fastPreview,
       thumbnailConcurrency: (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaults.thumbnailConcurrency,
     );
@@ -56,6 +64,7 @@ Future<void> saveSettings(AppSettings settings) async {
   final tmp = File('${file.path}.tmp');
   await tmp.writeAsString(
     jsonEncode({
+      'language': settings.language,
       'fastPreview': settings.fastPreview,
       'thumbnailConcurrency': settings.thumbnailConcurrency,
     }),
