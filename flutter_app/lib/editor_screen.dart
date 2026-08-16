@@ -5,11 +5,18 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
-import 'native/preview_loader.dart';
+import 'native/edit_source.dart';
 import 'native/thumbnail_loader.dart';
 import 'raw_files.dart';
+import 'render/render_job.dart';
+import 'render/render_params.dart';
 import 'theme.dart';
 import 'widgets/slider_row.dart';
+
+/// How long to wait after the last slider change before actually
+/// re-rendering, restarted on every change — matches the Python app's
+/// DEBOUNCE_MS. Keeps a fast slider drag from queuing a render per frame.
+const _renderDebounce = Duration(milliseconds: 25);
 
 /// How many thumbnails to decode concurrently (each on its own isolate via
 /// `compute`). Bounded so opening a folder with hundreds of RAWs doesn't
@@ -49,6 +56,13 @@ const _sections = <String, List<_SliderSpec>>{
   ],
 };
 
+Map<String, double> _defaultParamValues() {
+  return {
+    for (final specs in _sections.values)
+      for (final spec in specs) spec.name: spec.defaultValue,
+  };
+}
+
 /// Main window: image viewer + toolbar, adjustment panel, and a filmstrip
 /// that lists real RAW files from a chosen folder. Selecting a file decodes
 /// its full RAW preview in the background (showing the fast embedded
@@ -65,8 +79,22 @@ class _EditorScreenState extends State<EditorScreen> {
   int? _selectedIndex;
   bool _loading = false;
   final Map<String, Uint8List> _thumbnails = {};
-  final Map<String, Uint8List> _previews = {};
+  final Map<String, EditSourcePair> _editSources = {};
+  final Map<String, Uint8List> _renderedPreviews = {};
   int _folderGeneration = 0;
+
+  /// Current slider values for whichever photo is selected. Reset to
+  /// defaults on every selection change — persisting per-photo edits is a
+  /// later step.
+  Map<String, double> _paramValues = _defaultParamValues();
+  Timer? _renderDebounceTimer;
+  int _renderRequestId = 0;
+
+  @override
+  void dispose() {
+    _renderDebounceTimer?.cancel();
+    super.dispose();
+  }
 
   Future<void> _openFolder() async {
     final folder = await FilePicker.getDirectoryPath(dialogTitle: 'Open Folder');
@@ -94,7 +122,8 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() {
       _loading = true;
       _thumbnails.clear();
-      _previews.clear();
+      _editSources.clear();
+      _renderedPreviews.clear();
     });
     final files = await listRawFiles(folder);
     if (!mounted || generation != _folderGeneration) {
@@ -105,10 +134,11 @@ class _EditorScreenState extends State<EditorScreen> {
       _files = files;
       _selectedIndex = files.isEmpty ? null : (index < 0 ? 0 : index);
       _loading = false;
+      _paramValues = _defaultParamValues();
     });
     unawaited(_loadThumbnails(files, generation));
     if (_selectedIndex != null) {
-      unawaited(_loadPreview(files[_selectedIndex!].path, generation));
+      unawaited(_loadEditSourceAndRender(files[_selectedIndex!].path, generation));
     }
   }
 
@@ -132,25 +162,77 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   void _selectIndex(int index) {
-    setState(() => _selectedIndex = index);
-    unawaited(_loadPreview(_files[index].path, _folderGeneration));
+    setState(() {
+      _selectedIndex = index;
+      _paramValues = _defaultParamValues();
+    });
+    unawaited(_loadEditSourceAndRender(_files[index].path, _folderGeneration));
   }
 
-  /// Decodes the full editable RAW preview for [path] in the background and
-  /// caches it, unless it's already cached. Guarded by [generation] so a
-  /// slow decode from a folder the user has since navigated away from can't
-  /// clobber state after the fact.
-  Future<void> _loadPreview(String path, int generation) async {
-    if (_previews.containsKey(path)) {
+  /// Decodes the full editable RAW buffer for [path] (unless already
+  /// cached) and renders it with the current slider values. Guarded by
+  /// [generation] so a slow decode from a folder the user has since
+  /// navigated away from can't clobber state after the fact.
+  Future<void> _loadEditSourceAndRender(String path, int generation) async {
+    var sources = _editSources[path];
+    if (sources == null) {
+      sources = await compute(decodeEditSources, path);
+      if (!mounted || generation != _folderGeneration) {
+        return;
+      }
+      if (sources == null) {
+        return;
+      }
+      setState(() => _editSources[path] = sources!);
+    }
+    await _renderPreview(path);
+  }
+
+  /// Renders [path]'s cached edit source with the current slider values and
+  /// caches the resulting JPEG. Uses the smaller "live" resolution while
+  /// [live] is true (a slider is actively being dragged) for speed.
+  Future<void> _renderPreview(String path, {bool live = false}) async {
+    final sources = _editSources[path];
+    if (sources == null) {
       return;
     }
-    final bytes = await compute(decodeRawPreview, path);
-    if (!mounted || generation != _folderGeneration) {
+    final requestId = ++_renderRequestId;
+    final job = RenderJob(
+      source: live ? sources.live : sources.preview,
+      params: RenderParams.fromValues(_paramValues),
+    );
+    final bytes = await compute(renderJobToJpeg, job);
+    // A newer render (from further slider moves, or a different photo) has
+    // since been requested — this result is stale, drop it.
+    if (!mounted || requestId != _renderRequestId) {
       return;
     }
-    if (bytes != null) {
-      setState(() => _previews[path] = bytes);
+    setState(() => _renderedPreviews[path] = bytes);
+  }
+
+  void _onParamChanged(String name, double value) {
+    setState(() => _paramValues[name] = value);
+    _scheduleRender(live: true);
+  }
+
+  void _onParamChangeEnd(String name, double value) {
+    _scheduleRender(live: false);
+  }
+
+  void _resetParams() {
+    setState(() => _paramValues = _defaultParamValues());
+    _scheduleRender(live: false);
+  }
+
+  void _scheduleRender({required bool live}) {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null) {
+      return;
     }
+    _renderDebounceTimer?.cancel();
+    _renderDebounceTimer = Timer(_renderDebounce, () {
+      unawaited(_renderPreview(selected.path, live: live));
+    });
   }
 
   @override
@@ -169,10 +251,15 @@ class _EditorScreenState extends State<EditorScreen> {
                     selected: selected,
                     loading: _loading,
                     thumbnail: selected == null ? null : _thumbnails[selected.path],
-                    preview: selected == null ? null : _previews[selected.path],
+                    preview: selected == null ? null : _renderedPreviews[selected.path],
                   ),
                 ),
-                const _ControlsPanel(),
+                _ControlsPanel(
+                  values: _paramValues,
+                  onChanged: _onParamChanged,
+                  onChangeEnd: _onParamChangeEnd,
+                  onReset: _resetParams,
+                ),
               ],
             ),
           ),
@@ -351,7 +438,17 @@ class _ViewerToolbar extends StatelessWidget {
 }
 
 class _ControlsPanel extends StatelessWidget {
-  const _ControlsPanel();
+  const _ControlsPanel({
+    required this.values,
+    required this.onChanged,
+    required this.onChangeEnd,
+    required this.onReset,
+  });
+
+  final Map<String, double> values;
+  final void Function(String name, double value) onChanged;
+  final void Function(String name, double value) onChangeEnd;
+  final VoidCallback onReset;
 
   @override
   Widget build(BuildContext context) {
@@ -373,7 +470,7 @@ class _ControlsPanel extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(width: 8),
-                IconButton(onPressed: () {}, icon: const Icon(Icons.refresh, size: 16)),
+                IconButton(onPressed: onReset, icon: const Icon(Icons.refresh, size: 16)),
               ],
             ),
             const SizedBox(height: 10),
@@ -398,8 +495,10 @@ class _ControlsPanel extends StatelessWidget {
                     name: spec.name,
                     min: spec.min,
                     max: spec.max,
-                    defaultValue: spec.defaultValue,
+                    value: values[spec.name] ?? spec.defaultValue,
                     decimals: spec.decimals,
+                    onChanged: (v) => onChanged(spec.name, v),
+                    onChangeEnd: (v) => onChangeEnd(spec.name, v),
                   ),
                 ),
             ],

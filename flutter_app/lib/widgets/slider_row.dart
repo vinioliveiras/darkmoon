@@ -4,33 +4,28 @@ import '../theme.dart';
 
 /// A single adjustment control: a name/value header above a slider.
 ///
-/// This is a layout-only port of the Python app's SliderControl for now —
-/// it holds its own value locally. Wiring it up to a real image pipeline is a
-/// later step.
-class SliderRow extends StatefulWidget {
+/// Controlled by the parent (value + callbacks) rather than holding its own
+/// state, since the editor needs the current value of every slider to
+/// render the image.
+class SliderRow extends StatelessWidget {
   const SliderRow({
     super.key,
     required this.name,
     required this.min,
     required this.max,
-    required this.defaultValue,
+    required this.value,
+    required this.onChanged,
+    this.onChangeEnd,
     this.decimals = 2,
   });
 
   final String name;
   final double min;
   final double max;
-  final double defaultValue;
+  final double value;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double>? onChangeEnd;
   final int decimals;
-
-  @override
-  State<SliderRow> createState() => _SliderRowState();
-}
-
-class _SliderRowState extends State<SliderRow> {
-  late double _value = widget.defaultValue;
-
-  String get _formatted => _value.toStringAsFixed(widget.decimals);
 
   @override
   Widget build(BuildContext context) {
@@ -40,10 +35,10 @@ class _SliderRowState extends State<SliderRow> {
         Row(
           children: [
             Expanded(
-              child: Text(widget.name, style: Theme.of(context).textTheme.bodyMedium),
+              child: Text(name, style: Theme.of(context).textTheme.bodyMedium),
             ),
             Text(
-              _formatted,
+              value.toStringAsFixed(decimals),
               style: const TextStyle(color: DarkmoonColors.textMuted, fontSize: 11.5),
             ),
           ],
@@ -53,10 +48,11 @@ class _SliderRowState extends State<SliderRow> {
             trackShape: const RectangularSliderTrackShape(),
           ),
           child: Slider(
-            min: widget.min,
-            max: widget.max,
-            value: _value,
-            onChanged: (v) => setState(() => _value = v),
+            min: min,
+            max: max,
+            value: value.clamp(min, max),
+            onChanged: onChanged,
+            onChangeEnd: onChangeEnd,
           ),
         ),
       ],
