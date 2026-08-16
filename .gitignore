@@ -2,3 +2,7 @@ venv/
 __pycache__/
 *.pyc
 run.log
+build/
+dist/
+stderr.log
+*.zip
