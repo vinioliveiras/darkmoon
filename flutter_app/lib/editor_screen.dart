@@ -1,5 +1,8 @@
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
+import 'raw_files.dart';
 import 'theme.dart';
 import 'widgets/slider_row.dart';
 
@@ -36,28 +39,77 @@ const _sections = <String, List<_SliderSpec>>{
   ],
 };
 
-/// Layout-only port of the Python app's main window: image viewer + toolbar
-/// on the left, adjustment panel on the right, filmstrip along the bottom.
-/// Nothing here is wired to real RAW decoding or image processing yet.
-class EditorScreen extends StatelessWidget {
+/// Main window: image viewer + toolbar, adjustment panel, and a filmstrip
+/// that now lists real RAW files from a chosen folder. Selecting a file only
+/// updates the placeholder text for now — RAW decoding isn't wired up yet.
+class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key});
 
   @override
+  State<EditorScreen> createState() => _EditorScreenState();
+}
+
+class _EditorScreenState extends State<EditorScreen> {
+  List<RawFile> _files = const [];
+  int? _selectedIndex;
+  bool _loading = false;
+
+  Future<void> _openFolder() async {
+    final folder = await FilePicker.getDirectoryPath(dialogTitle: 'Open Folder');
+    if (folder == null) {
+      return;
+    }
+    await _loadFolder(folder);
+  }
+
+  Future<void> _openFile() async {
+    final result = await FilePicker.pickFiles(
+      dialogTitle: 'Open RAW File',
+      type: FileType.custom,
+      allowedExtensions: rawExtensions.map((ext) => ext.substring(1)).toList(),
+    );
+    final path = result?.files.single.path;
+    if (path == null) {
+      return;
+    }
+    await _loadFolder(p.dirname(path), selectPath: path);
+  }
+
+  Future<void> _loadFolder(String folder, {String? selectPath}) async {
+    setState(() => _loading = true);
+    final files = await listRawFiles(folder);
+    if (!mounted) {
+      return;
+    }
+    final index = selectPath == null ? 0 : files.indexWhere((f) => f.path == selectPath);
+    setState(() {
+      _files = files;
+      _selectedIndex = files.isEmpty ? null : (index < 0 ? 0 : index);
+      _loading = false;
+    });
+  }
+
+  void _selectIndex(int index) {
+    setState(() => _selectedIndex = index);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final selected = _selectedIndex != null ? _files[_selectedIndex!] : null;
     return Scaffold(
       body: Column(
         children: [
-          const _TopMenuBar(),
+          _TopMenuBar(onOpenFile: _openFile, onOpenFolder: _openFolder),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: const [
-                Expanded(child: _ImageArea()),
-                _ControlsPanel(),
+              children: [
+                Expanded(child: _ImageArea(selected: selected, loading: _loading)),
+                const _ControlsPanel(),
               ],
             ),
           ),
-          const _Filmstrip(),
+          _Filmstrip(files: _files, selectedIndex: _selectedIndex, onSelect: _selectIndex),
         ],
       ),
     );
@@ -65,7 +117,10 @@ class EditorScreen extends StatelessWidget {
 }
 
 class _TopMenuBar extends StatelessWidget {
-  const _TopMenuBar();
+  const _TopMenuBar({required this.onOpenFile, required this.onOpenFolder});
+
+  final VoidCallback onOpenFile;
+  final VoidCallback onOpenFolder;
 
   @override
   Widget build(BuildContext context) {
@@ -77,10 +132,24 @@ class _TopMenuBar extends StatelessWidget {
         border: Border(bottom: BorderSide(color: DarkmoonColors.divider)),
       ),
       child: Row(
-        children: const [
-          _MenuBarLabel('File'),
-          SizedBox(width: 4),
-          _MenuBarLabel('Settings...'),
+        children: [
+          PopupMenuButton<VoidCallback>(
+            tooltip: '',
+            color: DarkmoonColors.surfaceRaised,
+            offset: const Offset(0, 26),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+              side: const BorderSide(color: DarkmoonColors.border),
+            ),
+            itemBuilder: (context) => [
+              PopupMenuItem(value: onOpenFile, child: const Text('Open File...')),
+              PopupMenuItem(value: onOpenFolder, child: const Text('Open Folder...')),
+            ],
+            onSelected: (callback) => callback(),
+            child: const _MenuBarLabel('File'),
+          ),
+          const SizedBox(width: 4),
+          const _MenuBarLabel('Settings...'),
         ],
       ),
     );
@@ -102,19 +171,31 @@ class _MenuBarLabel extends StatelessWidget {
 }
 
 class _ImageArea extends StatelessWidget {
-  const _ImageArea();
+  const _ImageArea({required this.selected, required this.loading});
+
+  final RawFile? selected;
+  final bool loading;
 
   @override
   Widget build(BuildContext context) {
+    final String message;
+    if (loading) {
+      message = 'Loading folder...';
+    } else if (selected != null) {
+      message = '${selected!.name}\n(preview not implemented yet)';
+    } else {
+      message = 'Open a folder with RAW files to get started';
+    }
     return Column(
       children: [
         Expanded(
           child: Container(
             color: DarkmoonColors.canvas,
             alignment: Alignment.center,
-            child: const Text(
-              'Open a folder with RAW files to get started',
-              style: TextStyle(color: DarkmoonColors.textMuted),
+            child: Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: DarkmoonColors.textMuted),
             ),
           ),
         ),
@@ -237,17 +318,71 @@ class _ControlsPanel extends StatelessWidget {
 }
 
 class _Filmstrip extends StatelessWidget {
-  const _Filmstrip();
+  const _Filmstrip({required this.files, required this.selectedIndex, required this.onSelect});
+
+  final List<RawFile> files;
+  final int? selectedIndex;
+  final ValueChanged<int> onSelect;
 
   @override
   Widget build(BuildContext context) {
+    if (files.isEmpty) {
+      return Container(
+        height: 114,
+        color: DarkmoonColors.filmstrip,
+        alignment: Alignment.center,
+        child: const Text(
+          'No folder open',
+          style: TextStyle(color: DarkmoonColors.textMuted, fontSize: 11),
+        ),
+      );
+    }
     return Container(
       height: 114,
       color: DarkmoonColors.filmstrip,
-      alignment: Alignment.center,
-      child: const Text(
-        'No folder open',
-        style: TextStyle(color: DarkmoonColors.textMuted, fontSize: 11),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.all(8),
+        itemCount: files.length,
+        itemBuilder: (context, index) {
+          final file = files[index];
+          final isSelected = index == selectedIndex;
+          return Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: GestureDetector(
+              onTap: () => onSelect(index),
+              child: Container(
+                width: 104,
+                padding: const EdgeInsets.all(4),
+                decoration: BoxDecoration(
+                  color: isSelected ? DarkmoonColors.accent.withValues(alpha: 0.28) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF26262A),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        alignment: Alignment.center,
+                        child: const Icon(Icons.image_outlined, color: DarkmoonColors.textMuted, size: 22),
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      file.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: DarkmoonColors.textSecondary, fontSize: 10),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          );
+        },
       ),
     );
   }
