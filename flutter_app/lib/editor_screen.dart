@@ -2,7 +2,9 @@ import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import 'catalog/catalog_store.dart';
@@ -10,13 +12,20 @@ import 'export/export_job.dart';
 import 'native/edit_source.dart';
 import 'native/thumbnail_loader.dart';
 import 'raw_files.dart';
+import 'render/histogram.dart';
 import 'render/render_job.dart';
 import 'render/render_params.dart';
 import 'settings/app_settings.dart';
 import 'theme.dart';
 import 'widgets/export_dialog.dart';
+import 'widgets/histogram_view.dart';
 import 'widgets/settings_dialog.dart';
 import 'widgets/slider_row.dart';
+
+/// Zoom bounds and step, matching the Python app's MIN_ZOOM/MAX_ZOOM/ZOOM_STEP.
+const double _minZoom = 0.1;
+const double _maxZoom = 4.0;
+const double _zoomStep = 1.15;
 
 /// How long to wait after the last slider change before actually
 /// re-rendering, restarted on every change — matches the Python app's
@@ -87,7 +96,18 @@ class _EditorScreenState extends State<EditorScreen> {
   final Map<String, Uint8List> _thumbnails = {};
   final Map<String, EditSourcePair> _editSources = {};
   final Map<String, Uint8List> _renderedPreviews = {};
+  final Map<String, Histogram> _histograms = {};
   int _folderGeneration = 0;
+
+  /// Unedited render of whichever photos have had Before/After turned on,
+  /// computed lazily (only when first needed) since most photos are never
+  /// compared this way.
+  final Map<String, Uint8List> _neutralPreviews = {};
+  bool _beforeAfterMode = false;
+
+  final TransformationController _viewController = TransformationController();
+  final GlobalKey _viewportKey = GlobalKey();
+  double _zoomScale = 1.0;
 
   /// Current slider values for whichever photo is selected — either that
   /// photo's saved edits from [_edits], or defaults if it has none yet.
@@ -146,6 +166,7 @@ class _EditorScreenState extends State<EditorScreen> {
   void dispose() {
     _renderDebounceTimer?.cancel();
     _catalogSaveTimer?.cancel();
+    _viewController.dispose();
     super.dispose();
   }
 
@@ -212,6 +233,9 @@ class _EditorScreenState extends State<EditorScreen> {
       _thumbnails.clear();
       _editSources.clear();
       _renderedPreviews.clear();
+      _histograms.clear();
+      _neutralPreviews.clear();
+      _beforeAfterMode = false;
     });
     final files = await listRawFiles(folder);
     if (!mounted || generation != _folderGeneration) {
@@ -219,6 +243,7 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     final index = selectPath == null ? 0 : files.indexWhere((f) => f.path == selectPath);
     final selectedIndex = files.isEmpty ? null : (index < 0 ? 0 : index);
+    _resetZoom();
     setState(() {
       _files = files;
       _selectedIndex = selectedIndex;
@@ -256,11 +281,15 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     _flushCurrentEdits();
     final path = _files[index].path;
+    _resetZoom();
     setState(() {
       _selectedIndex = index;
       _paramValues = _paramValuesFor(path);
     });
     unawaited(_loadEditSourceAndRender(path, _folderGeneration));
+    if (_beforeAfterMode && !_neutralPreviews.containsKey(path)) {
+      unawaited(_loadNeutralPreview(path));
+    }
   }
 
   /// Decodes the full editable RAW buffer for [path] (unless already
@@ -283,8 +312,9 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   /// Renders [path]'s cached edit source with the current slider values and
-  /// caches the resulting JPEG. Uses the smaller "live" resolution while
-  /// [live] is true (a slider is actively being dragged) for speed.
+  /// caches the resulting JPEG + histogram. Uses the smaller "live"
+  /// resolution while [live] is true (a slider is actively being dragged)
+  /// for speed.
   Future<void> _renderPreview(String path, {bool live = false}) async {
     final sources = _editSources[path];
     if (sources == null) {
@@ -295,13 +325,76 @@ class _EditorScreenState extends State<EditorScreen> {
       source: live ? sources.live : sources.preview,
       params: RenderParams.fromValues(_paramValues),
     );
-    final bytes = await compute(renderJobToJpeg, job);
+    final result = await compute(renderJobToJpeg, job);
     // A newer render (from further slider moves, or a different photo) has
     // since been requested — this result is stale, drop it.
     if (!mounted || requestId != _renderRequestId) {
       return;
     }
-    setState(() => _renderedPreviews[path] = bytes);
+    setState(() {
+      _renderedPreviews[path] = result.jpegBytes;
+      _histograms[path] = result.histogram;
+    });
+  }
+
+  /// Renders [path] with neutral (default) params, for the Before/After
+  /// comparison — independent of whatever edits are currently applied.
+  Future<void> _loadNeutralPreview(String path) async {
+    final sources = _editSources[path];
+    if (sources == null) {
+      return;
+    }
+    final result = await compute(
+      renderJobToJpeg,
+      RenderJob(source: sources.preview, params: const RenderParams()),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _neutralPreviews[path] = result.jpegBytes);
+  }
+
+  void _toggleBeforeAfter() {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    setState(() => _beforeAfterMode = !_beforeAfterMode);
+    if (_beforeAfterMode && selected != null && !_neutralPreviews.containsKey(selected.path)) {
+      unawaited(_loadNeutralPreview(selected.path));
+    }
+  }
+
+  void _resetZoom() {
+    _viewController.value = Matrix4.identity();
+    setState(() => _zoomScale = 1.0);
+  }
+
+  void _zoomBy(double factor, {Offset? anchor}) {
+    final newScale = (_zoomScale * factor).clamp(_minZoom, _maxZoom);
+    final effectiveFactor = newScale / _zoomScale;
+    if (effectiveFactor == 1.0) {
+      return;
+    }
+    final box = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    final center = anchor ?? (box != null ? box.size.center(Offset.zero) : Offset.zero);
+    final matrix = Matrix4.copy(_viewController.value)
+      ..translateByDouble(center.dx, center.dy, 0, 1)
+      ..scaleByDouble(effectiveFactor, effectiveFactor, effectiveFactor, 1)
+      ..translateByDouble(-center.dx, -center.dy, 0, 1);
+    _viewController.value = matrix;
+    setState(() => _zoomScale = newScale);
+  }
+
+  void _zoomIn() => _zoomBy(_zoomStep);
+
+  void _zoomOut() => _zoomBy(1 / _zoomStep);
+
+  /// Ctrl+scroll zooms (anchored at the cursor); plain scroll does nothing,
+  /// matching the Python app's wheelEvent behavior.
+  void _handlePointerSignal(PointerSignalEvent event) {
+    if (event is! PointerScrollEvent || !HardwareKeyboard.instance.isControlPressed) {
+      return;
+    }
+    final factor = event.scrollDelta.dy < 0 ? _zoomStep : 1 / _zoomStep;
+    _zoomBy(factor, anchor: event.localPosition);
   }
 
   void _onParamChanged(String name, double value) {
@@ -398,10 +491,21 @@ class _EditorScreenState extends State<EditorScreen> {
                               selected: selected,
                               thumbnail: selected == null ? null : _thumbnails[selected.path],
                               preview: selected == null ? null : _renderedPreviews[selected.path],
+                              neutralPreview: selected == null ? null : _neutralPreviews[selected.path],
+                              beforeAfterMode: _beforeAfterMode,
+                              viewController: _viewController,
+                              viewportKey: _viewportKey,
+                              zoomScale: _zoomScale,
+                              onZoomIn: _zoomIn,
+                              onZoomOut: _zoomOut,
+                              onZoomFit: _resetZoom,
+                              onToggleBeforeAfter: selected == null ? null : _toggleBeforeAfter,
+                              onPointerSignal: _handlePointerSignal,
                             ),
                           ),
                           _ControlsPanel(
                             values: _paramValues,
+                            histogram: selected == null ? null : _histograms[selected.path],
                             onChanged: _onParamChanged,
                             onChangeEnd: _onParamChangeEnd,
                             onReset: _resetParams,
@@ -492,11 +596,31 @@ class _ImageArea extends StatelessWidget {
     required this.selected,
     required this.thumbnail,
     required this.preview,
+    required this.neutralPreview,
+    required this.beforeAfterMode,
+    required this.viewController,
+    required this.viewportKey,
+    required this.zoomScale,
+    required this.onZoomIn,
+    required this.onZoomOut,
+    required this.onZoomFit,
+    required this.onToggleBeforeAfter,
+    required this.onPointerSignal,
   });
 
   final RawFile? selected;
   final Uint8List? thumbnail;
   final Uint8List? preview;
+  final Uint8List? neutralPreview;
+  final bool beforeAfterMode;
+  final TransformationController viewController;
+  final GlobalKey viewportKey;
+  final double zoomScale;
+  final VoidCallback onZoomIn;
+  final VoidCallback onZoomOut;
+  final VoidCallback onZoomFit;
+  final VoidCallback? onToggleBeforeAfter;
+  final void Function(PointerSignalEvent) onPointerSignal;
 
   @override
   Widget build(BuildContext context) {
@@ -504,12 +628,22 @@ class _ImageArea extends StatelessWidget {
       children: [
         Expanded(
           child: Container(
+            key: viewportKey,
             color: DarkmoonColors.canvas,
             alignment: Alignment.center,
             child: _buildContent(),
           ),
         ),
-        const _ViewerToolbar(),
+        _ViewerToolbar(
+          zoomLabel: beforeAfterMode ? 'Fit' : '${(zoomScale * 100).round()}%',
+          zoomEnabled: !beforeAfterMode,
+          beforeAfterMode: beforeAfterMode,
+          beforeAfterEnabled: onToggleBeforeAfter != null,
+          onZoomIn: onZoomIn,
+          onZoomOut: onZoomOut,
+          onZoomFit: onZoomFit,
+          onToggleBeforeAfter: onToggleBeforeAfter,
+        ),
       ],
     );
   }
@@ -532,9 +666,58 @@ class _ImageArea extends StatelessWidget {
         style: const TextStyle(color: DarkmoonColors.textMuted),
       );
     }
-    // gaplessPlayback avoids a flash back to empty when the thumbnail is
-    // swapped out for the full preview once it finishes decoding.
-    return Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true);
+    if (beforeAfterMode) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(child: _labeledImage('After', bytes)),
+          Container(width: 1, color: DarkmoonColors.divider),
+          // Falls back to the edited image until the neutral render finishes.
+          Expanded(child: _labeledImage('Before', neutralPreview ?? bytes)),
+        ],
+      );
+    }
+    return Listener(
+      onPointerSignal: onPointerSignal,
+      child: InteractiveViewer(
+        transformationController: viewController,
+        minScale: _minZoom,
+        maxScale: _maxZoom,
+        child: _fittedImage(bytes),
+      ),
+    );
+  }
+
+  Widget _labeledImage(String label, Uint8List bytes) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        _fittedImage(bytes),
+        Positioned(
+          left: 8,
+          top: 8,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(4),
+            ),
+            child: Text(label, style: const TextStyle(color: Colors.white, fontSize: 11)),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // SizedBox.expand forces the image into the full available box regardless
+  // of the source resolution (the "live" low-res render during a slider
+  // drag is a different pixel size than the full-res one), so BoxFit.contain
+  // always fits against the same fixed box — without this, the displayed
+  // image visibly shrank and grew back as the source resolution changed.
+  Widget _fittedImage(Uint8List bytes) {
+    return SizedBox.expand(
+      child: Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true),
+    );
   }
 }
 
@@ -573,7 +756,25 @@ class _LoadingOverlay extends StatelessWidget {
 }
 
 class _ViewerToolbar extends StatelessWidget {
-  const _ViewerToolbar();
+  const _ViewerToolbar({
+    required this.zoomLabel,
+    required this.zoomEnabled,
+    required this.beforeAfterMode,
+    required this.beforeAfterEnabled,
+    required this.onZoomIn,
+    required this.onZoomOut,
+    required this.onZoomFit,
+    required this.onToggleBeforeAfter,
+  });
+
+  final String zoomLabel;
+  final bool zoomEnabled;
+  final bool beforeAfterMode;
+  final bool beforeAfterEnabled;
+  final VoidCallback onZoomIn;
+  final VoidCallback onZoomOut;
+  final VoidCallback onZoomFit;
+  final VoidCallback? onToggleBeforeAfter;
 
   static final _compactButtonStyle = ElevatedButton.styleFrom(
     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -596,25 +797,37 @@ class _ViewerToolbar extends StatelessWidget {
       child: Row(
         children: [
           IconButton(
-            onPressed: () {},
+            onPressed: zoomEnabled ? onZoomOut : null,
             icon: const Icon(Icons.remove, size: 14),
             style: _compactIconButtonStyle,
           ),
-          const SizedBox(
+          SizedBox(
             width: 34,
-            child: Text('Fit', textAlign: TextAlign.center, style: TextStyle(color: DarkmoonColors.textSecondary, fontSize: 11.5)),
+            child: Text(
+              zoomLabel,
+              textAlign: TextAlign.center,
+              style: const TextStyle(color: DarkmoonColors.textSecondary, fontSize: 11.5),
+            ),
           ),
           IconButton(
-            onPressed: () {},
+            onPressed: zoomEnabled ? onZoomIn : null,
             icon: const Icon(Icons.add, size: 14),
             style: _compactIconButtonStyle,
           ),
           const SizedBox(width: 6),
-          ElevatedButton(onPressed: () {}, style: _compactButtonStyle, child: const Text('Fit to window')),
+          ElevatedButton(
+            onPressed: zoomEnabled ? onZoomFit : null,
+            style: _compactButtonStyle,
+            child: const Text('Fit to window'),
+          ),
           const Spacer(),
           ElevatedButton.icon(
-            onPressed: () {},
-            style: _compactButtonStyle,
+            onPressed: onToggleBeforeAfter,
+            style: beforeAfterMode
+                ? _compactButtonStyle.copyWith(
+                    backgroundColor: const WidgetStatePropertyAll(DarkmoonColors.accent),
+                  )
+                : _compactButtonStyle,
             icon: const Icon(Icons.compare, size: 14),
             label: const Text('Before/After (\\)'),
           ),
@@ -627,6 +840,7 @@ class _ViewerToolbar extends StatelessWidget {
 class _ControlsPanel extends StatelessWidget {
   const _ControlsPanel({
     required this.values,
+    required this.histogram,
     required this.onChanged,
     required this.onChangeEnd,
     required this.onReset,
@@ -635,6 +849,7 @@ class _ControlsPanel extends StatelessWidget {
   });
 
   final Map<String, double> values;
+  final Histogram? histogram;
   final void Function(String name, double value) onChanged;
   final void Function(String name, double value) onChangeEnd;
   final VoidCallback onReset;
@@ -671,13 +886,7 @@ class _ControlsPanel extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 10),
-            Container(
-              height: 64,
-              decoration: BoxDecoration(
-                color: DarkmoonColors.canvas,
-                borderRadius: BorderRadius.circular(6),
-              ),
-            ),
+            HistogramView(histogram: histogram),
             for (final entry in _sections.entries) ...[
               const SizedBox(height: 10),
               if (entry.key != _sections.keys.first) const Divider(),

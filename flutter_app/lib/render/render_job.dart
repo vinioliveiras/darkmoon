@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
 import '../native/edit_source.dart';
+import 'histogram.dart';
 import 'render.dart';
 import 'render_params.dart';
 
@@ -16,12 +17,22 @@ class RenderJob {
   final RenderParams params;
 }
 
-/// Runs [renderRgb] on the job's source and encodes the result as JPEG
-/// bytes ready for `Image.memory`.
+class RenderResult {
+  const RenderResult({required this.jpegBytes, required this.histogram});
+
+  final Uint8List jpegBytes;
+  final Histogram histogram;
+}
+
+/// Runs [renderRgb] on the job's source, encodes the result as JPEG bytes
+/// ready for `Image.memory`, and bins it into a histogram — computed here
+/// (rather than by re-decoding the JPEG later) since the raw pixel data is
+/// already in hand.
 ///
 /// Designed to run via `compute()`.
-Uint8List renderJobToJpeg(RenderJob job) {
+RenderResult renderJobToJpeg(RenderJob job) {
   final rendered = renderRgb(job.source.width, job.source.height, job.source.rgbBytes, job.params);
+  final histogram = computeHistogram(rendered);
   final image = img.Image.fromBytes(
     width: job.source.width,
     height: job.source.height,
@@ -29,5 +40,6 @@ Uint8List renderJobToJpeg(RenderJob job) {
     numChannels: 3,
     order: img.ChannelOrder.rgb,
   );
-  return Uint8List.fromList(img.encodeJpg(image, quality: 90));
+  final jpegBytes = Uint8List.fromList(img.encodeJpg(image, quality: 90));
+  return RenderResult(jpegBytes: jpegBytes, histogram: histogram);
 }

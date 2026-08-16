@@ -32,12 +32,16 @@ void main(List<String> args) {
 
   void renderAndSave(String label, RenderParams params) {
     final watch = Stopwatch()..start();
-    final bytes = renderJobToJpeg(RenderJob(source: sources.preview, params: params));
+    final result = renderJobToJpeg(RenderJob(source: sources.preview, params: params));
     watch.stop();
     final outPath = '${outPrefix}_$label.jpg';
-    File(outPath).writeAsBytesSync(bytes);
+    File(outPath).writeAsBytesSync(result.jpegBytes);
     // ignore: avoid_print
-    print('$label: ${bytes.length} JPEG bytes in ${watch.elapsedMilliseconds}ms -> $outPath');
+    print(
+      '$label: ${result.jpegBytes.length} JPEG bytes '
+      '(hist max r=${result.histogram.red.reduce((a, b) => a > b ? a : b)}) '
+      'in ${watch.elapsedMilliseconds}ms -> $outPath',
+    );
   }
 
   renderAndSave('neutral', const RenderParams());
