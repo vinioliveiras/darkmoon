@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
+import 'image_utils.dart';
 import 'libraw.dart';
 
 /// Embedded camera preview JPEGs are often nearly full-resolution (multiple
@@ -29,16 +30,6 @@ Uint8List? decodeRawThumbnail(String path) {
     return null;
   }
   final oriented = img.bakeOrientation(decoded);
-  final resized = _fitToMaxDimension(oriented, thumbnailMaxDimension);
+  final resized = fitToMaxDimension(oriented, thumbnailMaxDimension);
   return Uint8List.fromList(img.encodeJpg(resized, quality: 85));
-}
-
-img.Image _fitToMaxDimension(img.Image image, int maxDimension) {
-  final longestSide = image.width > image.height ? image.width : image.height;
-  if (longestSide <= maxDimension) {
-    return image;
-  }
-  return image.width >= image.height
-      ? img.copyResize(image, width: maxDimension)
-      : img.copyResize(image, height: maxDimension);
 }

@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import 'native/preview_loader.dart';
 import 'native/thumbnail_loader.dart';
 import 'raw_files.dart';
 import 'theme.dart';
@@ -49,8 +50,9 @@ const _sections = <String, List<_SliderSpec>>{
 };
 
 /// Main window: image viewer + toolbar, adjustment panel, and a filmstrip
-/// that now lists real RAW files from a chosen folder. Selecting a file only
-/// updates the placeholder text for now — RAW decoding isn't wired up yet.
+/// that lists real RAW files from a chosen folder. Selecting a file decodes
+/// its full RAW preview in the background (showing the fast embedded
+/// thumbnail in the meantime).
 class EditorScreen extends StatefulWidget {
   const EditorScreen({super.key});
 
@@ -63,6 +65,7 @@ class _EditorScreenState extends State<EditorScreen> {
   int? _selectedIndex;
   bool _loading = false;
   final Map<String, Uint8List> _thumbnails = {};
+  final Map<String, Uint8List> _previews = {};
   int _folderGeneration = 0;
 
   Future<void> _openFolder() async {
@@ -91,6 +94,7 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() {
       _loading = true;
       _thumbnails.clear();
+      _previews.clear();
     });
     final files = await listRawFiles(folder);
     if (!mounted || generation != _folderGeneration) {
@@ -103,6 +107,9 @@ class _EditorScreenState extends State<EditorScreen> {
       _loading = false;
     });
     unawaited(_loadThumbnails(files, generation));
+    if (_selectedIndex != null) {
+      unawaited(_loadPreview(files[_selectedIndex!].path, generation));
+    }
   }
 
   Future<void> _loadThumbnails(List<RawFile> files, int generation) async {
@@ -126,6 +133,24 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _selectIndex(int index) {
     setState(() => _selectedIndex = index);
+    unawaited(_loadPreview(_files[index].path, _folderGeneration));
+  }
+
+  /// Decodes the full editable RAW preview for [path] in the background and
+  /// caches it, unless it's already cached. Guarded by [generation] so a
+  /// slow decode from a folder the user has since navigated away from can't
+  /// clobber state after the fact.
+  Future<void> _loadPreview(String path, int generation) async {
+    if (_previews.containsKey(path)) {
+      return;
+    }
+    final bytes = await compute(decodeRawPreview, path);
+    if (!mounted || generation != _folderGeneration) {
+      return;
+    }
+    if (bytes != null) {
+      setState(() => _previews[path] = bytes);
+    }
   }
 
   @override
@@ -144,6 +169,7 @@ class _EditorScreenState extends State<EditorScreen> {
                     selected: selected,
                     loading: _loading,
                     thumbnail: selected == null ? null : _thumbnails[selected.path],
+                    preview: selected == null ? null : _previews[selected.path],
                   ),
                 ),
                 const _ControlsPanel(),
@@ -217,11 +243,17 @@ class _MenuBarLabel extends StatelessWidget {
 }
 
 class _ImageArea extends StatelessWidget {
-  const _ImageArea({required this.selected, required this.loading, required this.thumbnail});
+  const _ImageArea({
+    required this.selected,
+    required this.loading,
+    required this.thumbnail,
+    required this.preview,
+  });
 
   final RawFile? selected;
   final bool loading;
   final Uint8List? thumbnail;
+  final Uint8List? preview;
 
   @override
   Widget build(BuildContext context) {
@@ -250,16 +282,19 @@ class _ImageArea extends StatelessWidget {
         style: TextStyle(color: DarkmoonColors.textMuted),
       );
     }
-    if (thumbnail == null) {
+    // Prefer the full RAW decode; fall back to the fast embedded thumbnail
+    // while it's still decoding, so something appears immediately.
+    final bytes = preview ?? thumbnail;
+    if (bytes == null) {
       return Text(
-        '${selected!.name}\n(decoding thumbnail...)',
+        '${selected!.name}\n(decoding...)',
         textAlign: TextAlign.center,
         style: const TextStyle(color: DarkmoonColors.textMuted),
       );
     }
-    // This is the embedded camera-generated thumbnail, shown as a fast stand-in
-    // — full RAW decoding (matching the current adjustments) isn't wired up yet.
-    return Image.memory(thumbnail!, fit: BoxFit.contain);
+    // gaplessPlayback avoids a flash back to empty when the thumbnail is
+    // swapped out for the full preview once it finishes decoding.
+    return Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true);
   }
 }
 
