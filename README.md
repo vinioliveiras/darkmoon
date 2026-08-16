@@ -6,18 +6,21 @@ Editor de fotos RAW para Windows (MVP inicial), inspirado no Lightroom.
 
 - Python + PySide6 (Qt) para a interface
 - rawpy (LibRaw) para decodificar arquivos RAW
-- NumPy para os ajustes de imagem
+- NumPy + SciPy para os ajustes de imagem
 
 ## Funcionalidades atuais
 
 - Abrir arquivos RAW (.CR2, .CR3, .NEF, .ARW, .DNG, .RAF, .ORF, .RW2)
-- Ajuste de brilho e contraste com preview ao vivo
+- Balanço de branco (temperatura e matiz)
+- Tom (brilho e contraste)
+- Presença (textura, claridade e remoção de neblina)
+- Preview ao vivo (renderizado sobre uma versão reduzida da imagem, até 1600px, para manter a edição fluida)
 
 ## Como rodar
 
 ```
 python -m venv venv
 venv\Scripts\activate
-pip install rawpy numpy pillow pyside6
+pip install rawpy numpy pillow pyside6 scipy
 python main.py
 ```
