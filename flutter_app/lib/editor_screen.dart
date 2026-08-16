@@ -1027,6 +1027,12 @@ class _ImageArea extends StatelessWidget {
         transformationController: viewController,
         minScale: _minZoom,
         maxScale: _maxZoom,
+        // InteractiveViewer has its own built-in pinch/trackpad scale
+        // gesture handling that's entirely separate from the Listener
+        // above — without this it zoomed on trackpad pinch/two-finger
+        // scroll regardless of Ctrl, since that gesture never goes
+        // through onPointerSignal at all. Panning (drag) stays enabled.
+        scaleEnabled: false,
         child: _fittedImage(bytes),
       ),
     );
