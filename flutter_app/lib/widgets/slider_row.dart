@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,15 +10,19 @@ import '../theme.dart';
 /// value can also be clicked and typed directly, matching the Python app's
 /// `SliderControl`.
 ///
-/// The slider's value is controlled by the parent (value + callbacks)
-/// since the editor needs the current value of every slider to render the
-/// image — but while actively dragging, this widget tracks the position
-/// locally and only propagates to the parent every ~1 frame instead of on
-/// every pointer tick. Without that, every tick triggered a full rebuild
-/// of the entire editor (image, histogram, filmstrip, all other sliders)
-/// via the parent's setState, which is what made dragging feel stuttery —
-/// not a precision issue, the value itself was always a full-precision
-/// double.
+/// Dragging uses *relative* sensitivity (Lightroom/Photoshop-style)
+/// instead of Flutter's stock `Slider`, which maps its whole min-max range
+/// across the track's fixed pixel width — for a -100..100 range on a
+/// ~190px-wide track that's already ~1 unit per pixel of mouse movement,
+/// so no amount of value precision in the code could make it feel fine-
+/// grained; the track itself is just too physically narrow for that
+/// range. Here, dragging by one pixel moves the value by an amount scaled
+/// to the slider's own decimal precision (0.01 units/pixel for a 2-decimal,
+/// -100..100 slider — enough to actually land on hundredths — much
+/// coarser for Temperature's 0-decimal, 48000-wide range, where fine
+/// per-pixel control isn't the point). The thumb still renders at its
+/// proportional min-max position for "where am I" feedback; it just no
+/// longer jumps to follow the cursor 1:1.
 class SliderRow extends StatefulWidget {
   const SliderRow({
     super.key,
@@ -47,6 +52,11 @@ class SliderRow extends StatefulWidget {
 /// throttle that still feels instant.
 const _dragPropagateThrottle = Duration(milliseconds: 16);
 
+/// Reference track width (px) the sensitivity formula is tuned against —
+/// not the widget's actual rendered width, just a fixed constant so
+/// sensitivity doesn't shift with panel width changes.
+const _referenceTrackWidth = 200.0;
+
 class _SliderRowState extends State<SliderRow> {
   bool _editing = false;
   final _controller = TextEditingController();
@@ -57,6 +67,8 @@ class _SliderRowState extends State<SliderRow> {
   /// parent. Null when not dragging (widget.value is the source of truth).
   double? _dragValue;
   Timer? _propagateTimer;
+
+  double get _unitsPerPixel => (widget.max - widget.min) / (_referenceTrackWidth * math.pow(10, widget.decimals));
 
   @override
   void initState() {
@@ -96,8 +108,8 @@ class _SliderRowState extends State<SliderRow> {
     widget.onChangeEnd?.call(clamped);
   }
 
-  void _onDragChanged(double v) {
-    setState(() => _dragValue = v);
+  void _scheduleUpdate(double next) {
+    setState(() => _dragValue = next);
     _propagateTimer ??= Timer(_dragPropagateThrottle, () {
       _propagateTimer = null;
       if (_dragValue != null) {
@@ -106,16 +118,21 @@ class _SliderRowState extends State<SliderRow> {
     });
   }
 
-  void _onDragEnd(double v) {
+  void _onDragUpdate(double deltaX) {
+    final current = _dragValue ?? widget.value;
+    final next = (current + deltaX * _unitsPerPixel).clamp(widget.min, widget.max);
+    _scheduleUpdate(next);
+  }
+
+  void _onDragEnd() {
     _propagateTimer?.cancel();
     _propagateTimer = null;
+    final finalValue = _dragValue;
     setState(() => _dragValue = null);
-    // Always send the exact final value, even if a throttled tick already
-    // sent something close — onChangeEnd is what triggers the full-quality
-    // render and catalog save, so it must reflect where the thumb actually
-    // stopped.
-    widget.onChanged(v);
-    widget.onChangeEnd?.call(v);
+    if (finalValue != null) {
+      widget.onChanged(finalValue);
+      widget.onChangeEnd?.call(finalValue);
+    }
   }
 
   @override
@@ -136,16 +153,23 @@ class _SliderRowState extends State<SliderRow> {
             ),
           ],
         ),
-        SliderTheme(
-          data: SliderTheme.of(context).copyWith(
-            trackShape: const RectangularSliderTrackShape(),
-          ),
-          child: Slider(
-            min: widget.min,
-            max: widget.max,
-            value: displayValue,
-            onChanged: _onDragChanged,
-            onChangeEnd: _onDragEnd,
+        GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onHorizontalDragUpdate: (details) => _onDragUpdate(details.delta.dx),
+          onHorizontalDragEnd: (_) => _onDragEnd(),
+          onHorizontalDragCancel: _onDragEnd,
+          child: IgnorePointer(
+            child: SliderTheme(
+              data: SliderTheme.of(context).copyWith(
+                trackShape: const RectangularSliderTrackShape(),
+              ),
+              child: Slider(
+                min: widget.min,
+                max: widget.max,
+                value: displayValue,
+                onChanged: (_) {},
+              ),
+            ),
           ),
         ),
       ],
