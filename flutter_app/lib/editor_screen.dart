@@ -6,12 +6,14 @@ import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
 import 'catalog/catalog_store.dart';
+import 'export/export_job.dart';
 import 'native/edit_source.dart';
 import 'native/thumbnail_loader.dart';
 import 'raw_files.dart';
 import 'render/render_job.dart';
 import 'render/render_params.dart';
 import 'theme.dart';
+import 'widgets/export_dialog.dart';
 import 'widgets/slider_row.dart';
 
 /// How long to wait after the last slider change before actually
@@ -102,6 +104,8 @@ class _EditorScreenState extends State<EditorScreen> {
   /// to how long opening a folder via a native file dialog takes.
   Map<String, Map<String, double>> _edits = {};
   Timer? _catalogSaveTimer;
+
+  bool _exporting = false;
 
   @override
   void initState() {
@@ -307,6 +311,51 @@ class _EditorScreenState extends State<EditorScreen> {
     });
   }
 
+  Future<void> _exportCurrent() async {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null || _exporting) {
+      return;
+    }
+    final options = await showDialog<ExportOptions>(
+      context: context,
+      builder: (_) => const ExportOptionsDialog(),
+    );
+    if (options == null) {
+      return;
+    }
+    final baseName = p.basenameWithoutExtension(selected.path);
+    final destPath = await FilePicker.saveFile(
+      dialogTitle: 'Export Photo',
+      fileName: '${baseName}_edit.${options.format.extension}',
+      type: FileType.custom,
+      allowedExtensions: [options.format.extension],
+    );
+    if (destPath == null || !mounted) {
+      return;
+    }
+
+    setState(() => _exporting = true);
+    final result = await compute(
+      exportPhoto,
+      ExportRequest(
+        sourcePath: selected.path,
+        destPath: destPath,
+        params: RenderParams.fromValues(_paramValues),
+        format: options.format,
+        quality: options.quality,
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() => _exporting = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(result.success ? 'Exported to ${result.destPath}' : 'Export failed: ${result.error}'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final selected = _selectedIndex != null ? _files[_selectedIndex!] : null;
@@ -331,6 +380,8 @@ class _EditorScreenState extends State<EditorScreen> {
                   onChanged: _onParamChanged,
                   onChangeEnd: _onParamChangeEnd,
                   onReset: _resetParams,
+                  onExport: selected == null ? null : _exportCurrent,
+                  exporting: _exporting,
                 ),
               ],
             ),
@@ -515,12 +566,16 @@ class _ControlsPanel extends StatelessWidget {
     required this.onChanged,
     required this.onChangeEnd,
     required this.onReset,
+    required this.onExport,
+    required this.exporting,
   });
 
   final Map<String, double> values;
   final void Function(String name, double value) onChanged;
   final void Function(String name, double value) onChangeEnd;
   final VoidCallback onReset;
+  final VoidCallback? onExport;
+  final bool exporting;
 
   @override
   Widget build(BuildContext context) {
@@ -536,9 +591,15 @@ class _ControlsPanel extends StatelessWidget {
               children: [
                 Expanded(
                   child: ElevatedButton.icon(
-                    onPressed: () {},
-                    icon: const Icon(Icons.file_download_outlined, size: 16),
-                    label: const Text('Export...'),
+                    onPressed: exporting ? null : onExport,
+                    icon: exporting
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.file_download_outlined, size: 16),
+                    label: Text(exporting ? 'Exporting...' : 'Export...'),
                   ),
                 ),
                 const SizedBox(width: 8),
