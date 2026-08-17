@@ -79,6 +79,14 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderVibrance;
     case 'Saturation':
       return l10n.sliderSaturation;
+    case 'SharpenAmount':
+      return l10n.sliderSharpenAmount;
+    case 'SharpenRadius':
+      return l10n.sliderSharpenRadius;
+    case 'SharpenDetail':
+      return l10n.sliderSharpenDetail;
+    case 'SharpenMasking':
+      return l10n.sliderSharpenMasking;
     case 'DenoiseLuminance':
       return l10n.sliderDenoiseLuminance;
     case 'DenoiseLuminanceDetail':
@@ -91,6 +99,12 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderDenoiseColorDetail;
     case 'DenoiseColorSmoothness':
       return l10n.sliderDenoiseColorSmoothness;
+    case 'VignetteAmount':
+      return l10n.sliderVignetteAmount;
+    case 'VignetteMidpoint':
+      return l10n.sliderVignetteMidpoint;
+    case 'VignetteFeather':
+      return l10n.sliderVignetteFeather;
     default:
       return key;
   }
@@ -108,6 +122,8 @@ String _sectionLabel(AppLocalizations l10n, String key) {
       return l10n.sectionPresence;
     case 'DETAIL':
       return l10n.sectionDetail;
+    case 'EFFECTS':
+      return l10n.sectionEffects;
     default:
       return key;
   }
@@ -197,6 +213,10 @@ const _sections = <String, List<_SliderSpec>>{
     ),
   ],
   'DETAIL': [
+    _SliderSpec('SharpenAmount', 0, 150, 0),
+    _SliderSpec('SharpenRadius', 0.5, 3.0, 1.0, decimals: 1),
+    _SliderSpec('SharpenDetail', 0, 100, 25),
+    _SliderSpec('SharpenMasking', 0, 100, 0),
     _SliderSpec('DenoiseLuminance', 0, 100, 0),
     _SliderSpec('DenoiseLuminanceDetail', 0, 100, 50),
     _SliderSpec('DenoiseLuminanceContrast', 0, 100, 0),
@@ -206,10 +226,24 @@ const _sections = <String, List<_SliderSpec>>{
   ],
 };
 
+/// Post-Crop Vignette sliders (Lightroom's Effects panel) — global-only,
+/// so kept out of [_sections] (which masks also render from) rather than
+/// a fourth entry there.
+const _vignetteSliders = [
+  _SliderSpec('VignetteAmount', -100, 100, 0),
+  _SliderSpec('VignetteMidpoint', 0, 100, 50),
+  _SliderSpec('VignetteFeather', 0, 100, 50),
+];
+
 Map<String, double> _defaultParamValues() {
   return {
     for (final specs in _sections.values)
       for (final spec in specs) spec.name: spec.defaultValue,
+    // Vignette lives outside [_sections] (masks don't get Effects) but
+    // still needs its non-zero neutrals (Midpoint/Feather = 50) in the
+    // defaults map, or Reset / first-open / preset-merge would leave
+    // those keys missing and the sliders would snap to 0.
+    for (final spec in _vignetteSliders) spec.name: spec.defaultValue,
   };
 }
 
@@ -1685,17 +1719,6 @@ class _EditorScreenState extends State<EditorScreen> {
                               beforeAfterMode: _beforeAfterMode,
                               viewController: _viewController,
                               viewportKey: _viewportKey,
-                              zoomScale: _zoomScale,
-                              onZoomIn: _zoomIn,
-                              onZoomOut: _zoomOut,
-                              onZoomFit: _resetZoom,
-                              onToggleBeforeAfter: selected == null
-                                  ? null
-                                  : _toggleBeforeAfter,
-                              fullQualityMode: _fullQualityMode,
-                              onToggleFullQuality: selected == null
-                                  ? null
-                                  : _toggleFullQuality,
                               onPointerSignal: _handlePointerSignal,
                               editingMask:
                                   (_beforeAfterMode || selected == null)
@@ -1753,6 +1776,23 @@ class _EditorScreenState extends State<EditorScreen> {
                           ),
                         ],
                       ),
+                    ),
+                    _ViewerToolbar(
+                      zoomLabel: _zoomScale == 1.0
+                          ? AppLocalizations.of(context)!.zoomFit
+                          : '${(_zoomScale * 100).round()}%',
+                      beforeAfterMode: _beforeAfterMode,
+                      beforeAfterEnabled: selected != null,
+                      onZoomIn: _zoomIn,
+                      onZoomOut: _zoomOut,
+                      onZoomFit: _resetZoom,
+                      onToggleBeforeAfter: selected == null
+                          ? null
+                          : _toggleBeforeAfter,
+                      fullQualityMode: _fullQualityMode,
+                      onToggleFullQuality: selected == null
+                          ? null
+                          : _toggleFullQuality,
                     ),
                     _Filmstrip(
                       files: _files,
@@ -1860,13 +1900,6 @@ class _ImageArea extends StatelessWidget {
     required this.beforeAfterMode,
     required this.viewController,
     required this.viewportKey,
-    required this.zoomScale,
-    required this.onZoomIn,
-    required this.onZoomOut,
-    required this.onZoomFit,
-    required this.onToggleBeforeAfter,
-    required this.fullQualityMode,
-    required this.onToggleFullQuality,
     required this.onPointerSignal,
     required this.editingMask,
     required this.editingSource,
@@ -1885,13 +1918,6 @@ class _ImageArea extends StatelessWidget {
   final bool beforeAfterMode;
   final TransformationController viewController;
   final GlobalKey viewportKey;
-  final double zoomScale;
-  final VoidCallback onZoomIn;
-  final VoidCallback onZoomOut;
-  final VoidCallback onZoomFit;
-  final VoidCallback? onToggleBeforeAfter;
-  final bool fullQualityMode;
-  final VoidCallback? onToggleFullQuality;
   final void Function(PointerSignalEvent) onPointerSignal;
 
   /// The mask currently being edited (Linear/Radial Gradient), if any —
@@ -1919,30 +1945,11 @@ class _ImageArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Column(
-      children: [
-        Expanded(
-          child: Container(
-            key: viewportKey,
-            color: DarkmoonColors.canvas,
-            alignment: Alignment.center,
-            child: _buildContent(l10n),
-          ),
-        ),
-        _ViewerToolbar(
-          zoomLabel: zoomScale == 1.0
-              ? l10n.zoomFit
-              : '${(zoomScale * 100).round()}%',
-          beforeAfterMode: beforeAfterMode,
-          beforeAfterEnabled: onToggleBeforeAfter != null,
-          onZoomIn: onZoomIn,
-          onZoomOut: onZoomOut,
-          onZoomFit: onZoomFit,
-          onToggleBeforeAfter: onToggleBeforeAfter,
-          fullQualityMode: fullQualityMode,
-          onToggleFullQuality: onToggleFullQuality,
-        ),
-      ],
+    return Container(
+      key: viewportKey,
+      color: DarkmoonColors.canvas,
+      alignment: Alignment.center,
+      child: _buildContent(l10n),
     );
   }
 
@@ -2211,49 +2218,75 @@ class _ViewerToolbar extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return Container(
       height: 44,
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
       color: DarkmoonColors.background,
       child: Row(
         children: [
-          // Not Flexible: every segment inside is either an icon or the
-          // fixed-width zoom-percent readout, neither of which has any
-          // room to give — letting this pill shrink would only crush the
-          // percentage text unreadable, never actually save space.
-          _ToolbarPill(
-            children: [
-              _ToolbarSegment(icon: CupertinoIcons.minus, onTap: onZoomOut),
-              _ToolbarSegment(label: zoomLabel, width: 40, padded: false),
-              _ToolbarSegment(icon: CupertinoIcons.add, onTap: onZoomIn),
-            ],
-          ),
-          const SizedBox(width: 6),
-          _ToolbarPill(
-            children: [
-              _ToolbarSegment(
-                icon: CupertinoIcons.arrow_up_left_arrow_down_right,
-                onTap: onZoomFit,
-                tooltip: l10n.fitToWindow,
+          // Reserved space matching the folder/preset sidebar's width
+          // above, so the controls below line up under the image viewer
+          // rather than spreading to the far edge of the window — left
+          // empty for now, for future buttons.
+          const SizedBox(width: 220),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+              child: Row(
+                children: [
+                  // Not Flexible: every segment inside is either an icon or
+                  // the fixed-width zoom-percent readout, neither of which
+                  // has any room to give — letting this pill shrink would
+                  // only crush the percentage text unreadable, never
+                  // actually save space.
+                  _ToolbarPill(
+                    children: [
+                      _ToolbarSegment(
+                        icon: CupertinoIcons.minus,
+                        onTap: onZoomOut,
+                      ),
+                      _ToolbarSegment(
+                        label: zoomLabel,
+                        width: 40,
+                        padded: false,
+                      ),
+                      _ToolbarSegment(
+                        icon: CupertinoIcons.add,
+                        onTap: onZoomIn,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 6),
+                  _ToolbarPill(
+                    children: [
+                      _ToolbarSegment(
+                        icon: CupertinoIcons.arrow_up_left_arrow_down_right,
+                        onTap: onZoomFit,
+                        tooltip: l10n.fitToWindow,
+                      ),
+                    ],
+                  ),
+                  const Spacer(),
+                  _ToolbarPill(
+                    children: [
+                      _ToolbarSegment(
+                        icon: CupertinoIcons.square_split_2x1,
+                        selected: beforeAfterMode,
+                        onTap: onToggleBeforeAfter,
+                        tooltip: l10n.beforeAfterButton,
+                      ),
+                      _ToolbarSegment(
+                        label: l10n.fullQualityShortLabel,
+                        selected: fullQualityMode,
+                        onTap: onToggleFullQuality,
+                        tooltip: l10n.fullQualityButton,
+                      ),
+                    ],
+                  ),
+                ],
               ),
-            ],
-          ),
-          const Spacer(),
-          Flexible(
-            child: _ToolbarPill(
-              children: [
-                _ToolbarSegment(
-                  label: l10n.beforeAfterButton,
-                  selected: beforeAfterMode,
-                  onTap: onToggleBeforeAfter,
-                ),
-                _ToolbarSegment(
-                  label: l10n.fullQualityShortLabel,
-                  selected: fullQualityMode,
-                  onTap: onToggleFullQuality,
-                  tooltip: l10n.fullQualityButton,
-                ),
-              ],
             ),
           ),
+          // Reserved space matching _ControlsPanel's width above — same
+          // idea as the sidebar spacer on the left.
+          const SizedBox(width: 280),
         ],
       ),
     );
@@ -2339,7 +2372,7 @@ class _ToolbarSegment extends StatelessWidget {
       height: double.infinity,
       alignment: Alignment.center,
       padding: padded
-          ? EdgeInsets.symmetric(horizontal: label != null ? 10 : 7)
+          ? const EdgeInsets.symmetric(horizontal: 7)
           : EdgeInsets.zero,
       color: selected ? DarkmoonColors.accent : Colors.transparent,
       child: icon != null
@@ -2925,6 +2958,27 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                         ),
                       ),
                     ],
+                    const Divider(),
+                    _SectionHeader(
+                      label: l10n.sectionEffects,
+                      collapsed: _collapsed.contains('EFFECTS'),
+                      onTap: () => _toggleSection('EFFECTS'),
+                    ),
+                    if (!_collapsed.contains('EFFECTS'))
+                      for (final spec in _vignetteSliders)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: SliderRow(
+                            name: _sliderLabel(l10n, spec.name),
+                            min: spec.min,
+                            max: spec.max,
+                            value: values[spec.name] ?? spec.defaultValue,
+                            decimals: spec.decimals,
+                            defaultValue: spec.defaultValue,
+                            onChanged: (v) => onChanged(spec.name, v),
+                            onChangeEnd: (v) => onChangeEnd(spec.name, v),
+                          ),
+                        ),
                   ],
                 ],
               ],
@@ -3078,6 +3132,8 @@ String _gradeRangeLabel(AppLocalizations l10n, String range) {
       return l10n.gradeRangeMidtones;
     case 'Highlights':
       return l10n.sliderHighlights;
+    case 'Global':
+      return l10n.gradeRangeGlobal;
   }
   throw ArgumentError.value(range, 'range');
 }
@@ -3090,7 +3146,7 @@ class _GradeRangeTabs extends StatelessWidget {
   final String active;
   final ValueChanged<String> onSelect;
 
-  static const _ranges = ['Shadows', 'Midtones', 'Highlights'];
+  static const _ranges = ['Shadows', 'Midtones', 'Highlights', 'Global'];
 
   @override
   Widget build(BuildContext context) {

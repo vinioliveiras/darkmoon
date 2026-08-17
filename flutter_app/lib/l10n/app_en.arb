@@ -49,6 +49,7 @@
     "placeholders": { "count": {"type": "int"} }
   },
   "presetSelectTooltip": "Select presets",
+  "presetSelectAllTooltip": "Select all",
   "presetSelectedCount": "{count} selected",
   "@presetSelectedCount": {
     "placeholders": { "count": {"type": "int"} }
@@ -112,7 +113,9 @@
   "sectionColorCurve": "COLOR CURVE",
   "sectionColorMixer": "COLOR MIXER",
   "sectionColorGrading": "COLOR GRADING",
+  "sectionEffects": "EFFECTS",
   "gradeRangeMidtones": "Midtones",
+  "gradeRangeGlobal": "Global",
 
   "maskImageLayer": "Image",
   "maskLinearGradient": "Linear Gradient",
@@ -162,5 +165,14 @@
   "sliderDenoiseLuminanceContrast": "Luminance Contrast",
   "sliderDenoiseColor": "Color",
   "sliderDenoiseColorDetail": "Color Detail",
-  "sliderDenoiseColorSmoothness": "Color Smoothness"
+  "sliderDenoiseColorSmoothness": "Color Smoothness",
+
+  "sliderSharpenAmount": "Amount",
+  "sliderSharpenRadius": "Radius",
+  "sliderSharpenDetail": "Detail",
+  "sliderSharpenMasking": "Masking",
+
+  "sliderVignetteAmount": "Vignette Amount",
+  "sliderVignetteMidpoint": "Vignette Midpoint",
+  "sliderVignetteFeather": "Vignette Feather"
 }

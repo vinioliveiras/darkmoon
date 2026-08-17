@@ -8,7 +8,9 @@ import 'denoise.dart';
 import 'local_contrast.dart';
 import 'mask.dart';
 import 'render_params.dart';
+import 'sharpen.dart';
 import 'tone_curve.dart';
+import 'vignette.dart';
 
 /// Absolute color temperature (Kelvin) treated as "no white-balance shift",
 /// matching the Python app's TEMPERATURE_NEUTRAL_KELVIN.
@@ -124,6 +126,7 @@ void _applyAdjustmentSteps(
   applyColorMixer(buffer, params.colorMixer);
   applyColorGrading(buffer, params.colorGrading);
   applyDenoise(buffer, width, height, params.denoise);
+  applySharpen(buffer, width, height, params.sharpen);
   applyLocalContrast(buffer, width, height, params.texture, 3);
   applyLocalContrast(
     buffer,
@@ -136,6 +139,7 @@ void _applyAdjustmentSteps(
   applyDehaze(buffer, width, height, params.dehaze);
   _applyVibrance(buffer, pixelCount, params.vibrance);
   _applySaturation(buffer, pixelCount, params.saturation);
+  applyVignette(buffer, width, height, params.vignette);
 }
 
 Uint8List _toUint8(Float32List buffer) {

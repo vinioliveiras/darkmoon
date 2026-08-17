@@ -1,7 +1,9 @@
 import 'color_grading.dart';
 import 'color_mixer.dart';
 import 'denoise.dart';
+import 'sharpen.dart';
 import 'tone_curve.dart';
+import 'vignette.dart';
 
 /// The current value of every adjustment slider, passed into [renderRgb].
 ///
@@ -26,13 +28,16 @@ class RenderParams {
     this.colorMixer = const ColorMixerValues(),
     this.colorGrading = const ColorGradingValues(),
     this.denoise = const DenoiseParams(),
+    this.sharpen = const SharpenParams(),
+    this.vignette = const VignetteParams(),
   });
 
   /// Builds params from the editor's flat `{sliderName: value}` map, using
   /// this class's defaults for any slider not present. [colorMixer]'s 24
-  /// keys, [colorGrading]'s 9 keys and [denoise]'s 6 keys all live in that
-  /// same flat map, same as every other slider — only [curves] is passed
-  /// separately, since a curve is a list of points, not a single double.
+  /// keys, [colorGrading]'s 12 keys, [denoise]'s 6 keys, [sharpen]'s 4
+  /// keys and [vignette]'s 3 keys all live in that same flat map, same as
+  /// every other slider — only [curves] is passed separately, since a
+  /// curve is a list of points, not a single double.
   factory RenderParams.fromValues(
     Map<String, double> values, {
     PhotoCurves? curves,
@@ -57,6 +62,8 @@ class RenderParams {
       colorMixer: ColorMixerValues.fromValues(values),
       colorGrading: ColorGradingValues.fromValues(values),
       denoise: DenoiseParams.fromValues(values),
+      sharpen: SharpenParams.fromValues(values),
+      vignette: VignetteParams.fromValues(values),
     );
   }
 
@@ -78,4 +85,6 @@ class RenderParams {
   final ColorMixerValues colorMixer;
   final ColorGradingValues colorGrading;
   final DenoiseParams denoise;
+  final SharpenParams sharpen;
+  final VignetteParams vignette;
 }

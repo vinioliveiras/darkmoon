@@ -75,6 +75,18 @@ class _PresetPanelState extends State<PresetPanel> {
     });
   }
 
+  void _toggleSelectAll() {
+    setState(() {
+      if (_selectedIds.length == widget.presets.length) {
+        _selectedIds.clear();
+      } else {
+        _selectedIds
+          ..clear()
+          ..addAll(widget.presets.map((p) => p.id));
+      }
+    });
+  }
+
   void _confirmBulkDelete() {
     final selected = [
       for (final preset in widget.presets)
@@ -103,61 +115,45 @@ class _PresetPanelState extends State<PresetPanel> {
                 ),
               ),
               if (_selectionMode) ...[
-                SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: IconButton(
-                    tooltip: l10n.presetDeleteLabel,
-                    padding: EdgeInsets.zero,
-                    onPressed: _selectedIds.isEmpty ? null : _confirmBulkDelete,
-                    icon: const Icon(CupertinoIcons.trash, size: 14),
-                  ),
+                _HeaderIconButton(
+                  tooltip: l10n.presetSelectAllTooltip,
+                  icon: _selectedIds.length == widget.presets.length
+                      ? CupertinoIcons.checkmark_circle_fill
+                      : CupertinoIcons.checkmark_circle,
+                  onPressed: _toggleSelectAll,
                 ),
-                SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: IconButton(
-                    tooltip: l10n.cancelButton,
-                    padding: EdgeInsets.zero,
-                    onPressed: _exitSelectionMode,
-                    icon: const Icon(CupertinoIcons.xmark, size: 14),
-                  ),
+                const SizedBox(width: 10),
+                _HeaderIconButton(
+                  tooltip: l10n.presetDeleteLabel,
+                  icon: CupertinoIcons.trash,
+                  onPressed: _selectedIds.isEmpty ? null : _confirmBulkDelete,
+                ),
+                const SizedBox(width: 10),
+                _HeaderIconButton(
+                  tooltip: l10n.cancelButton,
+                  icon: CupertinoIcons.xmark,
+                  onPressed: _exitSelectionMode,
                 ),
               ] else ...[
-                if (widget.presets.isNotEmpty)
-                  SizedBox(
-                    height: 24,
-                    width: 24,
-                    child: IconButton(
-                      tooltip: l10n.presetSelectTooltip,
-                      padding: EdgeInsets.zero,
-                      onPressed: () =>
-                          _enterSelectionMode(widget.presets.first.id),
-                      icon: const Icon(
-                        CupertinoIcons.checkmark_circle,
-                        size: 14,
-                      ),
-                    ),
+                if (widget.presets.isNotEmpty) ...[
+                  _HeaderIconButton(
+                    tooltip: l10n.presetSelectTooltip,
+                    icon: CupertinoIcons.checkmark_circle,
+                    onPressed: () =>
+                        _enterSelectionMode(widget.presets.first.id),
                   ),
-                SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: IconButton(
-                    tooltip: l10n.presetImportTooltip,
-                    padding: EdgeInsets.zero,
-                    onPressed: widget.onImport,
-                    icon: const Icon(CupertinoIcons.tray_arrow_down, size: 14),
-                  ),
+                  const SizedBox(width: 10),
+                ],
+                _HeaderIconButton(
+                  tooltip: l10n.presetImportTooltip,
+                  icon: CupertinoIcons.tray_arrow_down,
+                  onPressed: widget.onImport,
                 ),
-                SizedBox(
-                  height: 24,
-                  width: 24,
-                  child: IconButton(
-                    tooltip: l10n.presetSaveNewTooltip,
-                    padding: EdgeInsets.zero,
-                    onPressed: widget.enabled ? widget.onSaveNew : null,
-                    icon: const Icon(CupertinoIcons.add, size: 14),
-                  ),
+                const SizedBox(width: 10),
+                _HeaderIconButton(
+                  tooltip: l10n.presetSaveNewTooltip,
+                  icon: CupertinoIcons.add,
+                  onPressed: widget.enabled ? widget.onSaveNew : null,
                 ),
               ],
             ],
@@ -190,6 +186,32 @@ class _PresetPanelState extends State<PresetPanel> {
               onDelete: () => widget.onDelete(preset),
             ),
       ],
+    );
+  }
+}
+
+class _HeaderIconButton extends StatelessWidget {
+  const _HeaderIconButton({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 24,
+      width: 24,
+      child: IconButton(
+        tooltip: tooltip,
+        padding: EdgeInsets.zero,
+        onPressed: onPressed,
+        icon: Icon(icon, size: 14),
+      ),
     );
   }
 }

@@ -6,9 +6,9 @@ import 'preset.dart';
 /// Reads/writes Lightroom-compatible `.xmp` Develop Preset files —
 /// specifically the `crs:` (Camera Raw Settings) attributes that have a
 /// real equivalent in this app's own adjustment set. Attributes this app
-/// doesn't support (sharpening, lens corrections, crop, camera profile,
-/// point color, masks, ...) are simply left out on export and ignored on
-/// import, rather than erroring.
+/// doesn't support (lens corrections, crop, camera profile, camera
+/// calibration, film grain, point color, masks, ...) are simply left out
+/// on export and ignored on import, rather than erroring.
 ///
 /// This is *file-format* compatibility, not *rendering* compatibility —
 /// Lightroom's actual Camera Raw pipeline is proprietary, so a preset
@@ -39,6 +39,13 @@ const _directMappings = [
   ('DenoiseColor', 'ColorNoiseReduction'),
   ('DenoiseColorDetail', 'ColorNoiseReductionDetail'),
   ('DenoiseColorSmoothness', 'ColorNoiseReductionSmoothness'),
+  ('SharpenAmount', 'Sharpness'),
+  ('SharpenRadius', 'SharpenRadius'),
+  ('SharpenDetail', 'SharpenDetail'),
+  ('SharpenMasking', 'SharpenEdgeMasking'),
+  ('VignetteAmount', 'PostCropVignetteAmount'),
+  ('VignetteMidpoint', 'PostCropVignetteMidpoint'),
+  ('VignetteFeather', 'PostCropVignetteFeather'),
 ];
 
 const _mixerChannels = [
@@ -57,6 +64,20 @@ const _gradeRanges = [
   ('Shadows', 'Shadow'),
   ('Midtones', 'Midtone'),
   ('Highlights', 'Highlight'),
+  ('Global', 'Global'),
+];
+
+/// (our Color Grading range name, legacy Split Toning hue/saturation
+/// attribute names) — Split Toning predates the Color Grading wheels and
+/// only ever covered shadows/highlights (no midtone or global control).
+/// Many presets — especially ones ported forward from older Lightroom
+/// versions — still carry these instead of (or alongside) the modern
+/// `ColorGrade*` attributes, so they're used as a fallback when the
+/// modern ones are absent, applied onto the very same Shadows/Highlights
+/// grading zones we already render.
+const _splitToningFallback = [
+  ('Shadows', 'SplitToningShadowHue', 'SplitToningShadowSaturation'),
+  ('Highlights', 'SplitToningHighlightHue', 'SplitToningHighlightSaturation'),
 ];
 
 /// Our Exposure is scaled to +-3 stops of actual brightness change (see
@@ -87,6 +108,21 @@ const _structuralCrsAttributes = {
   'SupportsOutputReferred',
   'CameraModelRestriction',
   'RequiresRGBTables',
+  // Mode flags, labels and provenance metadata rather than settings with
+  // a visible effect we're missing — either purely informational, or
+  // (WhiteBalance) a mode name whose actual numeric effect is the
+  // Temperature/Tint attributes we already read directly.
+  'WhiteBalance',
+  'ToneCurveName2012',
+  'CompatibleVersion',
+  'ShowInQuickActions',
+  'ShowInPresets',
+  'AllowFilters',
+  'AsShotTemperature',
+  'AsShotTint',
+  'HDREditMode',
+  'Copyright',
+  'ContactInfo',
 };
 
 double _exposureToStops(double ourValue) =>
@@ -112,6 +148,13 @@ String xmpFromPreset(Preset preset) {
         nest: () {
           builder.element(
             'rdf:Description',
+            // Only slider keys actually present in [preset.values] get
+            // written — a preset re-exported after being imported partial
+            // (e.g. a "Punchy" preset that never touched Temperature)
+            // must stay partial, or writing a 0 fallback for an untouched
+            // slider whose real neutral isn't 0 (Temperature's is 5500)
+            // would bake in the same corruption `presetFromXmp` guards
+            // against on the way back in.
             attributes: {
               'rdf:about': '',
               'crs:PresetType': 'Normal',
@@ -119,28 +162,25 @@ String xmpFromPreset(Preset preset) {
               'crs:ProcessVersion': '11.0',
               'crs:HasSettings': 'True',
               for (final (ourKey, crsAttr) in _directMappings)
-                'crs:$crsAttr': (preset.values[ourKey] ?? 0).toString(),
-              'crs:Exposure2012': _exposureToStops(
-                preset.values['Exposure'] ?? 0,
-              ).toStringAsFixed(2),
+                if (preset.values[ourKey] case final v?)
+                  'crs:$crsAttr': v.toString(),
+              if (preset.values['Exposure'] case final v?)
+                'crs:Exposure2012': _exposureToStops(v).toStringAsFixed(2),
               for (final channel in _mixerChannels) ...{
-                'crs:HueAdjustment$channel':
-                    (preset.values['Mixer${channel}Hue'] ?? 0).toString(),
-                'crs:SaturationAdjustment$channel':
-                    (preset.values['Mixer${channel}Saturation'] ?? 0)
-                        .toString(),
-                'crs:LuminanceAdjustment$channel':
-                    (preset.values['Mixer${channel}Luminance'] ?? 0).toString(),
+                if (preset.values['Mixer${channel}Hue'] case final v?)
+                  'crs:HueAdjustment$channel': v.toString(),
+                if (preset.values['Mixer${channel}Saturation'] case final v?)
+                  'crs:SaturationAdjustment$channel': v.toString(),
+                if (preset.values['Mixer${channel}Luminance'] case final v?)
+                  'crs:LuminanceAdjustment$channel': v.toString(),
               },
               for (final (ourRange, crsRange) in _gradeRanges) ...{
-                'crs:ColorGrade${crsRange}Hue':
-                    (preset.values['Grade${ourRange}Hue'] ?? 0).toString(),
-                'crs:ColorGrade${crsRange}Sat':
-                    (preset.values['Grade${ourRange}Saturation'] ?? 0)
-                        .toString(),
-                'crs:ColorGrade${crsRange}Lum':
-                    (preset.values['Grade${ourRange}Luminance'] ?? 0)
-                        .toString(),
+                if (preset.values['Grade${ourRange}Hue'] case final v?)
+                  'crs:ColorGrade${crsRange}Hue': v.toString(),
+                if (preset.values['Grade${ourRange}Saturation'] case final v?)
+                  'crs:ColorGrade${crsRange}Sat': v.toString(),
+                if (preset.values['Grade${ourRange}Luminance'] case final v?)
+                  'crs:ColorGrade${crsRange}Lum': v.toString(),
               },
             },
             namespaces: {_crsNamespace: 'crs'},
@@ -219,28 +259,60 @@ Preset? presetFromXmp(String xmlSource, {required String fallbackName}) {
     return null;
   }
 
-  double attr(String name, [double fallback = 0]) {
+  // Only present attributes make it into [values] — a real preset only
+  // ever carries the boxes that were checked when it was made (e.g. a
+  // "Punchy" preset touching just Contrast/Clarity has no Temperature
+  // attribute at all). Filling absent ones in with a numeric fallback
+  // instead of omitting them was a real bug: several of our sliders have
+  // a *non-zero* neutral default (Temperature's is 5500, not 0), so a
+  // fallback of 0 silently overwrote it with a wildly wrong value —
+  // e.g. crushing white balance to 0K — the moment `_applyPreset` merged
+  // `values` over `_defaultParamValues()`. Omitting the key instead lets
+  // that merge fall through to the real default, exactly like Lightroom
+  // leaves untouched settings alone.
+  double? attr(String name) {
     final raw = description.attributes
         .where((a) => a.name.local == name)
         .map((a) => a.value)
         .firstOrNull;
-    return raw == null ? fallback : (double.tryParse(raw) ?? fallback);
+    return raw == null ? null : double.tryParse(raw);
   }
 
   final values = <String, double>{
-    for (final (ourKey, crsAttr) in _directMappings) ourKey: attr(crsAttr),
-    'Exposure': _stopsToExposure(attr('Exposure2012')),
+    for (final (ourKey, crsAttr) in _directMappings)
+      if (attr(crsAttr) case final v?) ourKey: v,
+    if (attr('Exposure2012') case final v?) 'Exposure': _stopsToExposure(v),
     for (final channel in _mixerChannels) ...{
-      'Mixer${channel}Hue': attr('HueAdjustment$channel'),
-      'Mixer${channel}Saturation': attr('SaturationAdjustment$channel'),
-      'Mixer${channel}Luminance': attr('LuminanceAdjustment$channel'),
+      if (attr('HueAdjustment$channel') case final v?) 'Mixer${channel}Hue': v,
+      if (attr('SaturationAdjustment$channel') case final v?)
+        'Mixer${channel}Saturation': v,
+      if (attr('LuminanceAdjustment$channel') case final v?)
+        'Mixer${channel}Luminance': v,
     },
     for (final (ourRange, crsRange) in _gradeRanges) ...{
-      'Grade${ourRange}Hue': attr('ColorGrade${crsRange}Hue'),
-      'Grade${ourRange}Saturation': attr('ColorGrade${crsRange}Sat'),
-      'Grade${ourRange}Luminance': attr('ColorGrade${crsRange}Lum'),
+      if (attr('ColorGrade${crsRange}Hue') case final v?)
+        'Grade${ourRange}Hue': v,
+      if (attr('ColorGrade${crsRange}Sat') case final v?)
+        'Grade${ourRange}Saturation': v,
+      if (attr('ColorGrade${crsRange}Lum') case final v?)
+        'Grade${ourRange}Luminance': v,
     },
   };
+
+  // Legacy Split Toning only kicks in where the modern Color Grading
+  // wheel for that same zone wasn't already set above — a preset with
+  // both is trusting the modern attributes, not the legacy ones they were
+  // upgraded from.
+  for (final (ourRange, hueAttr, satAttr) in _splitToningFallback) {
+    final hue = attr(hueAttr);
+    if (hue != null && !values.containsKey('Grade${ourRange}Hue')) {
+      values['Grade${ourRange}Hue'] = hue;
+    }
+    final sat = attr(satAttr);
+    if (sat != null && !values.containsKey('Grade${ourRange}Saturation')) {
+      values['Grade${ourRange}Saturation'] = sat;
+    }
+  }
 
   final name =
       description
@@ -282,6 +354,10 @@ List<String> _unsupportedAttributes(XmlElement description) {
       'ColorGrade${crsRange}Hue',
       'ColorGrade${crsRange}Sat',
       'ColorGrade${crsRange}Lum',
+    },
+    for (final (_, hueAttr, satAttr) in _splitToningFallback) ...{
+      hueAttr,
+      satAttr,
     },
   };
   final unsupported = <String>[];

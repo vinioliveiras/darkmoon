@@ -75,4 +75,146 @@ void main() {
     expect(presetFromXmp('not xml at all', fallbackName: 'x'), isNull);
     expect(presetFromXmp('<html></html>', fallbackName: 'x'), isNull);
   });
+
+  test('attributes absent from a real (partial) Lightroom preset are omitted, '
+      'not defaulted to 0', () {
+    // A real preset that only touches Contrast/Clarity — no Temperature,
+    // no Exposure — mirroring how "Update to Preset" only writes the
+    // boxes that were actually checked. Regression test for a bug where
+    // every mapped attribute was force-included with a 0 fallback,
+    // silently zeroing out sliders whose real neutral isn't 0 (like
+    // Temperature's 5500) the moment the preset was applied.
+    const xml = '''
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about=""
+        xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
+        crs:PresetType="Normal"
+        crs:Contrast2012="25"
+        crs:Clarity2012="15">
+      <crs:Name>
+        <rdf:Alt>
+          <rdf:li xml:lang="x-default">Punchy</rdf:li>
+        </rdf:Alt>
+      </crs:Name>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+''';
+    final decoded = presetFromXmp(xml, fallbackName: 'fallback');
+    expect(decoded, isNotNull);
+    expect(decoded!.values['Contrast'], 25);
+    expect(decoded.values['Clarity'], 15);
+    expect(decoded.values.containsKey('Temperature'), isFalse);
+    expect(decoded.values.containsKey('Exposure'), isFalse);
+    expect(decoded.values.containsKey('Tint'), isFalse);
+  });
+
+  test('re-exporting a partial preset keeps untouched sliders untouched', () {
+    const partial = Preset(id: 'p2', name: 'Partial', values: {'Contrast': 25});
+    final xml = xmpFromPreset(partial);
+    final decoded = presetFromXmp(xml, fallbackName: 'fallback');
+    expect(decoded, isNotNull);
+    expect(decoded!.values['Contrast'], 25);
+    expect(decoded.values.containsKey('Temperature'), isFalse);
+  });
+
+  test(
+    'high-impact Lightroom attrs map onto sharpen, vignette and global grade',
+    () {
+      const xml = '''
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about=""
+        xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
+        crs:PresetType="Normal"
+        crs:Sharpness="40"
+        crs:SharpenRadius="1.2"
+        crs:SharpenDetail="25"
+        crs:SharpenEdgeMasking="30"
+        crs:PostCropVignetteAmount="-20"
+        crs:PostCropVignetteMidpoint="40"
+        crs:PostCropVignetteFeather="60"
+        crs:ColorGradeGlobalHue="30"
+        crs:ColorGradeGlobalSat="12"
+        crs:ColorGradeGlobalLum="-5">
+      <crs:Name>
+        <rdf:Alt>
+          <rdf:li xml:lang="x-default">Punch</rdf:li>
+        </rdf:Alt>
+      </crs:Name>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+''';
+      final decoded = presetFromXmp(xml, fallbackName: 'fallback');
+      expect(decoded, isNotNull);
+      expect(decoded!.values['SharpenAmount'], 40);
+      expect(decoded.values['SharpenRadius'], closeTo(1.2, 0.01));
+      expect(decoded.values['SharpenDetail'], 25);
+      expect(decoded.values['SharpenMasking'], 30);
+      expect(decoded.values['VignetteAmount'], -20);
+      expect(decoded.values['VignetteMidpoint'], 40);
+      expect(decoded.values['VignetteFeather'], 60);
+      expect(decoded.values['GradeGlobalHue'], 30);
+      expect(decoded.values['GradeGlobalSaturation'], 12);
+      expect(decoded.values['GradeGlobalLuminance'], -5);
+      expect(decoded.unsupportedAttributes, isEmpty);
+    },
+  );
+
+  test('legacy Split Toning falls back onto Shadows/Highlights grading', () {
+    const xml = '''
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about=""
+        xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
+        crs:PresetType="Normal"
+        crs:SplitToningShadowHue="210"
+        crs:SplitToningShadowSaturation="18"
+        crs:SplitToningHighlightHue="40"
+        crs:SplitToningHighlightSaturation="10">
+      <crs:Name>
+        <rdf:Alt>
+          <rdf:li xml:lang="x-default">Split</rdf:li>
+        </rdf:Alt>
+      </crs:Name>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+''';
+    final decoded = presetFromXmp(xml, fallbackName: 'fallback');
+    expect(decoded, isNotNull);
+    expect(decoded!.values['GradeShadowsHue'], 210);
+    expect(decoded.values['GradeShadowsSaturation'], 18);
+    expect(decoded.values['GradeHighlightsHue'], 40);
+    expect(decoded.values['GradeHighlightsSaturation'], 10);
+    expect(decoded.unsupportedAttributes, isEmpty);
+  });
+
+  test('modern ColorGrade wins over legacy Split Toning on the same zone', () {
+    const xml = '''
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP">
+  <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+    <rdf:Description rdf:about=""
+        xmlns:crs="http://ns.adobe.com/camera-raw-settings/1.0/"
+        crs:PresetType="Normal"
+        crs:ColorGradeShadowHue="90"
+        crs:ColorGradeShadowSat="8"
+        crs:SplitToningShadowHue="210"
+        crs:SplitToningShadowSaturation="18">
+      <crs:Name>
+        <rdf:Alt>
+          <rdf:li xml:lang="x-default">Both</rdf:li>
+        </rdf:Alt>
+      </crs:Name>
+    </rdf:Description>
+  </rdf:RDF>
+</x:xmpmeta>
+''';
+    final decoded = presetFromXmp(xml, fallbackName: 'fallback');
+    expect(decoded, isNotNull);
+    expect(decoded!.values['GradeShadowsHue'], 90);
+    expect(decoded.values['GradeShadowsSaturation'], 8);
+  });
 }

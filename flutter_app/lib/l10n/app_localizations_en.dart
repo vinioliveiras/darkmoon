@@ -113,6 +113,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get presetSelectTooltip => 'Select presets';
 
   @override
+  String get presetSelectAllTooltip => 'Select all';
+
+  @override
   String presetSelectedCount(int count) {
     return '$count selected';
   }
@@ -263,7 +266,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sectionColorGrading => 'COLOR GRADING';
 
   @override
+  String get sectionEffects => 'EFFECTS';
+
+  @override
   String get gradeRangeMidtones => 'Midtones';
+
+  @override
+  String get gradeRangeGlobal => 'Global';
 
   @override
   String get maskImageLayer => 'Image';
@@ -405,4 +414,25 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sliderDenoiseColorSmoothness => 'Color Smoothness';
+
+  @override
+  String get sliderSharpenAmount => 'Amount';
+
+  @override
+  String get sliderSharpenRadius => 'Radius';
+
+  @override
+  String get sliderSharpenDetail => 'Detail';
+
+  @override
+  String get sliderSharpenMasking => 'Masking';
+
+  @override
+  String get sliderVignetteAmount => 'Vignette Amount';
+
+  @override
+  String get sliderVignetteMidpoint => 'Vignette Midpoint';
+
+  @override
+  String get sliderVignetteFeather => 'Vignette Feather';
 }

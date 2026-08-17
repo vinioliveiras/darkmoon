@@ -23,13 +23,16 @@ class GradeRange {
       );
 }
 
-/// The three tonal ranges Lightroom's Color Grading panel exposes —
-/// Global blending/balance controls aren't included in this first pass.
+/// The four tonal ranges Lightroom's Color Grading panel exposes —
+/// Shadows/Midtones/Highlights plus a Global wheel that tints uniformly
+/// across the whole tonal range. Blending/balance controls between ranges
+/// aren't modeled.
 class ColorGradingValues {
   const ColorGradingValues({
     this.shadows = const GradeRange(),
     this.midtones = const GradeRange(),
     this.highlights = const GradeRange(),
+    this.global = const GradeRange(),
   });
 
   /// Builds grading values from the editor's flat `{sliderName: value}`
@@ -45,15 +48,20 @@ class ColorGradingValues {
       shadows: range('Shadows'),
       midtones: range('Midtones'),
       highlights: range('Highlights'),
+      global: range('Global'),
     );
   }
 
   final GradeRange shadows;
   final GradeRange midtones;
   final GradeRange highlights;
+  final GradeRange global;
 
   bool get isIdentity =>
-      shadows.isIdentity && midtones.isIdentity && highlights.isIdentity;
+      shadows.isIdentity &&
+      midtones.isIdentity &&
+      highlights.isIdentity &&
+      global.isIdentity;
 }
 
 /// How strongly a fully-saturated wheel color tints the image — tuned so
@@ -93,6 +101,8 @@ void applyColorGrading(Float32List img, ColorGradingValues grading) {
   final shadowTint = _tintOffset(grading.shadows);
   final midTint = _tintOffset(grading.midtones);
   final highlightTint = _tintOffset(grading.highlights);
+  final globalTint = _tintOffset(grading.global);
+  final globalLumOffset = grading.global.luminance / 100.0 * 80.0;
 
   for (var i = 0; i < img.length; i += 3) {
     final r = img[i];
@@ -135,6 +145,11 @@ void applyColorGrading(Float32List img, ColorGradingValues grading) {
       dg += lumOffset;
       db += lumOffset;
     }
+    // Global applies at full strength everywhere, independent of the
+    // shadow/midtone/highlight partition above.
+    dr += globalTint[0] + globalLumOffset;
+    dg += globalTint[1] + globalLumOffset;
+    db += globalTint[2] + globalLumOffset;
 
     img[i] = r + dr;
     img[i + 1] = g + dg;

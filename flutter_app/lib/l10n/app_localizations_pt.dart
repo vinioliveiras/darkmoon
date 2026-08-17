@@ -113,6 +113,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get presetSelectTooltip => 'Selecionar presets';
 
   @override
+  String get presetSelectAllTooltip => 'Selecionar tudo';
+
+  @override
   String presetSelectedCount(int count) {
     return '$count selecionado(s)';
   }
@@ -266,7 +269,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sectionColorGrading => 'GRADAÇÃO DE COR';
 
   @override
+  String get sectionEffects => 'EFEITOS';
+
+  @override
   String get gradeRangeMidtones => 'Meios-tons';
+
+  @override
+  String get gradeRangeGlobal => 'Global';
 
   @override
   String get maskImageLayer => 'Imagem';
@@ -408,4 +417,25 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get sliderDenoiseColorSmoothness => 'Suavidade de Cor';
+
+  @override
+  String get sliderSharpenAmount => 'Quantidade';
+
+  @override
+  String get sliderSharpenRadius => 'Raio';
+
+  @override
+  String get sliderSharpenDetail => 'Detalhe';
+
+  @override
+  String get sliderSharpenMasking => 'Máscara de Bordas';
+
+  @override
+  String get sliderVignetteAmount => 'Quantidade da Vinheta';
+
+  @override
+  String get sliderVignetteMidpoint => 'Ponto Médio da Vinheta';
+
+  @override
+  String get sliderVignetteFeather => 'Suavização da Vinheta';
 }

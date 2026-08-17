@@ -34,6 +34,7 @@
   "presetDeleteConfirmMessage": "Excluir o preset \"{name}\"? Essa ação não pode ser desfeita.",
   "presetDeleteManyConfirmMessage": "Excluir {count} presets? Essa ação não pode ser desfeita.",
   "presetSelectTooltip": "Selecionar presets",
+  "presetSelectAllTooltip": "Selecionar tudo",
   "presetSelectedCount": "{count} selecionado(s)",
   "presetUnsupportedTitle": "Alguns ajustes não foram aplicados",
   "presetUnsupportedMessage": "O preset \"{name}\" tem ajustes que este app ainda não suporta, então foram ignorados:",
@@ -85,7 +86,9 @@
   "sectionColorCurve": "CURVA DE COR",
   "sectionColorMixer": "MIXAGEM DE COR",
   "sectionColorGrading": "GRADAÇÃO DE COR",
+  "sectionEffects": "EFEITOS",
   "gradeRangeMidtones": "Meios-tons",
+  "gradeRangeGlobal": "Global",
 
   "maskImageLayer": "Imagem",
   "maskLinearGradient": "Gradiente Linear",
@@ -135,5 +138,14 @@
   "sliderDenoiseLuminanceContrast": "Contraste de Luminância",
   "sliderDenoiseColor": "Cor",
   "sliderDenoiseColorDetail": "Detalhe de Cor",
-  "sliderDenoiseColorSmoothness": "Suavidade de Cor"
+  "sliderDenoiseColorSmoothness": "Suavidade de Cor",
+
+  "sliderSharpenAmount": "Quantidade",
+  "sliderSharpenRadius": "Raio",
+  "sliderSharpenDetail": "Detalhe",
+  "sliderSharpenMasking": "Máscara de Bordas",
+
+  "sliderVignetteAmount": "Quantidade da Vinheta",
+  "sliderVignetteMidpoint": "Ponto Médio da Vinheta",
+  "sliderVignetteFeather": "Suavização da Vinheta"
 }

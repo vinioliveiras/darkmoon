@@ -284,6 +284,12 @@ abstract class AppLocalizations {
   /// **'Select presets'**
   String get presetSelectTooltip;
 
+  /// No description provided for @presetSelectAllTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Select all'**
+  String get presetSelectAllTooltip;
+
   /// No description provided for @presetSelectedCount.
   ///
   /// In en, this message translates to:
@@ -560,11 +566,23 @@ abstract class AppLocalizations {
   /// **'COLOR GRADING'**
   String get sectionColorGrading;
 
+  /// No description provided for @sectionEffects.
+  ///
+  /// In en, this message translates to:
+  /// **'EFFECTS'**
+  String get sectionEffects;
+
   /// No description provided for @gradeRangeMidtones.
   ///
   /// In en, this message translates to:
   /// **'Midtones'**
   String get gradeRangeMidtones;
+
+  /// No description provided for @gradeRangeGlobal.
+  ///
+  /// In en, this message translates to:
+  /// **'Global'**
+  String get gradeRangeGlobal;
 
   /// No description provided for @maskImageLayer.
   ///
@@ -847,6 +865,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Color Smoothness'**
   String get sliderDenoiseColorSmoothness;
+
+  /// No description provided for @sliderSharpenAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get sliderSharpenAmount;
+
+  /// No description provided for @sliderSharpenRadius.
+  ///
+  /// In en, this message translates to:
+  /// **'Radius'**
+  String get sliderSharpenRadius;
+
+  /// No description provided for @sliderSharpenDetail.
+  ///
+  /// In en, this message translates to:
+  /// **'Detail'**
+  String get sliderSharpenDetail;
+
+  /// No description provided for @sliderSharpenMasking.
+  ///
+  /// In en, this message translates to:
+  /// **'Masking'**
+  String get sliderSharpenMasking;
+
+  /// No description provided for @sliderVignetteAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Vignette Amount'**
+  String get sliderVignetteAmount;
+
+  /// No description provided for @sliderVignetteMidpoint.
+  ///
+  /// In en, this message translates to:
+  /// **'Vignette Midpoint'**
+  String get sliderVignetteMidpoint;
+
+  /// No description provided for @sliderVignetteFeather.
+  ///
+  /// In en, this message translates to:
+  /// **'Vignette Feather'**
+  String get sliderVignetteFeather;
 }
 
 class _AppLocalizationsDelegate
