@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'hsl.dart';
+import 'luminance.dart';
 
 /// One tonal range's color-wheel position (hue/saturation) plus an
 /// independent brightness offset — mirrors Lightroom's Color Grading
@@ -108,7 +109,7 @@ void applyColorGrading(Float32List img, ColorGradingValues grading) {
     final r = img[i];
     final g = img[i + 1];
     final b = img[i + 2];
-    final lum = ((r + g + b) / 3.0 / 255.0).clamp(0.0, 1.0);
+    final lum = (luminanceRgb(r, g, b) / 255.0).clamp(0.0, 1.0);
 
     // Partition of unity over [0,1] — shadows peak at lum=0, highlights at
     // lum=1, midtones in between, each tapering to 0 by the next range.

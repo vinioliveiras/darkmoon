@@ -36,6 +36,7 @@ class SliderRow extends StatefulWidget {
     this.decimals = 2,
     this.defaultValue,
     this.trackColors,
+    this.valueSuffix = '',
   });
 
   final String name;
@@ -45,6 +46,11 @@ class SliderRow extends StatefulWidget {
   final ValueChanged<double> onChanged;
   final ValueChanged<double>? onChangeEnd;
   final int decimals;
+
+  /// Appended to the displayed value (e.g. `'K'` for Temperature) —
+  /// display only, never included in the editable text field so typing a
+  /// new value stays a plain number.
+  final String valueSuffix;
 
   /// Double-tapping the track resets to this value, if set — matches
   /// Lightroom's double-click-to-reset. Null (the default) disables the
@@ -234,7 +240,7 @@ class _SliderRowState extends State<SliderRow> {
         child: Align(
           alignment: Alignment.centerRight,
           child: Text(
-            displayValue.toStringAsFixed(widget.decimals),
+            '${displayValue.toStringAsFixed(widget.decimals)}${widget.valueSuffix}',
             style: const TextStyle(
               color: DarkmoonColors.textMuted,
               fontSize: 11.5,

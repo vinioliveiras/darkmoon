@@ -76,6 +76,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get presetEmptyHint => 'No presets yet';
 
   @override
+  String presetAmountDialogTitle(String name) {
+    return 'Apply \"$name\"';
+  }
+
+  @override
+  String get presetAmountLabel => 'Amount';
+
+  @override
+  String get presetAmountApplyButton => 'Apply';
+
+  @override
   String get presetRenameLabel => 'Rename';
 
   @override
@@ -144,10 +155,49 @@ class AppLocalizationsEn extends AppLocalizations {
   String get beforeAfterButton => 'Before/After';
 
   @override
+  String get cropButton => 'Crop & Transform';
+
+  @override
+  String get sectionCropTransform => 'CROP & TRANSFORM';
+
+  @override
+  String get cropAspectLabel => 'Aspect';
+
+  @override
+  String get transformStraightenLabel => 'Straighten';
+
+  @override
+  String get transformVerticalLabel => 'Vertical';
+
+  @override
+  String get transformHorizontalLabel => 'Horizontal';
+
+  @override
+  String get transformAspectLabel => 'Aspect';
+
+  @override
+  String get transformScaleLabel => 'Scale';
+
+  @override
+  String get cropRotateLeftTooltip => 'Rotate 90° left';
+
+  @override
+  String get cropRotateRightTooltip => 'Rotate 90° right';
+
+  @override
+  String get cropDoneButton => 'OK';
+
+  @override
   String get fullQualityButton => 'Full Quality';
 
   @override
   String get fullQualityShortLabel => 'HD';
+
+  @override
+  String get undoButton => 'Undo';
+
+  @override
+  String get redoButton => 'Redo';
 
   @override
   String get aiDenoiseButton => 'AI Denoise';
@@ -158,6 +208,9 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get aiDenoiseDialogMessage =>
       'Reduce noise automatically, tuned to keep detail sharp.';
+
+  @override
+  String get aiDenoiseLevelOff => 'Off';
 
   @override
   String get aiDenoiseLevelLight => 'Light';
@@ -179,6 +232,18 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get exportingButton => 'Exporting...';
+
+  @override
+  String get exportStageDecoding => 'Decoding RAW...';
+
+  @override
+  String get exportStageRendering => 'Applying edits...';
+
+  @override
+  String get exportStageEncoding => 'Encoding...';
+
+  @override
+  String get exportStageWriting => 'Saving file...';
 
   @override
   String get exportPhotoDialogTitle => 'Export Photo';
@@ -206,7 +271,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get resetTooltip => 'Reset adjustments';
+  String get resetTooltip => 'Reset';
 
   @override
   String get settingsDialogTitle => 'Settings';
@@ -229,6 +294,13 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsAlwaysFullQualityLabel =>
       'Always open photos in full quality';
+
+  @override
+  String get settingsRawOnlyLabel => 'RAW files only';
+
+  @override
+  String get settingsRawOnlyHint =>
+      'Hide JPEG, PNG and other common image formats from the library';
 
   @override
   String get settingsThumbnailThreadsLabel => 'Thumbnail loading threads';
@@ -321,7 +393,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get maskInvertLabel => 'Invert';
 
   @override
+  String get maskOpacityLabel => 'Opacity';
+
+  @override
+  String get maskOverlayOpacityLabel => 'Overlay Opacity';
+
+  @override
   String get maskDeleteTooltip => 'Delete mask';
+
+  @override
+  String get maskOverlayVisibleTooltip => 'Hide mask overlay';
+
+  @override
+  String get maskOverlayHiddenTooltip => 'Show mask overlay';
 
   @override
   String get maskBrushSizeLabel => 'Size';

@@ -34,6 +34,8 @@ class BrushMaskOverlay extends StatefulWidget {
     required this.brushErase,
     required this.onChanged,
     required this.onChangeEnd,
+    this.showOverlay = true,
+    this.overlayOpacity = 0.4,
   });
 
   final Size containerSize;
@@ -47,6 +49,16 @@ class BrushMaskOverlay extends StatefulWidget {
   final bool brushErase;
   final ValueChanged<MaskLayer> onChanged;
   final ValueChanged<MaskLayer> onChangeEnd;
+
+  /// Whether painted strokes are shown as a shaded overlay — when false,
+  /// only the hover cursor ring (needed to place the next dab) still
+  /// draws, matching the other mask overlays' visibility toggle.
+  final bool showOverlay;
+
+  /// How opaque painted strokes' shading is, 0..1 — user-adjustable, same
+  /// idea as [GradientMaskOverlay.overlayOpacity]. The hover cursor ring
+  /// stays at full opacity regardless, since it's UI chrome, not shading.
+  final double overlayOpacity;
 
   @override
   State<BrushMaskOverlay> createState() => _BrushMaskOverlayState();
@@ -148,11 +160,15 @@ class _BrushMaskOverlayState extends State<BrushMaskOverlay> {
         child: CustomPaint(
           size: widget.containerSize,
           painter: _BrushPreviewPainter(
-            liveStroke: _liveStroke,
+            // widget.mask.brush.strokes already includes the in-progress
+            // stroke as its last element while dragging — onChanged
+            // (called from _updateStroke) appends it live — so this alone
+            // covers both committed strokes and the one being dragged.
+            strokes: widget.showOverlay ? widget.mask.brush.strokes : const [],
+            imageRect: imageRect,
             radiusPx: widget.brushRadius * imageRect.width,
-            hardness: widget.brushHardness,
-            erase: widget.brushErase,
             cursor: _hoverLocal,
+            overlayOpacity: widget.overlayOpacity,
           ),
         ),
       ),
@@ -162,28 +178,36 @@ class _BrushMaskOverlayState extends State<BrushMaskOverlay> {
 
 class _BrushPreviewPainter extends CustomPainter {
   const _BrushPreviewPainter({
-    required this.liveStroke,
+    required this.strokes,
+    required this.imageRect,
     required this.radiusPx,
-    required this.hardness,
-    required this.erase,
     required this.cursor,
+    required this.overlayOpacity,
   });
 
-  final List<Offset> liveStroke;
+  /// Every stroke the mask currently has, including the one still being
+  /// dragged (see the comment at this painter's construction site) —
+  /// shown as a persistent shaded overlay (toggleable via
+  /// [BrushMaskOverlay.showOverlay]), the same idea as the gradient masks'
+  /// shaded coverage area, so a painted-then-released brush mask still
+  /// shows where it covers instead of only being visible in the rendered
+  /// image itself.
+  final List<BrushStroke> strokes;
+  final Rect imageRect;
   final double radiusPx;
-  final double hardness;
-  final bool erase;
   final Offset? cursor;
+  final double overlayOpacity;
 
   void _paintDabs(
     Canvas canvas,
     List<Offset> points,
     double radius,
+    double hardness,
     bool eraseStroke,
   ) {
     final blur = (radius * (1 - hardness)).clamp(0.0, radius);
     final paint = Paint()
-      ..color = DarkmoonColors.accent.withValues(alpha: 0.4)
+      ..color = DarkmoonColors.accent.withValues(alpha: overlayOpacity)
       ..blendMode = eraseStroke ? BlendMode.clear : BlendMode.srcOver
       ..maskFilter = blur > 0
           ? MaskFilter.blur(BlurStyle.normal, blur / 2)
@@ -195,13 +219,24 @@ class _BrushPreviewPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Committed strokes already show up in the rendered image itself
-    // (each one triggers a real re-render when the drag that made it
-    // ends) — only the stroke still being dragged needs an approximate
-    // preview here, ahead of the next debounced render.
-    if (liveStroke.isNotEmpty) {
+    if (strokes.isNotEmpty) {
       canvas.saveLayer(Offset.zero & size, Paint());
-      _paintDabs(canvas, liveStroke, radiusPx, erase);
+      for (final stroke in strokes) {
+        final points = [
+          for (final p in stroke.points)
+            Offset(
+              imageRect.left + p.x * imageRect.width,
+              imageRect.top + p.y * imageRect.height,
+            ),
+        ];
+        _paintDabs(
+          canvas,
+          points,
+          stroke.radius * imageRect.width,
+          stroke.hardness,
+          stroke.erase,
+        );
+      }
       canvas.restore();
     }
 
@@ -220,8 +255,9 @@ class _BrushPreviewPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _BrushPreviewPainter oldDelegate) =>
-      oldDelegate.liveStroke != liveStroke ||
+      oldDelegate.strokes != strokes ||
+      oldDelegate.imageRect != imageRect ||
       oldDelegate.radiusPx != radiusPx ||
-      oldDelegate.hardness != hardness ||
-      oldDelegate.cursor != cursor;
+      oldDelegate.cursor != cursor ||
+      oldDelegate.overlayOpacity != overlayOpacity;
 }

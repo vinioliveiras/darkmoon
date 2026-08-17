@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
@@ -171,6 +172,22 @@ class _FolderNodeState extends State<_FolderNode> {
   List<Directory>? _children;
   bool _loading = false;
 
+  @override
+  void initState() {
+    super.initState();
+    // A root node starts with its chevron already drawn as "expanded"
+    // (initiallyExpanded: true), but _children is still null at this
+    // point — without fetching here, the chevron and the actual "are
+    // children showing" state (_expanded && _children != null) disagree
+    // until the first tap, which _toggleExpanded then reads as "already
+    // expanded, nothing to fetch" and just flips _expanded to false,
+    // visually collapsing a node that was never really showing its
+    // children. A second tap was needed to finally fetch and show them.
+    if (widget.initiallyExpanded) {
+      unawaited(_loadChildren());
+    }
+  }
+
   String get _name {
     final parts = widget.path
         .split(Platform.pathSeparator)
@@ -179,17 +196,21 @@ class _FolderNodeState extends State<_FolderNode> {
     return parts.isEmpty ? widget.path : parts.last;
   }
 
+  Future<void> _loadChildren() async {
+    setState(() => _loading = true);
+    final dirs = await _listSubfolders(widget.path);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _children = dirs;
+      _loading = false;
+    });
+  }
+
   Future<void> _toggleExpanded() async {
     if (!_expanded && _children == null) {
-      setState(() => _loading = true);
-      final dirs = await _listSubfolders(widget.path);
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _children = dirs;
-        _loading = false;
-      });
+      await _loadChildren();
     }
     setState(() => _expanded = !_expanded);
   }

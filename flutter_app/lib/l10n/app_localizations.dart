@@ -218,6 +218,24 @@ abstract class AppLocalizations {
   /// **'No presets yet'**
   String get presetEmptyHint;
 
+  /// No description provided for @presetAmountDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply \"{name}\"'**
+  String presetAmountDialogTitle(String name);
+
+  /// No description provided for @presetAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get presetAmountLabel;
+
+  /// No description provided for @presetAmountApplyButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get presetAmountApplyButton;
+
   /// No description provided for @presetRenameLabel.
   ///
   /// In en, this message translates to:
@@ -338,6 +356,72 @@ abstract class AppLocalizations {
   /// **'Before/After'**
   String get beforeAfterButton;
 
+  /// No description provided for @cropButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Crop & Transform'**
+  String get cropButton;
+
+  /// No description provided for @sectionCropTransform.
+  ///
+  /// In en, this message translates to:
+  /// **'CROP & TRANSFORM'**
+  String get sectionCropTransform;
+
+  /// No description provided for @cropAspectLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Aspect'**
+  String get cropAspectLabel;
+
+  /// No description provided for @transformStraightenLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Straighten'**
+  String get transformStraightenLabel;
+
+  /// No description provided for @transformVerticalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Vertical'**
+  String get transformVerticalLabel;
+
+  /// No description provided for @transformHorizontalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Horizontal'**
+  String get transformHorizontalLabel;
+
+  /// No description provided for @transformAspectLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Aspect'**
+  String get transformAspectLabel;
+
+  /// No description provided for @transformScaleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Scale'**
+  String get transformScaleLabel;
+
+  /// No description provided for @cropRotateLeftTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate 90° left'**
+  String get cropRotateLeftTooltip;
+
+  /// No description provided for @cropRotateRightTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Rotate 90° right'**
+  String get cropRotateRightTooltip;
+
+  /// No description provided for @cropDoneButton.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get cropDoneButton;
+
   /// No description provided for @fullQualityButton.
   ///
   /// In en, this message translates to:
@@ -349,6 +433,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'HD'**
   String get fullQualityShortLabel;
+
+  /// No description provided for @undoButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo'**
+  String get undoButton;
+
+  /// No description provided for @redoButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Redo'**
+  String get redoButton;
 
   /// No description provided for @aiDenoiseButton.
   ///
@@ -367,6 +463,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Reduce noise automatically, tuned to keep detail sharp.'**
   String get aiDenoiseDialogMessage;
+
+  /// No description provided for @aiDenoiseLevelOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get aiDenoiseLevelOff;
 
   /// No description provided for @aiDenoiseLevelLight.
   ///
@@ -409,6 +511,30 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Exporting...'**
   String get exportingButton;
+
+  /// No description provided for @exportStageDecoding.
+  ///
+  /// In en, this message translates to:
+  /// **'Decoding RAW...'**
+  String get exportStageDecoding;
+
+  /// No description provided for @exportStageRendering.
+  ///
+  /// In en, this message translates to:
+  /// **'Applying edits...'**
+  String get exportStageRendering;
+
+  /// No description provided for @exportStageEncoding.
+  ///
+  /// In en, this message translates to:
+  /// **'Encoding...'**
+  String get exportStageEncoding;
+
+  /// No description provided for @exportStageWriting.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving file...'**
+  String get exportStageWriting;
 
   /// No description provided for @exportPhotoDialogTitle.
   ///
@@ -455,7 +581,7 @@ abstract class AppLocalizations {
   /// No description provided for @resetTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Reset adjustments'**
+  /// **'Reset'**
   String get resetTooltip;
 
   /// No description provided for @settingsDialogTitle.
@@ -499,6 +625,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Always open photos in full quality'**
   String get settingsAlwaysFullQualityLabel;
+
+  /// No description provided for @settingsRawOnlyLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'RAW files only'**
+  String get settingsRawOnlyLabel;
+
+  /// No description provided for @settingsRawOnlyHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide JPEG, PNG and other common image formats from the library'**
+  String get settingsRawOnlyHint;
 
   /// No description provided for @settingsThumbnailThreadsLabel.
   ///
@@ -674,11 +812,35 @@ abstract class AppLocalizations {
   /// **'Invert'**
   String get maskInvertLabel;
 
+  /// No description provided for @maskOpacityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Opacity'**
+  String get maskOpacityLabel;
+
+  /// No description provided for @maskOverlayOpacityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Overlay Opacity'**
+  String get maskOverlayOpacityLabel;
+
   /// No description provided for @maskDeleteTooltip.
   ///
   /// In en, this message translates to:
   /// **'Delete mask'**
   String get maskDeleteTooltip;
+
+  /// No description provided for @maskOverlayVisibleTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide mask overlay'**
+  String get maskOverlayVisibleTooltip;
+
+  /// No description provided for @maskOverlayHiddenTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Show mask overlay'**
+  String get maskOverlayHiddenTooltip;
 
   /// No description provided for @maskBrushSizeLabel.
   ///

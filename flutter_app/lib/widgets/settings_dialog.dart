@@ -115,6 +115,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
               onChanged: (v) =>
                   _update(_settings.copyWith(alwaysFullQuality: v)),
             ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.settingsRawOnlyLabel),
+              subtitle: Text(l10n.settingsRawOnlyHint),
+              value: _settings.rawOnly,
+              onChanged: (v) => _update(_settings.copyWith(rawOnly: v)),
+            ),
             const SizedBox(height: 8),
             Row(
               children: [

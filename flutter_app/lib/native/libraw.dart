@@ -43,6 +43,87 @@ Uint8List _copyProcessedImageData(Pointer<libraw_processed_image_t> image) {
   return Uint8List.fromList(dataPtr.asTypedList(image.ref.data_size));
 }
 
+/// Camera/exposure metadata read straight from a RAW file's own header —
+/// no demosaic/decode needed, so this is far cheaper than
+/// [decodeRawImage] or even [extractRawThumbnailJpeg].
+class RawMetadata {
+  const RawMetadata({
+    required this.cameraMake,
+    required this.cameraModel,
+    required this.lensModel,
+    required this.isoSpeed,
+    required this.shutterSeconds,
+    required this.apertureFNumber,
+    required this.focalLengthMm,
+  });
+
+  /// Manufacturer-normalized names (e.g. "Fujifilm" rather than a
+  /// per-model raw string), matching what a Lightroom-style metadata panel
+  /// shows — empty string if LibRaw couldn't identify the camera.
+  final String cameraMake;
+  final String cameraModel;
+
+  /// Empty string if the file carries no lens data (older/manual lenses,
+  /// or a camera model LibRaw doesn't parse lens info for).
+  final String lensModel;
+
+  /// 0 if absent from the file.
+  final double isoSpeed;
+
+  /// Exposure time in seconds (e.g. 0.004 for "1/250") — 0 if absent.
+  final double shutterSeconds;
+
+  /// f-number (e.g. 2.8 for "f/2.8") — 0 if absent.
+  final double apertureFNumber;
+
+  /// 0 if absent.
+  final double focalLengthMm;
+}
+
+/// Reads a null-terminated `Array<Char>` field as a Dart string, stopping
+/// at the first NUL byte (or the array's own length, whichever comes
+/// first) rather than assuming the whole fixed-size buffer is meaningful.
+String _charArrayToString(Array<Char> array, int maxLength) {
+  final bytes = <int>[];
+  for (var i = 0; i < maxLength; i++) {
+    final b = array[i];
+    if (b == 0) {
+      break;
+    }
+    bytes.add(b);
+  }
+  return String.fromCharCodes(bytes).trim();
+}
+
+/// Reads camera/lens/exposure metadata from [path]'s RAW header — cheap
+/// (no unpack/demosaic), since LibRaw parses this during file open alone.
+/// Returns null if LibRaw fails to open the file.
+///
+/// Blocking native call — run on a background isolate (e.g. via `compute`).
+RawMetadata? extractRawMetadata(String path) {
+  final lib = _Lib.instance;
+  final lr = _openRaw(lib, path);
+  if (lr == null) {
+    return null;
+  }
+  try {
+    final idata = lr.ref.idata;
+    final other = lr.ref.other;
+    final lens = lr.ref.lens;
+    return RawMetadata(
+      cameraMake: _charArrayToString(idata.normalized_make, 64),
+      cameraModel: _charArrayToString(idata.normalized_model, 64),
+      lensModel: _charArrayToString(lens.Lens, 128),
+      isoSpeed: other.iso_speed,
+      shutterSeconds: other.shutter,
+      apertureFNumber: other.aperture,
+      focalLengthMm: other.focal_len,
+    );
+  } finally {
+    lib.libraw_close(lr);
+  }
+}
+
 /// Opens [path], returning an initialized `libraw_data_t*`, or null (after
 /// freeing it) if LibRaw fails to open the file. Caller owns the result and
 /// must eventually call `lib.libraw_close`.
@@ -101,6 +182,12 @@ Uint8List? extractRawThumbnailJpeg(String path) {
   }
 }
 
+/// The coarse stages [decodeRawImage] moves through — LibRaw's C API
+/// exposes no fractional progress callback, so this is the finest-grained
+/// signal available: one message per stage boundary, not a percentage
+/// within a stage.
+enum RawDecodeStage { opening, unpacking, processing, extracting }
+
 /// Fully decodes/demosaics a RAW file into an RGB bitmap — the actual
 /// editable image, not just the camera's embedded preview.
 ///
@@ -116,20 +203,41 @@ Uint8List? extractRawThumbnailJpeg(String path) {
 /// above a 1600px editing preview for most cameras. Set to false for a
 /// full-resolution decode (e.g. for export).
 ///
+/// [onStage], if given, is called synchronously as each [RawDecodeStage]
+/// starts — a coarse progress signal for callers that want to show more
+/// than an indeterminate spinner (see `edit_source.dart`'s isolate-based
+/// wrappers, which forward these across a `SendPort`).
+///
 /// Blocking native call — run on a background isolate (e.g. via `compute`).
-RawImage? decodeRawImage(String path, {bool halfSize = true}) {
+RawImage? decodeRawImage(
+  String path, {
+  bool halfSize = true,
+  void Function(RawDecodeStage stage)? onStage,
+}) {
+  onStage?.call(RawDecodeStage.opening);
   final lib = _Lib.instance;
   final lr = _openRaw(lib, path);
   if (lr == null) {
     return null;
   }
   try {
+    onStage?.call(RawDecodeStage.unpacking);
     if (lib.libraw_unpack(lr) != 0) {
       return null;
     }
 
     final params = lr.ref.params;
     params.use_camera_wb = 1;
+    // Use the camera's own embedded color calibration matrix (written into
+    // the RAW file by the manufacturer for that specific sensor) instead
+    // of LibRaw's generic per-sensor-family fallback matrix. This is the
+    // biggest lever available here toward "the app recognizes the camera
+    // and adjusts color like Lightroom does": Lightroom/ACR ship their own
+    // per-camera-model calibration profiles, which aren't available to
+    // LibRaw, but every RAW file's own manufacturer-embedded matrix is —
+    // using it noticeably closes the color gap for supported cameras
+    // versus falling back to a generic matrix.
+    params.use_camera_matrix = 1;
     params.output_bps = 8;
     // half_size does a crude 2x2-block average instead of real demosaicing.
     // That's a fine trade for speed on standard Bayer sensors, but Fujifilm
@@ -142,10 +250,12 @@ RawImage? decodeRawImage(String path, {bool halfSize = true}) {
     params.half_size = (halfSize && !isXTrans) ? 1 : 0;
     params.user_flip = -1;
 
+    onStage?.call(RawDecodeStage.processing);
     if (lib.libraw_dcraw_process(lr) != 0) {
       return null;
     }
 
+    onStage?.call(RawDecodeStage.extracting);
     final errPtr = malloc<Int>();
     try {
       final image = lib.libraw_dcraw_make_mem_image(lr, errPtr);

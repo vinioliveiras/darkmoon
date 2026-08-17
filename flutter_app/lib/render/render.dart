@@ -2,10 +2,12 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'ai_denoise.dart';
+import 'baseline_chroma.dart';
 import 'color_grading.dart';
 import 'color_mixer.dart';
 import 'dehaze.dart';
 import 'local_contrast.dart';
+import 'luminance.dart';
 import 'mask.dart';
 import 'render_params.dart';
 import 'sharpen.dart';
@@ -29,13 +31,14 @@ Uint8List renderRgb(
   int width,
   int height,
   Uint8List sourceRgb,
-  RenderParams params,
-) {
+  RenderParams params, {
+  void Function(RenderStage stage)? onStage,
+}) {
   final buffer = Float32List(sourceRgb.length);
   for (var i = 0; i < sourceRgb.length; i++) {
     buffer[i] = sourceRgb[i].toDouble();
   }
-  _applyAdjustmentSteps(buffer, width, height, params);
+  _applyAdjustmentSteps(buffer, width, height, params, onStage: onStage);
   return _toUint8(buffer);
 }
 
@@ -62,7 +65,17 @@ Uint8List renderRgbWithMasks(
   _applyAdjustmentSteps(buffer, width, height, globalParams);
 
   for (final mask in masks) {
-    if (!mask.enabled) {
+    // A mask with no adjustment values and an identity curve has nothing
+    // to paint — skipping it avoids a full-buffer copy, a full re-run of
+    // every adjustment step, and a per-pixel alpha computation for a
+    // layer that would blend in as a no-op anyway. This matters in
+    // practice: every enabled mask pays this cost on every render
+    // (including drags of the global sliders or a different mask
+    // entirely), so a photo with several masks — most of which are only
+    // there for their geometry/opacity while the user tweaks something
+    // else — would otherwise re-run the whole pipeline once per mask on
+    // every single slider tick.
+    if (!mask.enabled || (mask.values.isEmpty && mask.curves.isIdentity)) {
       continue;
     }
     final layerBuffer = Float32List.fromList(buffer);
@@ -70,7 +83,7 @@ Uint8List renderRgbWithMasks(
       layerBuffer,
       width,
       height,
-      RenderParams.fromValues(mask.values),
+      RenderParams.fromValues(mask.values, curves: mask.curves),
     );
     final alpha = computeMaskAlpha(
       mask,
@@ -99,15 +112,34 @@ Uint8List renderRgbWithMasks(
   return _toUint8(buffer);
 }
 
+/// The coarse stages [_applyAdjustmentSteps] moves through — used by
+/// `render_job.dart`'s progress-reporting entry point for the one-shot AI
+/// Denoise apply action, the slowest single step in the pipeline.
+enum RenderStage { denoising, adjusting, encoding }
+
 void _applyAdjustmentSteps(
   Float32List buffer,
   int width,
   int height,
-  RenderParams params,
-) {
+  RenderParams params, {
+  void Function(RenderStage stage)? onStage,
+}) {
   final pixelCount = width * height;
+  onStage?.call(RenderStage.denoising);
   _applyWhiteBalance(buffer, params.temperature, params.tint);
   _applyExposure(buffer, params.exposure);
+  // Denoise runs early — right after white balance/exposure establish the
+  // pixel values but before any tone shaping — so Highlights/Shadows/
+  // Whites/Blacks and Clarity/Texture don't push local contrast into noise
+  // this pass never got a chance to remove. Doing it after tone shaping
+  // (as an earlier version of this pipeline did) let a strong Shadows lift
+  // amplify shadow-region noise right back up, undoing much of the
+  // smoothing. Matches Lightroom's own ordering: its noise reduction is
+  // one of the first things applied to the raw sensor data, well before
+  // Basic panel tone adjustments.
+  applyBaselineChromaSmoothing(buffer, width, height);
+  applyAiDenoise(buffer, width, height, params.aiDenoise);
+  onStage?.call(RenderStage.adjusting);
   _applyBrightnessContrast(buffer, params.brightness, params.contrast);
   _applyHighlightsShadows(
     buffer,
@@ -125,9 +157,15 @@ void _applyAdjustmentSteps(
   );
   applyColorMixer(buffer, params.colorMixer);
   applyColorGrading(buffer, params.colorGrading);
-  applyAiDenoise(buffer, width, height, params.aiDenoise);
   applySharpen(buffer, width, height, params.sharpen);
-  applyLocalContrast(buffer, width, height, params.texture, 3);
+  applyLocalContrast(
+    buffer,
+    width,
+    height,
+    params.texture,
+    3,
+    noiseAware: true,
+  );
   applyLocalContrast(
     buffer,
     width,
@@ -150,25 +188,51 @@ Uint8List _toUint8(Float32List buffer) {
   return out;
 }
 
+/// How strongly a mired shift moves the red/blue gains — calibrated so the
+/// overall warm/cool strength at typical daylight deltas roughly matches
+/// the old Kelvin-linear model's feel around 5500K, while the mired scale
+/// (rather than raw Kelvin) makes larger deviations track Lightroom's
+/// actual Temp-slider curve instead of under- or over-correcting them.
+const double _miredGainPerUnit = 0.0013;
+
 void _applyWhiteBalance(
   Float32List img,
   double temperatureKelvin,
   double tint,
 ) {
-  final delta =
-      (temperatureKelvin - _temperatureNeutralKelvin) /
-      _temperatureNeutralKelvin *
-      100.0;
-  if (delta == 0 && tint == 0) {
+  if (temperatureKelvin == _temperatureNeutralKelvin && tint == 0) {
     return;
   }
-  final rGain = 1.0 + (delta / 100.0) * 0.3;
-  final bGain = 1.0 - (delta / 100.0) * 0.3;
-  final gGain = 1.0 - (tint / 100.0) * 0.2;
+  // Color temperature correction is approximately linear in "mired"
+  // (micro reciprocal degrees, 1e6/Kelvin) rather than in Kelvin itself —
+  // the same reason photographic warming/cooling filters are rated in
+  // mired shift, not Kelvin. A Kelvin-linear model (equal gain per Kelvin
+  // regardless of starting point) badly under- or overshoots for presets
+  // that set an absolute Temperature far from the 5500K reference, like a
+  // warm-toned preset dropping to ~4200K, because the same Kelvin delta is
+  // a much bigger perceptual/mired shift down in the warm end of the scale
+  // than up in the cool end.
+  // A lower Kelvin value (warmer preset) means a *larger* mired value
+  // relative to neutral (1/T grows as T shrinks), and warming an image
+  // means boosting red / cutting blue — so positive miredDelta (warm)
+  // should give a positive gain applied to red and a negative one to blue.
+  final miredDelta =
+      1.0e6 / temperatureKelvin - 1.0e6 / _temperatureNeutralKelvin;
+  final tempGain = (miredDelta * _miredGainPerUnit).clamp(-0.6, 0.6);
+  final rGain = 1.0 + tempGain;
+  final bGain = 1.0 - tempGain;
+
+  // Tint moves along the green/magenta axis: green shifts one way, red and
+  // blue shift the other, so overall luminance stays roughly put instead
+  // of drifting with the color shift (unlike nudging green alone).
+  final tintShift = tint / 100.0 * 0.2;
+  final gGain = 1.0 + tintShift;
+  final rbGain = 1.0 - tintShift * 0.5;
+
   for (var i = 0; i < img.length; i += 3) {
-    img[i] *= rGain;
+    img[i] *= rGain * rbGain;
     img[i + 1] *= gGain;
-    img[i + 2] *= bGain;
+    img[i + 2] *= bGain * rbGain;
   }
 }
 
@@ -210,7 +274,7 @@ void _applyHighlightsShadows(
     // Luminance is computed once from the input and reused for both
     // weights below, matching the Python function (it doesn't recompute
     // luminance after applying the shadows adjustment).
-    final luminance = (img[i] + img[i + 1] + img[i + 2]) / 3.0 / 255.0;
+    final luminance = luminanceRgb(img[i], img[i + 1], img[i + 2]) / 255.0;
     if (shadows != 0) {
       final weight = (1.0 - luminance * 2.0).clamp(0.0, 1.0);
       final add = weight * (shadows / 100.0) * 80.0;
@@ -239,7 +303,7 @@ void _applyWhitesBlacks(
   }
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
-    final luminance = (img[i] + img[i + 1] + img[i + 2]) / 3.0 / 255.0;
+    final luminance = luminanceRgb(img[i], img[i + 1], img[i + 2]) / 255.0;
     if (whites != 0) {
       final weight = ((luminance - 0.75) * 4.0).clamp(0.0, 1.0);
       final add = weight * (whites / 100.0) * 100.0;
@@ -264,7 +328,7 @@ void _applyVibrance(Float32List img, int pixelCount, double amount) {
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
     final r = img[i], g = img[i + 1], b = img[i + 2];
-    final luminance = (r + g + b) / 3.0;
+    final luminance = luminanceRgb(r, g, b);
     final maxC = math.max(r, math.max(g, b));
     final minC = math.min(r, math.min(g, b));
     final currentSaturation = (maxC - minC) / 255.0;
@@ -283,7 +347,7 @@ void _applySaturation(Float32List img, int pixelCount, double amount) {
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
     final r = img[i], g = img[i + 1], b = img[i + 2];
-    final luminance = (r + g + b) / 3.0;
+    final luminance = luminanceRgb(r, g, b);
     img[i] = luminance + (r - luminance) * factor;
     img[i + 1] = luminance + (g - luminance) * factor;
     img[i + 2] = luminance + (b - luminance) * factor;

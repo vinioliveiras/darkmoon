@@ -5,10 +5,11 @@ import 'package:flutter/material.dart';
 import '../render/mask.dart';
 import '../theme.dart';
 
-/// How opaque the shaded overlay is on the mask's full-effect side —
-/// tinted, not solid, so the image underneath stays visible while
-/// editing.
-const _shadeAlpha = 0.32;
+/// Default opacity for the shaded overlay on the mask's full-effect side —
+/// tinted, not solid, so the image underneath stays visible while editing.
+/// User-adjustable via [GradientMaskOverlay.overlayOpacity]; this is just
+/// its fallback.
+const _defaultShadeAlpha = 0.32;
 
 /// Draggable on-canvas handles for editing a Linear or Radial Gradient
 /// mask's geometry, drawn directly over the displayed image. Meant to be
@@ -31,6 +32,8 @@ class GradientMaskOverlay extends StatefulWidget {
     required this.mask,
     required this.onChanged,
     required this.onChangeEnd,
+    this.showOverlay = true,
+    this.overlayOpacity = _defaultShadeAlpha,
   });
 
   final Size containerSize;
@@ -39,6 +42,18 @@ class GradientMaskOverlay extends StatefulWidget {
   final MaskLayer mask;
   final ValueChanged<MaskLayer> onChanged;
   final ValueChanged<MaskLayer> onChangeEnd;
+
+  /// Whether the shaded coverage area + handles are drawn — when false,
+  /// drag handling still works (invisibly), so hiding the overlay doesn't
+  /// also disable editing.
+  final bool showOverlay;
+
+  /// How opaque the shaded coverage area is, 0..1 — user-adjustable so a
+  /// bright white wash doesn't obscure the photo while judging a mask's
+  /// effect. The boundary line/handles stay at full opacity regardless,
+  /// since they need to stay visible as UI chrome even when the shading
+  /// itself is dialed down.
+  final double overlayOpacity;
 
   @override
   State<GradientMaskOverlay> createState() => _GradientMaskOverlayState();
@@ -158,30 +173,38 @@ class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
       onPanStart: (details) => _handlePanStart(details, imageRect),
       onPanUpdate: (details) => _handlePanUpdate(details, imageRect),
       onPanEnd: (_) => _handlePanEnd(imageRect),
-      child: CustomPaint(
-        size: widget.containerSize,
-        painter: mask.type == MaskType.linearGradient
-            ? _LinearHandlesPainter(
-                start: _toLocal(
-                  mask.linear.startX,
-                  mask.linear.startY,
-                  imageRect,
-                ),
-                end: _toLocal(mask.linear.endX, mask.linear.endY, imageRect),
-              )
-            : _RadialHandlesPainter(
-                center: _toLocal(
-                  mask.radial.centerX,
-                  mask.radial.centerY,
-                  imageRect,
-                ),
-                radiusPx: mask.radial.radius * imageRect.width,
-                innerRadiusPx:
-                    mask.radial.radius *
-                    (1.0 - mask.radial.feather.clamp(0.0, 1.0)) *
-                    imageRect.width,
-              ),
-      ),
+      child: widget.showOverlay
+          ? CustomPaint(
+              size: widget.containerSize,
+              painter: mask.type == MaskType.linearGradient
+                  ? _LinearHandlesPainter(
+                      start: _toLocal(
+                        mask.linear.startX,
+                        mask.linear.startY,
+                        imageRect,
+                      ),
+                      end: _toLocal(
+                        mask.linear.endX,
+                        mask.linear.endY,
+                        imageRect,
+                      ),
+                      shadeAlpha: widget.overlayOpacity,
+                    )
+                  : _RadialHandlesPainter(
+                      center: _toLocal(
+                        mask.radial.centerX,
+                        mask.radial.centerY,
+                        imageRect,
+                      ),
+                      radiusPx: mask.radial.radius * imageRect.width,
+                      innerRadiusPx:
+                          mask.radial.radius *
+                          (1.0 - mask.radial.feather.clamp(0.0, 1.0)) *
+                          imageRect.width,
+                      shadeAlpha: widget.overlayOpacity,
+                    ),
+            )
+          : SizedBox.fromSize(size: widget.containerSize),
     );
   }
 }
@@ -199,10 +222,15 @@ void _drawHandle(Canvas canvas, Offset center) {
 }
 
 class _LinearHandlesPainter extends CustomPainter {
-  const _LinearHandlesPainter({required this.start, required this.end});
+  const _LinearHandlesPainter({
+    required this.start,
+    required this.end,
+    required this.shadeAlpha,
+  });
 
   final Offset start;
   final Offset end;
+  final double shadeAlpha;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -212,7 +240,7 @@ class _LinearHandlesPainter extends CustomPainter {
     // so what's shaded here is exactly what the render pipeline applies.
     final shaderPaint = Paint()
       ..shader = ui.Gradient.linear(start, end, [
-        DarkmoonColors.accent.withValues(alpha: _shadeAlpha),
+        DarkmoonColors.accent.withValues(alpha: shadeAlpha),
         DarkmoonColors.accent.withValues(alpha: 0),
       ]);
     canvas.drawRect(Offset.zero & size, shaderPaint);
@@ -242,7 +270,9 @@ class _LinearHandlesPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _LinearHandlesPainter oldDelegate) =>
-      oldDelegate.start != start || oldDelegate.end != end;
+      oldDelegate.start != start ||
+      oldDelegate.end != end ||
+      oldDelegate.shadeAlpha != shadeAlpha;
 }
 
 Paint _tickPaint() => Paint()
@@ -254,11 +284,13 @@ class _RadialHandlesPainter extends CustomPainter {
     required this.center,
     required this.radiusPx,
     required this.innerRadiusPx,
+    required this.shadeAlpha,
   });
 
   final Offset center;
   final double radiusPx;
   final double innerRadiusPx;
+  final double shadeAlpha;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -270,8 +302,8 @@ class _RadialHandlesPainter extends CustomPainter {
         center,
         radiusPx <= 0 ? 0.001 : radiusPx,
         [
-          DarkmoonColors.accent.withValues(alpha: _shadeAlpha),
-          DarkmoonColors.accent.withValues(alpha: _shadeAlpha),
+          DarkmoonColors.accent.withValues(alpha: shadeAlpha),
+          DarkmoonColors.accent.withValues(alpha: shadeAlpha),
           DarkmoonColors.accent.withValues(alpha: 0),
         ],
         [
@@ -308,5 +340,6 @@ class _RadialHandlesPainter extends CustomPainter {
   bool shouldRepaint(covariant _RadialHandlesPainter oldDelegate) =>
       oldDelegate.center != center ||
       oldDelegate.radiusPx != radiusPx ||
-      oldDelegate.innerRadiusPx != innerRadiusPx;
+      oldDelegate.innerRadiusPx != innerRadiusPx ||
+      oldDelegate.shadeAlpha != shadeAlpha;
 }

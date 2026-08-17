@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'tone_curve.dart';
+
 /// A linear gradient mask: full effect on the [startX]/[startY] side,
 /// fading linearly to zero by [endX]/[endY], staying zero beyond it.
 /// Points are normalized to the image's own 0..1 coordinate space (not
@@ -156,7 +158,9 @@ class MaskLayer {
     this.colorRange = const ColorRangeGeometry(),
     this.enabled = true,
     this.inverted = false,
+    this.opacity = 100,
     this.values = const {},
+    this.curves = identityPhotoCurves,
   });
 
   final String id;
@@ -168,7 +172,19 @@ class MaskLayer {
   final ColorRangeGeometry colorRange;
   final bool enabled;
   final bool inverted;
+
+  /// How strongly this mask's effect applies, 0..100 — scales the mask's
+  /// own per-pixel alpha uniformly before compositing (see
+  /// [computeMaskAlpha]), the same "Opacity" a Lightroom/Photoshop mask
+  /// layer has. 100 (the default) applies at full computed strength,
+  /// matching every mask's behavior before this field existed.
+  final double opacity;
   final Map<String, double> values;
+
+  /// This mask's own Tone Curve + Color Curve, independent of the global
+  /// [PhotoCurves] — mirrors how [values] holds the mask's own slider
+  /// values separately from the global `_paramValues`.
+  final PhotoCurves curves;
 
   MaskLayer copyWith({
     LinearGradientGeometry? linear,
@@ -177,7 +193,9 @@ class MaskLayer {
     ColorRangeGeometry? colorRange,
     bool? enabled,
     bool? inverted,
+    double? opacity,
     Map<String, double>? values,
+    PhotoCurves? curves,
   }) => MaskLayer(
     id: id,
     name: name,
@@ -188,7 +206,9 @@ class MaskLayer {
     colorRange: colorRange ?? this.colorRange,
     enabled: enabled ?? this.enabled,
     inverted: inverted ?? this.inverted,
+    opacity: opacity ?? this.opacity,
     values: values ?? this.values,
+    curves: curves ?? this.curves,
   );
 }
 
@@ -224,6 +244,12 @@ Float32List computeMaskAlpha(
   if (mask.inverted) {
     for (var i = 0; i < alpha.length; i++) {
       alpha[i] = 1.0 - alpha[i];
+    }
+  }
+  final opacityFactor = (mask.opacity / 100.0).clamp(0.0, 1.0);
+  if (opacityFactor != 1.0) {
+    for (var i = 0; i < alpha.length; i++) {
+      alpha[i] *= opacityFactor;
     }
   }
   return alpha;

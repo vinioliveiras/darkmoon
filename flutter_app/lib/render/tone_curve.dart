@@ -165,3 +165,41 @@ class PhotoCurves {
 }
 
 const identityPhotoCurves = PhotoCurves();
+
+/// Linearly interpolates each point in [target] toward the matching point
+/// in [base] by [amount] (0..1, 0 = stays at [base], 1 = lands exactly on
+/// [target]) — used for a preset's Amount slider (Lightroom-style,
+/// 0-150%). Falls back to [target] unchanged when the two curves don't
+/// have the same number of control points (a mismatched point count has
+/// no meaningful "halfway" shape, so partial application isn't
+/// well-defined — this only matters for curves imported from elsewhere,
+/// since presets created in-app always start from the same identity
+/// curve's point count).
+List<CurvePoint> lerpCurve(
+  List<CurvePoint> base,
+  List<CurvePoint> target,
+  double amount,
+) {
+  if (base.length != target.length) {
+    return target;
+  }
+  return [
+    for (var i = 0; i < target.length; i++)
+      CurvePoint(
+        base[i].x + (target[i].x - base[i].x) * amount,
+        base[i].y + (target[i].y - base[i].y) * amount,
+      ),
+  ];
+}
+
+/// [lerpCurve], applied to every curve in a [PhotoCurves].
+PhotoCurves lerpPhotoCurves(
+  PhotoCurves base,
+  PhotoCurves target,
+  double amount,
+) => PhotoCurves(
+  tone: lerpCurve(base.tone, target.tone, amount),
+  red: lerpCurve(base.red, target.red, amount),
+  green: lerpCurve(base.green, target.green, amount),
+  blue: lerpCurve(base.blue, target.blue, amount),
+);

@@ -1,17 +1,30 @@
-import 'package:flutter/material.dart';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
 
-/// Tap-to-sample surface for a Color Range mask — clicking anywhere on
-/// the image picks that point's color as the mask's reference color.
-/// Unlike the gradient/brush overlays this needs no on-canvas drawing of
-/// its own; the panel's color swatch and tolerance/feather sliders are
-/// enough to show the current selection.
-class ColorRangeOverlay extends StatelessWidget {
+import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
+
+import '../render/mask.dart';
+import '../theme.dart';
+
+/// Tap-to-sample surface for a Color Range mask — clicking anywhere on the
+/// image picks that point's color as the mask's reference color. Also
+/// shades exactly the pixels the mask currently covers, computed with the
+/// same [computeMaskAlpha]/[ColorRangeGeometry] math the render pipeline
+/// uses, so what's shaded here is exactly what the effect applies to — the
+/// same "what you see is what's masked" idea as the gradient masks'
+/// overlay, just per-pixel instead of a smooth gradient shape.
+class ColorRangeOverlay extends StatefulWidget {
   const ColorRangeOverlay({
     super.key,
     required this.containerSize,
     required this.imageWidth,
     required this.imageHeight,
     required this.onSample,
+    this.mask,
+    this.previewJpegBytes,
+    this.showOverlay = true,
+    this.overlayOpacity = 0.5,
   });
 
   final Size containerSize;
@@ -21,27 +34,143 @@ class ColorRangeOverlay extends StatelessWidget {
   /// Normalized (0..1) image coordinates of the tapped point.
   final void Function(double nx, double ny) onSample;
 
+  /// The mask being edited, and the currently-rendered preview (same JPEG
+  /// bytes the image itself displays) to sample its color-distance alpha
+  /// from — null while either isn't available yet, in which case no
+  /// shading is drawn, only tap-to-sample still works.
+  final MaskLayer? mask;
+  final Uint8List? previewJpegBytes;
+
+  /// Whether the shaded selection overlay should be drawn — a toggle the
+  /// user controls, same as the other mask overlays' visibility.
+  final bool showOverlay;
+
+  /// How opaque the shaded selection is, 0..1 — user-adjustable, same idea
+  /// as the other mask overlays' opacity control.
+  final double overlayOpacity;
+
+  @override
+  State<ColorRangeOverlay> createState() => _ColorRangeOverlayState();
+}
+
+class _ColorRangeOverlayState extends State<ColorRangeOverlay> {
+  ui.Image? _alphaImage;
+  int _requestId = 0;
+
+  // Cached decode of [widget.previewJpegBytes] — a mask's tolerance/
+  // feather sliders change (and so trigger a rebuild) far more often than
+  // the preview itself re-renders, so re-decoding the JPEG on every slider
+  // tick would be wasteful; only [computeMaskAlpha] (cheap) needs to rerun
+  // that often.
+  Uint8List? _decodedForBytes;
+  Float32List? _decodedRgb;
+  int _decodedWidth = 0;
+  int _decodedHeight = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduleRebuild();
+  }
+
+  @override
+  void didUpdateWidget(covariant ColorRangeOverlay oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.showOverlay &&
+        (!identical(widget.mask, oldWidget.mask) ||
+            !identical(widget.previewJpegBytes, oldWidget.previewJpegBytes) ||
+            widget.imageWidth != oldWidget.imageWidth ||
+            widget.imageHeight != oldWidget.imageHeight ||
+            widget.overlayOpacity != oldWidget.overlayOpacity)) {
+      _scheduleRebuild();
+    } else if (!widget.showOverlay && oldWidget.showOverlay) {
+      setState(() => _alphaImage = null);
+    }
+  }
+
+  @override
+  void dispose() {
+    _alphaImage?.dispose();
+    super.dispose();
+  }
+
+  void _scheduleRebuild() {
+    final mask = widget.mask;
+    final jpegBytes = widget.previewJpegBytes;
+    if (!widget.showOverlay || mask == null || jpegBytes == null) {
+      return;
+    }
+    if (!identical(_decodedForBytes, jpegBytes)) {
+      final decoded = img.decodeImage(jpegBytes);
+      if (decoded == null) {
+        return;
+      }
+      final rgbBytes = decoded.getBytes(order: img.ChannelOrder.rgb);
+      final rgb = Float32List(rgbBytes.length);
+      for (var i = 0; i < rgbBytes.length; i++) {
+        rgb[i] = rgbBytes[i].toDouble();
+      }
+      _decodedForBytes = jpegBytes;
+      _decodedRgb = rgb;
+      _decodedWidth = decoded.width;
+      _decodedHeight = decoded.height;
+    }
+    final rgb = _decodedRgb;
+    if (rgb == null) {
+      return;
+    }
+    final requestId = ++_requestId;
+    final width = _decodedWidth;
+    final height = _decodedHeight;
+    final alpha = computeMaskAlpha(
+      mask,
+      width,
+      height,
+      sourceForColorRange: rgb,
+    );
+    final pixels = Uint8List(width * height * 4);
+    final accentR = DarkmoonColors.accent.r.round();
+    final accentG = DarkmoonColors.accent.g.round();
+    final accentB = DarkmoonColors.accent.b.round();
+    for (var p = 0; p < alpha.length; p++) {
+      final i = p * 4;
+      pixels[i] = accentR;
+      pixels[i + 1] = accentG;
+      pixels[i + 2] = accentB;
+      pixels[i + 3] = (alpha[p].clamp(0.0, 1.0) * 255 * widget.overlayOpacity)
+          .round();
+    }
+    ui.decodeImageFromPixels(pixels, width, height, ui.PixelFormat.rgba8888, (
+      image,
+    ) {
+      if (!mounted || requestId != _requestId) {
+        image.dispose();
+        return;
+      }
+      final old = _alphaImage;
+      setState(() => _alphaImage = image);
+      old?.dispose();
+    });
+  }
+
   Rect _imageRect() {
-    final imageAspect = imageWidth / imageHeight;
-    final containerAspect = containerSize.width / containerSize.height;
+    final imageAspect = widget.imageWidth / widget.imageHeight;
+    final size = widget.containerSize;
+    final containerAspect = size.width / size.height;
     double w, h;
     if (containerAspect > imageAspect) {
-      h = containerSize.height;
+      h = size.height;
       w = h * imageAspect;
     } else {
-      w = containerSize.width;
+      w = size.width;
       h = w / imageAspect;
     }
-    return Rect.fromLTWH(
-      (containerSize.width - w) / 2,
-      (containerSize.height - h) / 2,
-      w,
-      h,
-    );
+    return Rect.fromLTWH((size.width - w) / 2, (size.height - h) / 2, w, h);
   }
 
   @override
   Widget build(BuildContext context) {
+    final image = widget.showOverlay ? _alphaImage : null;
     return MouseRegion(
       cursor: SystemMouseCursors.precise,
       child: GestureDetector(
@@ -52,9 +181,45 @@ class ColorRangeOverlay extends StatelessWidget {
               .clamp(0.0, 1.0);
           final ny = ((details.localPosition.dy - rect.top) / rect.height)
               .clamp(0.0, 1.0);
-          onSample(nx, ny);
+          widget.onSample(nx, ny);
         },
+        child: image == null
+            ? null
+            : CustomPaint(
+                size: widget.containerSize,
+                painter: _ColorRangeAlphaPainter(
+                  image: image,
+                  imageRect: _imageRect(),
+                ),
+              ),
       ),
     );
   }
+}
+
+/// Draws a precomputed alpha [image] (built by [_ColorRangeOverlayState],
+/// since [ui.decodeImageFromPixels] is async and [CustomPainter.paint]
+/// isn't) scaled up to fit [imageRect] — cheaper than recomputing at every
+/// zoom level, and the alpha field is smooth enough that upscaling doesn't
+/// visibly matter.
+class _ColorRangeAlphaPainter extends CustomPainter {
+  const _ColorRangeAlphaPainter({required this.image, required this.imageRect});
+
+  final ui.Image image;
+  final Rect imageRect;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    canvas.drawImageRect(
+      image,
+      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+      imageRect,
+      Paint()..filterQuality = FilterQuality.low,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ColorRangeAlphaPainter oldDelegate) =>
+      !identical(oldDelegate.image, image) ||
+      oldDelegate.imageRect != imageRect;
 }

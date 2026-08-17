@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../render/mask.dart';
 import '../theme.dart';
+import 'slider_row.dart';
 
 /// Sentinel id for the always-present base layer — the whole photo, i.e.
 /// the editor's existing global adjustments. Not a real [MaskLayer].
@@ -23,6 +24,12 @@ class MaskSelector extends StatelessWidget {
     required this.onToggleEnabled,
     required this.onToggleInverted,
     required this.onDelete,
+    required this.onOpacityChanged,
+    required this.onOpacityChangeEnd,
+    required this.overlayVisible,
+    required this.onToggleOverlayVisible,
+    required this.overlayOpacity,
+    required this.onOverlayOpacityChanged,
   });
 
   final List<MaskLayer> masks;
@@ -32,6 +39,23 @@ class MaskSelector extends StatelessWidget {
   final VoidCallback onToggleEnabled;
   final VoidCallback onToggleInverted;
   final VoidCallback onDelete;
+
+  /// How strongly the active mask's effect applies, 0..100 — see
+  /// [MaskLayer.opacity].
+  final ValueChanged<double> onOpacityChanged;
+  final ValueChanged<double> onOpacityChangeEnd;
+
+  /// Whether the active mask's on-canvas overlay (shaded coverage area,
+  /// handles) is currently shown.
+  final bool overlayVisible;
+  final VoidCallback onToggleOverlayVisible;
+
+  /// How opaque that on-canvas overlay's shading is (0..1), one value per
+  /// mask type — a display-only preference, independent of
+  /// [onOpacityChanged]'s real mask-effect strength. The active mask's own
+  /// type picks which entry is shown/edited.
+  final Map<MaskType, double> overlayOpacity;
+  final void Function(MaskType type, double value) onOverlayOpacityChanged;
 
   MaskLayer? get _active => activeId == imageMaskId
       ? null
@@ -63,6 +87,23 @@ class MaskSelector extends StatelessWidget {
               ),
             ),
             if (active != null) ...[
+              const SizedBox(width: 6),
+              SizedBox(
+                height: 34,
+                width: 34,
+                child: IconButton(
+                  tooltip: overlayVisible
+                      ? l10n.maskOverlayVisibleTooltip
+                      : l10n.maskOverlayHiddenTooltip,
+                  onPressed: onToggleOverlayVisible,
+                  icon: Icon(
+                    overlayVisible
+                        ? CupertinoIcons.eye
+                        : CupertinoIcons.eye_slash,
+                    size: 15,
+                  ),
+                ),
+              ),
               const SizedBox(width: 6),
               SizedBox(
                 height: 34,
@@ -107,6 +148,28 @@ class MaskSelector extends StatelessWidget {
               ),
             ],
           ),
+          const SizedBox(height: 8),
+          SliderRow(
+            name: l10n.maskOpacityLabel,
+            min: 0,
+            max: 100,
+            value: active.opacity,
+            decimals: 0,
+            defaultValue: 100,
+            onChanged: onOpacityChanged,
+            onChangeEnd: onOpacityChangeEnd,
+          ),
+          if (overlayVisible) ...[
+            const SizedBox(height: 8),
+            SliderRow(
+              name: l10n.maskOverlayOpacityLabel,
+              min: 0,
+              max: 100,
+              value: (overlayOpacity[active.type] ?? 0) * 100,
+              decimals: 0,
+              onChanged: (v) => onOverlayOpacityChanged(active.type, v / 100),
+            ),
+          ],
         ],
       ],
     );

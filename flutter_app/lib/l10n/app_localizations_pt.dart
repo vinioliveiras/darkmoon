@@ -76,6 +76,17 @@ class AppLocalizationsPt extends AppLocalizations {
   String get presetEmptyHint => 'Nenhum preset ainda';
 
   @override
+  String presetAmountDialogTitle(String name) {
+    return 'Aplicar \"$name\"';
+  }
+
+  @override
+  String get presetAmountLabel => 'Intensidade';
+
+  @override
+  String get presetAmountApplyButton => 'Aplicar';
+
+  @override
   String get presetRenameLabel => 'Renomear';
 
   @override
@@ -144,10 +155,49 @@ class AppLocalizationsPt extends AppLocalizations {
   String get beforeAfterButton => 'Antes/Depois (\\)';
 
   @override
+  String get cropButton => 'Cortar e Transformar';
+
+  @override
+  String get sectionCropTransform => 'CORTAR E TRANSFORMAR';
+
+  @override
+  String get cropAspectLabel => 'Proporção';
+
+  @override
+  String get transformStraightenLabel => 'Endireitar';
+
+  @override
+  String get transformVerticalLabel => 'Vertical';
+
+  @override
+  String get transformHorizontalLabel => 'Horizontal';
+
+  @override
+  String get transformAspectLabel => 'Proporção';
+
+  @override
+  String get transformScaleLabel => 'Escala';
+
+  @override
+  String get cropRotateLeftTooltip => 'Girar 90° à esquerda';
+
+  @override
+  String get cropRotateRightTooltip => 'Girar 90° à direita';
+
+  @override
+  String get cropDoneButton => 'OK';
+
+  @override
   String get fullQualityButton => 'Qualidade Máxima';
 
   @override
   String get fullQualityShortLabel => 'HD';
+
+  @override
+  String get undoButton => 'Desfazer';
+
+  @override
+  String get redoButton => 'Refazer';
 
   @override
   String get aiDenoiseButton => 'Redução de Ruído com IA';
@@ -158,6 +208,9 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get aiDenoiseDialogMessage =>
       'Reduz o ruído automaticamente, ajustado para manter os detalhes nítidos.';
+
+  @override
+  String get aiDenoiseLevelOff => 'Desligado';
 
   @override
   String get aiDenoiseLevelLight => 'Leve';
@@ -179,6 +232,18 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get exportingButton => 'Exportando...';
+
+  @override
+  String get exportStageDecoding => 'Decodificando RAW...';
+
+  @override
+  String get exportStageRendering => 'Aplicando edições...';
+
+  @override
+  String get exportStageEncoding => 'Codificando...';
+
+  @override
+  String get exportStageWriting => 'Salvando arquivo...';
 
   @override
   String get exportPhotoDialogTitle => 'Exportar foto';
@@ -230,6 +295,13 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get settingsAlwaysFullQualityLabel =>
       'Sempre abrir fotos em qualidade máxima';
+
+  @override
+  String get settingsRawOnlyLabel => 'Somente arquivos RAW';
+
+  @override
+  String get settingsRawOnlyHint =>
+      'Oculta JPEG, PNG e outros formatos comuns de imagem da biblioteca';
 
   @override
   String get settingsThumbnailThreadsLabel =>
@@ -324,7 +396,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get maskInvertLabel => 'Inverter';
 
   @override
+  String get maskOpacityLabel => 'Opacidade';
+
+  @override
+  String get maskOverlayOpacityLabel => 'Opacidade da Marcação';
+
+  @override
   String get maskDeleteTooltip => 'Excluir máscara';
+
+  @override
+  String get maskOverlayVisibleTooltip => 'Ocultar marcação da máscara';
+
+  @override
+  String get maskOverlayHiddenTooltip => 'Mostrar marcação da máscara';
 
   @override
   String get maskBrushSizeLabel => 'Tamanho';

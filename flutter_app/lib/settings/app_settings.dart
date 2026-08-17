@@ -23,6 +23,7 @@ class AppSettings {
     this.fastPreview = true,
     this.thumbnailConcurrency = 4,
     this.alwaysFullQuality = false,
+    this.rawOnly = false,
     this.libraryFolders = const [],
     this.recentFiles = const [],
     this.lastActiveFolder,
@@ -44,6 +45,10 @@ class AppSettings {
   /// per-session via the viewer's Full Quality toggle).
   final bool alwaysFullQuality;
 
+  /// When true, folders only show RAW files — common image formats (JPEG,
+  /// PNG, etc.) are filtered out of the library entirely.
+  final bool rawOnly;
+
   /// Folders added to the sidebar's folder tree via File > Add Folder,
   /// persisted so they're still there next launch. Order is insertion
   /// order (most-recently-added last).
@@ -63,6 +68,7 @@ class AppSettings {
     bool? fastPreview,
     int? thumbnailConcurrency,
     bool? alwaysFullQuality,
+    bool? rawOnly,
     List<String>? libraryFolders,
     List<String>? recentFiles,
     String? lastActiveFolder,
@@ -71,6 +77,7 @@ class AppSettings {
     fastPreview: fastPreview ?? this.fastPreview,
     thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
     alwaysFullQuality: alwaysFullQuality ?? this.alwaysFullQuality,
+    rawOnly: rawOnly ?? this.rawOnly,
     libraryFolders: libraryFolders ?? this.libraryFolders,
     recentFiles: recentFiles ?? this.recentFiles,
     lastActiveFolder: lastActiveFolder ?? this.lastActiveFolder,
@@ -113,6 +120,7 @@ Future<AppSettings> loadSettings() async {
           (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
       alwaysFullQuality:
           raw['alwaysFullQuality'] as bool? ?? defaults.alwaysFullQuality,
+      rawOnly: raw['rawOnly'] as bool? ?? defaults.rawOnly,
       libraryFolders:
           (raw['libraryFolders'] as List?)?.cast<String>() ??
           defaults.libraryFolders,
@@ -135,6 +143,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'fastPreview': settings.fastPreview,
       'thumbnailConcurrency': settings.thumbnailConcurrency,
       'alwaysFullQuality': settings.alwaysFullQuality,
+      'rawOnly': settings.rawOnly,
       'libraryFolders': settings.libraryFolders,
       'recentFiles': settings.recentFiles,
       'lastActiveFolder': settings.lastActiveFolder,

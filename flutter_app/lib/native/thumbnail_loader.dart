@@ -1,7 +1,9 @@
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
+import '../raw_files.dart' show isRawFile;
 import 'image_utils.dart';
 import 'libraw.dart';
 
@@ -27,7 +29,22 @@ const int thumbnailMaxDimension = 200;
 /// Designed to run via `compute()`: it's a top-level function taking/
 /// returning simple, isolate-transferable data, and the LibRaw call it
 /// wraps is blocking.
+///
+/// For a common (non-RAW) image format, decodes the file directly instead
+/// of going through LibRaw's embedded-thumbnail extraction — there's no
+/// separate camera-generated preview to pull out, the file itself already
+/// is the (much smaller than a RAW's demosaiced buffer) source image.
 Uint8List? decodeRawThumbnail(String path) {
+  if (!isRawFile(path)) {
+    final bytes = File(path).readAsBytesSync();
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) {
+      return null;
+    }
+    final resized = fitToMaxDimension(decoded, thumbnailMaxDimension);
+    final oriented = img.bakeOrientation(resized);
+    return Uint8List.fromList(img.encodeJpg(oriented, quality: 85));
+  }
   final jpegBytes = extractRawThumbnailJpeg(path);
   if (jpegBytes == null) {
     return null;
@@ -36,7 +53,13 @@ Uint8List? decodeRawThumbnail(String path) {
   if (decoded == null) {
     return null;
   }
-  final oriented = img.bakeOrientation(decoded);
-  final resized = fitToMaxDimension(oriented, thumbnailMaxDimension);
-  return Uint8List.fromList(img.encodeJpg(resized, quality: 85));
+  // Downscale before baking orientation, not after: bakeOrientation's
+  // rotate/flip is O(pixel count), and at full embedded-preview resolution
+  // that's often multiple megapixels for a 200px thumbnail. A 90/180/270
+  // rotation or flip doesn't care what resolution it runs at, so doing it
+  // on the already-downscaled image is the same visual result for a
+  // fraction of the pixels touched.
+  final resized = fitToMaxDimension(decoded, thumbnailMaxDimension);
+  final oriented = img.bakeOrientation(resized);
+  return Uint8List.fromList(img.encodeJpg(oriented, quality: 85));
 }

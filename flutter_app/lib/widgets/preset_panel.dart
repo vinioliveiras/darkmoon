@@ -102,6 +102,9 @@ class _PresetPanelState extends State<PresetPanel> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        // Header stays outside the scroll view below so the section title
+        // and action buttons remain fixed in place while a long preset
+        // list scrolls underneath them.
         Padding(
           padding: const EdgeInsets.fromLTRB(12, 12, 8, 6),
           child: Row(
@@ -159,32 +162,40 @@ class _PresetPanelState extends State<PresetPanel> {
             ],
           ),
         ),
-        if (widget.presets.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            child: Text(
-              l10n.presetEmptyHint,
-              style: const TextStyle(
-                color: DarkmoonColors.textMuted,
-                fontSize: 11,
-              ),
-            ),
-          )
-        else
-          for (final preset in widget.presets)
-            _PresetRow(
-              preset: preset,
-              enabled: widget.enabled,
-              applied: widget.isApplied(preset),
-              selectionMode: _selectionMode,
-              selected: _selectedIds.contains(preset.id),
-              onApply: () => widget.onApply(preset),
-              onLongPress: () => _enterSelectionMode(preset.id),
-              onToggleSelected: () => _toggleSelected(preset.id),
-              onRename: () => widget.onRename(preset),
-              onExport: () => widget.onExport(preset),
-              onDelete: () => widget.onDelete(preset),
-            ),
+        Expanded(
+          child: widget.presets.isEmpty
+              ? Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    l10n.presetEmptyHint,
+                    style: const TextStyle(
+                      color: DarkmoonColors.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                )
+              : SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (final preset in widget.presets)
+                        _PresetRow(
+                          preset: preset,
+                          enabled: widget.enabled,
+                          applied: widget.isApplied(preset),
+                          selectionMode: _selectionMode,
+                          selected: _selectedIds.contains(preset.id),
+                          onApply: () => widget.onApply(preset),
+                          onLongPress: () => _enterSelectionMode(preset.id),
+                          onToggleSelected: () => _toggleSelected(preset.id),
+                          onRename: () => widget.onRename(preset),
+                          onExport: () => widget.onExport(preset),
+                          onDelete: () => widget.onDelete(preset),
+                        ),
+                    ],
+                  ),
+                ),
+        ),
       ],
     );
   }

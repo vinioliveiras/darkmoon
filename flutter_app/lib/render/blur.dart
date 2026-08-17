@@ -179,3 +179,72 @@ Float32List minFilter(Float32List channel, int width, int height, int size) {
     radius,
   );
 }
+
+/// Blends [channel] with a Gaussian-blurred ([sigma]) version of itself,
+/// weighting each pixel's contribution from the blur by how far its local
+/// high-frequency energy stands out above the *surrounding* region's own
+/// typical high-frequency energy — a self-calibrating (Wiener-style soft
+/// threshold) estimate of that region's noise floor, rather than a single
+/// fixed magnitude cutoff picked by eye against one test photo. A pixel
+/// whose residual is about the size of its neighborhood's typical residual
+/// reads as noise and gets mostly smoothed; one well above it reads as a
+/// real edge/detail and mostly survives — and because the "typical
+/// residual" is measured locally, a photo's noisier shadows and cleaner
+/// highlights each get an amount of smoothing suited to what's actually
+/// there, and a low-ISO shot doesn't get over-smoothed by a threshold
+/// tuned against a noisier one.
+///
+/// [strength] (0..1) is the overall blend amount, same convention as every
+/// other adjustment; [noiseRadius] sets how wide a neighborhood the local
+/// noise floor is estimated over.
+Float32List adaptiveDenoiseChannel(
+  Float32List channel,
+  int width,
+  int height,
+  double sigma,
+  double strength, {
+  int noiseRadius = 6,
+}) {
+  if (strength <= 0) {
+    return Float32List.fromList(channel);
+  }
+  final blurred = gaussianBlurChannel(channel, width, height, sigma);
+  final n = channel.length;
+  final residualSq = Float32List(n);
+  for (var i = 0; i < n; i++) {
+    final r = channel[i] - blurred[i];
+    residualSq[i] = r * r;
+  }
+  final localNoiseVar = localVarianceFromResidualSq(
+    residualSq,
+    width,
+    height,
+    noiseRadius,
+  );
+  final out = Float32List(n);
+  for (var i = 0; i < n; i++) {
+    final r = channel[i] - blurred[i];
+    final rSq = r * r;
+    final edgeWeight = rSq / (rSq + localNoiseVar[i] + 1.0);
+    final denoised = blurred[i] + r * edgeWeight;
+    out[i] = channel[i] + (denoised - channel[i]) * strength;
+  }
+  return out;
+}
+
+/// Computes a per-pixel local variance estimate from a precomputed
+/// squared-residual buffer. This is the same local-variance estimator used by
+/// [adaptiveDenoiseChannel], extracted for reuse by Texture/Clarity/Sharpen.
+///
+/// [residualSq] is a single-channel [Float32List] of size `width * height`
+/// containing (pixel - blurred_pixel)^2. The function returns a buffer of the
+/// same size where each pixel is the mean of [residualSq] over a
+/// (2*[noiseRadius]+1) x (2*[noiseRadius]+1) box window around it.
+Float32List localVarianceFromResidualSq(
+  Float32List residualSq,
+  int width,
+  int height,
+  int noiseRadius,
+) {
+  return boxBlurMean(residualSq, width, height, noiseRadius);
+}

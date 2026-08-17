@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'blur.dart';
+import 'luminance.dart';
 
 /// One-shot, Lightroom/Photomator-style intelligent denoise pass — no
 /// sliders, no manual tuning: each level is pre-tuned to what testing found
@@ -9,22 +10,46 @@ import 'blur.dart';
 enum AiDenoiseLevel { light, medium, strong }
 
 class _AiDenoiseTuning {
-  const _AiDenoiseTuning({required this.strength, required this.edgeGuard});
+  const _AiDenoiseTuning({
+    required this.lumaSigma,
+    required this.lumaStrength,
+    required this.chromaSigma,
+    required this.chromaStrength,
+  });
 
-  /// 0..1 — how much of the smoothed result replaces the original.
-  final double strength;
+  /// Blur radius (px) the luminance noise floor is measured/smoothed over.
+  final double lumaSigma;
 
-  /// 0..1 — how strongly real edges are protected from smoothing; higher
-  /// keeps more detail/sharpness at the cost of leaving a little more noise
-  /// right at edges, which reads as more natural than a uniformly mushy
-  /// result.
-  final double edgeGuard;
+  /// 0..1 — overall luminance smoothing amount.
+  final double lumaStrength;
+
+  /// Blur radius (px) for chroma — wider than luma, since color noise is
+  /// lower-frequency and less detail-bearing than luminance grain.
+  final double chromaSigma;
+
+  /// 0..1 — overall chroma smoothing amount.
+  final double chromaStrength;
 }
 
 const _tuning = {
-  AiDenoiseLevel.light: _AiDenoiseTuning(strength: 0.35, edgeGuard: 0.88),
-  AiDenoiseLevel.medium: _AiDenoiseTuning(strength: 0.6, edgeGuard: 0.82),
-  AiDenoiseLevel.strong: _AiDenoiseTuning(strength: 0.85, edgeGuard: 0.7),
+  AiDenoiseLevel.light: _AiDenoiseTuning(
+    lumaSigma: 1.4,
+    lumaStrength: 0.35,
+    chromaSigma: 3.0,
+    chromaStrength: 0.45,
+  ),
+  AiDenoiseLevel.medium: _AiDenoiseTuning(
+    lumaSigma: 2.0,
+    lumaStrength: 0.55,
+    chromaSigma: 4.0,
+    chromaStrength: 0.65,
+  ),
+  AiDenoiseLevel.strong: _AiDenoiseTuning(
+    lumaSigma: 2.8,
+    lumaStrength: 0.7,
+    chromaSigma: 5.0,
+    chromaStrength: 0.8,
+  ),
 };
 
 class AiDenoiseParams {
@@ -50,11 +75,18 @@ class AiDenoiseParams {
 
 /// Applies the one-shot adaptive denoise pass to packed RGB data.
 ///
-/// Two local scales are combined: broad grain is reduced with a wider
-/// blur, while a narrower one stands in for untouched fine detail — blended
-/// back in more heavily near real edges (per [_AiDenoiseTuning.edgeGuard])
-/// so texture and sharpness survive. Deterministic and fully offline: no
-/// model to ship, safe to run in a `compute()` isolate.
+/// Luminance and chroma are denoised independently via
+/// [adaptiveDenoiseChannel]'s locally-calibrated noise-floor estimate,
+/// rather than a single fixed edge-magnitude cutoff — so smoothing scales
+/// with each region's own actual noise level instead of either flattening
+/// low-noise areas or leaving noisier ones under-treated. Deterministic and
+/// fully offline: no model to ship, safe to run in a `compute()` isolate.
+///
+/// Runs early in the render pipeline (right after white balance/exposure,
+/// before tone shaping) so later adjustments that lift shadows or push
+/// local contrast don't amplify noise this pass never got a chance to
+/// remove — matching how Lightroom's own noise reduction happens before
+/// tone/presence adjustments rather than after them.
 void applyAiDenoise(
   Float32List img,
   int width,
@@ -73,39 +105,47 @@ void applyAiDenoise(
   final chromaB = Float32List(pixelCount);
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
-    final l = (img[i] + img[i + 1] + img[i + 2]) / 3.0;
+    final l = luminanceRgb(img[i], img[i + 1], img[i + 2]);
     luminance[p] = l;
     chromaR[p] = img[i] - l;
     chromaG[p] = img[i + 1] - l;
     chromaB[p] = img[i + 2] - l;
   }
 
-  final broad = gaussianBlurChannel(luminance, width, height, 3);
-  final fine = gaussianBlurChannel(luminance, width, height, 1);
-  final chromaBlurR = gaussianBlurChannel(chromaR, width, height, 2.2);
-  final chromaBlurG = gaussianBlurChannel(chromaG, width, height, 2.2);
-  final chromaBlurB = gaussianBlurChannel(chromaB, width, height, 2.2);
+  final denoisedLuma = adaptiveDenoiseChannel(
+    luminance,
+    width,
+    height,
+    tuning.lumaSigma,
+    tuning.lumaStrength,
+  );
+  final denoisedR = adaptiveDenoiseChannel(
+    chromaR,
+    width,
+    height,
+    tuning.chromaSigma,
+    tuning.chromaStrength,
+  );
+  final denoisedG = adaptiveDenoiseChannel(
+    chromaG,
+    width,
+    height,
+    tuning.chromaSigma,
+    tuning.chromaStrength,
+  );
+  final denoisedB = adaptiveDenoiseChannel(
+    chromaB,
+    width,
+    height,
+    tuning.chromaSigma,
+    tuning.chromaStrength,
+  );
 
-  final strength = tuning.strength;
-  final cMix = strength * 0.75;
   for (var p = 0; p < pixelCount; p++) {
-    final edge = (luminance[p] - fine[p]).abs();
-    final edgeProtection = (edge / 22.0).clamp(0.0, 1.0);
-    final lMix = strength * (1.0 - edgeProtection * tuning.edgeGuard);
-    final l =
-        luminance[p] * (1 - lMix) + (broad[p] * 0.65 + fine[p] * 0.35) * lMix;
     final i = p * 3;
-    img[i] = (l + chromaR[p] * (1 - cMix) + chromaBlurR[p] * cMix).clamp(
-      0.0,
-      255.0,
-    );
-    img[i + 1] = (l + chromaG[p] * (1 - cMix) + chromaBlurG[p] * cMix).clamp(
-      0.0,
-      255.0,
-    );
-    img[i + 2] = (l + chromaB[p] * (1 - cMix) + chromaBlurB[p] * cMix).clamp(
-      0.0,
-      255.0,
-    );
+    final l = denoisedLuma[p];
+    img[i] = (l + denoisedR[p]).clamp(0.0, 255.0);
+    img[i + 1] = (l + denoisedG[p]).clamp(0.0, 255.0);
+    img[i + 2] = (l + denoisedB[p]).clamp(0.0, 255.0);
   }
 }
