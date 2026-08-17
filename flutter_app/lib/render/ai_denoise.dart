@@ -2,40 +2,70 @@ import 'dart:typed_data';
 
 import 'blur.dart';
 
-/// Lightroom/Photomator-style one-shot denoise control.
-///
-/// This first Windows implementation is deliberately self-contained: it uses
-/// a multi-scale, edge-aware residual pass so the feature works offline and
-/// without shipping a large ML runtime or model. The API is kept separate from
-/// the classic six-slider denoise pass so a native model backend can replace
-/// this implementation later without changing presets or the editor UI.
-class AiDenoiseParams {
-  const AiDenoiseParams({this.amount = 0});
+/// One-shot, Lightroom/Photomator-style intelligent denoise pass — no
+/// sliders, no manual tuning: each level is pre-tuned to what testing found
+/// to be a good noise/detail trade-off for that strength, so picking a
+/// level is the only decision the user makes.
+enum AiDenoiseLevel { light, medium, strong }
 
-  factory AiDenoiseParams.fromValues(Map<String, double> values) =>
-      AiDenoiseParams(amount: values['AiDenoiseAmount'] ?? 0);
+class _AiDenoiseTuning {
+  const _AiDenoiseTuning({required this.strength, required this.edgeGuard});
 
-  /// 0..100 — strength of the one-shot intelligent denoise pass.
-  final double amount;
+  /// 0..1 — how much of the smoothed result replaces the original.
+  final double strength;
 
-  bool get isIdentity => amount <= 0;
+  /// 0..1 — how strongly real edges are protected from smoothing; higher
+  /// keeps more detail/sharpness at the cost of leaving a little more noise
+  /// right at edges, which reads as more natural than a uniformly mushy
+  /// result.
+  final double edgeGuard;
 }
 
-/// Applies a one-shot adaptive denoise pass to packed RGB data.
+const _tuning = {
+  AiDenoiseLevel.light: _AiDenoiseTuning(strength: 0.35, edgeGuard: 0.88),
+  AiDenoiseLevel.medium: _AiDenoiseTuning(strength: 0.6, edgeGuard: 0.82),
+  AiDenoiseLevel.strong: _AiDenoiseTuning(strength: 0.85, edgeGuard: 0.7),
+};
+
+class AiDenoiseParams {
+  const AiDenoiseParams({this.level});
+
+  /// Builds params from the editor's flat `{sliderName: value}` map — a
+  /// single `'AiDenoiseLevel'` key (1/2/3 for Light/Medium/Strong), absent
+  /// or below 1 meaning off. Not a slider: applied as a one-shot action
+  /// from the toolbar's AI Denoise dialog rather than dragged.
+  factory AiDenoiseParams.fromValues(Map<String, double> values) {
+    final raw = values['AiDenoiseLevel'];
+    if (raw == null || raw < 1) {
+      return const AiDenoiseParams();
+    }
+    final index = raw.round().clamp(1, AiDenoiseLevel.values.length) - 1;
+    return AiDenoiseParams(level: AiDenoiseLevel.values[index]);
+  }
+
+  final AiDenoiseLevel? level;
+
+  bool get isIdentity => level == null;
+}
+
+/// Applies the one-shot adaptive denoise pass to packed RGB data.
 ///
-/// Two local scales are combined: broad grain is reduced with a larger blur,
-/// while the fine scale is retained around strong edges. This gives the
-/// Lightroom/Photomator-like result expected from a dedicated AI button while
-/// remaining deterministic, offline, and safe in a [compute] isolate.
+/// Two local scales are combined: broad grain is reduced with a wider
+/// blur, while a narrower one stands in for untouched fine detail — blended
+/// back in more heavily near real edges (per [_AiDenoiseTuning.edgeGuard])
+/// so texture and sharpness survive. Deterministic and fully offline: no
+/// model to ship, safe to run in a `compute()` isolate.
 void applyAiDenoise(
   Float32List img,
   int width,
   int height,
   AiDenoiseParams params,
 ) {
-  if (params.isIdentity || width < 3 || height < 3) {
+  final level = params.level;
+  if (level == null || width < 3 || height < 3) {
     return;
   }
+  final tuning = _tuning[level]!;
   final pixelCount = width * height;
   final luminance = Float32List(pixelCount);
   final chromaR = Float32List(pixelCount);
@@ -50,18 +80,18 @@ void applyAiDenoise(
     chromaB[p] = img[i + 2] - l;
   }
 
-  final strength = (params.amount / 100.0).clamp(0.0, 1.0);
   final broad = gaussianBlurChannel(luminance, width, height, 3);
   final fine = gaussianBlurChannel(luminance, width, height, 1);
-  final chromaBlurR = gaussianBlurChannel(chromaR, width, height, 2);
-  final chromaBlurG = gaussianBlurChannel(chromaG, width, height, 2);
-  final chromaBlurB = gaussianBlurChannel(chromaB, width, height, 2);
+  final chromaBlurR = gaussianBlurChannel(chromaR, width, height, 2.2);
+  final chromaBlurG = gaussianBlurChannel(chromaG, width, height, 2.2);
+  final chromaBlurB = gaussianBlurChannel(chromaB, width, height, 2.2);
 
+  final strength = tuning.strength;
+  final cMix = strength * 0.75;
   for (var p = 0; p < pixelCount; p++) {
     final edge = (luminance[p] - fine[p]).abs();
     final edgeProtection = (edge / 22.0).clamp(0.0, 1.0);
-    final lMix = strength * (1.0 - edgeProtection * 0.82);
-    final cMix = strength * 0.72;
+    final lMix = strength * (1.0 - edgeProtection * tuning.edgeGuard);
     final l =
         luminance[p] * (1 - lMix) + (broad[p] * 0.65 + fine[p] * 0.35) * lMix;
     final i = p * 3;

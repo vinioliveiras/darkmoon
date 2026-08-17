@@ -5,7 +5,6 @@ import 'ai_denoise.dart';
 import 'color_grading.dart';
 import 'color_mixer.dart';
 import 'dehaze.dart';
-import 'denoise.dart';
 import 'local_contrast.dart';
 import 'mask.dart';
 import 'render_params.dart';
@@ -127,7 +126,6 @@ void _applyAdjustmentSteps(
   applyColorMixer(buffer, params.colorMixer);
   applyColorGrading(buffer, params.colorGrading);
   applyAiDenoise(buffer, width, height, params.aiDenoise);
-  applyDenoise(buffer, width, height, params.denoise);
   applySharpen(buffer, width, height, params.sharpen);
   applyLocalContrast(buffer, width, height, params.texture, 3);
   applyLocalContrast(

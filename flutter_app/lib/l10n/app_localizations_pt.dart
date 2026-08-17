@@ -150,6 +150,31 @@ class AppLocalizationsPt extends AppLocalizations {
   String get fullQualityShortLabel => 'HD';
 
   @override
+  String get aiDenoiseButton => 'Redução de Ruído com IA';
+
+  @override
+  String get aiDenoiseDialogTitle => 'Redução de Ruído com IA';
+
+  @override
+  String get aiDenoiseDialogMessage =>
+      'Reduz o ruído automaticamente, ajustado para manter os detalhes nítidos.';
+
+  @override
+  String get aiDenoiseLevelLight => 'Leve';
+
+  @override
+  String get aiDenoiseLevelMedium => 'Médio';
+
+  @override
+  String get aiDenoiseLevelStrong => 'Forte';
+
+  @override
+  String get aiDenoiseApplyButton => 'Aplicar';
+
+  @override
+  String get aiDenoiseApplyingMessage => 'Aplicando redução de ruído com IA...';
+
+  @override
   String get exportPanelButton => 'Exportar';
 
   @override
@@ -399,27 +424,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get sliderSaturation => 'Saturação';
-
-  @override
-  String get sliderDenoiseLuminance => 'Luminância';
-
-  @override
-  String get sliderDenoiseLuminanceDetail => 'Detalhe de Luminância';
-
-  @override
-  String get sliderDenoiseLuminanceContrast => 'Contraste de Luminância';
-
-  @override
-  String get sliderDenoiseColor => 'Cor';
-
-  @override
-  String get sliderDenoiseColorDetail => 'Detalhe de Cor';
-
-  @override
-  String get sliderDenoiseColorSmoothness => 'Suavidade de Cor';
-
-  @override
-  String get sliderAiDenoiseAmount => 'Redução de Ruído com IA';
 
   @override
   String get sliderSharpenAmount => 'Quantidade';

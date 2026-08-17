@@ -25,6 +25,7 @@ import 'presets/preset_store.dart';
 import 'presets/preset_xmp.dart';
 import 'presets/preset_zip.dart';
 import 'raw_files.dart';
+import 'render/ai_denoise.dart';
 import 'render/histogram.dart';
 import 'render/mask.dart';
 import 'render/render_job.dart';
@@ -32,6 +33,7 @@ import 'render/render_params.dart';
 import 'render/tone_curve.dart';
 import 'settings/app_settings.dart';
 import 'theme.dart';
+import 'widgets/ai_denoise_dialog.dart';
 import 'widgets/brush_mask_overlay.dart';
 import 'widgets/color_range_overlay.dart';
 import 'widgets/color_wheel.dart';
@@ -79,8 +81,6 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderVibrance;
     case 'Saturation':
       return l10n.sliderSaturation;
-    case 'AiDenoiseAmount':
-      return l10n.sliderAiDenoiseAmount;
     case 'SharpenAmount':
       return l10n.sliderSharpenAmount;
     case 'SharpenRadius':
@@ -89,18 +89,6 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderSharpenDetail;
     case 'SharpenMasking':
       return l10n.sliderSharpenMasking;
-    case 'DenoiseLuminance':
-      return l10n.sliderDenoiseLuminance;
-    case 'DenoiseLuminanceDetail':
-      return l10n.sliderDenoiseLuminanceDetail;
-    case 'DenoiseLuminanceContrast':
-      return l10n.sliderDenoiseLuminanceContrast;
-    case 'DenoiseColor':
-      return l10n.sliderDenoiseColor;
-    case 'DenoiseColorDetail':
-      return l10n.sliderDenoiseColorDetail;
-    case 'DenoiseColorSmoothness':
-      return l10n.sliderDenoiseColorSmoothness;
     case 'VignetteAmount':
       return l10n.sliderVignetteAmount;
     case 'VignetteMidpoint':
@@ -215,17 +203,10 @@ const _sections = <String, List<_SliderSpec>>{
     ),
   ],
   'DETAIL': [
-    _SliderSpec('AiDenoiseAmount', 0, 100, 0),
     _SliderSpec('SharpenAmount', 0, 150, 0),
     _SliderSpec('SharpenRadius', 0.5, 3.0, 1.0, decimals: 1),
     _SliderSpec('SharpenDetail', 0, 100, 25),
     _SliderSpec('SharpenMasking', 0, 100, 0),
-    _SliderSpec('DenoiseLuminance', 0, 100, 0),
-    _SliderSpec('DenoiseLuminanceDetail', 0, 100, 50),
-    _SliderSpec('DenoiseLuminanceContrast', 0, 100, 0),
-    _SliderSpec('DenoiseColor', 0, 100, 0),
-    _SliderSpec('DenoiseColorDetail', 0, 100, 50),
-    _SliderSpec('DenoiseColorSmoothness', 0, 100, 50),
   ],
 };
 
@@ -313,6 +294,13 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _isRenderingSlow = false;
   Timer? _slowRenderTimer;
   static const _slowRenderThreshold = Duration(seconds: 3);
+
+  /// True while the one-shot AI Denoise pass (picked from its toolbar
+  /// dialog) is being computed and rendered — shown as its own loading
+  /// overlay message rather than the generic "applying adjustments" one,
+  /// since it's a deliberate action the user just confirmed rather than an
+  /// incidental slow render.
+  bool _isApplyingAiDenoise = false;
 
   /// Real progress for the loading overlay while a folder's thumbnails are
   /// being decoded — [_thumbnailsTotal] is 0 until the file list is known.
@@ -986,6 +974,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _loading = false;
       _isDecodingPhoto = false;
       _isRenderingSlow = false;
+      _isApplyingAiDenoise = false;
       _thumbnailsLoaded = 0;
       _thumbnailsTotal = 0;
     });
@@ -1220,6 +1209,39 @@ class _EditorScreenState extends State<EditorScreen> {
       // preview.
       unawaited(_renderPreview(selected.path));
     }
+  }
+
+  /// Opens the AI Denoise level dialog and, if the user confirms, bakes the
+  /// chosen level into the current photo's params and re-renders — a
+  /// deliberate one-shot action (with its own loading message) rather than
+  /// a slider the user drags, matching the Lightroom/Photomator "pick a
+  /// strength, apply" pattern.
+  Future<void> _openAiDenoiseDialog() async {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null) {
+      return;
+    }
+    final currentLevel = AiDenoiseParams.fromValues(_paramValues).level;
+    final level = await showDialog<AiDenoiseLevel>(
+      context: context,
+      builder: (_) => AiDenoiseDialog(initialLevel: currentLevel),
+    );
+    if (level == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _paramValues = {
+        ..._paramValues,
+        'AiDenoiseLevel': (AiDenoiseLevel.values.indexOf(level) + 1).toDouble(),
+      };
+      _isApplyingAiDenoise = true;
+    });
+    await _renderPreview(selected.path);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _isApplyingAiDenoise = false);
+    _scheduleCatalogSave();
   }
 
   void _resetZoom() {
@@ -1629,6 +1651,9 @@ class _EditorScreenState extends State<EditorScreen> {
     if (_isDecodingPhoto && selected != null) {
       return _LoadingInfo(message: l10n.loadingImage(selected.name));
     }
+    if (_isApplyingAiDenoise) {
+      return _LoadingInfo(message: l10n.aiDenoiseApplyingMessage);
+    }
     if (_isRenderingSlow) {
       return _LoadingInfo(message: l10n.applyingAdjustments);
     }
@@ -1796,6 +1821,12 @@ class _EditorScreenState extends State<EditorScreen> {
                       onToggleFullQuality: selected == null
                           ? null
                           : _toggleFullQuality,
+                      aiDenoiseActive:
+                          AiDenoiseParams.fromValues(_paramValues).level !=
+                          null,
+                      onOpenAiDenoise: selected == null
+                          ? null
+                          : _openAiDenoiseDialog,
                     ),
                     _Filmstrip(
                       files: _files,
@@ -2204,6 +2235,8 @@ class _ViewerToolbar extends StatelessWidget {
     required this.onToggleBeforeAfter,
     required this.fullQualityMode,
     required this.onToggleFullQuality,
+    required this.aiDenoiseActive,
+    required this.onOpenAiDenoise,
   });
 
   final String zoomLabel;
@@ -2215,6 +2248,11 @@ class _ViewerToolbar extends StatelessWidget {
   final VoidCallback? onToggleBeforeAfter;
   final bool fullQualityMode;
   final VoidCallback? onToggleFullQuality;
+
+  /// True when a level is already applied to the current photo — shown as
+  /// a filled/selected button, same convention as Before/After and HD.
+  final bool aiDenoiseActive;
+  final VoidCallback? onOpenAiDenoise;
 
   @override
   Widget build(BuildContext context) {
@@ -2267,6 +2305,17 @@ class _ViewerToolbar extends StatelessWidget {
                     ],
                   ),
                   const Spacer(),
+                  _ToolbarPill(
+                    children: [
+                      _ToolbarSegment(
+                        icon: CupertinoIcons.sparkles,
+                        selected: aiDenoiseActive,
+                        onTap: onOpenAiDenoise,
+                        tooltip: l10n.aiDenoiseButton,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 6),
                   _ToolbarPill(
                     children: [
                       _ToolbarSegment(

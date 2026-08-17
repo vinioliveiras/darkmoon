@@ -350,6 +350,54 @@ abstract class AppLocalizations {
   /// **'HD'**
   String get fullQualityShortLabel;
 
+  /// No description provided for @aiDenoiseButton.
+  ///
+  /// In en, this message translates to:
+  /// **'AI Denoise'**
+  String get aiDenoiseButton;
+
+  /// No description provided for @aiDenoiseDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'AI Denoise'**
+  String get aiDenoiseDialogTitle;
+
+  /// No description provided for @aiDenoiseDialogMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Reduce noise automatically, tuned to keep detail sharp.'**
+  String get aiDenoiseDialogMessage;
+
+  /// No description provided for @aiDenoiseLevelLight.
+  ///
+  /// In en, this message translates to:
+  /// **'Light'**
+  String get aiDenoiseLevelLight;
+
+  /// No description provided for @aiDenoiseLevelMedium.
+  ///
+  /// In en, this message translates to:
+  /// **'Medium'**
+  String get aiDenoiseLevelMedium;
+
+  /// No description provided for @aiDenoiseLevelStrong.
+  ///
+  /// In en, this message translates to:
+  /// **'Strong'**
+  String get aiDenoiseLevelStrong;
+
+  /// No description provided for @aiDenoiseApplyButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply'**
+  String get aiDenoiseApplyButton;
+
+  /// No description provided for @aiDenoiseApplyingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Applying AI Denoise...'**
+  String get aiDenoiseApplyingMessage;
+
   /// No description provided for @exportPanelButton.
   ///
   /// In en, this message translates to:
@@ -829,48 +877,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Saturation'**
   String get sliderSaturation;
-
-  /// No description provided for @sliderDenoiseLuminance.
-  ///
-  /// In en, this message translates to:
-  /// **'Luminance'**
-  String get sliderDenoiseLuminance;
-
-  /// No description provided for @sliderDenoiseLuminanceDetail.
-  ///
-  /// In en, this message translates to:
-  /// **'Luminance Detail'**
-  String get sliderDenoiseLuminanceDetail;
-
-  /// No description provided for @sliderDenoiseLuminanceContrast.
-  ///
-  /// In en, this message translates to:
-  /// **'Luminance Contrast'**
-  String get sliderDenoiseLuminanceContrast;
-
-  /// No description provided for @sliderDenoiseColor.
-  ///
-  /// In en, this message translates to:
-  /// **'Color'**
-  String get sliderDenoiseColor;
-
-  /// No description provided for @sliderDenoiseColorDetail.
-  ///
-  /// In en, this message translates to:
-  /// **'Color Detail'**
-  String get sliderDenoiseColorDetail;
-
-  /// No description provided for @sliderDenoiseColorSmoothness.
-  ///
-  /// In en, this message translates to:
-  /// **'Color Smoothness'**
-  String get sliderDenoiseColorSmoothness;
-
-  /// No description provided for @sliderAiDenoiseAmount.
-  ///
-  /// In en, this message translates to:
-  /// **'AI Denoise'**
-  String get sliderAiDenoiseAmount;
 
   /// No description provided for @sliderSharpenAmount.
   ///

@@ -22,8 +22,6 @@ void main() {
         'Dehaze': 5,
         'Vibrance': 30,
         'Saturation': -5,
-        'DenoiseLuminance': 40,
-        'DenoiseColor': 25,
         'MixerRedHue': 10,
         'MixerRedSaturation': -20,
         'MixerRedLuminance': 5,

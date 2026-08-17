@@ -67,6 +67,14 @@
   "beforeAfterButton": "Before/After",
   "fullQualityButton": "Full Quality",
   "fullQualityShortLabel": "HD",
+  "aiDenoiseButton": "AI Denoise",
+  "aiDenoiseDialogTitle": "AI Denoise",
+  "aiDenoiseDialogMessage": "Reduce noise automatically, tuned to keep detail sharp.",
+  "aiDenoiseLevelLight": "Light",
+  "aiDenoiseLevelMedium": "Medium",
+  "aiDenoiseLevelStrong": "Strong",
+  "aiDenoiseApplyButton": "Apply",
+  "aiDenoiseApplyingMessage": "Applying AI Denoise...",
 
   "exportPanelButton": "Export",
   "exportingButton": "Exporting...",
@@ -159,15 +167,6 @@
   "sliderDehaze": "Dehaze",
   "sliderVibrance": "Vibrance",
   "sliderSaturation": "Saturation",
-
-  "sliderDenoiseLuminance": "Luminance",
-  "sliderDenoiseLuminanceDetail": "Luminance Detail",
-  "sliderDenoiseLuminanceContrast": "Luminance Contrast",
-  "sliderDenoiseColor": "Color",
-  "sliderDenoiseColorDetail": "Color Detail",
-  "sliderDenoiseColorSmoothness": "Color Smoothness",
-
-  "sliderAiDenoiseAmount": "AI Denoise",
 
   "sliderSharpenAmount": "Amount",
   "sliderSharpenRadius": "Radius",

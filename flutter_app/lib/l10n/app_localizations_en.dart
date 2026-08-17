@@ -150,6 +150,31 @@ class AppLocalizationsEn extends AppLocalizations {
   String get fullQualityShortLabel => 'HD';
 
   @override
+  String get aiDenoiseButton => 'AI Denoise';
+
+  @override
+  String get aiDenoiseDialogTitle => 'AI Denoise';
+
+  @override
+  String get aiDenoiseDialogMessage =>
+      'Reduce noise automatically, tuned to keep detail sharp.';
+
+  @override
+  String get aiDenoiseLevelLight => 'Light';
+
+  @override
+  String get aiDenoiseLevelMedium => 'Medium';
+
+  @override
+  String get aiDenoiseLevelStrong => 'Strong';
+
+  @override
+  String get aiDenoiseApplyButton => 'Apply';
+
+  @override
+  String get aiDenoiseApplyingMessage => 'Applying AI Denoise...';
+
+  @override
   String get exportPanelButton => 'Export';
 
   @override
@@ -396,27 +421,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sliderSaturation => 'Saturation';
-
-  @override
-  String get sliderDenoiseLuminance => 'Luminance';
-
-  @override
-  String get sliderDenoiseLuminanceDetail => 'Luminance Detail';
-
-  @override
-  String get sliderDenoiseLuminanceContrast => 'Luminance Contrast';
-
-  @override
-  String get sliderDenoiseColor => 'Color';
-
-  @override
-  String get sliderDenoiseColorDetail => 'Color Detail';
-
-  @override
-  String get sliderDenoiseColorSmoothness => 'Color Smoothness';
-
-  @override
-  String get sliderAiDenoiseAmount => 'AI Denoise';
 
   @override
   String get sliderSharpenAmount => 'Amount';

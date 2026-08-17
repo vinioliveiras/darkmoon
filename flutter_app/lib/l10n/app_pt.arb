@@ -46,6 +46,14 @@
   "beforeAfterButton": "Antes/Depois (\\)",
   "fullQualityButton": "Qualidade Máxima",
   "fullQualityShortLabel": "HD",
+  "aiDenoiseButton": "Redução de Ruído com IA",
+  "aiDenoiseDialogTitle": "Redução de Ruído com IA",
+  "aiDenoiseDialogMessage": "Reduz o ruído automaticamente, ajustado para manter os detalhes nítidos.",
+  "aiDenoiseLevelLight": "Leve",
+  "aiDenoiseLevelMedium": "Médio",
+  "aiDenoiseLevelStrong": "Forte",
+  "aiDenoiseApplyButton": "Aplicar",
+  "aiDenoiseApplyingMessage": "Aplicando redução de ruído com IA...",
 
   "exportPanelButton": "Exportar",
   "exportingButton": "Exportando...",
@@ -132,15 +140,6 @@
   "sliderDehaze": "Remoção de Neblina",
   "sliderVibrance": "Vibração",
   "sliderSaturation": "Saturação",
-
-  "sliderDenoiseLuminance": "Luminância",
-  "sliderDenoiseLuminanceDetail": "Detalhe de Luminância",
-  "sliderDenoiseLuminanceContrast": "Contraste de Luminância",
-  "sliderDenoiseColor": "Cor",
-  "sliderDenoiseColorDetail": "Detalhe de Cor",
-  "sliderDenoiseColorSmoothness": "Suavidade de Cor",
-
-  "sliderAiDenoiseAmount": "Redução de Ruído com IA",
 
   "sliderSharpenAmount": "Quantidade",
   "sliderSharpenRadius": "Raio",
