@@ -416,6 +416,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sliderDenoiseColorSmoothness => 'Color Smoothness';
 
   @override
+  String get sliderAiDenoiseAmount => 'AI Denoise';
+
+  @override
   String get sliderSharpenAmount => 'Amount';
 
   @override

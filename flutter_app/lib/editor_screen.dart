@@ -79,6 +79,8 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderVibrance;
     case 'Saturation':
       return l10n.sliderSaturation;
+    case 'AiDenoiseAmount':
+      return l10n.sliderAiDenoiseAmount;
     case 'SharpenAmount':
       return l10n.sliderSharpenAmount;
     case 'SharpenRadius':
@@ -213,6 +215,7 @@ const _sections = <String, List<_SliderSpec>>{
     ),
   ],
   'DETAIL': [
+    _SliderSpec('AiDenoiseAmount', 0, 100, 0),
     _SliderSpec('SharpenAmount', 0, 150, 0),
     _SliderSpec('SharpenRadius', 0.5, 3.0, 1.0, decimals: 1),
     _SliderSpec('SharpenDetail', 0, 100, 25),

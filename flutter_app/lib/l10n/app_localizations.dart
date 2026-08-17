@@ -866,6 +866,12 @@ abstract class AppLocalizations {
   /// **'Color Smoothness'**
   String get sliderDenoiseColorSmoothness;
 
+  /// No description provided for @sliderAiDenoiseAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'AI Denoise'**
+  String get sliderAiDenoiseAmount;
+
   /// No description provided for @sliderSharpenAmount.
   ///
   /// In en, this message translates to:

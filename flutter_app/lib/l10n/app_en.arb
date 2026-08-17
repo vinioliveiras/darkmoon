@@ -167,6 +167,8 @@
   "sliderDenoiseColorDetail": "Color Detail",
   "sliderDenoiseColorSmoothness": "Color Smoothness",
 
+  "sliderAiDenoiseAmount": "AI Denoise",
+
   "sliderSharpenAmount": "Amount",
   "sliderSharpenRadius": "Radius",
   "sliderSharpenDetail": "Detail",
