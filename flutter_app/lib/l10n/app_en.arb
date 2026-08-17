@@ -107,6 +107,7 @@
   "exportQualityLabel": "Quality",
   "exportDialogConfirm": "Export",
   "cancelButton": "Cancel",
+  "hideButton": "Hide",
   "exportSuccessMessage": "Exported to {path}",
   "@exportSuccessMessage": {
     "placeholders": { "path": {"type": "String"} }
@@ -160,6 +161,8 @@
   "maskInvertLabel": "Invert",
   "maskOpacityLabel": "Opacity",
   "maskOverlayOpacityLabel": "Overlay Opacity",
+  "maskCloneTooltip": "Duplicate mask",
+  "maskCloneSuffix": "copy",
   "maskDeleteTooltip": "Delete mask",
   "maskOverlayVisibleTooltip": "Hide mask overlay",
   "maskOverlayHiddenTooltip": "Show mask overlay",

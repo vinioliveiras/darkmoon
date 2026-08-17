@@ -37,6 +37,8 @@ class SliderRow extends StatefulWidget {
     this.defaultValue,
     this.trackColors,
     this.valueSuffix = '',
+    this.labelFontSize = 12.5,
+    this.valueFontSize = 11.5,
   });
 
   final String name;
@@ -51,6 +53,13 @@ class SliderRow extends StatefulWidget {
   /// display only, never included in the editable text field so typing a
   /// new value stays a plain number.
   final String valueSuffix;
+
+  /// Font sizes for the name label and the value readout/edit field —
+  /// overridable for call sites that want a more prominent standalone
+  /// control (e.g. the toolbar's preset Amount slider) rather than the
+  /// default sizing tuned for many stacked rows in a narrow panel.
+  final double labelFontSize;
+  final double valueFontSize;
 
   /// Double-tapping the track resets to this value, if set — matches
   /// Lightroom's double-click-to-reset. Null (the default) disables the
@@ -194,12 +203,14 @@ class _SliderRowState extends State<SliderRow> {
             Expanded(
               child: Text(
                 widget.name,
-                style: Theme.of(context).textTheme.bodyMedium,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontSize: widget.labelFontSize,
+                ),
               ),
             ),
             SizedBox(
-              width: 52,
-              height: 18,
+              width: widget.valueFontSize > 12 ? 64 : 52,
+              height: widget.valueFontSize > 12 ? 22 : 18,
               child: _editing
                   ? _buildEditField()
                   : _buildValueLabel(displayValue),
@@ -241,9 +252,9 @@ class _SliderRowState extends State<SliderRow> {
           alignment: Alignment.centerRight,
           child: Text(
             '${displayValue.toStringAsFixed(widget.decimals)}${widget.valueSuffix}',
-            style: const TextStyle(
+            style: TextStyle(
               color: DarkmoonColors.textMuted,
-              fontSize: 11.5,
+              fontSize: widget.valueFontSize,
             ),
           ),
         ),
@@ -257,7 +268,10 @@ class _SliderRowState extends State<SliderRow> {
       focusNode: _focusNode,
       autofocus: true,
       textAlign: TextAlign.right,
-      style: const TextStyle(color: DarkmoonColors.textPrimary, fontSize: 11.5),
+      style: TextStyle(
+        color: DarkmoonColors.textPrimary,
+        fontSize: widget.valueFontSize,
+      ),
       decoration: const InputDecoration(
         isDense: true,
         contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),

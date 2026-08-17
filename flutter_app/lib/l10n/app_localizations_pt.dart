@@ -261,6 +261,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get cancelButton => 'Cancelar';
 
   @override
+  String get hideButton => 'Ocultar';
+
+  @override
   String exportSuccessMessage(String path) {
     return 'Exportado para $path';
   }
@@ -400,6 +403,12 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get maskOverlayOpacityLabel => 'Opacidade da Marcação';
+
+  @override
+  String get maskCloneTooltip => 'Duplicar máscara';
+
+  @override
+  String get maskCloneSuffix => 'cópia';
 
   @override
   String get maskDeleteTooltip => 'Excluir máscara';

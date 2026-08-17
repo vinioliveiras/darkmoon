@@ -566,6 +566,12 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get cancelButton;
 
+  /// No description provided for @hideButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Hide'**
+  String get hideButton;
+
   /// No description provided for @exportSuccessMessage.
   ///
   /// In en, this message translates to:
@@ -823,6 +829,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Overlay Opacity'**
   String get maskOverlayOpacityLabel;
+
+  /// No description provided for @maskCloneTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate mask'**
+  String get maskCloneTooltip;
+
+  /// No description provided for @maskCloneSuffix.
+  ///
+  /// In en, this message translates to:
+  /// **'copy'**
+  String get maskCloneSuffix;
 
   /// No description provided for @maskDeleteTooltip.
   ///

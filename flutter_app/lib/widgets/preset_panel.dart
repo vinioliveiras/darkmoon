@@ -303,11 +303,14 @@ class _PresetRow extends StatelessWidget {
               ),
               if (!selectionMode)
                 PopupMenuButton<VoidCallback>(
-                  icon: const Icon(
-                    CupertinoIcons.ellipsis,
-                    size: 14,
-                    color: DarkmoonColors.textMuted,
-                  ),
+                  // Uses `child` rather than `icon` — `icon` wraps in an
+                  // IconButton, which inherits the app's global
+                  // IconButtonTheme (a bordered, filled rounded-square
+                  // background meant for standalone toolbar buttons).
+                  // That reads as a distracting box around a menu trigger
+                  // that's supposed to sit quietly at the end of a list
+                  // row, so this stays a bare icon with no persistent
+                  // background.
                   padding: EdgeInsets.zero,
                   onSelected: (action) => action(),
                   itemBuilder: (context) => [
@@ -324,6 +327,14 @@ class _PresetRow extends StatelessWidget {
                       child: Text(l10n.presetDeleteLabel),
                     ),
                   ],
+                  child: const Padding(
+                    padding: EdgeInsets.all(6),
+                    child: Icon(
+                      CupertinoIcons.ellipsis,
+                      size: 14,
+                      color: DarkmoonColors.textMuted,
+                    ),
+                  ),
                 ),
             ],
           ),

@@ -26,6 +26,8 @@ class FolderSidebar extends StatelessWidget {
     required this.onSelect,
     required this.onRemove,
     required this.onSelectRecentFile,
+    required this.rawOnly,
+    required this.onRawOnlyChanged,
   });
 
   final List<String> roots;
@@ -35,6 +37,11 @@ class FolderSidebar extends StatelessWidget {
   final ValueChanged<String> onRemove;
   final ValueChanged<String> onSelectRecentFile;
 
+  /// Mirrors [AppSettings.rawOnly] — surfaced here too (not just in
+  /// Settings) since it directly affects what this browser shows.
+  final bool rawOnly;
+  final ValueChanged<bool> onRawOnlyChanged;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -42,44 +49,71 @@ class FolderSidebar extends StatelessWidget {
       return Container(
         width: 220,
         color: DarkmoonColors.panel,
-        padding: const EdgeInsets.all(12),
-        alignment: Alignment.topLeft,
-        child: Text(
-          l10n.noFolderOpen,
-          style: const TextStyle(color: DarkmoonColors.textMuted, fontSize: 11),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Align(
+                  alignment: Alignment.topLeft,
+                  child: Text(
+                    l10n.noFolderOpen,
+                    style: const TextStyle(
+                      color: DarkmoonColors.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            _RawOnlyCheckboxRow(value: rawOnly, onChanged: onRawOnlyChanged),
+          ],
         ),
       );
     }
     return Container(
       width: 220,
       color: DarkmoonColors.panel,
-      child: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (recentFiles.isNotEmpty) ...[
-              _SidebarSectionHeader(l10n.sidebarRecentFilesSection),
-              for (final path in recentFiles)
-                _RecentFileRow(
-                  key: ValueKey(path),
-                  path: path,
-                  onTap: () => onSelectRecentFile(path),
-                ),
-              const SizedBox(height: 8),
-            ],
-            _SidebarSectionHeader(l10n.sidebarFoldersSection),
-            for (final root in roots)
-              _FolderNode(
-                key: ValueKey(root),
-                path: root,
-                depth: 0,
-                selectedPath: selectedPath,
-                onSelect: onSelect,
-                onRemove: onRemove,
-                initiallyExpanded: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (recentFiles.isNotEmpty) ...[
+                    _SidebarSectionHeader(l10n.sidebarRecentFilesSection),
+                    for (final path in recentFiles)
+                      _RecentFileRow(
+                        key: ValueKey(path),
+                        path: path,
+                        onTap: () => onSelectRecentFile(path),
+                      ),
+                    const SizedBox(height: 8),
+                  ],
+                  _SidebarSectionHeader(l10n.sidebarFoldersSection),
+                  for (final root in roots)
+                    _FolderNode(
+                      key: ValueKey(root),
+                      path: root,
+                      depth: 0,
+                      selectedPath: selectedPath,
+                      onSelect: onSelect,
+                      onRemove: onRemove,
+                      initiallyExpanded: true,
+                    ),
+                ],
               ),
-          ],
-        ),
+            ),
+          ),
+          // Pinned below the scrollable folder tree rather than inside it
+          // — sits right at the boundary with the Presets section (its
+          // sibling below this widget in EditorScreen's layout), not
+          // scrolling away with a long folder list.
+          _RawOnlyCheckboxRow(value: rawOnly, onChanged: onRawOnlyChanged),
+        ],
       ),
     );
   }
@@ -95,6 +129,53 @@ class _SidebarSectionHeader extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
       child: Text(label, style: Theme.of(context).textTheme.labelSmall),
+    );
+  }
+}
+
+class _RawOnlyCheckboxRow extends StatelessWidget {
+  const _RawOnlyCheckboxRow({required this.value, required this.onChanged});
+
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: () => onChanged(!value),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 4, 12, 8),
+          child: Row(
+            children: [
+              SizedBox(
+                width: 18,
+                height: 18,
+                child: Checkbox(
+                  value: value,
+                  onChanged: (v) => onChanged(v ?? false),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  l10n.settingsRawOnlyLabel,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: DarkmoonColors.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }

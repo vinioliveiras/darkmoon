@@ -18,6 +18,7 @@ import 'catalog/thumbnail_cache.dart';
 import 'catalog/thumbnail_cache_dir.dart';
 import 'export/export_job.dart';
 import 'l10n/app_localizations.dart';
+import 'native/common_image_thumbnail.dart';
 import 'native/edit_source.dart';
 import 'native/libraw.dart'
     show RawDecodeStage, RawMetadata, extractRawMetadata;
@@ -166,6 +167,88 @@ class _SliderSpec {
   final String valueSuffix;
 }
 
+/// Storage key for a [_sections] category's on/off toggle — stored as a
+/// synthetic entry inside the same flat `_paramValues` map every other
+/// per-photo slider value already lives in (0 = disabled, absent/anything
+/// else = enabled), so it rides along for free with catalog persistence,
+/// undo/redo history, and photo switching without any separate storage.
+String _categoryEnabledKey(String category) => '_categoryEnabled_$category';
+
+/// Color Mixer/Color Grading channel and range names, and the shared
+/// Hue/Saturation/Luminance suffix set both use — kept alongside
+/// [_categoryEnabledKey] so [_withCategoriesApplied] can enumerate every
+/// `Mixer{channel}{suffix}`/`Grade{range}{suffix}` key it needs to reset
+/// without duplicating the widget-side lists ([_mixerChannels],
+/// [_GradeRangeTabs._ranges]) that drive their pickers.
+const _hslSuffixes = ['Hue', 'Saturation', 'Luminance'];
+const _gradeRanges = ['Shadows', 'Midtones', 'Highlights', 'Global'];
+
+/// Neutralizes every disabled category's contribution to [values] (a flat
+/// `{paramName: value}` map — either the global layer's `_paramValues` or
+/// one mask's own [MaskLayer.values]), swapping each disabled category's
+/// slider-backed keys for their defaults. Curve-based categories (Tone
+/// Curve/Color Curve) aren't handled here since they don't live in this
+/// map — see [_withCurveCategoriesApplied]. Used wherever the render
+/// pipeline reads param values, so a disabled category renders as if its
+/// sliders were never touched, while the underlying stored values stay
+/// untouched underneath (re-enabling restores them exactly).
+Map<String, double> _withCategoriesApplied(Map<String, double> values) {
+  bool disabled(String category) =>
+      (values[_categoryEnabledKey(category)] ?? 1) == 0;
+  final overrides = <String, double>{};
+  for (final entry in _sections.entries) {
+    if (disabled(entry.key)) {
+      for (final spec in entry.value) {
+        overrides[spec.name] = spec.defaultValue;
+      }
+    }
+  }
+  if (disabled('EFFECTS')) {
+    for (final spec in _vignetteSliders) {
+      overrides[spec.name] = spec.defaultValue;
+    }
+  }
+  if (disabled('COLOR MIXER')) {
+    for (final channel in _mixerChannels) {
+      for (final suffix in _hslSuffixes) {
+        overrides['Mixer$channel$suffix'] = 0.0;
+      }
+    }
+  }
+  if (disabled('COLOR GRADING')) {
+    for (final range in _gradeRanges) {
+      for (final suffix in _hslSuffixes) {
+        overrides['Grade$range$suffix'] = 0.0;
+      }
+    }
+  }
+  return overrides.isEmpty ? values : {...values, ...overrides};
+}
+
+/// The curve-category counterpart to [_withCategoriesApplied] — Tone
+/// Curve/Color Curve live in a [PhotoCurves], not the flat values map, so
+/// disabling them means resetting curve fields to identity rather than
+/// overriding map entries. [values] is whichever map ([MaskLayer.values]
+/// for a mask's own curves, or the global `_paramValues` for
+/// `_currentCurves`) carries that curve category's toggle flags.
+PhotoCurves _withCurveCategoriesApplied(
+  PhotoCurves curves,
+  Map<String, double> values,
+) {
+  var result = curves;
+  if ((values[_categoryEnabledKey('TONE CURVE')] ?? 1) == 0) {
+    result = result.copyWith(tone: identityToneCurve);
+  }
+  if ((values[_categoryEnabledKey('COLOR CURVE')] ?? 1) == 0) {
+    result = result.copyWith(
+      red: identityToneCurve,
+      green: identityToneCurve,
+      blue: identityToneCurve,
+    );
+  }
+  return result;
+}
+
 const _sections = <String, List<_SliderSpec>>{
   'WHITE BALANCE': [
     _SliderSpec(
@@ -279,6 +362,14 @@ class _EditorScreenState extends State<EditorScreen> {
   List<RawFile> _files = const [];
   int? _selectedIndex;
   bool _loading = false;
+
+  /// True while the user has dismissed the loading overlay via "Hide" but
+  /// the underlying operation is still running — the app stays usable
+  /// (browsing the filmstrip, opening another photo) while it finishes in
+  /// the background. Reset to false whenever a new loading state starts,
+  /// so the next long operation shows its overlay again rather than
+  /// staying permanently hidden from one dismissal.
+  bool _loadingOverlayHidden = false;
 
   /// Whichever folder is actually loaded into [_files] right now — may be
   /// one of [AppSettings.libraryFolders] or one of its subfolders. Used to
@@ -809,6 +900,24 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
+  /// Mirrors the Settings dialog's "RAW files only" toggle, exposed
+  /// directly in the folder browser too since it changes what that
+  /// browser shows — re-scans the open folder immediately so the effect
+  /// is visible right away rather than waiting for the next folder switch.
+  void _setRawOnly(bool value) {
+    final next = _settings.copyWith(rawOnly: value);
+    setState(() => _settings = next);
+    unawaited(saveSettings(next));
+    final folder = _currentFolder;
+    if (folder != null) {
+      final selectedIndex = _selectedIndex;
+      final selectPath = selectedIndex == null
+          ? null
+          : _files[selectedIndex].path;
+      unawaited(_loadFolder(folder, selectPath: selectPath));
+    }
+  }
+
   void _openSettings() {
     showDialog<void>(
       context: context,
@@ -1056,6 +1165,7 @@ class _EditorScreenState extends State<EditorScreen> {
   void _beginLoadingFiles() {
     setState(() {
       _loading = true;
+      _loadingOverlayHidden = false;
       _thumbnails.clear();
       _editSources.clear();
       _renderedPreviews.clear();
@@ -1087,6 +1197,14 @@ class _EditorScreenState extends State<EditorScreen> {
       _thumbnailsLoaded = 0;
       _thumbnailsTotal = 0;
     });
+  }
+
+  /// Dismisses the loading overlay without cancelling the underlying
+  /// operation — it keeps running in the background (progress still
+  /// updates the toolbar/panel state as usual), and the app stays
+  /// interactive in the meantime.
+  void _hideLoadingOverlay() {
+    setState(() => _loadingOverlayHidden = true);
   }
 
   /// Applies a freshly-listed folder/file set, kicks off thumbnail loading
@@ -1144,7 +1262,7 @@ class _EditorScreenState extends State<EditorScreen> {
         // miss, goes to a background isolate.
         var bytes = await cache?.lookup(file.path);
         final fromCache = bytes != null;
-        bytes ??= await compute(decodeRawThumbnail, file.path);
+        bytes ??= await _decodeThumbnail(file);
         if (!mounted || generation != _folderGeneration) {
           return;
         }
@@ -1164,6 +1282,32 @@ class _EditorScreenState extends State<EditorScreen> {
       List.generate(_settings.thumbnailConcurrency, (_) => worker()),
     );
     unawaited(cache?.flush());
+  }
+
+  /// A JPEG common image (by far the usual case for a "loading photos is
+  /// slow" complaint — camera/phone JPEGs run tens of megapixels) gets
+  /// [decodeJpegThumbnailFast]'s scaled dart:ui decode instead of
+  /// [decodeRawThumbnail]'s full-resolution `package:image` decode, which
+  /// dominated thumbnail generation time for large files. Falls back to
+  /// the general path on any failure (corrupt file, unusual JPEG variant
+  /// the hand-rolled EXIF reader trips on, etc.) rather than losing the
+  /// thumbnail outright. Every other case (RAW files, and the less
+  /// commonly huge PNG/TIFF/WebP/BMP formats) keeps using the
+  /// `compute()`-based background-isolate path unchanged.
+  Future<Uint8List?> _decodeThumbnail(RawFile file) async {
+    final ext = p.extension(file.path).toLowerCase();
+    if (!file.isRaw && (ext == '.jpg' || ext == '.jpeg')) {
+      try {
+        final bytes = await File(file.path).readAsBytes();
+        final fast = await decodeJpegThumbnailFast(bytes);
+        if (fast != null) {
+          return fast;
+        }
+      } catch (_) {
+        // Fall through to the general decode path below.
+      }
+    }
+    return compute(decodeRawThumbnail, file.path);
   }
 
   void _selectIndex(int index) {
@@ -1202,6 +1346,7 @@ class _EditorScreenState extends State<EditorScreen> {
     if (sources == null) {
       setState(() {
         _isDecodingPhoto = true;
+        _loadingOverlayHidden = false;
         _decodeStage = null;
       });
       sources = await decodeEditSourcesWithProgress(path, (stage) {
@@ -1279,8 +1424,11 @@ class _EditorScreenState extends State<EditorScreen> {
         : _cropTransform;
     final job = RenderJob(
       source: live ? sources.live : (fullQualitySource ?? sources.preview),
-      params: RenderParams.fromValues(_paramValues, curves: _currentCurves),
-      masks: _currentMasks,
+      params: RenderParams.fromValues(
+        _effectiveParamValues(),
+        curves: _effectiveCurves,
+      ),
+      masks: _effectiveMasks,
       cropTransform: cropTransform,
     );
     // The AI Denoise apply action wants real stage progress (it's the
@@ -1338,7 +1486,10 @@ class _EditorScreenState extends State<EditorScreen> {
   /// by [generation] the same way as _loadEditSourceAndRender.
   Future<void> _loadFullQualityAndRender(String path, int generation) async {
     if (!_fullQualitySources.containsKey(path)) {
-      setState(() => _isDecodingPhoto = true);
+      setState(() {
+        _isDecodingPhoto = true;
+        _loadingOverlayHidden = false;
+      });
       final source = await compute(decodeFullQualitySource, path);
       if (!mounted || generation != _folderGeneration) {
         return;
@@ -1408,6 +1559,7 @@ class _EditorScreenState extends State<EditorScreen> {
             : (AiDenoiseLevel.values.indexOf(level) + 1).toDouble(),
       };
       _isApplyingAiDenoise = true;
+      _loadingOverlayHidden = false;
       _aiDenoiseRenderStage = null;
     });
     await _renderPreview(
@@ -1477,6 +1629,31 @@ class _EditorScreenState extends State<EditorScreen> {
     _scheduleRender(live: false);
     _scheduleCatalogSave();
   }
+
+  /// [_paramValues] with every disabled category's sliders swapped for
+  /// their defaults — used wherever the render pipeline reads the global
+  /// layer's param values. See [_withCategoriesApplied]'s doc comment.
+  Map<String, double> _effectiveParamValues() =>
+      _withCategoriesApplied(_paramValues);
+
+  /// [_currentCurves] with Tone Curve/Color Curve reset to identity if
+  /// either is disabled — the curve equivalent of [_effectiveParamValues],
+  /// kept separate since curves don't live in the flat values map.
+  PhotoCurves get _effectiveCurves =>
+      _withCurveCategoriesApplied(_currentCurves, _paramValues);
+
+  /// [_currentMasks] with every mask's own disabled categories (values
+  /// *and* curves) neutralized the same way the global layer's are —
+  /// masks carry their own independent slider/curve values (see
+  /// [MaskLayer.values]/[MaskLayer.curves]), so each one needs its own
+  /// pass rather than sharing the global layer's toggle state.
+  List<MaskLayer> get _effectiveMasks => [
+    for (final mask in _currentMasks)
+      mask.copyWith(
+        values: _withCategoriesApplied(mask.values),
+        curves: _withCurveCategoriesApplied(mask.curves, mask.values),
+      ),
+  ];
 
   /// Crop/Transform state, derived from the same flat `_paramValues` map
   /// every other global adjustment lives in — deliberately global-only
@@ -1746,6 +1923,42 @@ class _EditorScreenState extends State<EditorScreen> {
     _scheduleCatalogSave();
   }
 
+  /// Duplicates the active mask into a new sibling layer — same geometry,
+  /// slider values and curves, a fresh id, and a "copy" suffix on the
+  /// name so it's distinguishable in the switch menu. The clone becomes
+  /// the active
+  /// layer, matching [_addMask]'s "select what you just created" feel.
+  void _cloneActiveMask() {
+    final l10n = AppLocalizations.of(context)!;
+    final source = _currentMasks
+        .where((m) => m.id == _activeMaskId)
+        .firstOrNull;
+    if (source == null) {
+      return;
+    }
+    final clone = MaskLayer(
+      id: 'mask_${DateTime.now().microsecondsSinceEpoch}',
+      name: '${source.name} ${l10n.maskCloneSuffix}',
+      type: source.type,
+      linear: source.linear,
+      radial: source.radial,
+      brush: source.brush,
+      colorRange: source.colorRange,
+      enabled: source.enabled,
+      inverted: source.inverted,
+      opacity: source.opacity,
+      values: Map<String, double>.from(source.values),
+      curves: source.curves,
+    );
+    setState(() {
+      _currentMasks = [..._currentMasks, clone];
+      _activeMaskId = clone.id;
+    });
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
   void _deleteActiveMask() {
     setState(() {
       _currentMasks = [
@@ -1994,14 +2207,18 @@ class _EditorScreenState extends State<EditorScreen> {
 
     setState(() {
       _exporting = true;
+      _loadingOverlayHidden = false;
       _exportStage = null;
     });
     final result = await exportPhotoWithProgress(
       ExportRequest(
         sourcePath: selected.path,
         destPath: destPath,
-        params: RenderParams.fromValues(_paramValues, curves: _currentCurves),
-        masks: _currentMasks,
+        params: RenderParams.fromValues(
+          _effectiveParamValues(),
+          curves: _effectiveCurves,
+        ),
+        masks: _effectiveMasks,
         format: options.format,
         quality: options.quality,
         cropTransform: _cropTransform,
@@ -2148,6 +2365,8 @@ class _EditorScreenState extends State<EditorScreen> {
                                     onRemove: _removeLibraryFolder,
                                     onSelectRecentFile: (path) =>
                                         unawaited(_selectRecentFile(path)),
+                                    rawOnly: _settings.rawOnly,
+                                    onRawOnlyChanged: _setRawOnly,
                                   ),
                                 ),
                                 Container(
@@ -2250,6 +2469,7 @@ class _EditorScreenState extends State<EditorScreen> {
                             onAddMask: _addMask,
                             onToggleMaskEnabled: _toggleActiveMaskEnabled,
                             onToggleMaskInverted: _toggleActiveMaskInverted,
+                            onCloneMask: _cloneActiveMask,
                             onDeleteMask: _deleteActiveMask,
                             onMaskOpacityChanged: _onActiveMaskOpacityChanged,
                             onMaskOpacityChangeEnd:
@@ -2334,9 +2554,13 @@ class _EditorScreenState extends State<EditorScreen> {
                 Builder(
                   builder: (context) {
                     final info = _overlayInfo(context, selected);
-                    return info == null
+                    return info == null || _loadingOverlayHidden
                         ? const SizedBox.shrink()
-                        : _LoadingOverlay(info: info, onCancel: _cancelLoading);
+                        : _LoadingOverlay(
+                            info: info,
+                            onCancel: _cancelLoading,
+                            onHide: _hideLoadingOverlay,
+                          );
                   },
                 ),
               ],
@@ -2706,10 +2930,18 @@ class _LoadingInfo {
 /// real progress when [info.progress] is known, an indeterminate bar
 /// otherwise, plus a way to cancel out of whatever's running.
 class _LoadingOverlay extends StatelessWidget {
-  const _LoadingOverlay({required this.info, required this.onCancel});
+  const _LoadingOverlay({
+    required this.info,
+    required this.onCancel,
+    required this.onHide,
+  });
 
   final _LoadingInfo info;
   final VoidCallback onCancel;
+
+  /// Dismisses the overlay while letting the operation keep running in
+  /// the background.
+  final VoidCallback onHide;
 
   @override
   Widget build(BuildContext context) {
@@ -2763,12 +2995,22 @@ class _LoadingOverlay extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: TextButton(
-                  onPressed: onCancel,
-                  child: Text(l10n.cancelButton),
-                ),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextButton(
+                      onPressed: onCancel,
+                      child: Text(l10n.cancelButton),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextButton(
+                      onPressed: onHide,
+                      child: Text(l10n.hideButton),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -2843,26 +3085,24 @@ class _ViewerToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Container(
-      height: 44,
+      height: 56,
       color: DarkmoonColors.background,
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           // Lines up under the folder/preset sidebar above — holds the
           // preset Amount slider, right under the preset list it affects.
-          // SliderRow's natural height (label row + track) slightly
-          // exceeds this 44px toolbar, so it's scaled down to fit rather
-          // than changing the toolbar's height everywhere else that
-          // relies on it staying 44px (the filmstrip row alignment,
-          // mainly).
+          // A larger label/value size than SliderRow's other call sites,
+          // since this is a standalone toolbar control rather than one of
+          // many stacked panel rows — it can afford to be more readable.
           SizedBox(
             width: 220,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               child: FittedBox(
                 fit: BoxFit.scaleDown,
-                alignment: Alignment.centerLeft,
                 child: SizedBox(
-                  width: 196,
+                  width: 192,
                   child: SliderRow(
                     name: l10n.presetAmountLabel,
                     min: 0,
@@ -2871,6 +3111,8 @@ class _ViewerToolbar extends StatelessWidget {
                     decimals: 0,
                     valueSuffix: '%',
                     defaultValue: 100,
+                    labelFontSize: 13,
+                    valueFontSize: 13,
                     onChanged: onPresetAmountChanged,
                   ),
                 ),
@@ -3365,11 +3607,22 @@ class _SectionHeader extends StatelessWidget {
     required this.label,
     required this.collapsed,
     required this.onTap,
+    this.enabled,
+    this.onEnabledChanged,
   });
 
   final String label;
   final bool collapsed;
   final VoidCallback onTap;
+
+  /// When non-null (only for the sections in [_sections], which map
+  /// straight onto sliders — Tone Curve/Color Mixer/etc. have their own
+  /// editors and aren't covered), shows a switch that turns off this
+  /// whole category's contribution to the render without discarding its
+  /// slider values, so the user can A/B a category the way a solo/mute
+  /// button works in an audio mixer.
+  final bool? enabled;
+  final ValueChanged<bool>? onEnabledChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -3395,9 +3648,22 @@ class _SectionHeader extends StatelessWidget {
                 Expanded(
                   child: Text(
                     label,
-                    style: Theme.of(context).textTheme.labelSmall,
+                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: enabled == false ? DarkmoonColors.textMuted : null,
+                    ),
                   ),
                 ),
+                if (enabled != null && onEnabledChanged != null) ...[
+                  Transform.scale(
+                    scale: 0.55,
+                    child: Switch(
+                      value: enabled!,
+                      onChanged: onEnabledChanged,
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                  ),
+                  const SizedBox(width: 2),
+                ],
                 Icon(
                   collapsed
                       ? CupertinoIcons.chevron_right
@@ -3436,6 +3702,7 @@ class _ControlsPanel extends StatefulWidget {
     required this.onAddMask,
     required this.onToggleMaskEnabled,
     required this.onToggleMaskInverted,
+    required this.onCloneMask,
     required this.onDeleteMask,
     required this.onMaskOpacityChanged,
     required this.onMaskOpacityChangeEnd,
@@ -3491,6 +3758,7 @@ class _ControlsPanel extends StatefulWidget {
   final ValueChanged<MaskType> onAddMask;
   final VoidCallback onToggleMaskEnabled;
   final VoidCallback onToggleMaskInverted;
+  final VoidCallback onCloneMask;
   final VoidCallback onDeleteMask;
   final ValueChanged<double> onMaskOpacityChanged;
   final ValueChanged<double> onMaskOpacityChangeEnd;
@@ -3601,6 +3869,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                   onAdd: widget.onAddMask,
                   onToggleEnabled: widget.onToggleMaskEnabled,
                   onToggleInverted: widget.onToggleMaskInverted,
+                  onClone: widget.onCloneMask,
                   onDelete: widget.onDeleteMask,
                   onOpacityChanged: widget.onMaskOpacityChanged,
                   onOpacityChangeEnd: widget.onMaskOpacityChangeEnd,
@@ -3725,10 +3994,21 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                 for (final entry in _sections.entries) ...[
                   const SizedBox(height: 10),
                   if (entry.key != _sections.keys.first) const Divider(),
+                  // `values`/`onChanged`/`onChangeEnd` already resolve to
+                  // either the global layer or the active mask's own (see
+                  // the comment below on Tone Curve/Color Mixer/etc.), so
+                  // the toggle works identically for both — no separate
+                  // mask-vs-global branch needed.
                   _SectionHeader(
                     label: _sectionLabel(l10n, entry.key),
                     collapsed: _collapsed.contains(entry.key),
                     onTap: () => _toggleSection(entry.key),
+                    enabled: (values[_categoryEnabledKey(entry.key)] ?? 1) != 0,
+                    onEnabledChanged: (v) {
+                      final key = _categoryEnabledKey(entry.key);
+                      onChanged(key, v ? 1 : 0);
+                      onChangeEnd(key, v ? 1 : 0);
+                    },
                   ),
                   if (!_collapsed.contains(entry.key))
                     for (final spec in entry.value)
@@ -3762,6 +4042,13 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                       label: l10n.sectionToneCurve,
                       collapsed: _collapsed.contains('TONE CURVE'),
                       onTap: () => _toggleSection('TONE CURVE'),
+                      enabled:
+                          (values[_categoryEnabledKey('TONE CURVE')] ?? 1) != 0,
+                      onEnabledChanged: (v) {
+                        final key = _categoryEnabledKey('TONE CURVE');
+                        onChanged(key, v ? 1 : 0);
+                        onChangeEnd(key, v ? 1 : 0);
+                      },
                     ),
                     if (!_collapsed.contains('TONE CURVE'))
                       Padding(
@@ -3777,6 +4064,14 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                       label: l10n.sectionColorCurve,
                       collapsed: _collapsed.contains('COLOR CURVE'),
                       onTap: () => _toggleSection('COLOR CURVE'),
+                      enabled:
+                          (values[_categoryEnabledKey('COLOR CURVE')] ?? 1) !=
+                          0,
+                      onEnabledChanged: (v) {
+                        final key = _categoryEnabledKey('COLOR CURVE');
+                        onChanged(key, v ? 1 : 0);
+                        onChangeEnd(key, v ? 1 : 0);
+                      },
                     ),
                     if (!_collapsed.contains('COLOR CURVE')) ...[
                       Padding(
@@ -3807,6 +4102,14 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                       label: l10n.sectionColorMixer,
                       collapsed: _collapsed.contains('COLOR MIXER'),
                       onTap: () => _toggleSection('COLOR MIXER'),
+                      enabled:
+                          (values[_categoryEnabledKey('COLOR MIXER')] ?? 1) !=
+                          0,
+                      onEnabledChanged: (v) {
+                        final key = _categoryEnabledKey('COLOR MIXER');
+                        onChanged(key, v ? 1 : 0);
+                        onChangeEnd(key, v ? 1 : 0);
+                      },
                     ),
                     if (!_collapsed.contains('COLOR MIXER')) ...[
                       Padding(
@@ -3852,6 +4155,14 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                       label: l10n.sectionColorGrading,
                       collapsed: _collapsed.contains('COLOR GRADING'),
                       onTap: () => _toggleSection('COLOR GRADING'),
+                      enabled:
+                          (values[_categoryEnabledKey('COLOR GRADING')] ?? 1) !=
+                          0,
+                      onEnabledChanged: (v) {
+                        final key = _categoryEnabledKey('COLOR GRADING');
+                        onChanged(key, v ? 1 : 0);
+                        onChangeEnd(key, v ? 1 : 0);
+                      },
                     ),
                     if (!_collapsed.contains('COLOR GRADING')) ...[
                       Padding(
@@ -3920,6 +4231,13 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                       label: l10n.sectionEffects,
                       collapsed: _collapsed.contains('EFFECTS'),
                       onTap: () => _toggleSection('EFFECTS'),
+                      enabled:
+                          (values[_categoryEnabledKey('EFFECTS')] ?? 1) != 0,
+                      onEnabledChanged: (v) {
+                        final key = _categoryEnabledKey('EFFECTS');
+                        onChanged(key, v ? 1 : 0);
+                        onChangeEnd(key, v ? 1 : 0);
+                      },
                     ),
                     if (!_collapsed.contains('EFFECTS'))
                       for (final spec in _vignetteSliders)

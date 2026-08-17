@@ -23,6 +23,7 @@ class MaskSelector extends StatelessWidget {
     required this.onAdd,
     required this.onToggleEnabled,
     required this.onToggleInverted,
+    required this.onClone,
     required this.onDelete,
     required this.onOpacityChanged,
     required this.onOpacityChangeEnd,
@@ -38,6 +39,10 @@ class MaskSelector extends StatelessWidget {
   final ValueChanged<MaskType> onAdd;
   final VoidCallback onToggleEnabled;
   final VoidCallback onToggleInverted;
+
+  /// Duplicates the active mask (geometry, values, curves — everything
+  /// but the id/name) into a new sibling layer, selected right after.
+  final VoidCallback onClone;
   final VoidCallback onDelete;
 
   /// How strongly the active mask's effect applies, 0..100 — see
@@ -86,35 +91,6 @@ class MaskSelector extends StatelessWidget {
                 onTap: () => _showSwitchMenu(context),
               ),
             ),
-            if (active != null) ...[
-              const SizedBox(width: 6),
-              SizedBox(
-                height: 34,
-                width: 34,
-                child: IconButton(
-                  tooltip: overlayVisible
-                      ? l10n.maskOverlayVisibleTooltip
-                      : l10n.maskOverlayHiddenTooltip,
-                  onPressed: onToggleOverlayVisible,
-                  icon: Icon(
-                    overlayVisible
-                        ? CupertinoIcons.eye
-                        : CupertinoIcons.eye_slash,
-                    size: 15,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 6),
-              SizedBox(
-                height: 34,
-                width: 34,
-                child: IconButton(
-                  tooltip: l10n.maskDeleteTooltip,
-                  onPressed: onDelete,
-                  icon: const Icon(CupertinoIcons.trash, size: 15),
-                ),
-              ),
-            ],
             const SizedBox(width: 6),
             SizedBox(
               height: 34,
@@ -128,6 +104,50 @@ class MaskSelector extends StatelessWidget {
           ],
         ),
         if (active != null) ...[
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 34,
+                  child: IconButton(
+                    tooltip: overlayVisible
+                        ? l10n.maskOverlayVisibleTooltip
+                        : l10n.maskOverlayHiddenTooltip,
+                    onPressed: onToggleOverlayVisible,
+                    icon: Icon(
+                      overlayVisible
+                          ? CupertinoIcons.eye
+                          : CupertinoIcons.eye_slash,
+                      size: 15,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: SizedBox(
+                  height: 34,
+                  child: IconButton(
+                    tooltip: l10n.maskCloneTooltip,
+                    onPressed: onClone,
+                    icon: const Icon(CupertinoIcons.square_on_square, size: 15),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: SizedBox(
+                  height: 34,
+                  child: IconButton(
+                    tooltip: l10n.maskDeleteTooltip,
+                    onPressed: onDelete,
+                    icon: const Icon(CupertinoIcons.trash, size: 15),
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 6),
           Row(
             children: [

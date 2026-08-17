@@ -261,6 +261,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cancelButton => 'Cancel';
 
   @override
+  String get hideButton => 'Hide';
+
+  @override
   String exportSuccessMessage(String path) {
     return 'Exported to $path';
   }
@@ -397,6 +400,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get maskOverlayOpacityLabel => 'Overlay Opacity';
+
+  @override
+  String get maskCloneTooltip => 'Duplicate mask';
+
+  @override
+  String get maskCloneSuffix => 'copy';
 
   @override
   String get maskDeleteTooltip => 'Delete mask';

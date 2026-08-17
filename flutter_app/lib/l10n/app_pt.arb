@@ -83,6 +83,7 @@
   "exportQualityLabel": "Qualidade",
   "exportDialogConfirm": "Exportar",
   "cancelButton": "Cancelar",
+  "hideButton": "Ocultar",
   "exportSuccessMessage": "Exportado para {path}",
   "exportFailureMessage": "Falha ao exportar: {error}",
 
@@ -130,6 +131,8 @@
   "maskInvertLabel": "Inverter",
   "maskOpacityLabel": "Opacidade",
   "maskOverlayOpacityLabel": "Opacidade da Marcação",
+  "maskCloneTooltip": "Duplicar máscara",
+  "maskCloneSuffix": "cópia",
   "maskDeleteTooltip": "Excluir máscara",
   "maskOverlayVisibleTooltip": "Ocultar marcação da máscara",
   "maskOverlayHiddenTooltip": "Mostrar marcação da máscara",
