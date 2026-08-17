@@ -487,6 +487,15 @@ class _EditorScreenState extends State<EditorScreen> {
   /// per-photo state, so it isn't persisted with the catalog.
   bool _maskOverlayVisible = true;
 
+  /// True for the duration of a slider drag on one of the active mask's
+  /// own values (Tone/Presence/etc., opacity, Color Range tolerance/
+  /// feather) — while true, the mask overlay is hidden regardless of
+  /// [_maskOverlayVisible] so the shading doesn't hide the very change
+  /// the user is dragging the slider to see. Doesn't apply to
+  /// dragging the overlay itself (gradient handles, brush strokes),
+  /// where hiding it would be counterproductive.
+  bool _isAdjustingMaskValue = false;
+
   /// How opaque that overlay's shading is (0..1), one independent value per
   /// mask type — same session-wide preference scope as
   /// [_maskOverlayVisible]. Each type's own default matches what actually
@@ -1818,6 +1827,9 @@ class _EditorScreenState extends State<EditorScreen> {
       _onParamChanged(name, value);
       return;
     }
+    if (!_isAdjustingMaskValue) {
+      setState(() => _isAdjustingMaskValue = true);
+    }
     _updateActiveMask(
       (mask) => mask.copyWith(values: {...mask.values, name: value}),
     );
@@ -1829,6 +1841,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _onParamChangeEnd(name, value);
       return;
     }
+    setState(() => _isAdjustingMaskValue = false);
     _updateActiveMask(
       (mask) => mask.copyWith(values: {...mask.values, name: value}),
     );
@@ -1912,11 +1925,15 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   void _onActiveMaskOpacityChanged(double value) {
+    if (!_isAdjustingMaskValue) {
+      setState(() => _isAdjustingMaskValue = true);
+    }
     _updateActiveMask((mask) => mask.copyWith(opacity: value));
     _scheduleRender(live: _settings.fastPreview);
   }
 
   void _onActiveMaskOpacityChangeEnd(double value) {
+    setState(() => _isAdjustingMaskValue = false);
     _updateActiveMask((mask) => mask.copyWith(opacity: value));
     _pushHistory();
     _scheduleRender(live: false);
@@ -2027,6 +2044,9 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   void _onColorRangeToleranceChanged(double value) {
+    if (!_isAdjustingMaskValue) {
+      setState(() => _isAdjustingMaskValue = true);
+    }
     _updateActiveMask(
       (m) => m.copyWith(colorRange: m.colorRange.copyWith(tolerance: value)),
     );
@@ -2034,6 +2054,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   void _onColorRangeToleranceChangeEnd(double value) {
+    setState(() => _isAdjustingMaskValue = false);
     _updateActiveMask(
       (m) => m.copyWith(colorRange: m.colorRange.copyWith(tolerance: value)),
     );
@@ -2043,6 +2064,9 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   void _onColorRangeFeatherChanged(double value) {
+    if (!_isAdjustingMaskValue) {
+      setState(() => _isAdjustingMaskValue = true);
+    }
     _updateActiveMask(
       (m) => m.copyWith(colorRange: m.colorRange.copyWith(feather: value)),
     );
@@ -2050,6 +2074,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   void _onColorRangeFeatherChangeEnd(double value) {
+    setState(() => _isAdjustingMaskValue = false);
     _updateActiveMask(
       (m) => m.copyWith(colorRange: m.colorRange.copyWith(feather: value)),
     );
@@ -2433,7 +2458,8 @@ class _EditorScreenState extends State<EditorScreen> {
                               brushHardness: _brushHardness,
                               brushErase: _brushErase,
                               onSampleColor: _onSampleMaskColor,
-                              maskOverlayVisible: _maskOverlayVisible,
+                              maskOverlayVisible:
+                                  _maskOverlayVisible && !_isAdjustingMaskValue,
                               maskOverlayOpacity: _maskOverlayOpacity,
                               cropOverlayActive:
                                   !_beforeAfterMode && _cropOverlayActive,
@@ -3165,6 +3191,11 @@ class _ViewerToolbar extends StatelessWidget {
                         tooltip: l10n.undoButton,
                       ),
                       _ToolbarSegment(
+                        icon: CupertinoIcons.arrow_2_circlepath,
+                        onTap: onReset,
+                        tooltip: l10n.resetTooltip,
+                      ),
+                      _ToolbarSegment(
                         icon: CupertinoIcons.arrow_uturn_right,
                         onTap: canRedo ? onRedo : null,
                         tooltip: l10n.redoButton,
@@ -3214,9 +3245,9 @@ class _ViewerToolbar extends StatelessWidget {
               ),
             ),
           ),
-          // Lines up under _ControlsPanel above — holds Export/Reset, so
-          // they stay reachable regardless of how far the panel above has
-          // been scrolled.
+          // Lines up under _ControlsPanel above — holds Export, so it
+          // stays reachable regardless of how far the panel above has
+          // been scrolled. Reset now lives between Undo/Redo instead.
           SizedBox(
             width: 280,
             child: Padding(
@@ -3232,7 +3263,7 @@ class _ViewerToolbar extends StatelessWidget {
                           padding: const EdgeInsets.symmetric(horizontal: 10),
                           side: const BorderSide(
                             color: DarkmoonColors.accent,
-                            width: 1.4,
+                            width: 1.0,
                           ),
                         ),
                         icon: exporting
@@ -3254,16 +3285,6 @@ class _ViewerToolbar extends StatelessWidget {
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  _ToolbarPill(
-                    children: [
-                      _ToolbarSegment(
-                        icon: CupertinoIcons.arrow_2_circlepath,
-                        onTap: onReset,
-                        tooltip: l10n.resetTooltip,
-                      ),
-                    ],
                   ),
                 ],
               ),
@@ -3602,6 +3623,12 @@ class _AspectChip extends StatelessWidget {
   }
 }
 
+/// Fixed width of the right-hand controls column, and the horizontal inset
+/// its scrolling content sits at. [_SectionHeader] needs both so it can
+/// break back out of that inset and paint its bar edge-to-edge.
+const _controlsPanelWidth = 280.0;
+const _controlsPanelInset = 16.0;
+
 class _SectionHeader extends StatelessWidget {
   const _SectionHeader({
     required this.label,
@@ -3630,48 +3657,78 @@ class _SectionHeader extends StatelessWidget {
       // Spacing lives here, outside the InkWell, so hovering/clicking the
       // gap above and below the header box doesn't register as a tap on
       // it — only the visible rectangle itself should react.
-      padding: const EdgeInsets.only(top: 14, bottom: 2),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          borderRadius: BorderRadius.circular(6),
-          onTap: onTap,
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: DarkmoonColors.surfaceRaised,
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: DarkmoonColors.border),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    label,
-                    style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                      color: enabled == false ? DarkmoonColors.textMuted : null,
-                    ),
+      padding: const EdgeInsets.only(top: 10, bottom: 2),
+      // The controls column insets its scrolling content by
+      // [_controlsPanelInset] on each side; an OverflowBox lets this bar
+      // grow back out to the full column width so it bleeds edge-to-edge
+      // (no rounded corners, no side border). The inset is then re-added
+      // as inner padding so the label/switch stay aligned with the
+      // sliders. Centering a full-width child in the narrower slot cancels
+      // the symmetric inset exactly. IntrinsicHeight caps the OverflowBox
+      // to the header's own height — without it the box inherits the
+      // Column's unbounded vertical constraint and blows up to infinity.
+      child: IntrinsicHeight(
+        child: OverflowBox(
+          maxWidth: _controlsPanelWidth,
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              onTap: onTap,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: _controlsPanelInset,
+                  vertical: 8,
+                ),
+                decoration: const BoxDecoration(
+                  color: DarkmoonColors.surfaceRaised,
+                  border: Border(
+                    top: BorderSide(color: DarkmoonColors.border),
+                    bottom: BorderSide(color: DarkmoonColors.border),
                   ),
                 ),
-                if (enabled != null && onEnabledChanged != null) ...[
-                  Transform.scale(
-                    scale: 0.55,
-                    child: Switch(
-                      value: enabled!,
-                      onChanged: onEnabledChanged,
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        label,
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                          color: enabled == false
+                              ? DarkmoonColors.textMuted
+                              : null,
+                        ),
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 2),
-                ],
-                Icon(
-                  collapsed
-                      ? CupertinoIcons.chevron_right
-                      : CupertinoIcons.chevron_down,
-                  size: 13,
-                  color: DarkmoonColors.textMuted,
+                    if (enabled != null && onEnabledChanged != null) ...[
+                      // SizedBox+FittedBox (not Transform.scale) so the
+                      // switch's *layout* box shrinks along with its paint —
+                      // Transform.scale only shrinks what's drawn, leaving the
+                      // full-size unscaled switch still reserving space in the
+                      // Row and forcing the whole header taller than it looks
+                      // like it should be.
+                      SizedBox(
+                        width: 26,
+                        height: 16,
+                        child: FittedBox(
+                          child: Switch(
+                            value: enabled!,
+                            onChanged: onEnabledChanged,
+                            materialTapTargetSize:
+                                MaterialTapTargetSize.shrinkWrap,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 4),
+                    ],
+                    Icon(
+                      collapsed
+                          ? CupertinoIcons.chevron_right
+                          : CupertinoIcons.chevron_down,
+                      size: 13,
+                      color: DarkmoonColors.textMuted,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
@@ -3839,425 +3896,490 @@ class _ControlsPanelState extends State<_ControlsPanel> {
     final isColorRangeActive = activeMask?.type == MaskType.colorRange;
     final l10n = AppLocalizations.of(context)!;
     return Container(
-      width: 280,
+      width: _controlsPanelWidth,
       color: DarkmoonColors.panel,
       child: IgnorePointer(
         ignoring: !enabled,
         child: Opacity(
           opacity: enabled ? 1 : 0.45,
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                if (widget.cropOverlayActive) ...[
-                  _CropTransformPanel(
-                    params: widget.cropTransform,
-                    onChanged: widget.onCropTransformChanged,
-                    onChangeEnd: widget.onCropTransformChangeEnd,
-                    aspectRatio: widget.cropAspectRatio,
-                    onAspectRatioChanged: widget.onCropAspectRatioChanged,
-                    onDone: widget.onToggleCropOverlay,
-                    onReset: widget.onResetCropTransform,
-                  ),
-                  const SizedBox(height: 12),
-                ],
-                MaskSelector(
-                  masks: widget.masks,
-                  activeId: widget.activeMaskId,
-                  onSelect: widget.onSelectMask,
-                  onAdd: widget.onAddMask,
-                  onToggleEnabled: widget.onToggleMaskEnabled,
-                  onToggleInverted: widget.onToggleMaskInverted,
-                  onClone: widget.onCloneMask,
-                  onDelete: widget.onDeleteMask,
-                  onOpacityChanged: widget.onMaskOpacityChanged,
-                  onOpacityChangeEnd: widget.onMaskOpacityChangeEnd,
-                  overlayVisible: widget.maskOverlayVisible,
-                  onToggleOverlayVisible: widget.onToggleMaskOverlayVisible,
-                  overlayOpacity: widget.maskOverlayOpacity,
-                  onOverlayOpacityChanged: widget.onMaskOverlayOpacityChanged,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Histogram + photo info are pinned at the very top of the
+              // column so they stay put as the first item even while a
+              // mask is being created/edited below — the mask UI and every
+              // adjustment section scroll independently beneath them.
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  _controlsPanelInset,
+                  14,
+                  _controlsPanelInset,
+                  8,
                 ),
-                if (isBrushActive) ...[
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: SliderRow(
-                      name: l10n.maskBrushSizeLabel,
-                      min: 0.01,
-                      max: 0.4,
-                      value: widget.brushRadius,
-                      decimals: 2,
-                      onChanged: widget.onBrushRadiusChanged,
-                      onChangeEnd: widget.onBrushRadiusChanged,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Text(
+                        l10n.histogramTitle,
+                        style: Theme.of(context).textTheme.labelSmall,
+                      ),
                     ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: SliderRow(
-                      name: l10n.maskBrushHardnessLabel,
-                      min: 0,
-                      max: 1,
-                      value: widget.brushHardness,
-                      decimals: 2,
-                      onChanged: widget.onBrushHardnessChanged,
-                      onChangeEnd: widget.onBrushHardnessChanged,
-                    ),
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          l10n.maskBrushEraseLabel,
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                      Switch(
-                        value: widget.brushErase,
-                        onChanged: (_) => widget.onToggleBrushErase(),
-                      ),
-                      const SizedBox(width: 6),
-                      SizedBox(
-                        height: 32,
-                        width: 32,
-                        child: IconButton(
-                          tooltip: l10n.maskUndoStrokeTooltip,
-                          onPressed: widget.onUndoStroke,
-                          icon: const Icon(
-                            CupertinoIcons.arrow_uturn_left,
-                            size: 15,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-                if (isColorRangeActive) ...[
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Container(
-                        width: 32,
-                        height: 32,
-                        decoration: BoxDecoration(
-                          color: Color.fromARGB(
-                            255,
-                            activeMask!.colorRange.r.round().clamp(0, 255),
-                            activeMask.colorRange.g.round().clamp(0, 255),
-                            activeMask.colorRange.b.round().clamp(0, 255),
-                          ),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: DarkmoonColors.border),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          l10n.colorRangeHint,
-                          style: const TextStyle(
-                            color: DarkmoonColors.textMuted,
-                            fontSize: 11,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: SliderRow(
-                      name: l10n.colorRangeToleranceLabel,
-                      min: 0,
-                      max: 100,
-                      value: activeMask.colorRange.tolerance,
-                      decimals: 0,
-                      onChanged: widget.onColorRangeToleranceChanged,
-                      onChangeEnd: widget.onColorRangeToleranceChangeEnd,
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: SliderRow(
-                      name: l10n.colorRangeFeatherLabel,
-                      min: 0,
-                      max: 100,
-                      value: activeMask.colorRange.feather,
-                      decimals: 0,
-                      onChanged: widget.onColorRangeFeatherChanged,
-                      onChangeEnd: widget.onColorRangeFeatherChangeEnd,
-                    ),
-                  ),
-                ],
-                const SizedBox(height: 10),
-                HistogramView(histogram: histogram),
-                PhotoMetadataView(metadata: widget.metadata),
-                for (final entry in _sections.entries) ...[
-                  const SizedBox(height: 10),
-                  if (entry.key != _sections.keys.first) const Divider(),
-                  // `values`/`onChanged`/`onChangeEnd` already resolve to
-                  // either the global layer or the active mask's own (see
-                  // the comment below on Tone Curve/Color Mixer/etc.), so
-                  // the toggle works identically for both — no separate
-                  // mask-vs-global branch needed.
-                  _SectionHeader(
-                    label: _sectionLabel(l10n, entry.key),
-                    collapsed: _collapsed.contains(entry.key),
-                    onTap: () => _toggleSection(entry.key),
-                    enabled: (values[_categoryEnabledKey(entry.key)] ?? 1) != 0,
-                    onEnabledChanged: (v) {
-                      final key = _categoryEnabledKey(entry.key);
-                      onChanged(key, v ? 1 : 0);
-                      onChangeEnd(key, v ? 1 : 0);
-                    },
-                  ),
-                  if (!_collapsed.contains(entry.key))
-                    for (final spec in entry.value)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: SliderRow(
-                          name: _sliderLabel(l10n, spec.name),
-                          min: spec.min,
-                          max: spec.max,
-                          value: values[spec.name] ?? spec.defaultValue,
-                          decimals: spec.decimals,
-                          defaultValue: spec.defaultValue,
-                          trackColors: spec.gradientColors,
-                          valueSuffix: spec.valueSuffix,
-                          onChanged: (v) => onChanged(spec.name, v),
-                          onChangeEnd: (v) => onChangeEnd(spec.name, v),
-                        ),
-                      ),
-                  // Tone Curve/Color Curve/Color Mixer/Color Grading/
-                  // Effects are available for masks too — `curves`/
-                  // `onChanged`/`onChangeEnd` above already resolve to
-                  // either the global state or the active mask's own
-                  // (see _activeCurves/_onActiveChanged), so no extra
-                  // mask-vs-global branching is needed here. Placed after
-                  // Detail rather than interleaved with the _sections
-                  // loop, so Presence/Detail stay right after Tone, ahead
-                  // of the advanced color tools.
-                  if (entry.key == 'DETAIL') ...[
-                    const Divider(),
-                    _SectionHeader(
-                      label: l10n.sectionToneCurve,
-                      collapsed: _collapsed.contains('TONE CURVE'),
-                      onTap: () => _toggleSection('TONE CURVE'),
-                      enabled:
-                          (values[_categoryEnabledKey('TONE CURVE')] ?? 1) != 0,
-                      onEnabledChanged: (v) {
-                        final key = _categoryEnabledKey('TONE CURVE');
-                        onChanged(key, v ? 1 : 0);
-                        onChangeEnd(key, v ? 1 : 0);
-                      },
-                    ),
-                    if (!_collapsed.contains('TONE CURVE'))
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: ToneCurveEditor(
-                          points: curves.tone,
-                          onChanged: onToneCurveChanged,
-                          onChangeEnd: onToneCurveChangeEnd,
-                        ),
-                      ),
-                    const Divider(),
-                    _SectionHeader(
-                      label: l10n.sectionColorCurve,
-                      collapsed: _collapsed.contains('COLOR CURVE'),
-                      onTap: () => _toggleSection('COLOR CURVE'),
-                      enabled:
-                          (values[_categoryEnabledKey('COLOR CURVE')] ?? 1) !=
-                          0,
-                      onEnabledChanged: (v) {
-                        final key = _categoryEnabledKey('COLOR CURVE');
-                        onChanged(key, v ? 1 : 0);
-                        onChangeEnd(key, v ? 1 : 0);
-                      },
-                    ),
-                    if (!_collapsed.contains('COLOR CURVE')) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 4, bottom: 8),
-                        child: _ColorChannelTabs(
-                          active: _activeColorChannel,
-                          onSelect: (channel) =>
-                              setState(() => _activeColorChannel = channel),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: ToneCurveEditor(
-                          key: ValueKey(_activeColorChannel),
-                          points: _channelPoints(curves, _activeColorChannel),
-                          lineColor: _channelColor(_activeColorChannel),
-                          onChanged: (points) =>
-                              onColorCurveChanged(_activeColorChannel, points),
-                          onChangeEnd: (points) => onColorCurveChangeEnd(
-                            _activeColorChannel,
-                            points,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const Divider(),
-                    _SectionHeader(
-                      label: l10n.sectionColorMixer,
-                      collapsed: _collapsed.contains('COLOR MIXER'),
-                      onTap: () => _toggleSection('COLOR MIXER'),
-                      enabled:
-                          (values[_categoryEnabledKey('COLOR MIXER')] ?? 1) !=
-                          0,
-                      onEnabledChanged: (v) {
-                        final key = _categoryEnabledKey('COLOR MIXER');
-                        onChanged(key, v ? 1 : 0);
-                        onChangeEnd(key, v ? 1 : 0);
-                      },
-                    ),
-                    if (!_collapsed.contains('COLOR MIXER')) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6, bottom: 10),
-                        child: _MixerChannelDots(
-                          active: _activeMixerChannel,
-                          onSelect: (channel) =>
-                              setState(() => _activeMixerChannel = channel),
-                        ),
-                      ),
-                      for (final suffix in const [
-                        'Hue',
-                        'Saturation',
-                        'Luminance',
-                      ])
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: SliderRow(
-                            name: _mixerSliderLabel(l10n, suffix),
-                            min: -100,
-                            max: 100,
-                            value:
-                                values['Mixer$_activeMixerChannel$suffix'] ?? 0,
-                            decimals: 0,
-                            defaultValue: 0,
-                            trackColors: [
-                              DarkmoonColors.textMuted,
-                              _mixerChannelColor(_activeMixerChannel),
-                            ],
-                            onChanged: (v) => onChanged(
-                              'Mixer$_activeMixerChannel$suffix',
-                              v,
-                            ),
-                            onChangeEnd: (v) => onChangeEnd(
-                              'Mixer$_activeMixerChannel$suffix',
-                              v,
-                            ),
-                          ),
-                        ),
-                    ],
-                    const Divider(),
-                    _SectionHeader(
-                      label: l10n.sectionColorGrading,
-                      collapsed: _collapsed.contains('COLOR GRADING'),
-                      onTap: () => _toggleSection('COLOR GRADING'),
-                      enabled:
-                          (values[_categoryEnabledKey('COLOR GRADING')] ?? 1) !=
-                          0,
-                      onEnabledChanged: (v) {
-                        final key = _categoryEnabledKey('COLOR GRADING');
-                        onChanged(key, v ? 1 : 0);
-                        onChangeEnd(key, v ? 1 : 0);
-                      },
-                    ),
-                    if (!_collapsed.contains('COLOR GRADING')) ...[
-                      Padding(
-                        padding: const EdgeInsets.only(top: 6, bottom: 10),
-                        child: _GradeRangeTabs(
-                          active: _activeGradeRange,
-                          onSelect: (range) =>
-                              setState(() => _activeGradeRange = range),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: Center(
-                          child: SizedBox(
-                            width: 160,
-                            child: ColorWheel(
-                              key: ValueKey(_activeGradeRange),
-                              hue: values['Grade${_activeGradeRange}Hue'] ?? 0,
-                              saturation:
-                                  values['Grade${_activeGradeRange}Saturation'] ??
-                                  0,
-                              onChanged: (hue, sat) {
-                                onChanged('Grade${_activeGradeRange}Hue', hue);
-                                onChanged(
-                                  'Grade${_activeGradeRange}Saturation',
-                                  sat,
-                                );
-                              },
-                              onChangeEnd: (hue, sat) {
-                                onChangeEnd(
-                                  'Grade${_activeGradeRange}Hue',
-                                  hue,
-                                );
-                                onChangeEnd(
-                                  'Grade${_activeGradeRange}Saturation',
-                                  sat,
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: SliderRow(
-                          name: l10n.mixerLuminanceLabel,
-                          min: -100,
-                          max: 100,
-                          value:
-                              values['Grade${_activeGradeRange}Luminance'] ?? 0,
-                          decimals: 0,
-                          defaultValue: 0,
-                          onChanged: (v) => onChanged(
-                            'Grade${_activeGradeRange}Luminance',
-                            v,
-                          ),
-                          onChangeEnd: (v) => onChangeEnd(
-                            'Grade${_activeGradeRange}Luminance',
-                            v,
-                          ),
-                        ),
-                      ),
-                    ],
-                    const Divider(),
-                    _SectionHeader(
-                      label: l10n.sectionEffects,
-                      collapsed: _collapsed.contains('EFFECTS'),
-                      onTap: () => _toggleSection('EFFECTS'),
-                      enabled:
-                          (values[_categoryEnabledKey('EFFECTS')] ?? 1) != 0,
-                      onEnabledChanged: (v) {
-                        final key = _categoryEnabledKey('EFFECTS');
-                        onChanged(key, v ? 1 : 0);
-                        onChangeEnd(key, v ? 1 : 0);
-                      },
-                    ),
-                    if (!_collapsed.contains('EFFECTS'))
-                      for (final spec in _vignetteSliders)
-                        Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: SliderRow(
-                            name: _sliderLabel(l10n, spec.name),
-                            min: spec.min,
-                            max: spec.max,
-                            value: values[spec.name] ?? spec.defaultValue,
-                            decimals: spec.decimals,
-                            defaultValue: spec.defaultValue,
-                            onChanged: (v) => onChanged(spec.name, v),
-                            onChangeEnd: (v) => onChangeEnd(spec.name, v),
-                          ),
-                        ),
+                    HistogramView(histogram: histogram),
+                    PhotoMetadataView(metadata: widget.metadata),
                   ],
-                ],
-              ],
-            ),
+                ),
+              ),
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(
+                    _controlsPanelInset,
+                    0,
+                    _controlsPanelInset,
+                    14,
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      if (widget.cropOverlayActive) ...[
+                        _CropTransformPanel(
+                          params: widget.cropTransform,
+                          onChanged: widget.onCropTransformChanged,
+                          onChangeEnd: widget.onCropTransformChangeEnd,
+                          aspectRatio: widget.cropAspectRatio,
+                          onAspectRatioChanged: widget.onCropAspectRatioChanged,
+                          onDone: widget.onToggleCropOverlay,
+                          onReset: widget.onResetCropTransform,
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                      MaskSelector(
+                        masks: widget.masks,
+                        activeId: widget.activeMaskId,
+                        onSelect: widget.onSelectMask,
+                        onAdd: widget.onAddMask,
+                        onToggleEnabled: widget.onToggleMaskEnabled,
+                        onToggleInverted: widget.onToggleMaskInverted,
+                        onClone: widget.onCloneMask,
+                        onDelete: widget.onDeleteMask,
+                        onOpacityChanged: widget.onMaskOpacityChanged,
+                        onOpacityChangeEnd: widget.onMaskOpacityChangeEnd,
+                        overlayVisible: widget.maskOverlayVisible,
+                        onToggleOverlayVisible:
+                            widget.onToggleMaskOverlayVisible,
+                        overlayOpacity: widget.maskOverlayOpacity,
+                        onOverlayOpacityChanged:
+                            widget.onMaskOverlayOpacityChanged,
+                      ),
+                      if (isBrushActive) ...[
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: SliderRow(
+                            name: l10n.maskBrushSizeLabel,
+                            min: 0.01,
+                            max: 0.4,
+                            value: widget.brushRadius,
+                            decimals: 2,
+                            onChanged: widget.onBrushRadiusChanged,
+                            onChangeEnd: widget.onBrushRadiusChanged,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: SliderRow(
+                            name: l10n.maskBrushHardnessLabel,
+                            min: 0,
+                            max: 1,
+                            value: widget.brushHardness,
+                            decimals: 2,
+                            onChanged: widget.onBrushHardnessChanged,
+                            onChangeEnd: widget.onBrushHardnessChanged,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                l10n.maskBrushEraseLabel,
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            ),
+                            Switch(
+                              value: widget.brushErase,
+                              onChanged: (_) => widget.onToggleBrushErase(),
+                            ),
+                            const SizedBox(width: 6),
+                            SizedBox(
+                              height: 32,
+                              width: 32,
+                              child: IconButton(
+                                tooltip: l10n.maskUndoStrokeTooltip,
+                                onPressed: widget.onUndoStroke,
+                                icon: const Icon(
+                                  CupertinoIcons.arrow_uturn_left,
+                                  size: 15,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                      if (isColorRangeActive) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Color.fromARGB(
+                                  255,
+                                  activeMask!.colorRange.r.round().clamp(
+                                    0,
+                                    255,
+                                  ),
+                                  activeMask.colorRange.g.round().clamp(0, 255),
+                                  activeMask.colorRange.b.round().clamp(0, 255),
+                                ),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: DarkmoonColors.border,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                l10n.colorRangeHint,
+                                style: const TextStyle(
+                                  color: DarkmoonColors.textMuted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: SliderRow(
+                            name: l10n.colorRangeToleranceLabel,
+                            min: 0,
+                            max: 100,
+                            value: activeMask.colorRange.tolerance,
+                            decimals: 0,
+                            onChanged: widget.onColorRangeToleranceChanged,
+                            onChangeEnd: widget.onColorRangeToleranceChangeEnd,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: SliderRow(
+                            name: l10n.colorRangeFeatherLabel,
+                            min: 0,
+                            max: 100,
+                            value: activeMask.colorRange.feather,
+                            decimals: 0,
+                            onChanged: widget.onColorRangeFeatherChanged,
+                            onChangeEnd: widget.onColorRangeFeatherChangeEnd,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 4),
+                      for (final entry in _sections.entries) ...[
+                        const SizedBox(height: 10),
+                        // `values`/`onChanged`/`onChangeEnd` already resolve to
+                        // either the global layer or the active mask's own (see
+                        // the comment below on Tone Curve/Color Mixer/etc.), so
+                        // the toggle works identically for both — no separate
+                        // mask-vs-global branch needed.
+                        _SectionHeader(
+                          label: _sectionLabel(l10n, entry.key),
+                          collapsed: _collapsed.contains(entry.key),
+                          onTap: () => _toggleSection(entry.key),
+                          enabled:
+                              (values[_categoryEnabledKey(entry.key)] ?? 1) !=
+                              0,
+                          onEnabledChanged: (v) {
+                            final key = _categoryEnabledKey(entry.key);
+                            onChanged(key, v ? 1 : 0);
+                            onChangeEnd(key, v ? 1 : 0);
+                          },
+                        ),
+                        if (!_collapsed.contains(entry.key))
+                          for (final spec in entry.value)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: SliderRow(
+                                name: _sliderLabel(l10n, spec.name),
+                                min: spec.min,
+                                max: spec.max,
+                                value: values[spec.name] ?? spec.defaultValue,
+                                decimals: spec.decimals,
+                                defaultValue: spec.defaultValue,
+                                trackColors: spec.gradientColors,
+                                valueSuffix: spec.valueSuffix,
+                                onChanged: (v) => onChanged(spec.name, v),
+                                onChangeEnd: (v) => onChangeEnd(spec.name, v),
+                              ),
+                            ),
+                        // Tone Curve/Color Curve/Color Mixer/Color Grading/
+                        // Effects are available for masks too — `curves`/
+                        // `onChanged`/`onChangeEnd` above already resolve to
+                        // either the global state or the active mask's own
+                        // (see _activeCurves/_onActiveChanged), so no extra
+                        // mask-vs-global branching is needed here. Placed after
+                        // Detail rather than interleaved with the _sections
+                        // loop, so Presence/Detail stay right after Tone, ahead
+                        // of the advanced color tools.
+                        if (entry.key == 'DETAIL') ...[
+                          _SectionHeader(
+                            label: l10n.sectionToneCurve,
+                            collapsed: _collapsed.contains('TONE CURVE'),
+                            onTap: () => _toggleSection('TONE CURVE'),
+                            enabled:
+                                (values[_categoryEnabledKey('TONE CURVE')] ??
+                                    1) !=
+                                0,
+                            onEnabledChanged: (v) {
+                              final key = _categoryEnabledKey('TONE CURVE');
+                              onChanged(key, v ? 1 : 0);
+                              onChangeEnd(key, v ? 1 : 0);
+                            },
+                          ),
+                          if (!_collapsed.contains('TONE CURVE'))
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: ToneCurveEditor(
+                                points: curves.tone,
+                                onChanged: onToneCurveChanged,
+                                onChangeEnd: onToneCurveChangeEnd,
+                              ),
+                            ),
+                          _SectionHeader(
+                            label: l10n.sectionColorCurve,
+                            collapsed: _collapsed.contains('COLOR CURVE'),
+                            onTap: () => _toggleSection('COLOR CURVE'),
+                            enabled:
+                                (values[_categoryEnabledKey('COLOR CURVE')] ??
+                                    1) !=
+                                0,
+                            onEnabledChanged: (v) {
+                              final key = _categoryEnabledKey('COLOR CURVE');
+                              onChanged(key, v ? 1 : 0);
+                              onChangeEnd(key, v ? 1 : 0);
+                            },
+                          ),
+                          if (!_collapsed.contains('COLOR CURVE')) ...[
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4, bottom: 8),
+                              child: _ColorChannelTabs(
+                                active: _activeColorChannel,
+                                onSelect: (channel) => setState(
+                                  () => _activeColorChannel = channel,
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: ToneCurveEditor(
+                                key: ValueKey(_activeColorChannel),
+                                points: _channelPoints(
+                                  curves,
+                                  _activeColorChannel,
+                                ),
+                                lineColor: _channelColor(_activeColorChannel),
+                                onChanged: (points) => onColorCurveChanged(
+                                  _activeColorChannel,
+                                  points,
+                                ),
+                                onChangeEnd: (points) => onColorCurveChangeEnd(
+                                  _activeColorChannel,
+                                  points,
+                                ),
+                              ),
+                            ),
+                          ],
+                          _SectionHeader(
+                            label: l10n.sectionColorMixer,
+                            collapsed: _collapsed.contains('COLOR MIXER'),
+                            onTap: () => _toggleSection('COLOR MIXER'),
+                            enabled:
+                                (values[_categoryEnabledKey('COLOR MIXER')] ??
+                                    1) !=
+                                0,
+                            onEnabledChanged: (v) {
+                              final key = _categoryEnabledKey('COLOR MIXER');
+                              onChanged(key, v ? 1 : 0);
+                              onChangeEnd(key, v ? 1 : 0);
+                            },
+                          ),
+                          if (!_collapsed.contains('COLOR MIXER')) ...[
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                top: 6,
+                                bottom: 10,
+                              ),
+                              child: _MixerChannelDots(
+                                active: _activeMixerChannel,
+                                onSelect: (channel) => setState(
+                                  () => _activeMixerChannel = channel,
+                                ),
+                              ),
+                            ),
+                            for (final suffix in const [
+                              'Hue',
+                              'Saturation',
+                              'Luminance',
+                            ])
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: SliderRow(
+                                  name: _mixerSliderLabel(l10n, suffix),
+                                  min: -100,
+                                  max: 100,
+                                  value:
+                                      values['Mixer$_activeMixerChannel$suffix'] ??
+                                      0,
+                                  decimals: 0,
+                                  defaultValue: 0,
+                                  trackColors: [
+                                    DarkmoonColors.textMuted,
+                                    _mixerChannelColor(_activeMixerChannel),
+                                  ],
+                                  onChanged: (v) => onChanged(
+                                    'Mixer$_activeMixerChannel$suffix',
+                                    v,
+                                  ),
+                                  onChangeEnd: (v) => onChangeEnd(
+                                    'Mixer$_activeMixerChannel$suffix',
+                                    v,
+                                  ),
+                                ),
+                              ),
+                          ],
+                          _SectionHeader(
+                            label: l10n.sectionColorGrading,
+                            collapsed: _collapsed.contains('COLOR GRADING'),
+                            onTap: () => _toggleSection('COLOR GRADING'),
+                            enabled:
+                                (values[_categoryEnabledKey('COLOR GRADING')] ??
+                                    1) !=
+                                0,
+                            onEnabledChanged: (v) {
+                              final key = _categoryEnabledKey('COLOR GRADING');
+                              onChanged(key, v ? 1 : 0);
+                              onChangeEnd(key, v ? 1 : 0);
+                            },
+                          ),
+                          if (!_collapsed.contains('COLOR GRADING')) ...[
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                top: 6,
+                                bottom: 10,
+                              ),
+                              child: _GradeRangeTabs(
+                                active: _activeGradeRange,
+                                onSelect: (range) =>
+                                    setState(() => _activeGradeRange = range),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 160,
+                                  child: ColorWheel(
+                                    key: ValueKey(_activeGradeRange),
+                                    hue:
+                                        values['Grade${_activeGradeRange}Hue'] ??
+                                        0,
+                                    saturation:
+                                        values['Grade${_activeGradeRange}Saturation'] ??
+                                        0,
+                                    onChanged: (hue, sat) {
+                                      onChanged(
+                                        'Grade${_activeGradeRange}Hue',
+                                        hue,
+                                      );
+                                      onChanged(
+                                        'Grade${_activeGradeRange}Saturation',
+                                        sat,
+                                      );
+                                    },
+                                    onChangeEnd: (hue, sat) {
+                                      onChangeEnd(
+                                        'Grade${_activeGradeRange}Hue',
+                                        hue,
+                                      );
+                                      onChangeEnd(
+                                        'Grade${_activeGradeRange}Saturation',
+                                        sat,
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: SliderRow(
+                                name: l10n.mixerLuminanceLabel,
+                                min: -100,
+                                max: 100,
+                                value:
+                                    values['Grade${_activeGradeRange}Luminance'] ??
+                                    0,
+                                decimals: 0,
+                                defaultValue: 0,
+                                onChanged: (v) => onChanged(
+                                  'Grade${_activeGradeRange}Luminance',
+                                  v,
+                                ),
+                                onChangeEnd: (v) => onChangeEnd(
+                                  'Grade${_activeGradeRange}Luminance',
+                                  v,
+                                ),
+                              ),
+                            ),
+                          ],
+                          _SectionHeader(
+                            label: l10n.sectionEffects,
+                            collapsed: _collapsed.contains('EFFECTS'),
+                            onTap: () => _toggleSection('EFFECTS'),
+                            enabled:
+                                (values[_categoryEnabledKey('EFFECTS')] ?? 1) !=
+                                0,
+                            onEnabledChanged: (v) {
+                              final key = _categoryEnabledKey('EFFECTS');
+                              onChanged(key, v ? 1 : 0);
+                              onChangeEnd(key, v ? 1 : 0);
+                            },
+                          ),
+                          if (!_collapsed.contains('EFFECTS'))
+                            for (final spec in _vignetteSliders)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: SliderRow(
+                                  name: _sliderLabel(l10n, spec.name),
+                                  min: spec.min,
+                                  max: spec.max,
+                                  value: values[spec.name] ?? spec.defaultValue,
+                                  decimals: spec.decimals,
+                                  defaultValue: spec.defaultValue,
+                                  onChanged: (v) => onChanged(spec.name, v),
+                                  onChangeEnd: (v) => onChangeEnd(spec.name, v),
+                                ),
+                              ),
+                        ],
+                      ],
+                    ],
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ),

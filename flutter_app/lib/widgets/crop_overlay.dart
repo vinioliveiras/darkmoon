@@ -231,11 +231,17 @@ class _CropOverlayState extends State<CropOverlay> {
     widget.onChanged(_applyDrag(details.localPosition, imageRect));
   }
 
-  void _handlePanEnd(Rect imageRect) {
+  void _handlePanEnd() {
     if (_active == null) {
       return;
     }
-    widget.onChangeEnd(_applyDrag(_dragStartLocal, imageRect));
+    // widget.params already holds the last-dragged rect — every
+    // onPanUpdate already pushed it up via widget.onChanged. Re-deriving
+    // it here from _dragStartLocal (the position the drag *started* at)
+    // was the bug: dx/dy against itself is always zero, so this used to
+    // commit the pre-drag rect right as the user released the mouse,
+    // snapping the crop back to where it started.
+    widget.onChangeEnd(widget.params);
     _active = null;
   }
 
@@ -246,7 +252,7 @@ class _CropOverlayState extends State<CropOverlay> {
       behavior: HitTestBehavior.opaque,
       onPanStart: (details) => _handlePanStart(details, imageRect),
       onPanUpdate: (details) => _handlePanUpdate(details, imageRect),
-      onPanEnd: (_) => _handlePanEnd(imageRect),
+      onPanEnd: (_) => _handlePanEnd(),
       child: CustomPaint(
         size: widget.containerSize,
         painter: _CropPainter(

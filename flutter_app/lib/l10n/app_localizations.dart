@@ -860,6 +860,30 @@ abstract class AppLocalizations {
   /// **'Show mask overlay'**
   String get maskOverlayHiddenTooltip;
 
+  /// No description provided for @maskDisableTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Disable mask'**
+  String get maskDisableTooltip;
+
+  /// No description provided for @maskEnableTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Enable mask'**
+  String get maskEnableTooltip;
+
+  /// No description provided for @masksTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Masks'**
+  String get masksTitle;
+
+  /// No description provided for @histogramTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Histogram'**
+  String get histogramTitle;
+
   /// No description provided for @maskBrushSizeLabel.
   ///
   /// In en, this message translates to:

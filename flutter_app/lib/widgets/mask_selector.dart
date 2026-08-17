@@ -80,6 +80,13 @@ class MaskSelector extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6),
+          child: Text(
+            l10n.masksTitle,
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+        ),
         Row(
           children: [
             Expanded(
@@ -129,6 +136,25 @@ class MaskSelector extends StatelessWidget {
                 child: SizedBox(
                   height: 34,
                   child: IconButton(
+                    tooltip: active.enabled
+                        ? l10n.maskDisableTooltip
+                        : l10n.maskEnableTooltip,
+                    onPressed: onToggleEnabled,
+                    icon: Icon(
+                      CupertinoIcons.power,
+                      size: 15,
+                      color: active.enabled
+                          ? DarkmoonColors.accent
+                          : DarkmoonColors.textMuted,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: SizedBox(
+                  height: 34,
+                  child: IconButton(
                     tooltip: l10n.maskCloneTooltip,
                     onPressed: onClone,
                     icon: const Icon(CupertinoIcons.square_on_square, size: 15),
@@ -149,24 +175,12 @@ class MaskSelector extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: _MaskToggleChip(
-                  label: l10n.maskEnabledLabel,
-                  value: active.enabled,
-                  onTap: onToggleEnabled,
-                ),
-              ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: _MaskToggleChip(
-                  label: l10n.maskInvertLabel,
-                  value: active.inverted,
-                  onTap: onToggleInverted,
-                ),
-              ),
-            ],
+          // Enable/disable now lives in the power-icon button above, so this
+          // row carries only Invert (full width).
+          _MaskToggleChip(
+            label: l10n.maskInvertLabel,
+            value: active.inverted,
+            onTap: onToggleInverted,
           ),
           const SizedBox(height: 8),
           SliderRow(

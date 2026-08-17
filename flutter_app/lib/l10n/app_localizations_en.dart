@@ -417,6 +417,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get maskOverlayHiddenTooltip => 'Show mask overlay';
 
   @override
+  String get maskDisableTooltip => 'Disable mask';
+
+  @override
+  String get maskEnableTooltip => 'Enable mask';
+
+  @override
+  String get masksTitle => 'Masks';
+
+  @override
+  String get histogramTitle => 'Histogram';
+
+  @override
   String get maskBrushSizeLabel => 'Size';
 
   @override

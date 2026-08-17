@@ -151,13 +151,15 @@ class _RawOnlyCheckboxRow extends StatelessWidget {
           child: Row(
             children: [
               SizedBox(
-                width: 18,
-                height: 18,
-                child: Checkbox(
-                  value: value,
-                  onChanged: (v) => onChanged(v ?? false),
-                  visualDensity: VisualDensity.compact,
-                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                width: 14,
+                height: 14,
+                child: FittedBox(
+                  child: Checkbox(
+                    value: value,
+                    onChanged: (v) => onChanged(v ?? false),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
                 ),
               ),
               const SizedBox(width: 8),

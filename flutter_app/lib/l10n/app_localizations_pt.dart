@@ -420,6 +420,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String get maskOverlayHiddenTooltip => 'Mostrar marcação da máscara';
 
   @override
+  String get maskDisableTooltip => 'Desativar máscara';
+
+  @override
+  String get maskEnableTooltip => 'Ativar máscara';
+
+  @override
+  String get masksTitle => 'Máscaras';
+
+  @override
+  String get histogramTitle => 'Histograma';
+
+  @override
   String get maskBrushSizeLabel => 'Tamanho';
 
   @override
