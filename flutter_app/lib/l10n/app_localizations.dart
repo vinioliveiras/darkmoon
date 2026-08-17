@@ -779,7 +779,7 @@ abstract class AppLocalizations {
   /// No description provided for @maskImageLayer.
   ///
   /// In en, this message translates to:
-  /// **'Image'**
+  /// **'Full Image'**
   String get maskImageLayer;
 
   /// No description provided for @maskLinearGradient.

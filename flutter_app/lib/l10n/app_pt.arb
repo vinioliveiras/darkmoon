@@ -122,7 +122,7 @@
   "gradeRangeMidtones": "Meios-tons",
   "gradeRangeGlobal": "Global",
 
-  "maskImageLayer": "Imagem",
+  "maskImageLayer": "Imagem Completa",
   "maskLinearGradient": "Gradiente Linear",
   "maskRadialGradient": "Gradiente Radial",
   "maskBrush": "Pincel",

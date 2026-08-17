@@ -539,6 +539,12 @@ class _EditorScreenState extends State<EditorScreen> {
   /// photo is selected when the user picks one.
   List<Preset> _presets = [];
 
+  /// ID of the preset currently applied to the selected photo (if any).
+  /// Tracked separately from live values so the preset stays "active"
+  /// even after the user changes _presetAmount; it only clears when
+  /// the user makes a manual edit or switches photos.
+  String? _appliedPresetId;
+
   bool _exporting = false;
 
   /// Which stage the in-progress export is on, so the loading overlay can
@@ -651,6 +657,7 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() {
       _paramValues = blendedValues;
       _currentCurves = lerpPhotoCurves(_currentCurves, preset.curves, fraction);
+      _appliedPresetId = preset.id;
     });
     _pushHistory();
     _scheduleRender(live: false);
@@ -714,19 +721,13 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  /// Whether [preset] is exactly what's currently applied to the selected
-  /// photo — recomputed from the live values/curves rather than tracked
-  /// separately, so it naturally clears the moment the user tweaks
-  /// anything after applying, and never goes stale across photo switches.
+  /// Whether [preset] is the one currently applied to the selected photo.
+  /// Tracked via [_appliedPresetId] which is set on apply and cleared on
+  /// any manual edit, photo switch, reset, or file reload — so the preset
+  /// stays highlighted even when the user changes _presetAmount, and only
+  /// clears when they make a deliberate change.
   bool _matchesAppliedPreset(Preset preset) {
-    final merged = {..._defaultParamValues(), ...preset.values};
-    if (!mapEquals(_paramValues, merged)) {
-      return false;
-    }
-    return listEquals(_currentCurves.tone, preset.curves.tone) &&
-        listEquals(_currentCurves.red, preset.curves.red) &&
-        listEquals(_currentCurves.green, preset.curves.green) &&
-        listEquals(_currentCurves.blue, preset.curves.blue);
+    return _appliedPresetId == preset.id;
   }
 
   Future<void> _saveCurrentAsPreset() async {
@@ -977,6 +978,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _currentCurves = identityPhotoCurves;
       _currentMasks = [];
       _activeMaskId = imageMaskId;
+      _appliedPresetId = null;
     });
     _resetHistory();
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
@@ -1240,6 +1242,7 @@ class _EditorScreenState extends State<EditorScreen> {
           ? []
           : _masksFor(files[selectedIndex].path);
       _activeMaskId = imageMaskId;
+      _appliedPresetId = null;
     });
     _resetHistory();
     if (selectedIndex != null) {
@@ -1332,6 +1335,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _currentCurves = _curvesFor(path);
       _currentMasks = _masksFor(path);
       _activeMaskId = imageMaskId;
+      _appliedPresetId = null;
     });
     _resetHistory();
     unawaited(_loadEditSourceAndRender(path, _folderGeneration));
@@ -1628,7 +1632,10 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   void _onParamChanged(String name, double value) {
-    setState(() => _paramValues[name] = value);
+    setState(() {
+      _paramValues[name] = value;
+      _appliedPresetId = null;
+    });
     _scheduleRender(live: _settings.fastPreview);
     _scheduleCatalogSave();
   }
@@ -3256,13 +3263,13 @@ class _ViewerToolbar extends StatelessWidget {
                 children: [
                   Expanded(
                     child: SizedBox(
-                      height: 28,
+                      height: 36,
                       child: ElevatedButton.icon(
                         onPressed: exporting ? null : onExport,
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           side: const BorderSide(
-                            color: DarkmoonColors.accent,
+                            color: DarkmoonColors.border,
                             width: 1.0,
                           ),
                         ),
@@ -3308,7 +3315,7 @@ class _ToolbarPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 28,
+      height: 36,
       decoration: BoxDecoration(
         color: DarkmoonColors.surfaceRaised,
         borderRadius: BorderRadius.circular(7),

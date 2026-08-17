@@ -378,7 +378,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get gradeRangeGlobal => 'Global';
 
   @override
-  String get maskImageLayer => 'Imagem';
+  String get maskImageLayer => 'Imagem Completa';
 
   @override
   String get maskLinearGradient => 'Gradiente Linear';

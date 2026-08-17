@@ -152,7 +152,7 @@
   "gradeRangeMidtones": "Midtones",
   "gradeRangeGlobal": "Global",
 
-  "maskImageLayer": "Image",
+  "maskImageLayer": "Full Image",
   "maskLinearGradient": "Linear Gradient",
   "maskRadialGradient": "Radial Gradient",
   "maskBrush": "Brush",
