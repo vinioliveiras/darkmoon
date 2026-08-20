@@ -10,6 +10,7 @@ import 'crop_transform.dart';
 import 'histogram.dart';
 import 'mask.dart';
 import 'render.dart';
+import 'render_parallel.dart';
 import 'render_params.dart';
 
 /// Matches thumbnail_loader.dart's thumbnailMaxDimension — kept as its own
@@ -69,31 +70,53 @@ class RenderResult {
 /// Designed to run via `compute()` (when [onStage] is null) or via
 /// [renderJobToJpegWithProgress] otherwise — same reasoning as
 /// `edit_source.dart`'s [decodeEditSourcesWithProgress].
-RenderResult renderJobToJpeg(
+///
+/// The plain, no-masks, no-progress-tracking case (an ordinary slider-drag
+/// settled render — the overwhelming majority of calls) runs on
+/// [renderAdjustmentsParallel] instead of the serial [renderRgb], splitting
+/// the work across the machine's CPU cores. Masked renders and the
+/// progress-tracked AI Denoise apply path stay on the serial pipeline:
+/// composing several mask layers' band-parallel results correctly is a
+/// bigger job for another day, and the progress-tracked path already
+/// spawns its own dedicated isolate for the *whole* call (see
+/// [renderJobToJpegWithProgress]) — a one-shot action the user already
+/// expects to wait on with a progress bar, not the every-drag hot path
+/// this split was built for.
+Future<RenderResult> renderJobToJpeg(
   RenderJob job, {
   void Function(RenderStage stage)? onStage,
-}) {
+}) async {
   final geometry = applyCropTransform(
     job.source.rgbBytes,
     job.source.width,
     job.source.height,
     job.cropTransform,
   );
-  final rendered = job.masks.isEmpty
-      ? renderRgb(
-          geometry.width,
-          geometry.height,
-          geometry.rgbBytes,
-          job.params,
-          onStage: onStage,
-        )
-      : renderRgbWithMasks(
-          geometry.width,
-          geometry.height,
-          geometry.rgbBytes,
-          job.params,
-          job.masks,
-        );
+  final Uint8List rendered;
+  if (job.masks.isEmpty && onStage == null) {
+    rendered = await renderAdjustmentsParallel(
+      geometry.width,
+      geometry.height,
+      geometry.rgbBytes,
+      job.params,
+    );
+  } else {
+    rendered = job.masks.isEmpty
+        ? renderRgb(
+            geometry.width,
+            geometry.height,
+            geometry.rgbBytes,
+            job.params,
+            onStage: onStage,
+          )
+        : renderRgbWithMasks(
+            geometry.width,
+            geometry.height,
+            geometry.rgbBytes,
+            job.params,
+            job.masks,
+          );
+  }
   onStage?.call(RenderStage.encoding);
   final histogram = computeHistogram(rendered);
   final image = img.Image.fromBytes(
@@ -122,8 +145,8 @@ class _RenderJobIsolateArgs {
   final SendPort sendPort;
 }
 
-void _renderJobIsolateEntry(_RenderJobIsolateArgs args) {
-  final result = renderJobToJpeg(
+void _renderJobIsolateEntry(_RenderJobIsolateArgs args) async {
+  final result = await renderJobToJpeg(
     args.job,
     onStage: (stage) => args.sendPort.send(stage),
   );

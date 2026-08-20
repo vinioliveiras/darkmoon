@@ -117,6 +117,51 @@ Uint8List renderRgbWithMasks(
 /// Denoise apply action, the slowest single step in the pipeline.
 enum RenderStage { denoising, adjusting, encoding }
 
+// Each constant below is a generous upper bound (not a tight measurement)
+// on how many pixels beyond its own position one of [applyLocalAdjustmentSteps]'s
+// blur-based stages can reach, derived from its box-blur radii (see
+// `blur.dart`'s `_boxRadiiForGauss`) plus any local-variance window it
+// layers on top. Padding a band by less than the true reach would blur in
+// wrong (or missing/zero) data near the seam; padding by more only costs
+// a little redundant computation, never correctness — so these round up.
+const int _chromaSmoothingHaloPx =
+    40; // always active, downsampled 4x internally
+const int _sharpenHaloPx = 30; // radius up to 3.0 + a 6px noise window
+const int _aiDenoiseHaloPx =
+    50; // strong level's chromaSigma 5.0 + a 6px noise window
+const int _textureHaloPx = 30; // fixed sigma 3 + a 6px noise window
+const int _clarityHaloPx = 110; // fixed sigma 25 — the single biggest reach
+
+/// How many extra rows a horizontal band needs on each side (above and
+/// below the rows it's actually responsible for) before
+/// [applyLocalAdjustmentSteps] runs on it, for the result to come out
+/// pixel-identical to running that same function on the whole image at
+/// once. Sums each active stage's own reach (see the constants above)
+/// rather than taking their max, since they run in sequence — a later
+/// stage can read pixels that an earlier stage already shifted using data
+/// from beyond *its own* halo, so the margins compound outward.
+///
+/// Always includes [_chromaSmoothingHaloPx] (baseline chroma smoothing has
+/// no on/off switch); the rest only count when that param is actually
+/// active, so an untouched photo's halo stays small and most of a band's
+/// height goes toward real parallel work instead of overlap.
+int localAdjustmentHaloPx(RenderParams params) {
+  var halo = _chromaSmoothingHaloPx;
+  if (!params.sharpen.isIdentity) {
+    halo += _sharpenHaloPx;
+  }
+  if (!params.aiDenoise.isIdentity) {
+    halo += _aiDenoiseHaloPx;
+  }
+  if (params.texture != 0) {
+    halo += _textureHaloPx;
+  }
+  if (params.clarity != 0) {
+    halo += _clarityHaloPx;
+  }
+  return halo;
+}
+
 void _applyAdjustmentSteps(
   Float32List buffer,
   int width,
@@ -124,8 +169,40 @@ void _applyAdjustmentSteps(
   RenderParams params, {
   void Function(RenderStage stage)? onStage,
 }) {
-  final pixelCount = width * height;
   onStage?.call(RenderStage.denoising);
+  applyLocalAdjustmentSteps(buffer, width, height, params);
+  onStage?.call(RenderStage.adjusting);
+  applyGlobalAdjustmentSteps(buffer, width, height, params);
+}
+
+/// Every step whose effect on a pixel only ever depends on pixels within a
+/// bounded distance of it (a fixed blur/box-filter radius, or nothing at
+/// all) — as opposed to [applyGlobalAdjustmentSteps]'s Dehaze, which needs
+/// a statistic computed from the *entire* image. That distinction is what
+/// makes this half of the pipeline safe to run on an image split into
+/// independent horizontal bands (see `render_parallel.dart`): as long as
+/// each band is padded with at least [localAdjustmentHaloPx]'s worth of
+/// extra rows on each side before this runs, and that padding is trimmed
+/// off afterward, running this on each band separately and concatenating
+/// the results is pixel-identical to running it on the whole image once.
+///
+/// Order matches the Python app's `render()` for this half of the
+/// pipeline — see [applyGlobalAdjustmentSteps] for the rest.
+///
+/// [rowOffset] must be [buffer]'s row 0's absolute row index in the full
+/// image when [buffer] is one band of a larger image being rendered by
+/// `render_parallel.dart` (0, the default, for the whole image) — plumbed
+/// straight through to [applyBaselineChromaSmoothing], the one step here
+/// whose own internal downsampling needs it (see that function and
+/// [downsampleChannel] for why).
+void applyLocalAdjustmentSteps(
+  Float32List buffer,
+  int width,
+  int height,
+  RenderParams params, {
+  int rowOffset = 0,
+}) {
+  final pixelCount = width * height;
   _applyWhiteBalance(buffer, params.temperature, params.tint);
   _applyExposure(buffer, params.exposure);
   // Denoise runs early — right after white balance/exposure establish the
@@ -137,9 +214,8 @@ void _applyAdjustmentSteps(
   // smoothing. Matches Lightroom's own ordering: its noise reduction is
   // one of the first things applied to the raw sensor data, well before
   // Basic panel tone adjustments.
-  applyBaselineChromaSmoothing(buffer, width, height);
+  applyBaselineChromaSmoothing(buffer, width, height, rowOffset: rowOffset);
   applyAiDenoise(buffer, width, height, params.aiDenoise);
-  onStage?.call(RenderStage.adjusting);
   _applyBrightnessContrast(buffer, params.brightness, params.contrast);
   _applyHighlightsShadows(
     buffer,
@@ -174,6 +250,25 @@ void _applyAdjustmentSteps(
     25,
     protectMidtones: true,
   );
+}
+
+/// Everything [applyLocalAdjustmentSteps] leaves out — chiefly Dehaze,
+/// which estimates atmospheric light from the 0.1% of *the whole image's*
+/// pixels with the largest dark-channel value (`dehaze.dart`), a genuinely
+/// global statistic no per-band halo could make correct; Vibrance/
+/// Saturation/Vignette tag along here too since they're cheap enough
+/// (low-hundreds-of-ms even at full sensor resolution, see the profiling
+/// this pipeline split was built for) that splitting them out for
+/// parallelism wouldn't be worth the added complexity. Must run after
+/// [applyLocalAdjustmentSteps] on the *complete, already-stitched-back-
+/// together* buffer — never per-band.
+void applyGlobalAdjustmentSteps(
+  Float32List buffer,
+  int width,
+  int height,
+  RenderParams params,
+) {
+  final pixelCount = width * height;
   applyDehaze(buffer, width, height, params.dehaze);
   _applyVibrance(buffer, pixelCount, params.vibrance);
   _applySaturation(buffer, pixelCount, params.saturation);
@@ -212,22 +307,31 @@ void _applyWhiteBalance(
   // warm-toned preset dropping to ~4200K, because the same Kelvin delta is
   // a much bigger perceptual/mired shift down in the warm end of the scale
   // than up in the cool end.
-  // A lower Kelvin value (warmer preset) means a *larger* mired value
-  // relative to neutral (1/T grows as T shrinks), and warming an image
-  // means boosting red / cutting blue — so positive miredDelta (warm)
-  // should give a positive gain applied to red and a negative one to blue.
+  //
+  // This slider follows Lightroom/Camera Raw's own (famously
+  // counter-intuitive) convention, also encoded in its blue->orange
+  // gradient (editor_screen.dart's 'Temperature' _SliderSpec): the value
+  // means "what Kelvin was the scene's actual light source", so *raising*
+  // it tells the app the light was bluer than assumed, and the app adds
+  // warmth to compensate — a *higher* Kelvin value renders *warmer*
+  // (orange), a lower one renders cooler (blue). (This was previously
+  // inverted here — verified against a real Canon 350D CR2 where raising
+  // Temperature visibly cooled the image instead of warming it.)
   final miredDelta =
-      1.0e6 / temperatureKelvin - 1.0e6 / _temperatureNeutralKelvin;
+      1.0e6 / _temperatureNeutralKelvin - 1.0e6 / temperatureKelvin;
   final tempGain = (miredDelta * _miredGainPerUnit).clamp(-0.6, 0.6);
   final rGain = 1.0 + tempGain;
   final bGain = 1.0 - tempGain;
 
   // Tint moves along the green/magenta axis: green shifts one way, red and
   // blue shift the other, so overall luminance stays roughly put instead
-  // of drifting with the color shift (unlike nudging green alone).
+  // of drifting with the color shift (unlike nudging green alone). Sign
+  // matches Lightroom and this slider's own green->magenta gradient
+  // (editor_screen.dart's 'Tint' _SliderSpec): positive = magenta (green
+  // down, red/blue up), negative = green (green up, red/blue down).
   final tintShift = tint / 100.0 * 0.2;
-  final gGain = 1.0 + tintShift;
-  final rbGain = 1.0 - tintShift * 0.5;
+  final gGain = 1.0 - tintShift;
+  final rbGain = 1.0 + tintShift * 0.5;
 
   for (var i = 0; i < img.length; i += 3) {
     img[i] *= rGain * rbGain;

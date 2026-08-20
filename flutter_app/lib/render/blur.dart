@@ -248,3 +248,90 @@ Float32List localVarianceFromResidualSq(
 ) {
   return boxBlurMean(residualSq, width, height, noiseRadius);
 }
+
+/// Area-average downsample of a single-channel buffer by an integer
+/// [factor] in each dimension (e.g. `factor: 4` means 1/16th the pixels).
+/// [width] doesn't need to be an exact multiple of [factor] — the last
+/// column of blocks just averages over however many source columns remain.
+///
+/// [rowOffset] is [channel]'s row 0's *absolute* row index in some larger
+/// image this buffer is a horizontal slice of (0 if it's the whole
+/// image). Block boundaries are computed in that absolute coordinate
+/// space, not relative to this buffer's own row 0 — so a slice starting
+/// mid-image still downsamples using the exact same block grid the whole
+/// image would have used, rather than restarting a fresh grid at
+/// wherever the slice happens to begin. This is what makes it safe to
+/// downsample an image split into independent horizontal bands and get
+/// the same result as downsampling it whole: without this, two adjacent
+/// slices' block grids would disagree about where a block starts, and
+/// every row in both bands (not just near the seam) could land in a
+/// differently-averaged block than the whole-image computation would
+/// have put it in.
+({Float32List channel, int width, int height}) downsampleChannel(
+  Float32List channel,
+  int width,
+  int height,
+  int factor, {
+  int rowOffset = 0,
+}) {
+  final outWidth = (width / factor).ceil();
+  final firstBlock = rowOffset ~/ factor;
+  final lastBlock = (rowOffset + height - 1) ~/ factor;
+  final outHeight = lastBlock - firstBlock + 1;
+  final out = Float32List(outWidth * outHeight);
+  for (var ob = 0; ob < outHeight; ob++) {
+    final blockAbsoluteY0 = (firstBlock + ob) * factor;
+    final y0 = math.max(blockAbsoluteY0 - rowOffset, 0);
+    final y1 = math.min(blockAbsoluteY0 + factor - rowOffset, height);
+    for (var ox = 0; ox < outWidth; ox++) {
+      final x0 = ox * factor;
+      final x1 = math.min(x0 + factor, width);
+      var sum = 0.0;
+      for (var y = y0; y < y1; y++) {
+        final rowStart = y * width;
+        for (var x = x0; x < x1; x++) {
+          sum += channel[rowStart + x];
+        }
+      }
+      out[ob * outWidth + ox] = sum / ((y1 - y0) * (x1 - x0));
+    }
+  }
+  return (channel: out, width: outWidth, height: outHeight);
+}
+
+/// Nearest-neighbor upsample of a single-channel buffer from `srcWidth x
+/// srcHeight` back to `dstWidth x dstHeight`, for an exact integer
+/// [factor] — the cheap inverse of [downsampleChannel]: a single array
+/// read and no interpolation math per destination pixel. Safe for a
+/// subtle, low-strength effect (visible block edges would need both a
+/// hard color transition *and* strength high enough to notice blockiness,
+/// neither of which apply to baseline chroma smoothing).
+///
+/// [rowOffset] must be the exact same value passed to the
+/// [downsampleChannel] call that produced [src], so both agree on which
+/// absolute row each of [src]'s rows represents.
+Float32List upsampleChannelNearest(
+  Float32List src,
+  int srcWidth,
+  int srcHeight,
+  int factor,
+  int dstWidth,
+  int dstHeight, {
+  int rowOffset = 0,
+}) {
+  final firstBlock = rowOffset ~/ factor;
+  final out = Float32List(dstWidth * dstHeight);
+  for (var y = 0; y < dstHeight; y++) {
+    final sy = ((rowOffset + y) ~/ factor - firstBlock).clamp(
+      0,
+      srcHeight - 1,
+    );
+    final srcRow = sy * srcWidth;
+    final dstRow = y * dstWidth;
+    for (var x = 0; x < dstWidth; x++) {
+      final sx = (x ~/ factor).clamp(0, srcWidth - 1);
+      out[dstRow + x] = src[srcRow + sx];
+    }
+  }
+  return out;
+}

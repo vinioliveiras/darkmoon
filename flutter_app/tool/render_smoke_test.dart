@@ -9,9 +9,11 @@ import 'package:darkmoon/native/edit_source.dart';
 import 'package:darkmoon/render/render_job.dart';
 import 'package:darkmoon/render/render_params.dart';
 
-void main(List<String> args) {
+Future<void> main(List<String> args) async {
   if (args.isEmpty) {
-    stderr.writeln('Usage: dart run tool/render_smoke_test.dart <raw-file> [out-prefix]');
+    stderr.writeln(
+      'Usage: dart run tool/render_smoke_test.dart <raw-file> [out-prefix]',
+    );
     exit(1);
   }
   final path = args[0];
@@ -26,13 +28,15 @@ void main(List<String> args) {
   }
   // ignore: avoid_print
   print(
-    'decode: ${sources.preview.width}x${sources.preview.height} preview, '
+    'decode: ${sources.full.width}x${sources.full.height} full, '
     '${sources.live.width}x${sources.live.height} live, in ${decodeWatch.elapsedMilliseconds}ms',
   );
 
-  void renderAndSave(String label, RenderParams params) {
+  Future<void> renderAndSave(String label, RenderParams params) async {
     final watch = Stopwatch()..start();
-    final result = renderJobToJpeg(RenderJob(source: sources.preview, params: params));
+    final result = await renderJobToJpeg(
+      RenderJob(source: sources.full, params: params),
+    );
     watch.stop();
     final outPath = '${outPrefix}_$label.jpg';
     File(outPath).writeAsBytesSync(result.jpegBytes);
@@ -44,8 +48,8 @@ void main(List<String> args) {
     );
   }
 
-  renderAndSave('neutral', const RenderParams());
-  renderAndSave(
+  await renderAndSave('neutral', const RenderParams());
+  await renderAndSave(
     'adjusted',
     const RenderParams(
       temperature: 8000,
@@ -57,8 +61,8 @@ void main(List<String> args) {
       saturation: 15,
     ),
   );
-  renderAndSave('texture', const RenderParams(texture: 100));
-  renderAndSave('clarity', const RenderParams(clarity: 100));
-  renderAndSave('dehaze_positive', const RenderParams(dehaze: 80));
-  renderAndSave('dehaze_negative', const RenderParams(dehaze: -60));
+  await renderAndSave('texture', const RenderParams(texture: 100));
+  await renderAndSave('clarity', const RenderParams(clarity: 100));
+  await renderAndSave('dehaze_positive', const RenderParams(dehaze: 80));
+  await renderAndSave('dehaze_negative', const RenderParams(dehaze: -60));
 }

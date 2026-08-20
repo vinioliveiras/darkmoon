@@ -188,12 +188,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cropDoneButton => 'OK';
 
   @override
-  String get fullQualityButton => 'Full Quality';
-
-  @override
-  String get fullQualityShortLabel => 'HD';
-
-  @override
   String get undoButton => 'Undo';
 
   @override
@@ -293,10 +287,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsFastPreviewLabel => 'Fast preview while dragging sliders';
-
-  @override
-  String get settingsAlwaysFullQualityLabel =>
-      'Always open photos in full quality';
 
   @override
   String get settingsRawOnlyLabel => 'RAW files only';
@@ -484,6 +474,12 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get mixerLuminanceLabel => 'Luminance';
+
+  @override
+  String get mixerModeMixerLabel => 'Mixer';
+
+  @override
+  String get mixerModeHslLabel => 'HSL';
 
   @override
   String get sliderTemperature => 'Temperature';

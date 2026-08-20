@@ -422,18 +422,6 @@ abstract class AppLocalizations {
   /// **'OK'**
   String get cropDoneButton;
 
-  /// No description provided for @fullQualityButton.
-  ///
-  /// In en, this message translates to:
-  /// **'Full Quality'**
-  String get fullQualityButton;
-
-  /// No description provided for @fullQualityShortLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'HD'**
-  String get fullQualityShortLabel;
-
   /// No description provided for @undoButton.
   ///
   /// In en, this message translates to:
@@ -625,12 +613,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Fast preview while dragging sliders'**
   String get settingsFastPreviewLabel;
-
-  /// No description provided for @settingsAlwaysFullQualityLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Always open photos in full quality'**
-  String get settingsAlwaysFullQualityLabel;
 
   /// No description provided for @settingsRawOnlyLabel.
   ///
@@ -997,6 +979,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Luminance'**
   String get mixerLuminanceLabel;
+
+  /// No description provided for @mixerModeMixerLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Mixer'**
+  String get mixerModeMixerLabel;
+
+  /// No description provided for @mixerModeHslLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'HSL'**
+  String get mixerModeHslLabel;
 
   /// No description provided for @sliderTemperature.
   ///

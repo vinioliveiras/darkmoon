@@ -12,14 +12,16 @@ import 'package:image/image.dart' as img;
 
 void main(List<String> args) {
   if (args.isEmpty) {
-    stderr.writeln('Usage: dart run tool/raw_decode_smoke_test.dart <raw-file> [out.png]');
+    stderr.writeln(
+      'Usage: dart run tool/raw_decode_smoke_test.dart <raw-file> [out.png]',
+    );
     exit(1);
   }
   final path = args[0];
   final outPath = args.length > 1 ? args[1] : 'raw_decode_smoke_test_out.png';
 
   final stopwatch = Stopwatch()..start();
-  final decoded = decodeRawImage(path, fastPreview: true);
+  final decoded = decodeRawImage(path);
   stopwatch.stop();
 
   if (decoded == null) {

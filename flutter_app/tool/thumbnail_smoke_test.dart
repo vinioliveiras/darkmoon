@@ -15,12 +15,16 @@ import 'package:darkmoon/native/thumbnail_loader.dart';
 
 void main(List<String> args) async {
   if (args.isEmpty) {
-    stderr.writeln('Usage: dart run tool/thumbnail_smoke_test.dart <raw-file> [out.jpg]');
+    stderr.writeln(
+      'Usage: dart run tool/thumbnail_smoke_test.dart <raw-file> [out.jpg]',
+    );
     exit(1);
   }
   final path = args[0];
   final outPath = args.length > 1 ? args[1] : 'thumbnail_smoke_test_out.jpg';
-  final cacheDir = await Directory.systemTemp.createTemp('darkmoon_thumb_cache_');
+  final cacheDir = await Directory.systemTemp.createTemp(
+    'darkmoon_thumb_cache_',
+  );
   final cache = ThumbnailCacheManager(cacheDir.path);
 
   final coldWatch = Stopwatch()..start();
@@ -32,7 +36,9 @@ void main(List<String> args) async {
   }
   File(outPath).writeAsBytesSync(decoded);
   // ignore: avoid_print
-  print('cold (fresh decode): ${decoded.length} JPEG bytes in ${coldWatch.elapsedMilliseconds}ms -> $outPath');
+  print(
+    'cold (fresh decode): ${decoded.length} JPEG bytes in ${coldWatch.elapsedMilliseconds}ms -> $outPath',
+  );
 
   await cache.store(path, decoded);
   await cache.flush();
@@ -46,13 +52,19 @@ void main(List<String> args) async {
   final cached = await reopened.lookup(path);
   warmWatch.stop();
   if (cached == null) {
-    stderr.writeln('cache lookup returned null after store+flush — round trip failed');
+    stderr.writeln(
+      'cache lookup returned null after store+flush — round trip failed',
+    );
     exit(3);
   }
   // ignore: avoid_print
-  print('warm (cache hit, fresh manager): ${cached.length} JPEG bytes in ${warmWatch.elapsedMilliseconds}ms');
+  print(
+    'warm (cache hit, fresh manager): ${cached.length} JPEG bytes in ${warmWatch.elapsedMilliseconds}ms',
+  );
   if (cached.length != decoded.length) {
-    stderr.writeln('WARNING: cached bytes length differs from the original decode');
+    stderr.writeln(
+      'WARNING: cached bytes length differs from the original decode',
+    );
   }
 
   await cacheDir.delete(recursive: true);

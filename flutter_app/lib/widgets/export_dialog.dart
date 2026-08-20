@@ -24,7 +24,14 @@ class ExportOptionsDialog extends StatefulWidget {
 
 class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
   ExportFormat _format = ExportFormat.jpeg;
-  int _quality = 100;
+  // 100 looks identical to ~90 in a JPEG encoder (quality above ~92 mostly
+  // just disables chroma subsampling and wastes bytes on differences no one
+  // can see) while multiplying file size several times over — a 70MB JPEG
+  // out of an 8MP photo, reported against this default, is exactly that
+  // waste. 90 matches the quality this app's own on-screen preview JPEGs
+  // already render at (render_job.dart), a "good, normal-sized file"
+  // default the user can still raise for a specific need.
+  int _quality = 90;
 
   @override
   Widget build(BuildContext context) {

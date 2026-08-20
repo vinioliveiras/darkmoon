@@ -22,7 +22,6 @@ class AppSettings {
     this.language = 'auto',
     this.fastPreview = true,
     this.thumbnailConcurrency = 4,
-    this.alwaysFullQuality = false,
     this.rawOnly = false,
     this.libraryFolders = const [],
     this.recentFiles = const [],
@@ -39,11 +38,6 @@ class AppSettings {
 
   /// How many thumbnails to decode concurrently when a folder is opened.
   final int thumbnailConcurrency;
-
-  /// When true, every photo opens in the full-native-resolution view by
-  /// default instead of the downscaled editing preview (still overridable
-  /// per-session via the viewer's Full Quality toggle).
-  final bool alwaysFullQuality;
 
   /// When true, folders only show RAW files — common image formats (JPEG,
   /// PNG, etc.) are filtered out of the library entirely.
@@ -67,7 +61,6 @@ class AppSettings {
     String? language,
     bool? fastPreview,
     int? thumbnailConcurrency,
-    bool? alwaysFullQuality,
     bool? rawOnly,
     List<String>? libraryFolders,
     List<String>? recentFiles,
@@ -76,7 +69,6 @@ class AppSettings {
     language: language ?? this.language,
     fastPreview: fastPreview ?? this.fastPreview,
     thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
-    alwaysFullQuality: alwaysFullQuality ?? this.alwaysFullQuality,
     rawOnly: rawOnly ?? this.rawOnly,
     libraryFolders: libraryFolders ?? this.libraryFolders,
     recentFiles: recentFiles ?? this.recentFiles,
@@ -118,8 +110,6 @@ Future<AppSettings> loadSettings() async {
       fastPreview: raw['fastPreview'] as bool? ?? defaults.fastPreview,
       thumbnailConcurrency:
           (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
-      alwaysFullQuality:
-          raw['alwaysFullQuality'] as bool? ?? defaults.alwaysFullQuality,
       rawOnly: raw['rawOnly'] as bool? ?? defaults.rawOnly,
       libraryFolders:
           (raw['libraryFolders'] as List?)?.cast<String>() ??
@@ -142,7 +132,6 @@ Future<void> saveSettings(AppSettings settings) async {
       'language': settings.language,
       'fastPreview': settings.fastPreview,
       'thumbnailConcurrency': settings.thumbnailConcurrency,
-      'alwaysFullQuality': settings.alwaysFullQuality,
       'rawOnly': settings.rawOnly,
       'libraryFolders': settings.libraryFolders,
       'recentFiles': settings.recentFiles,

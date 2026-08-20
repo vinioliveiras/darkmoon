@@ -17,11 +17,20 @@ Histogram computeHistogram(List<int> rgb) {
   final red = List<int>.filled(histogramBins, 0);
   final green = List<int>.filled(histogramBins, 0);
   final blue = List<int>.filled(histogramBins, 0);
-  const binSize = 256 / histogramBins;
+  // 256 / histogramBins (64) is exactly 4, so the bin index is a plain
+  // bit shift — no float division/floor/clamp needed per pixel (rgb
+  // values are already ints in 0-255, so the result always lands in 0-63
+  // on its own). Asserts rather than silently miscomputing if
+  // histogramBins ever changes to something this shift no longer matches.
+  const binShift = 2; // log2(256 / histogramBins)
+  assert(
+    1 << binShift == 256 ~/ histogramBins,
+    'binShift must be updated to match histogramBins',
+  );
   for (var i = 0; i + 2 < rgb.length; i += 3) {
-    red[(rgb[i] / binSize).floor().clamp(0, histogramBins - 1)]++;
-    green[(rgb[i + 1] / binSize).floor().clamp(0, histogramBins - 1)]++;
-    blue[(rgb[i + 2] / binSize).floor().clamp(0, histogramBins - 1)]++;
+    red[rgb[i] >> binShift]++;
+    green[rgb[i + 1] >> binShift]++;
+    blue[rgb[i + 2] >> binShift]++;
   }
   return Histogram(red: red, green: green, blue: blue);
 }

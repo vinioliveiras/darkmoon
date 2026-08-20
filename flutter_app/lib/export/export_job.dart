@@ -10,6 +10,7 @@ import '../raw_files.dart' show isRawFile;
 import '../render/crop_transform.dart';
 import '../render/mask.dart';
 import '../render/render.dart';
+import '../render/render_parallel.dart';
 import '../render/render_params.dart';
 import 'export_format.dart';
 
@@ -55,14 +56,14 @@ class ExportResult {
 /// unlike a spinner that just spins for the whole call.
 enum ExportStage { decoding, rendering, encoding, writing }
 
-ExportResult _exportPhotoInternal(
+Future<ExportResult> _exportPhotoInternal(
   ExportRequest request,
   void Function(ExportStage stage)? onStage,
-) {
+) async {
   try {
     onStage?.call(ExportStage.decoding);
     final decoded = isRawFile(request.sourcePath)
-        ? decodeRawImage(request.sourcePath, fastPreview: false)
+        ? decodeRawImage(request.sourcePath)
         : decodeCommonImage(request.sourcePath);
     if (decoded == null) {
       return ExportResult.failure('Could not decode ${request.sourcePath}');
@@ -74,8 +75,13 @@ ExportResult _exportPhotoInternal(
       decoded.height,
       request.cropTransform,
     );
+    // Export never picked up the CPU-parallel render pipeline when it was
+    // added — that was only wired into the live-preview path
+    // (render_job.dart). Masked exports stay on the serial renderRgbWithMasks
+    // (composing several mask layers' band-parallel results correctly is
+    // out of scope for now, see render_parallel.dart's own doc comment).
     final rendered = request.masks.isEmpty
-        ? renderRgb(
+        ? await renderAdjustmentsParallel(
             geometry.width,
             geometry.height,
             geometry.rgbBytes,
@@ -109,16 +115,16 @@ ExportResult _exportPhotoInternal(
   }
 }
 
-/// Decodes [ExportRequest.sourcePath] at full resolution (unlike the
-/// half-size editing preview), applies the same render pipeline used for
-/// the on-screen preview, and writes it to [ExportRequest.destPath].
+/// Decodes [ExportRequest.sourcePath] at full resolution, applies the same
+/// render pipeline used for the on-screen preview, and writes it to
+/// [ExportRequest.destPath].
 ///
 /// Mirrors the Python app's `ExportTask.run`. Designed to run via
 /// `compute()`: decode + render + encode + file write are all blocking
 /// work. Prefer [exportPhotoWithProgress] where stage feedback matters —
 /// this plain version exists for callers (like the export smoke test)
 /// that just want the result.
-ExportResult exportPhoto(ExportRequest request) =>
+Future<ExportResult> exportPhoto(ExportRequest request) =>
     _exportPhotoInternal(request, null);
 
 class _ExportIsolateArgs {
@@ -128,8 +134,8 @@ class _ExportIsolateArgs {
   final SendPort sendPort;
 }
 
-void _exportIsolateEntry(_ExportIsolateArgs args) {
-  final result = _exportPhotoInternal(
+void _exportIsolateEntry(_ExportIsolateArgs args) async {
+  final result = await _exportPhotoInternal(
     args.request,
     (stage) => args.sendPort.send(stage),
   );

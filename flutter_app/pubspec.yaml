@@ -49,6 +49,13 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  # Needed because dart:ui's GPU-backed primitives (FragmentShader, Canvas,
+  # Image.toImage/toByteData) require a real engine/rasterizer attached —
+  # plain `flutter_test` widget tests run headless without one, so the GPU
+  # render pipeline's own tests (test/render/gpu/, once they exist) need a
+  # real launched app instead. See project_gpu_render_plan.md.
+  integration_test:
+    sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -64,6 +71,11 @@ dev_dependencies:
 # The following section is specific to Flutter packages.
 flutter:
   generate: true
+
+  # GPU render pipeline shaders — see project_gpu_render_plan.md. Phase 0
+  # spike only so far; more get added as later phases land.
+  shaders:
+    - shaders/_spike_passthrough.frag
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

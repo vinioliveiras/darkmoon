@@ -399,14 +399,6 @@ class _EditorScreenState extends State<EditorScreen> {
   final Map<String, Uint8List> _neutralPreviews = {};
   bool _beforeAfterMode = false;
 
-  /// Opt-in full-native-resolution decode, computed lazily per photo —
-  /// pixel math over a full sensor's worth of megapixels instead of the
-  /// ~1.7M-pixel editing preview is a real cost, so this only happens when
-  /// the user explicitly asks for it. Dragging a slider still uses the
-  /// small "live" resolution regardless, for responsiveness.
-  final Map<String, EditSource> _fullQualitySources = {};
-  bool _fullQualityMode = false;
-
   /// Whether the Crop Overlay's draggable rectangle is shown over the
   /// image — a session-wide UI mode (like Lightroom's crop tool toggle),
   /// not per-photo state.
@@ -1104,7 +1096,6 @@ class _EditorScreenState extends State<EditorScreen> {
         _metadata.clear();
         _neutralPreviews.clear();
         _beforeAfterMode = false;
-        _fullQualitySources.clear();
       }
     });
     unawaited(saveSettings(next));
@@ -1190,8 +1181,6 @@ class _EditorScreenState extends State<EditorScreen> {
       _metadata.clear();
       _neutralPreviews.clear();
       _beforeAfterMode = false;
-      _fullQualitySources.clear();
-      _fullQualityMode = _settings.alwaysFullQuality;
       _thumbnailsLoaded = 0;
       _thumbnailsTotal = 0;
     });
@@ -1255,11 +1244,6 @@ class _EditorScreenState extends State<EditorScreen> {
       unawaited(
         _loadEditSourceAndRender(files[selectedIndex].path, generation),
       );
-      if (_fullQualityMode) {
-        unawaited(
-          _loadFullQualityAndRender(files[selectedIndex].path, generation),
-        );
-      }
     }
     await _loadThumbnails(files, generation);
     if (!mounted || generation != _folderGeneration) {
@@ -1348,9 +1332,6 @@ class _EditorScreenState extends State<EditorScreen> {
     if (_beforeAfterMode && !_neutralPreviews.containsKey(path)) {
       unawaited(_loadNeutralPreview(path));
     }
-    if (_fullQualityMode) {
-      unawaited(_loadFullQualityAndRender(path, _folderGeneration));
-    }
   }
 
   /// Decodes the full editable RAW buffer for [path] (unless already
@@ -1402,8 +1383,8 @@ class _EditorScreenState extends State<EditorScreen> {
   /// Renders [path]'s cached edit source with the current slider values and
   /// caches the resulting JPEG + histogram + filmstrip thumbnail. Uses the
   /// smaller "live" resolution while [live] is true (a slider is actively
-  /// being dragged) for speed — even in full-quality mode, since dragging
-  /// needs to stay responsive regardless.
+  /// being dragged) for speed; the settled view always renders at full
+  /// sensor resolution ([EditSourcePair.full]).
   Future<void> _renderPreview(
     String path, {
     bool live = false,
@@ -1426,9 +1407,6 @@ class _EditorScreenState extends State<EditorScreen> {
         setState(() => _isRenderingSlow = true);
       }
     });
-    final fullQualitySource = _fullQualityMode
-        ? _fullQualitySources[path]
-        : null;
     // While the Crop Overlay is open, render the full straightened/
     // keystoned frame (no rectangular crop) so the discarded edges are
     // still visible under the overlay's scrim, Lightroom-style, instead
@@ -1442,7 +1420,7 @@ class _EditorScreenState extends State<EditorScreen> {
           )
         : _cropTransform;
     final job = RenderJob(
-      source: live ? sources.live : (fullQualitySource ?? sources.preview),
+      source: live ? sources.live : sources.full,
       params: RenderParams.fromValues(
         _effectiveParamValues(),
         curves: _effectiveCurves,
@@ -1482,7 +1460,7 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     final result = await compute(
       renderJobToJpeg,
-      RenderJob(source: sources.preview, params: const RenderParams()),
+      RenderJob(source: sources.full, params: const RenderParams()),
     );
     if (!mounted) {
       return;
@@ -1497,45 +1475,6 @@ class _EditorScreenState extends State<EditorScreen> {
         selected != null &&
         !_neutralPreviews.containsKey(selected.path)) {
       unawaited(_loadNeutralPreview(selected.path));
-    }
-  }
-
-  /// Decodes [path] at full native resolution (unless already cached) and
-  /// re-renders once it's ready, replacing the downscaled preview. Guarded
-  /// by [generation] the same way as _loadEditSourceAndRender.
-  Future<void> _loadFullQualityAndRender(String path, int generation) async {
-    if (!_fullQualitySources.containsKey(path)) {
-      setState(() {
-        _isDecodingPhoto = true;
-        _loadingOverlayHidden = false;
-      });
-      final source = await compute(decodeFullQualitySource, path);
-      if (!mounted || generation != _folderGeneration) {
-        return;
-      }
-      setState(() => _isDecodingPhoto = false);
-      if (source == null) {
-        return;
-      }
-      setState(() => _fullQualitySources[path] = source);
-    }
-    if (_fullQualityMode) {
-      await _renderPreview(path);
-    }
-  }
-
-  void _toggleFullQuality() {
-    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
-    setState(() => _fullQualityMode = !_fullQualityMode);
-    if (selected == null) {
-      return;
-    }
-    if (_fullQualityMode) {
-      unawaited(_loadFullQualityAndRender(selected.path, _folderGeneration));
-    } else {
-      // Switching back to the (already-decoded, so this is fast) downscaled
-      // preview.
-      unawaited(_renderPreview(selected.path));
     }
   }
 
@@ -2464,7 +2403,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                   : _activeMask,
                               editingSource: selected == null
                                   ? null
-                                  : _editSources[selected.path]?.preview,
+                                  : _editSources[selected.path]?.full,
                               onMaskGeometryChanged: _onMaskGeometryChanged,
                               onMaskGeometryChangeEnd: _onMaskGeometryChangeEnd,
                               brushRadius: _brushRadius,
@@ -2557,10 +2496,6 @@ class _EditorScreenState extends State<EditorScreen> {
                       onToggleBeforeAfter: selected == null
                           ? null
                           : _toggleBeforeAfter,
-                      fullQualityMode: _fullQualityMode,
-                      onToggleFullQuality: selected == null
-                          ? null
-                          : _toggleFullQuality,
                       canUndo: _canUndo,
                       canRedo: _canRedo,
                       onUndo: _undo,
@@ -3068,8 +3003,6 @@ class _ViewerToolbar extends StatelessWidget {
     required this.onZoomOut,
     required this.onZoomFit,
     required this.onToggleBeforeAfter,
-    required this.fullQualityMode,
-    required this.onToggleFullQuality,
     required this.canUndo,
     required this.canRedo,
     required this.onUndo,
@@ -3092,8 +3025,6 @@ class _ViewerToolbar extends StatelessWidget {
   final VoidCallback onZoomOut;
   final VoidCallback onZoomFit;
   final VoidCallback? onToggleBeforeAfter;
-  final bool fullQualityMode;
-  final VoidCallback? onToggleFullQuality;
 
   final bool canUndo;
   final bool canRedo;
@@ -3101,7 +3032,7 @@ class _ViewerToolbar extends StatelessWidget {
   final VoidCallback onRedo;
 
   /// True when a level is already applied to the current photo — shown as
-  /// a filled/selected button, same convention as Before/After and HD.
+  /// a filled/selected button, same convention as Before/After.
   final bool aiDenoiseActive;
   final VoidCallback? onOpenAiDenoise;
 
@@ -3245,12 +3176,6 @@ class _ViewerToolbar extends StatelessWidget {
                         selected: beforeAfterMode,
                         onTap: onToggleBeforeAfter,
                         tooltip: l10n.beforeAfterButton,
-                      ),
-                      _ToolbarSegment(
-                        label: l10n.fullQualityShortLabel,
-                        selected: fullQualityMode,
-                        onTap: onToggleFullQuality,
-                        tooltip: l10n.fullQualityButton,
                       ),
                     ],
                   ),
@@ -3875,7 +3800,17 @@ class _ControlsPanelState extends State<_ControlsPanel> {
   /// Which Color Mixer band is currently shown — one of the 8 capitalized
   /// channel names used in the "Mixer" + channel + "Hue/Saturation/
   /// Luminance" slider keys (e.g. `'Red'`), switched via the dot picker.
+  /// Only relevant in [_mixerViewMode] `'Mixer'` — `'HSL'` shows every
+  /// channel at once instead.
   String _activeMixerChannel = 'Red';
+
+  /// Color Mixer's own display mode, matching Lightroom's Mixer/HSL toggle
+  /// for the same underlying data: `'Mixer'` shows one selected channel's
+  /// three sliders at a time (the dot picker above); `'HSL'` shows three
+  /// stacked groups (Hue, Saturation, Luminance), each listing all 8
+  /// channels together, for comparing/adjusting across channels within one
+  /// attribute rather than across attributes within one channel.
+  String _mixerViewMode = 'Mixer';
 
   /// Which Color Grading range's wheel is currently shown — one of
   /// 'Shadows', 'Midtones', 'Highlights' (the "Grade" + range +
@@ -4235,43 +4170,112 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 top: 6,
                                 bottom: 10,
                               ),
-                              child: _MixerChannelDots(
-                                active: _activeMixerChannel,
-                                onSelect: (channel) => setState(
-                                  () => _activeMixerChannel = channel,
-                                ),
+                              child: _MixerModeTabs(
+                                active: _mixerViewMode,
+                                onSelect: (mode) =>
+                                    setState(() => _mixerViewMode = mode),
                               ),
                             ),
-                            for (final suffix in const [
-                              'Hue',
-                              'Saturation',
-                              'Luminance',
-                            ])
+                            if (_mixerViewMode == 'Mixer') ...[
                               Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: SliderRow(
-                                  name: _mixerSliderLabel(l10n, suffix),
-                                  min: -100,
-                                  max: 100,
-                                  value:
-                                      values['Mixer$_activeMixerChannel$suffix'] ??
-                                      0,
-                                  decimals: 0,
-                                  defaultValue: 0,
-                                  trackColors: [
-                                    DarkmoonColors.textMuted,
-                                    _mixerChannelColor(_activeMixerChannel),
-                                  ],
-                                  onChanged: (v) => onChanged(
-                                    'Mixer$_activeMixerChannel$suffix',
-                                    v,
-                                  ),
-                                  onChangeEnd: (v) => onChangeEnd(
-                                    'Mixer$_activeMixerChannel$suffix',
-                                    v,
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _MixerChannelDots(
+                                  active: _activeMixerChannel,
+                                  onSelect: (channel) => setState(
+                                    () => _activeMixerChannel = channel,
                                   ),
                                 ),
                               ),
+                              for (final suffix in const [
+                                'Hue',
+                                'Saturation',
+                                'Luminance',
+                              ])
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: SliderRow(
+                                    name: _mixerSliderLabel(l10n, suffix),
+                                    min: -100,
+                                    max: 100,
+                                    value:
+                                        values['Mixer$_activeMixerChannel$suffix'] ??
+                                        0,
+                                    decimals: 0,
+                                    defaultValue: 0,
+                                    trackColors: [
+                                      DarkmoonColors.textMuted,
+                                      _mixerChannelColor(_activeMixerChannel),
+                                    ],
+                                    onChanged: (v) => onChanged(
+                                      'Mixer$_activeMixerChannel$suffix',
+                                      v,
+                                    ),
+                                    onChangeEnd: (v) => onChangeEnd(
+                                      'Mixer$_activeMixerChannel$suffix',
+                                      v,
+                                    ),
+                                  ),
+                                ),
+                            ] else
+                              for (final suffix in const [
+                                'Hue',
+                                'Saturation',
+                                'Luminance',
+                              ])
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 14),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 4,
+                                        ),
+                                        child: Text(
+                                          _mixerSliderLabel(l10n, suffix),
+                                          style: TextStyle(
+                                            color: DarkmoonColors.textMuted,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.4,
+                                          ),
+                                        ),
+                                      ),
+                                      for (final channel in _mixerChannels)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 8,
+                                          ),
+                                          child: SliderRow(
+                                            name: _mixerChannelLabel(
+                                              l10n,
+                                              channel,
+                                            ),
+                                            min: -100,
+                                            max: 100,
+                                            value:
+                                                values['Mixer$channel$suffix'] ??
+                                                0,
+                                            decimals: 0,
+                                            defaultValue: 0,
+                                            trackColors: [
+                                              DarkmoonColors.textMuted,
+                                              _mixerChannelColor(channel),
+                                            ],
+                                            onChanged: (v) => onChanged(
+                                              'Mixer$channel$suffix',
+                                              v,
+                                            ),
+                                            onChangeEnd: (v) => onChangeEnd(
+                                              'Mixer$channel$suffix',
+                                              v,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
                           ],
                           _SectionHeader(
                             label: l10n.sectionColorGrading,
@@ -4491,6 +4495,71 @@ String _mixerSliderLabel(AppLocalizations l10n, String suffix) {
       return l10n.mixerLuminanceLabel;
   }
   throw ArgumentError.value(suffix, 'suffix');
+}
+
+/// Toggles the Color Mixer between its two display modes — matches
+/// Lightroom's own Mixer/HSL tabs, which control the exact same 24
+/// underlying values ("Mixer" + channel + "Hue/Saturation/Luminance"),
+/// just grouped differently: by channel (below, one at a time) or by
+/// attribute (all 8 channels stacked per Hue/Saturation/Luminance group).
+class _MixerModeTabs extends StatelessWidget {
+  const _MixerModeTabs({required this.active, required this.onSelect});
+
+  final String active;
+  final ValueChanged<String> onSelect;
+
+  static const _modes = ['Mixer', 'HSL'];
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Row(
+      children: [
+        for (final mode in _modes)
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 3),
+              child: Material(
+                color: mode == active
+                    ? DarkmoonColors.accent.withValues(alpha: 0.22)
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(6),
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(6),
+                  onTap: () => onSelect(mode),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 6),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: mode == active
+                            ? DarkmoonColors.accent
+                            : DarkmoonColors.border,
+                      ),
+                    ),
+                    alignment: Alignment.center,
+                    child: Text(
+                      mode == 'Mixer'
+                          ? l10n.mixerModeMixerLabel
+                          : l10n.mixerModeHslLabel,
+                      style: TextStyle(
+                        color: mode == active
+                            ? DarkmoonColors.accent
+                            : DarkmoonColors.textSecondary,
+                        fontSize: 11,
+                        fontWeight: mode == active
+                            ? FontWeight.w600
+                            : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
 }
 
 /// The Color Mixer's 8-band channel picker — small colored dots (one per

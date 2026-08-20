@@ -21,7 +21,12 @@ void main() {
   const sizes = [16, 32, 48, 256];
   final images = [
     for (final size in sizes)
-      img.copyResize(source, width: size, height: size, interpolation: img.Interpolation.average),
+      img.copyResize(
+        source,
+        width: size,
+        height: size,
+        interpolation: img.Interpolation.average,
+      ),
   ];
 
   final icoBytes = img.IcoEncoder().encodeImages(images);
