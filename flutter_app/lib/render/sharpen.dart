@@ -9,7 +9,11 @@ import 'luminance.dart';
 /// [applySharpen] for how each one maps onto the actual math.
 class SharpenParams {
   const SharpenParams({
-    this.amount = 0,
+    // Matches editor_screen.dart's 'SharpenAmount' _SliderSpec default (40,
+    // Lightroom's own RAW-import default) — kept in sync so the Before/After
+    // "neutral params" preview (_loadNeutralPreview) shows the same
+    // baseline sharpen as a freshly-opened, untouched photo.
+    this.amount = 40,
     this.radius = 1.0,
     this.detail = 25,
     this.masking = 0,

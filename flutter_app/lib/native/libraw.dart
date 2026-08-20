@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
+import 'camera_match.dart';
 import 'libraw_bindings.dart';
 
 /// A fully decoded/demosaiced RAW image: packed 8-bit RGB, row-major, no
@@ -157,28 +158,38 @@ Uint8List? extractRawThumbnailJpeg(String path) {
     return null;
   }
   try {
-    if (lib.libraw_unpack_thumb(lr) != 0) {
-      return null;
-    }
-    final errPtr = malloc<Int>();
-    try {
-      final image = lib.libraw_dcraw_make_mem_thumb(lr, errPtr);
-      if (image == nullptr) {
-        return null;
-      }
-      try {
-        if (image.ref.type != LibRaw_image_formats.LIBRAW_IMAGE_JPEG) {
-          return null;
-        }
-        return _copyProcessedImageData(image);
-      } finally {
-        lib.libraw_dcraw_clear_mem(image);
-      }
-    } finally {
-      malloc.free(errPtr);
-    }
+    return _extractThumbJpeg(lib, lr);
   } finally {
     lib.libraw_close(lr);
+  }
+}
+
+/// Shared by [extractRawThumbnailJpeg] (its own freshly-opened handle) and
+/// [decodeRawImage] (reuses the handle it's already unpacked/processed the
+/// main image on, for [applyCameraMatch] — cheaper than a second
+/// `libraw_open_wfile` just to re-read the same file's thumbnail). Same
+/// null-on-anything-but-a-JPEG-thumbnail contract as
+/// [extractRawThumbnailJpeg].
+Uint8List? _extractThumbJpeg(LibRawBindings lib, Pointer<libraw_data_t> lr) {
+  if (lib.libraw_unpack_thumb(lr) != 0) {
+    return null;
+  }
+  final errPtr = malloc<Int>();
+  try {
+    final image = lib.libraw_dcraw_make_mem_thumb(lr, errPtr);
+    if (image == nullptr) {
+      return null;
+    }
+    try {
+      if (image.ref.type != LibRaw_image_formats.LIBRAW_IMAGE_JPEG) {
+        return null;
+      }
+      return _copyProcessedImageData(image);
+    } finally {
+      lib.libraw_dcraw_clear_mem(image);
+    }
+  } finally {
+    malloc.free(errPtr);
   }
 }
 
@@ -191,17 +202,22 @@ enum RawDecodeStage { opening, unpacking, processing, extracting }
 /// Fully decodes/demosaics a RAW file into an RGB bitmap — the actual
 /// editable image, not just the camera's embedded preview.
 ///
-/// Mirrors the Python app's `raw.postprocess(use_camera_wb=True,
-/// output_bps=8, half_size=...)`: only white balance, bit depth and
-/// half-size are overridden, everything else (demosaic algorithm, color
-/// space, auto-brightness, ...) is left at LibRaw's defaults so behavior
-/// matches. `user_flip = -1` is set explicitly (rather than relying on
-/// LibRaw's own default) so orientation always comes from the file's EXIF
-/// data, the same fix applied on the Python side.
+/// Started from the Python app's `raw.postprocess(use_camera_wb=True,
+/// output_bps=8, half_size=...)`, but no longer matches it exactly: three
+/// params LibRaw's own defaults left sub-optimal for how this app actually
+/// uses the output (see each param's own comment below for why) are now
+/// set explicitly rather than left alone. `user_flip = -1` is set
+/// explicitly (rather than relying on LibRaw's own default) so orientation
+/// always comes from the file's EXIF data, the same fix applied on the
+/// Python side.
 ///
-/// [halfSize] skips full demosaicing — much faster, and still comfortably
-/// above a 1600px editing preview for most cameras. Set to false for a
-/// full-resolution decode (e.g. for export).
+/// [fastPreview] trades demosaic quality for speed — still a real
+/// per-pixel demosaic, never LibRaw's `half_size` box-average (see
+/// `params.half_size` below for why that path was removed entirely).
+/// [decodeEditSources] downscales to [previewMaxDimension] right after
+/// this returns, so the extra fidelity a slow algorithm buys is mostly
+/// lost anyway; set to false for a full-resolution, full-quality decode
+/// (e.g. for export or the opt-in full-quality view).
 ///
 /// [onStage], if given, is called synchronously as each [RawDecodeStage]
 /// starts — a coarse progress signal for callers that want to show more
@@ -211,7 +227,7 @@ enum RawDecodeStage { opening, unpacking, processing, extracting }
 /// Blocking native call — run on a background isolate (e.g. via `compute`).
 RawImage? decodeRawImage(
   String path, {
-  bool halfSize = true,
+  bool fastPreview = true,
   void Function(RawDecodeStage stage)? onStage,
 }) {
   onStage?.call(RawDecodeStage.opening);
@@ -239,15 +255,38 @@ RawImage? decodeRawImage(
     // versus falling back to a generic matrix.
     params.use_camera_matrix = 1;
     params.output_bps = 8;
-    // half_size does a crude 2x2-block average instead of real demosaicing.
-    // That's a fine trade for speed on standard Bayer sensors, but Fujifilm
-    // X-Trans sensors use a 6x6 color filter pattern (LibRaw's `filters ==
-    // 9` sentinel) that doesn't reduce to 2x2 blocks — half_size produces
-    // visible false-color (red/green) noise on those. Fall back to a full
-    // demosaic for X-Trans even though it's much slower (seconds instead of
-    // well under a second).
+    // half_size did a crude 2x2-block average instead of real demosaicing:
+    // fast, but visibly flatter/more aliased than a real interpolation —
+    // apps like RapidRAW/Vitrine never show a box-averaged decode, even
+    // for their fastest preview. Always demosaic properly; [fastPreview]
+    // controls speed via user_qual below instead.
+    params.half_size = 0;
+    // Fujifilm X-Trans sensors use a 6x6 color filter pattern (LibRaw's
+    // `filters == 9` sentinel) that isn't compatible with the fast linear
+    // algorithm below — forcing user_qual=0 on X-Trans produces visible
+    // false-color noise, so leave user_qual at LibRaw's own (X-Trans-aware)
+    // default for those regardless of [fastPreview].
     final isXTrans = lr.ref.idata.filters == 9;
-    params.half_size = (halfSize && !isXTrans) ? 1 : 0;
+    if (fastPreview && !isXTrans) {
+      // Linear interpolation: the fastest real demosaic LibRaw offers,
+      // still far cleaner than half_size's box average. LibRaw's own
+      // default (user_qual left at -1) resolves to a slower
+      // higher-quality algorithm (AHD-class), used here for the
+      // full-quality path below since its extra cost is worth paying when
+      // not immediately downscaled.
+      params.user_qual = 0;
+    }
+    // LibRaw's own default gamma (2.222 power / 4.5 toe-slope, dcraw's
+    // historical Rec.709-ish curve) is already close to sRGB but not
+    // exact. Match the real sRGB transfer function instead, same choice
+    // Vitrine makes explicitly (`-g 2.4 12.92` in its dcraw_emu call).
+    params.gamm[0] = 1.0 / 2.4;
+    params.gamm[1] = 12.92;
+    // LibRaw's default (0) hard-clips blown highlights to white. Blend
+    // reconstruction (2) recovers detail from the channels that aren't
+    // clipped instead, closer to how RapidRAW/Vitrine and Lightroom-style
+    // tools handle overexposed regions by default.
+    params.highlight = 2;
     params.user_flip = -1;
 
     onStage?.call(RawDecodeStage.processing);
@@ -267,10 +306,23 @@ RawImage? decodeRawImage(
             image.ref.colors != 3) {
           return null;
         }
+        final width = image.ref.width;
+        final height = image.ref.height;
+        final rgbBytes = _copyProcessedImageData(image);
+        // Nudge toward the camera's own embedded JPEG rendering — see
+        // applyCameraMatch's doc comment. Reuses this same still-open
+        // handle rather than reopening the file; a thumb-extraction
+        // failure (no embedded JPEG, unsupported thumb format, ...) just
+        // means no adjustment, not a decode failure.
         return RawImage(
-          width: image.ref.width,
-          height: image.ref.height,
-          rgbBytes: _copyProcessedImageData(image),
+          width: width,
+          height: height,
+          rgbBytes: applyCameraMatch(
+            rgbBytes,
+            width,
+            height,
+            _extractThumbJpeg(lib, lr),
+          ),
         );
       } finally {
         lib.libraw_dcraw_clear_mem(image);

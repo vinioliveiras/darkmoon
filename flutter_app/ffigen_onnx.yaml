@@ -1,0 +1,69 @@
+%YAML 1.1
+---
+# Generates lib/native/onnxruntime_bindings.dart from ONNX Runtime's public C
+# API headers (vendored under third_party/onnxruntime_headers — see that
+# folder's README for where they came from and how to refresh them).
+#
+# Unlike LibRaw, these headers are genuinely C (the C++ bits mentioned in
+# their doc comments are header-only wrapper classes in a separate file we
+# don't use) — no hand-written shim entry point is needed, ffigen parses
+# onnxruntime_c_api.h directly. dml_provider_factory.h itself pulls in
+# <d3d12.h> unconditionally (a large COM header we don't want ffigen
+# chewing through for the one exported function we need), so it is NOT used
+# as an entry point here — OrtSessionOptionsAppendExecutionProvider_DML's
+# signature is declared by hand in a tiny local shim instead (see
+# onnx_dml_c_api.h), same trick libraw_c_api.h uses for LibRaw's C++-mixed
+# header.
+name: OnnxruntimeBindings
+description: Minimal FFI bindings for ONNX Runtime inference (DirectML EP).
+output: 'lib/native/onnxruntime_bindings.dart'
+headers:
+  entry-points:
+    - 'third_party/onnxruntime_headers/onnxruntime_c_api.h'
+    - 'third_party/onnxruntime_headers/onnx_dml_c_api.h'
+  include-directives:
+    - 'third_party/onnxruntime_headers/**'
+compiler-opts:
+  - '-Ithird_party/onnxruntime_headers'
+  # onnxruntime_c_api.h's non-_WIN32 branch is missing SAL annotation
+  # macros the Windows branch relies on (_stdcall calling convention,
+  # wchar_t ORTCHAR_T) that this app's FFI calls must match — so parse it
+  # as Windows, pulling specstrings.h (and its own transitive sal.h etc.)
+  # from the Windows SDK already installed on this machine rather than
+  # undefining _WIN32.
+  - '-IC:/PROGRA~2/WINDOW~1/10/Include/100261~1.0/shared'
+functions:
+  include:
+    - 'OrtGetApiBase'
+    - 'OrtSessionOptionsAppendExecutionProvider_DML'
+structs:
+  include:
+    - 'OrtApiBase'
+    - 'OrtApi'
+    - 'OrtStatus'
+    - 'OrtEnv'
+    - 'OrtSession'
+    - 'OrtSessionOptions'
+    - 'OrtValue'
+    - 'OrtMemoryInfo'
+    - 'OrtAllocator'
+    - 'OrtTypeInfo'
+    - 'OrtTensorTypeAndShapeInfo'
+    - 'OrtRunOptions'
+  dependency-only: opaque
+enums:
+  include:
+    - 'ONNXTensorElementDataType'
+    - 'OrtLoggingLevel'
+    - 'OrtErrorCode'
+    - 'OrtMemType'
+    - 'OrtAllocatorType'
+    - 'GraphOptimizationLevel'
+    - 'ExecutionMode'
+# Windows/MSVC (what onnxruntime.dll is built with) always sizes plain
+# enums as `int` (4 bytes), matching ffigen's Windows default — safe to
+# silence, same reasoning as ffigen.yaml's LibRaw config.
+silence-enum-warning: true
+preamble: |
+  // GENERATED FILE — do not edit by hand.
+  // Regenerate with: dart run ffigen --config ffigen_onnx.yaml

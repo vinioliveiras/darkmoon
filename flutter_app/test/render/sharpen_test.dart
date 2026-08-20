@@ -52,7 +52,7 @@ void main() {
     test('amount 0 is a no-op', () {
       final img = Float32List.fromList([100, 120, 140, 80, 90, 110]);
       final copy = Float32List.fromList(img);
-      applySharpen(img, 1, 2, SharpenParams());
+      applySharpen(img, 1, 2, SharpenParams(amount: 0));
       for (var i = 0; i < img.length; i++) {
         expect(img[i], closeTo(copy[i], 0.01));
       }

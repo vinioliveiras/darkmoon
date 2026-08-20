@@ -297,7 +297,13 @@ const _sections = <String, List<_SliderSpec>>{
     ),
   ],
   'DETAIL': [
-    _SliderSpec('SharpenAmount', 0, 150, 0),
+    // 40 (not 0) matches Lightroom's own default RAW-import sharpening —
+    // and this section's other three sliders (Radius 1.0, Detail 25) were
+    // already set to Lightroom's defaults, so Amount=0 was leaving the
+    // group inconsistently "half off". A zero-edit photo now gets a small
+    // baseline sharpen instead of the flat, unsharpened look competitors
+    // like RapidRAW/Vitrine also avoid by baking in a similar default.
+    _SliderSpec('SharpenAmount', 0, 150, 40),
     _SliderSpec('SharpenRadius', 0.5, 3.0, 1.0, decimals: 1),
     _SliderSpec('SharpenDetail', 0, 100, 25),
     _SliderSpec('SharpenMasking', 0, 100, 0),

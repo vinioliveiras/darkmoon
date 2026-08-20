@@ -62,7 +62,7 @@ EditSourcePair? decodeEditSources(
   void Function(RawDecodeStage stage)? onStage,
 }) {
   final decoded = isRawFile(path)
-      ? decodeRawImage(path, halfSize: true, onStage: onStage)
+      ? decodeRawImage(path, fastPreview: true, onStage: onStage)
       : decodeCommonImage(path);
   if (decoded == null) {
     return null;
@@ -135,18 +135,18 @@ Future<EditSourcePair?> decodeEditSourcesWithProgress(
 
 /// Decodes the photo at [path] at full native resolution — no
 /// [previewMaxDimension] downscale, and (for a RAW file, unlike
-/// [decodeEditSources]) `halfSize: false` even on sensors where the fast
-/// half-size path would otherwise be usable, so "full quality" means the
-/// same thing regardless of camera. Backs the editor's opt-in full-quality
-/// view toggle: pixel math over 10s of megapixels instead of ~1.7M is a
-/// real cost, so this is only decoded when the user explicitly asks for
-/// it. Common image formats have no half-size path to skip — they're
-/// always decoded at their one native resolution.
+/// [decodeEditSources]) `fastPreview: false` for LibRaw's slower
+/// higher-quality demosaic regardless of sensor, so "full quality" means
+/// the same thing regardless of camera. Backs the editor's opt-in
+/// full-quality view toggle: pixel math over 10s of megapixels instead of
+/// ~1.7M is a real cost, so this is only decoded when the user explicitly
+/// asks for it. Common image formats have no quality knob to skip —
+/// they're always decoded at their one native resolution.
 ///
 /// Designed to run via `compute()`.
 EditSource? decodeFullQualitySource(String path) {
   final decoded = isRawFile(path)
-      ? decodeRawImage(path, halfSize: false)
+      ? decodeRawImage(path, fastPreview: false)
       : decodeCommonImage(path);
   if (decoded == null) {
     return null;

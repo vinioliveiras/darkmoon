@@ -19,7 +19,7 @@ void main(List<String> args) {
   final outPath = args.length > 1 ? args[1] : 'raw_decode_smoke_test_out.png';
 
   final stopwatch = Stopwatch()..start();
-  final decoded = decodeRawImage(path, halfSize: true);
+  final decoded = decodeRawImage(path, fastPreview: true);
   stopwatch.stop();
 
   if (decoded == null) {
