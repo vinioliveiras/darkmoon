@@ -125,6 +125,8 @@
   "settingsFastPreviewLabel": "Fast preview while dragging sliders",
   "settingsRawOnlyLabel": "RAW files only",
   "settingsRawOnlyHint": "Hide JPEG, PNG and other common image formats from the library",
+  "settingsGpuRenderLabel": "Use GPU rendering (experimental)",
+  "settingsGpuRenderHint": "Renders on the graphics card instead of the CPU; falls back automatically if unsupported",
   "settingsThumbnailThreadsLabel": "Thumbnail loading threads",
   "settingsUserDataSection": "USER DATA",
   "settingsClearThumbnailsButton": "Clear thumbnail cache",

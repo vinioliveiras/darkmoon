@@ -31,6 +31,8 @@ import 'raw_files.dart';
 import 'render/ai_denoise.dart';
 import 'render/histogram.dart';
 import 'render/mask.dart';
+import 'render/gpu/gpu_capability.dart';
+import 'render/gpu/render_job_gpu.dart';
 import 'render/render.dart' show RenderStage;
 import 'render/render_job.dart';
 import 'render/crop_transform.dart';
@@ -417,6 +419,30 @@ class _EditorScreenState extends State<EditorScreen> {
   Map<String, double> _paramValues = _defaultParamValues();
   Timer? _renderDebounceTimer;
   int _renderRequestId = 0;
+
+  /// True while `_renderPreview`'s render call (GPU or CPU) is actually
+  /// running — as opposed to `_renderDebounceTimer`, which just delays
+  /// *starting* one. See `_renderPreview`'s own doc comment for why this
+  /// guard exists: without it, rapid slider drags could pile up several
+  /// overlapping full-pipeline renders, each already in flight past the
+  /// debounce.
+  bool _renderInFlight = false;
+
+  /// The most recent render request that arrived while [_renderInFlight]
+  /// was already true — run once that render finishes, replacing (not
+  /// queuing behind) any earlier pending request, since only the latest
+  /// slider state is worth ever actually rendering.
+  ({String path, bool live, void Function(RenderStage stage)? onStage})?
+  _pendingRenderRequest;
+
+  /// Every caller currently `await`ing a coalesced-away `_renderPreview`
+  /// call (see that method's doc comment) — all resolved together once
+  /// [_pendingRenderRequest]'s eventual run finishes, since by then only
+  /// the latest request's params were ever going to render anyway. Needed
+  /// so `await _renderPreview(...)` call sites (initial photo load, the AI
+  /// Denoise apply action's progress overlay) still see their render
+  /// actually complete instead of returning the instant they got coalesced.
+  final List<Completer<void>> _pendingRenderWaiters = [];
 
   /// True while decoding a newly-selected photo's edit source (always
   /// shown — this is the multi-second X-Trans-full-demosaic case). True
@@ -902,6 +928,12 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     setState(() => _settings = settings);
+    if (settings.useGpuRender) {
+      // Only worth probing if the user has actually opted in — the probe
+      // does real GPU work (shader compile + draw + readback), no reason
+      // to pay that cost for every launch when the setting is off anyway.
+      unawaited(isGpuRenderAvailable());
+    }
     final lastFolder = settings.lastActiveFolder;
     if (lastFolder != null && await Directory(lastFolder).exists()) {
       unawaited(_loadFolder(lastFolder));
@@ -1385,6 +1417,20 @@ class _EditorScreenState extends State<EditorScreen> {
   /// smaller "live" resolution while [live] is true (a slider is actively
   /// being dragged) for speed; the settled view always renders at full
   /// sensor resolution ([EditSourcePair.full]).
+  ///
+  /// Coalesces overlapping calls via [_renderInFlight]/[_pendingRenderRequest]
+  /// rather than letting them run concurrently: harmless for the CPU path
+  /// (each render is a separate background isolate/thread, so several in
+  /// flight at once just uses more cores), but a real problem for GPU
+  /// rendering (`AppSettings.useGpuRender`), which must run inline on this
+  /// same UI isolate (see `render_gpu.dart`'s doc comment) — a rapid slider
+  /// drag firing the 25ms debounce repeatedly could otherwise pile up
+  /// several full ~25-shader-pass GPU renders all competing for this one
+  /// isolate's event loop, which is exactly what made the app go
+  /// "Not Responding" during a fast drag before this guard existed. A
+  /// coalesced-away call still counts as superseded for [_renderRequestId]
+  /// purposes once its replacement actually runs, so the existing
+  /// stale-result check below needs no changes.
   Future<void> _renderPreview(
     String path, {
     bool live = false,
@@ -1394,6 +1440,54 @@ class _EditorScreenState extends State<EditorScreen> {
     if (sources == null) {
       return;
     }
+    if (_renderInFlight) {
+      _pendingRenderRequest = (path: path, live: live, onStage: onStage);
+      final completer = Completer<void>();
+      _pendingRenderWaiters.add(completer);
+      return completer.future;
+    }
+    _renderInFlight = true;
+    try {
+      await _renderPreviewNow(path, live: live, onStage: onStage);
+    } finally {
+      _renderInFlight = false;
+      final pending = _pendingRenderRequest;
+      final waiters = _pendingRenderWaiters.toList();
+      _pendingRenderRequest = null;
+      _pendingRenderWaiters.clear();
+      if (pending != null) {
+        unawaited(
+          _renderPreview(
+            pending.path,
+            live: pending.live,
+            onStage: pending.onStage,
+          ).then(
+            (_) {
+              for (final w in waiters) {
+                w.complete();
+              }
+            },
+            onError: (Object e, StackTrace st) {
+              for (final w in waiters) {
+                w.completeError(e, st);
+              }
+            },
+          ),
+        );
+      } else {
+        for (final w in waiters) {
+          w.complete();
+        }
+      }
+    }
+  }
+
+  Future<void> _renderPreviewNow(
+    String path, {
+    bool live = false,
+    void Function(RenderStage stage)? onStage,
+  }) async {
+    final sources = _editSources[path]!;
     final requestId = ++_renderRequestId;
     _slowRenderTimer?.cancel();
     if (_isRenderingSlow) {
@@ -1431,10 +1525,18 @@ class _EditorScreenState extends State<EditorScreen> {
     // The AI Denoise apply action wants real stage progress (it's the
     // slowest single-shot render); ordinary slider-drag renders stay on
     // plain compute() so the 25ms live-preview debounce doesn't pay a
-    // fresh-isolate-spawn cost on every tick.
-    final result = onStage == null
-        ? await compute(renderJobToJpeg, job)
-        : await renderJobToJpegWithProgress(job, onStage);
+    // fresh-isolate-spawn cost on every tick. GPU rendering (opt-in, see
+    // AppSettings.useGpuRender) only applies to that plain path — it can't
+    // run inside renderJobToJpegWithProgress's dedicated isolate at all
+    // (dart:ui's GPU-backed primitives need the main isolate).
+    final RenderResult result;
+    if (onStage != null) {
+      result = await renderJobToJpegWithProgress(job, onStage);
+    } else if (_settings.useGpuRender && await isGpuRenderAvailable()) {
+      result = await renderJobToJpegGpu(job);
+    } else {
+      result = await compute(renderJobToJpeg, job);
+    }
     _slowRenderTimer?.cancel();
     // A newer render (from further slider moves, or a different photo) has
     // since been requested — this result is stale, drop it.
@@ -2328,7 +2430,11 @@ class _EditorScreenState extends State<EditorScreen> {
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           SizedBox(
-                            width: 220,
+                            // Same width as the right-side _ControlsPanel
+                            // (_controlsPanelWidth) — was 220 vs. the right
+                            // panel's 280, a visibly uneven two-column
+                            // layout the user asked to fix.
+                            width: _controlsPanelWidth,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [

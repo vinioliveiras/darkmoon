@@ -95,6 +95,8 @@
   "settingsFastPreviewLabel": "Preview rápido ao arrastar os sliders",
   "settingsRawOnlyLabel": "Somente arquivos RAW",
   "settingsRawOnlyHint": "Oculta JPEG, PNG e outros formatos comuns de imagem da biblioteca",
+  "settingsGpuRenderLabel": "Usar renderização por GPU (experimental)",
+  "settingsGpuRenderHint": "Renderiza na placa de vídeo em vez da CPU; volta automaticamente para a CPU se não houver suporte",
   "settingsThumbnailThreadsLabel": "Threads de carregamento de miniaturas",
   "settingsUserDataSection": "DADOS DO USUÁRIO",
   "settingsClearThumbnailsButton": "Limpar cache de miniaturas",

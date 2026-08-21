@@ -626,6 +626,18 @@ abstract class AppLocalizations {
   /// **'Hide JPEG, PNG and other common image formats from the library'**
   String get settingsRawOnlyHint;
 
+  /// No description provided for @settingsGpuRenderLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Use GPU rendering (experimental)'**
+  String get settingsGpuRenderLabel;
+
+  /// No description provided for @settingsGpuRenderHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Renders on the graphics card instead of the CPU; falls back automatically if unsupported'**
+  String get settingsGpuRenderHint;
+
   /// No description provided for @settingsThumbnailThreadsLabel.
   ///
   /// In en, this message translates to:

@@ -9,8 +9,12 @@ import 'luminance.dart';
 /// level is the only decision the user makes.
 enum AiDenoiseLevel { light, medium, strong }
 
-class _AiDenoiseTuning {
-  const _AiDenoiseTuning({
+/// Public (not `_AiDenoiseTuning`) so the GPU render path
+/// (`lib/render/gpu/denoise_gpu.dart`) can reuse [aiDenoiseTuning]'s exact
+/// per-level values for its own uniforms instead of duplicating them and
+/// risking drift.
+class AiDenoiseTuning {
+  const AiDenoiseTuning({
     required this.lumaSigma,
     required this.lumaStrength,
     required this.chromaSigma,
@@ -31,20 +35,20 @@ class _AiDenoiseTuning {
   final double chromaStrength;
 }
 
-const _tuning = {
-  AiDenoiseLevel.light: _AiDenoiseTuning(
+const aiDenoiseTuning = {
+  AiDenoiseLevel.light: AiDenoiseTuning(
     lumaSigma: 1.4,
     lumaStrength: 0.35,
     chromaSigma: 3.0,
     chromaStrength: 0.45,
   ),
-  AiDenoiseLevel.medium: _AiDenoiseTuning(
+  AiDenoiseLevel.medium: AiDenoiseTuning(
     lumaSigma: 2.0,
     lumaStrength: 0.55,
     chromaSigma: 4.0,
     chromaStrength: 0.65,
   ),
-  AiDenoiseLevel.strong: _AiDenoiseTuning(
+  AiDenoiseLevel.strong: AiDenoiseTuning(
     lumaSigma: 2.8,
     lumaStrength: 0.7,
     chromaSigma: 5.0,
@@ -97,7 +101,7 @@ void applyAiDenoise(
   if (level == null || width < 3 || height < 3) {
     return;
   }
-  final tuning = _tuning[level]!;
+  final tuning = aiDenoiseTuning[level]!;
   final pixelCount = width * height;
   final luminance = Float32List(pixelCount);
   final chromaR = Float32List(pixelCount);

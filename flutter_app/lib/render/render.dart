@@ -202,9 +202,13 @@ void applyLocalAdjustmentSteps(
   RenderParams params, {
   int rowOffset = 0,
 }) {
-  final pixelCount = width * height;
-  _applyWhiteBalance(buffer, params.temperature, params.tint);
-  _applyExposure(buffer, params.exposure);
+  // Split into applyPreDenoisePointOps/applyPostDenoisePointOps (rather
+  // than inlined here) so the GPU render path
+  // (`lib/render/gpu/render_gpu.dart`, `shaders/point_ops_pre_denoise.frag`
+  // + `shaders/point_ops_post_denoise.frag`) has an exact CPU reference for
+  // each of its two shader passes to test against — see
+  // project_gpu_render_plan.md's Phase 1.
+  applyPreDenoisePointOps(buffer, params);
   // Denoise runs early — right after white balance/exposure establish the
   // pixel values but before any tone shaping — so Highlights/Shadows/
   // Whites/Blacks and Clarity/Texture don't push local contrast into noise
@@ -216,23 +220,7 @@ void applyLocalAdjustmentSteps(
   // Basic panel tone adjustments.
   applyBaselineChromaSmoothing(buffer, width, height, rowOffset: rowOffset);
   applyAiDenoise(buffer, width, height, params.aiDenoise);
-  _applyBrightnessContrast(buffer, params.brightness, params.contrast);
-  _applyHighlightsShadows(
-    buffer,
-    pixelCount,
-    params.highlights,
-    params.shadows,
-  );
-  _applyWhitesBlacks(buffer, pixelCount, params.whites, params.blacks);
-  applyToneCurve(buffer, params.curves.tone);
-  applyColorCurves(
-    buffer,
-    params.curves.red,
-    params.curves.green,
-    params.curves.blue,
-  );
-  applyColorMixer(buffer, params.colorMixer);
-  applyColorGrading(buffer, params.colorGrading);
+  applyPostDenoisePointOps(buffer, width, height, params);
   applySharpen(buffer, width, height, params.sharpen);
   applyLocalContrast(
     buffer,
@@ -250,6 +238,49 @@ void applyLocalAdjustmentSteps(
     25,
     protectMidtones: true,
   );
+}
+
+/// White balance + exposure — the two point-operation stages that must
+/// run *before* denoise (see [applyLocalAdjustmentSteps]'s ordering
+/// comment). Split out from [applyLocalAdjustmentSteps] as its own
+/// function so `shaders/point_ops_pre_denoise.frag`'s GPU port has an
+/// exact, directly-callable CPU reference to test against, independent of
+/// baseline chroma smoothing (which has no GPU implementation yet).
+void applyPreDenoisePointOps(Float32List buffer, RenderParams params) {
+  _applyWhiteBalance(buffer, params.temperature, params.tint);
+  _applyExposure(buffer, params.exposure);
+}
+
+/// Every point-operation stage that runs *after* denoise, up to (but not
+/// including) Sharpen/Texture/Clarity: brightness/contrast, highlights/
+/// shadows, whites/blacks, tone + color curves, color mixer, color
+/// grading. Split out from [applyLocalAdjustmentSteps] for the same
+/// reason as [applyPreDenoisePointOps] — `shaders/point_ops_post_denoise.frag`'s
+/// exact CPU reference.
+void applyPostDenoisePointOps(
+  Float32List buffer,
+  int width,
+  int height,
+  RenderParams params,
+) {
+  final pixelCount = width * height;
+  _applyBrightnessContrast(buffer, params.brightness, params.contrast);
+  _applyHighlightsShadows(
+    buffer,
+    pixelCount,
+    params.highlights,
+    params.shadows,
+  );
+  _applyWhitesBlacks(buffer, pixelCount, params.whites, params.blacks);
+  applyToneCurve(buffer, params.curves.tone);
+  applyColorCurves(
+    buffer,
+    params.curves.red,
+    params.curves.green,
+    params.curves.blue,
+  );
+  applyColorMixer(buffer, params.colorMixer);
+  applyColorGrading(buffer, params.colorGrading);
 }
 
 /// Everything [applyLocalAdjustmentSteps] leaves out — chiefly Dehaze,

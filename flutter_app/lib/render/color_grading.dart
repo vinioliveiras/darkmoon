@@ -67,13 +67,16 @@ class ColorGradingValues {
 
 /// How strongly a fully-saturated wheel color tints the image — tuned so
 /// the effect is visible without immediately overwhelming the photo's own
-/// color, similar in scale to the app's other color adjustments.
-const _tintStrength = 0.6;
+/// color, similar in scale to the app's other color adjustments. Public
+/// so the GPU render path (`lib/render/gpu/render_gpu.dart`) can reuse
+/// [gradeTintOffset]'s exact math for its per-range uniforms instead of
+/// duplicating it and risking drift.
+const gradeTintStrength = 0.6;
 
 /// A signed RGB offset around neutral gray representing [range]'s wheel
 /// position — zero when saturation is 0, matching every other
 /// adjustment's no-op rule.
-List<double> _tintOffset(GradeRange range) {
+List<double> gradeTintOffset(GradeRange range) {
   if (range.saturation == 0) {
     return const [0.0, 0.0, 0.0];
   }
@@ -83,9 +86,9 @@ List<double> _tintOffset(GradeRange range) {
     0.5,
   );
   return [
-    (rgb[0] * 255 - 127.5) * _tintStrength,
-    (rgb[1] * 255 - 127.5) * _tintStrength,
-    (rgb[2] * 255 - 127.5) * _tintStrength,
+    (rgb[0] * 255 - 127.5) * gradeTintStrength,
+    (rgb[1] * 255 - 127.5) * gradeTintStrength,
+    (rgb[2] * 255 - 127.5) * gradeTintStrength,
   ];
 }
 
@@ -99,10 +102,10 @@ void applyColorGrading(Float32List img, ColorGradingValues grading) {
   if (grading.isIdentity) {
     return;
   }
-  final shadowTint = _tintOffset(grading.shadows);
-  final midTint = _tintOffset(grading.midtones);
-  final highlightTint = _tintOffset(grading.highlights);
-  final globalTint = _tintOffset(grading.global);
+  final shadowTint = gradeTintOffset(grading.shadows);
+  final midTint = gradeTintOffset(grading.midtones);
+  final highlightTint = gradeTintOffset(grading.highlights);
+  final globalTint = gradeTintOffset(grading.global);
   final globalLumOffset = grading.global.luminance / 100.0 * 80.0;
 
   for (var i = 0; i < img.length; i += 3) {

@@ -115,6 +115,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
               value: _settings.rawOnly,
               onChanged: (v) => _update(_settings.copyWith(rawOnly: v)),
             ),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(l10n.settingsGpuRenderLabel),
+              subtitle: Text(l10n.settingsGpuRenderHint),
+              value: _settings.useGpuRender,
+              onChanged: (v) => _update(_settings.copyWith(useGpuRender: v)),
+            ),
             const SizedBox(height: 8),
             Row(
               children: [

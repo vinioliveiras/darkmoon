@@ -19,6 +19,50 @@ Float32List _minAcrossChannels(Float32List rgb, int pixelCount) {
   return out;
 }
 
+/// Estimates the scene's atmospheric light (one value per RGB channel,
+/// 0..1) from the pixels least likely to be haze-free — the ones with the
+/// largest dark-channel value. This is the one genuinely global step in
+/// [applyDehaze]'s algorithm (a full-image sort by dark-channel value), so
+/// it's the piece the GPU render path (`lib/render/gpu/dehaze_gpu.dart`)
+/// keeps on CPU after reading back its current buffer, rather than
+/// reimplementing a full-image reduction in GLSL — see
+/// `project_gpu_render_plan.md`'s Phase 5. Extracted out of [applyDehaze]
+/// as a behavior-preserving refactor (same logic, same result), so both
+/// paths share one implementation instead of risking drift.
+///
+/// [norm] is packed RGB (3 values/pixel, already normalized to 0..1) —
+/// the GPU render path (`dehaze_gpu.dart`) builds this from a
+/// `gpu_pass.dart` readback (`rgbaToRgb` output / 255), and [applyDehaze]
+/// passes its own already-normalized `norm` buffer directly.
+Float32List estimateAtmosphericLight(Float32List norm, int width, int height) {
+  final pixelCount = width * height;
+  final darkChannel = minFilter(
+    _minAcrossChannels(norm, pixelCount),
+    width,
+    height,
+    15,
+  );
+
+  // Per-channel max among the 0.1% of pixels with the largest dark-channel
+  // value (the pixels least likely to be in shadow or deeply saturated
+  // color, i.e. most likely to be pure haze/sky).
+  final numPixels = math.max((pixelCount * 0.001).toInt(), 1);
+  final orderedByDarkChannel = List<int>.generate(pixelCount, (i) => i)
+    ..sort((a, b) => darkChannel[a].compareTo(darkChannel[b]));
+  final atmosphericLight = Float32List(3);
+  for (var c = 0; c < 3; c++) {
+    var maxV = 0.0;
+    for (var k = pixelCount - numPixels; k < pixelCount; k++) {
+      final v = norm[orderedByDarkChannel[k] * 3 + c];
+      if (v > maxV) {
+        maxV = v;
+      }
+    }
+    atmosphericLight[c] = maxV.clamp(0.5, 1.0);
+  }
+  return atmosphericLight;
+}
+
 /// A single-image haze removal / addition effect based on the dark-channel
 /// prior (He, Sun & Tang), matching the Python app's `apply_dehaze`:
 /// estimate atmospheric light from the pixels least likely to be haze-free
@@ -38,30 +82,7 @@ void applyDehaze(Float32List img, int width, int height, double amount) {
   }
   final strength = amount / 100.0;
 
-  final darkChannel = minFilter(
-    _minAcrossChannels(norm, pixelCount),
-    width,
-    height,
-    15,
-  );
-
-  // Atmospheric light: per-channel max among the 0.1% of pixels with the
-  // largest dark-channel value (the pixels least likely to be in shadow or
-  // deeply saturated color, i.e. most likely to be pure haze/sky).
-  final numPixels = math.max((pixelCount * 0.001).toInt(), 1);
-  final orderedByDarkChannel = List<int>.generate(pixelCount, (i) => i)
-    ..sort((a, b) => darkChannel[a].compareTo(darkChannel[b]));
-  final atmosphericLight = Float32List(3);
-  for (var c = 0; c < 3; c++) {
-    var maxV = 0.0;
-    for (var k = pixelCount - numPixels; k < pixelCount; k++) {
-      final v = norm[orderedByDarkChannel[k] * 3 + c];
-      if (v > maxV) {
-        maxV = v;
-      }
-    }
-    atmosphericLight[c] = maxV.clamp(0.5, 1.0);
-  }
+  final atmosphericLight = estimateAtmosphericLight(norm, width, height);
 
   final normalizedByAtm = Float32List(norm.length);
   for (var p = 0; p < pixelCount; p++) {

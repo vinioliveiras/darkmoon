@@ -78,8 +78,10 @@ Float32List boxBlurMean(
 /// given [sigma] — the standard "fast Gaussian via repeated box blur"
 /// technique (Kovesi / Getreuer), since a true Gaussian kernel would cost
 /// O(sigma) per pixel and Clarity's sigma (25) is too large for that to
-/// stay fast at preview resolutions.
-List<int> _boxRadiiForGauss(double sigma, int passes) {
+/// stay fast at preview resolutions. Public so the GPU render path
+/// (`lib/render/gpu/`) can precompute the same radii on CPU and pass them
+/// as shader uniforms, rather than reimplementing this math in GLSL.
+List<int> boxRadiiForGauss(double sigma, int passes) {
   if (sigma <= 0) {
     return List.filled(passes, 0);
   }
@@ -109,7 +111,7 @@ Float32List gaussianBlurChannel(
     return Float32List.fromList(channel);
   }
   var result = channel;
-  for (final radius in _boxRadiiForGauss(sigma, 3)) {
+  for (final radius in boxRadiiForGauss(sigma, 3)) {
     result = boxBlurMean(result, width, height, radius);
   }
   return result;
@@ -322,10 +324,7 @@ Float32List upsampleChannelNearest(
   final firstBlock = rowOffset ~/ factor;
   final out = Float32List(dstWidth * dstHeight);
   for (var y = 0; y < dstHeight; y++) {
-    final sy = ((rowOffset + y) ~/ factor - firstBlock).clamp(
-      0,
-      srcHeight - 1,
-    );
+    final sy = ((rowOffset + y) ~/ factor - firstBlock).clamp(0, srcHeight - 1);
     final srcRow = sy * srcWidth;
     final dstRow = y * dstWidth;
     for (var x = 0; x < dstWidth; x++) {

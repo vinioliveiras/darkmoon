@@ -15,8 +15,9 @@ import 'render_params.dart';
 
 /// Matches thumbnail_loader.dart's thumbnailMaxDimension — kept as its own
 /// constant here to avoid this file depending on the thumbnail loader just
-/// for one number.
-const int _filmstripThumbnailMaxDimension = 200;
+/// for one number. Public so `render_job_gpu.dart`'s `renderJobToJpegGpu`
+/// can reuse the exact same value for its own thumbnail encode.
+const int filmstripThumbnailMaxDimension = 200;
 
 /// A single `compute()` request: apply [params] (and any [masks], stacked
 /// on top) to [source] and encode the result as JPEG. Bundled into one
@@ -127,7 +128,7 @@ Future<RenderResult> renderJobToJpeg(
     order: img.ChannelOrder.rgb,
   );
   final jpegBytes = Uint8List.fromList(img.encodeJpg(image, quality: 90));
-  final thumbnail = fitToMaxDimension(image, _filmstripThumbnailMaxDimension);
+  final thumbnail = fitToMaxDimension(image, filmstripThumbnailMaxDimension);
   final thumbnailBytes = Uint8List.fromList(
     img.encodeJpg(thumbnail, quality: 85),
   );

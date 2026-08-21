@@ -66,9 +66,7 @@ Future<Uint8List> _runPassthrough(ui.Image source) async {
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
-  testWidgets('shader asset loads and rootBundle is reachable', (
-    tester,
-  ) async {
+  testWidgets('shader asset loads and rootBundle is reachable', (tester) async {
     // Fails loudly (not silently returns null) if the `flutter: shaders:`
     // pubspec entry or the build's asset bundling is wrong — confirms the
     // "shader compile-time asset bundling correctness" risk from the plan
@@ -138,11 +136,15 @@ void main() {
             bytes[i + 3] = 255;
           }
           final completer = Completer<ui.Image>();
-          ui.decodeImageFromPixels(bytes, width, height, ui.PixelFormat.rgba8888, (
-            img,
-          ) {
-            completer.complete(img);
-          });
+          ui.decodeImageFromPixels(
+            bytes,
+            width,
+            height,
+            ui.PixelFormat.rgba8888,
+            (img) {
+              completer.complete(img);
+            },
+          );
           final img = await completer.future;
           final result = await _runPassthrough(img);
           return 'ran ${result.length} bytes back, first pixel r=${result[0]}';

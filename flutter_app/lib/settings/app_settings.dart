@@ -21,6 +21,7 @@ class AppSettings {
   const AppSettings({
     this.language = 'auto',
     this.fastPreview = true,
+    this.useGpuRender = false,
     this.thumbnailConcurrency = 4,
     this.rawOnly = false,
     this.libraryFolders = const [],
@@ -35,6 +36,16 @@ class AppSettings {
   /// "live" resolution for speed; while false, every render uses full
   /// preview quality (slower to update while dragging).
   final bool fastPreview;
+
+  /// Opt-in GPU-accelerated rendering (`lib/render/gpu/`) instead of the
+  /// CPU pipeline — off by default (see project_gpu_render_plan.md's
+  /// "What Happens to the CPU Path": GPU rendering is still new,
+  /// unverified on the wide range of real Windows GPU/driver
+  /// combinations the CPU path already handles reliably). Only takes
+  /// effect when `isGpuRenderAvailable()`'s capability probe passes and
+  /// the photo has no mask layers (masks aren't GPU-ported yet) —
+  /// editor_screen.dart falls back to CPU silently otherwise.
+  final bool useGpuRender;
 
   /// How many thumbnails to decode concurrently when a folder is opened.
   final int thumbnailConcurrency;
@@ -60,6 +71,7 @@ class AppSettings {
   AppSettings copyWith({
     String? language,
     bool? fastPreview,
+    bool? useGpuRender,
     int? thumbnailConcurrency,
     bool? rawOnly,
     List<String>? libraryFolders,
@@ -68,6 +80,7 @@ class AppSettings {
   }) => AppSettings(
     language: language ?? this.language,
     fastPreview: fastPreview ?? this.fastPreview,
+    useGpuRender: useGpuRender ?? this.useGpuRender,
     thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
     rawOnly: rawOnly ?? this.rawOnly,
     libraryFolders: libraryFolders ?? this.libraryFolders,
@@ -108,6 +121,7 @@ Future<AppSettings> loadSettings() async {
     return AppSettings(
       language: raw['language'] as String? ?? defaults.language,
       fastPreview: raw['fastPreview'] as bool? ?? defaults.fastPreview,
+      useGpuRender: raw['useGpuRender'] as bool? ?? defaults.useGpuRender,
       thumbnailConcurrency:
           (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
       rawOnly: raw['rawOnly'] as bool? ?? defaults.rawOnly,
@@ -131,6 +145,7 @@ Future<void> saveSettings(AppSettings settings) async {
     jsonEncode({
       'language': settings.language,
       'fastPreview': settings.fastPreview,
+      'useGpuRender': settings.useGpuRender,
       'thumbnailConcurrency': settings.thumbnailConcurrency,
       'rawOnly': settings.rawOnly,
       'libraryFolders': settings.libraryFolders,

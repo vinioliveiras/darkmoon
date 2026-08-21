@@ -297,6 +297,14 @@ class AppLocalizationsPt extends AppLocalizations {
       'Oculta JPEG, PNG e outros formatos comuns de imagem da biblioteca';
 
   @override
+  String get settingsGpuRenderLabel =>
+      'Usar renderização por GPU (experimental)';
+
+  @override
+  String get settingsGpuRenderHint =>
+      'Renderiza na placa de vídeo em vez da CPU; volta automaticamente para a CPU se não houver suporte';
+
+  @override
   String get settingsThumbnailThreadsLabel =>
       'Threads de carregamento de miniaturas';
 

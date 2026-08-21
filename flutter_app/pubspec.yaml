@@ -76,6 +76,28 @@ flutter:
   # spike only so far; more get added as later phases land.
   shaders:
     - shaders/_spike_passthrough.frag
+    - shaders/point_ops_pre_denoise.frag
+    - shaders/point_ops_post_denoise.frag
+    - shaders/box_blur_h.frag
+    - shaders/box_blur_v.frag
+    - shaders/min_filter_h.frag
+    - shaders/min_filter_v.frag
+    - shaders/downsample_box.frag
+    - shaders/upsample.frag
+    - shaders/chroma_extract.frag
+    - shaders/luminance_extract.frag
+    - shaders/residual_sq.frag
+    - shaders/denoise_combine.frag
+    - shaders/chroma_recombine.frag
+    - shaders/luma_chroma_recombine.frag
+    - shaders/abs_residual.frag
+    - shaders/sharpen_combine.frag
+    - shaders/local_contrast_combine.frag
+    - shaders/dehaze_min_channel.frag
+    - shaders/dehaze_pretransmission.frag
+    - shaders/dehaze_apply.frag
+    - shaders/post_dehaze.frag
+    - shaders/mask_blend.frag
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in

@@ -296,6 +296,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Hide JPEG, PNG and other common image formats from the library';
 
   @override
+  String get settingsGpuRenderLabel => 'Use GPU rendering (experimental)';
+
+  @override
+  String get settingsGpuRenderHint =>
+      'Renders on the graphics card instead of the CPU; falls back automatically if unsupported';
+
+  @override
   String get settingsThumbnailThreadsLabel => 'Thumbnail loading threads';
 
   @override
