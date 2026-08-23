@@ -63,7 +63,7 @@ Future<ExportResult> _exportPhotoInternal(
   try {
     onStage?.call(ExportStage.decoding);
     final decoded = isRawFile(request.sourcePath)
-        ? decodeRawImage(request.sourcePath)
+        ? decodeRawImage(request.sourcePath, fastPreview: false)
         : decodeCommonImage(request.sourcePath);
     if (decoded == null) {
       return ExportResult.failure('Could not decode ${request.sourcePath}');

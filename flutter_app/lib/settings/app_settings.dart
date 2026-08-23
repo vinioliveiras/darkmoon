@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../native/edit_source.dart' show defaultPreviewMaxDimension;
+
 /// Cap concurrency at 8 even on many-core machines — thumbnail decode is
 /// bottlenecked on the same LibRaw/JPEG-decode work per photo regardless
 /// of core count, and spawning too many isolates at once just adds
@@ -14,6 +16,15 @@ int _defaultThumbnailConcurrency() => Platform.numberOfProcessors.clamp(2, 8);
 /// unbounded over months of use.
 const _maxRecentFiles = 15;
 
+/// The discrete preview-resolution choices offered in Settings — a
+/// long-edge pixel cap for the downscaled buffer the editor decodes and
+/// renders against while editing (see `edit_source.dart`'s
+/// `EditSourcePair.preview` and `defaultPreviewMaxDimension`). Export
+/// always decodes at the sensor's native resolution regardless of this
+/// setting, so this only trades editing-preview sharpness for decode/
+/// render speed, never final output quality.
+const List<int> previewResolutionOptions = [512, 768, 1024, 1280, 1600, 2048];
+
 /// App-wide settings, mirroring the Python app's `DEFAULT_SETTINGS` (minus
 /// the thumbnail disk cache setting, since this port's cache doesn't have
 /// a size/eviction knob yet to expose).
@@ -21,7 +32,8 @@ class AppSettings {
   const AppSettings({
     this.language = 'auto',
     this.fastPreview = true,
-    this.useGpuRender = false,
+    this.previewResolution = defaultPreviewMaxDimension,
+    this.useGpuRender = true,
     this.thumbnailConcurrency = 4,
     this.rawOnly = false,
     this.libraryFolders = const [],
@@ -37,14 +49,23 @@ class AppSettings {
   /// preview quality (slower to update while dragging).
   final bool fastPreview;
 
-  /// Opt-in GPU-accelerated rendering (`lib/render/gpu/`) instead of the
-  /// CPU pipeline — off by default (see project_gpu_render_plan.md's
-  /// "What Happens to the CPU Path": GPU rendering is still new,
-  /// unverified on the wide range of real Windows GPU/driver
-  /// combinations the CPU path already handles reliably). Only takes
-  /// effect when `isGpuRenderAvailable()`'s capability probe passes and
-  /// the photo has no mask layers (masks aren't GPU-ported yet) —
-  /// editor_screen.dart falls back to CPU silently otherwise.
+  /// The long-edge pixel cap the editor decodes/renders against while
+  /// editing (see `edit_source.dart`'s `EditSourcePair.preview`) — one of
+  /// [previewResolutionOptions]. Lower is faster to decode and re-render on
+  /// every adjustment but softer on screen; export always uses the
+  /// sensor's native resolution regardless of this setting.
+  final int previewResolution;
+
+  /// GPU-accelerated rendering (`lib/render/gpu/`) for the settled
+  /// (non-drag) preview render, instead of the CPU pipeline — on by
+  /// default now that the editing preview itself is downscaled (see
+  /// [previewResolution]), which keeps each shader pass cheap. Only
+  /// takes effect when
+  /// `isGpuRenderAvailable()`'s capability probe passes;
+  /// editor_screen.dart falls back to CPU silently otherwise (including
+  /// for the whole live-drag path, deliberately kept off GPU — see
+  /// `_renderPreviewNow`'s doc comment for the "Not Responding" freeze
+  /// this avoids).
   final bool useGpuRender;
 
   /// How many thumbnails to decode concurrently when a folder is opened.
@@ -71,6 +92,7 @@ class AppSettings {
   AppSettings copyWith({
     String? language,
     bool? fastPreview,
+    int? previewResolution,
     bool? useGpuRender,
     int? thumbnailConcurrency,
     bool? rawOnly,
@@ -80,6 +102,7 @@ class AppSettings {
   }) => AppSettings(
     language: language ?? this.language,
     fastPreview: fastPreview ?? this.fastPreview,
+    previewResolution: previewResolution ?? this.previewResolution,
     useGpuRender: useGpuRender ?? this.useGpuRender,
     thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
     rawOnly: rawOnly ?? this.rawOnly,
@@ -121,6 +144,9 @@ Future<AppSettings> loadSettings() async {
     return AppSettings(
       language: raw['language'] as String? ?? defaults.language,
       fastPreview: raw['fastPreview'] as bool? ?? defaults.fastPreview,
+      previewResolution:
+          (raw['previewResolution'] as num?)?.toInt() ??
+          defaults.previewResolution,
       useGpuRender: raw['useGpuRender'] as bool? ?? defaults.useGpuRender,
       thumbnailConcurrency:
           (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
@@ -145,6 +171,7 @@ Future<void> saveSettings(AppSettings settings) async {
     jsonEncode({
       'language': settings.language,
       'fastPreview': settings.fastPreview,
+      'previewResolution': settings.previewResolution,
       'useGpuRender': settings.useGpuRender,
       'thumbnailConcurrency': settings.thumbnailConcurrency,
       'rawOnly': settings.rawOnly,

@@ -211,10 +211,13 @@ enum RawDecodeStage { opening, unpacking, processing, extracting }
 /// always comes from the file's EXIF data, the same fix applied on the
 /// Python side.
 ///
-/// Every caller now wants the same thing (full sensor resolution, best
-/// available demosaic) — there's no more separate fast/preview decode
-/// mode, so `user_qual` is left at LibRaw's own default (an AHD-class
-/// algorithm) rather than overridden.
+/// [fastPreview] trades demosaic quality for speed — still a real
+/// per-pixel demosaic, never LibRaw's `half_size` box-average (see
+/// `params.half_size` below for why that path was removed entirely).
+/// [decodeEditSources] downscales to [previewMaxDimension] right after
+/// this returns, so the extra fidelity a slow algorithm buys is mostly
+/// lost anyway; set to false for a full-resolution, full-quality decode
+/// (export, or the opt-in full-quality view).
 ///
 /// [onStage], if given, is called synchronously as each [RawDecodeStage]
 /// starts — a coarse progress signal for callers that want to show more
@@ -224,6 +227,7 @@ enum RawDecodeStage { opening, unpacking, processing, extracting }
 /// Blocking native call — run on a background isolate (e.g. via `compute`).
 RawImage? decodeRawImage(
   String path, {
+  bool fastPreview = true,
   void Function(RawDecodeStage stage)? onStage,
 }) {
   onStage?.call(RawDecodeStage.opening);
@@ -254,10 +258,24 @@ RawImage? decodeRawImage(
     // half_size did a crude 2x2-block average instead of real demosaicing:
     // fast, but visibly flatter/more aliased than a real interpolation —
     // apps like RapidRAW/Vitrine never show a box-averaged decode, even
-    // for their fastest preview. Always demosaic properly; user_qual is
-    // left at LibRaw's own (X-Trans-aware) default for actual demosaic
-    // quality.
+    // for their fastest preview. Always demosaic properly; [fastPreview]
+    // controls speed via user_qual below instead.
     params.half_size = 0;
+    // Fujifilm X-Trans sensors use a 6x6 color filter pattern (LibRaw's
+    // `filters == 9` sentinel) that isn't compatible with the fast linear
+    // algorithm below — forcing user_qual=0 on X-Trans produces visible
+    // false-color noise, so leave user_qual at LibRaw's own (X-Trans-aware)
+    // default for those regardless of [fastPreview].
+    final isXTrans = lr.ref.idata.filters == 9;
+    if (fastPreview && !isXTrans) {
+      // Linear interpolation: the fastest real demosaic LibRaw offers,
+      // still far cleaner than half_size's box average. LibRaw's own
+      // default (user_qual left at -1) resolves to a slower
+      // higher-quality algorithm (AHD-class), used here for the
+      // full-quality path below since its extra cost is worth paying when
+      // not immediately downscaled.
+      params.user_qual = 0;
+    }
     // LibRaw's own default gamma (2.222 power / 4.5 toe-slope, dcraw's
     // historical Rec.709-ish curve) is already close to sRGB but not
     // exact. Match the real sRGB transfer function instead, same choice

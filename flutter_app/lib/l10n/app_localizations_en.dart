@@ -289,6 +289,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsFastPreviewLabel => 'Fast preview while dragging sliders';
 
   @override
+  String get settingsPreviewResolutionLabel => 'Preview resolution';
+
+  @override
+  String get settingsPreviewResolutionHint =>
+      'Lower is faster to open and edit photos; export always uses the full sensor resolution';
+
+  @override
   String get settingsRawOnlyLabel => 'RAW files only';
 
   @override

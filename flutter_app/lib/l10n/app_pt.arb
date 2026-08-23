@@ -93,6 +93,8 @@
   "settingsLanguageEnglish": "English",
   "settingsLanguagePortuguese": "Português",
   "settingsFastPreviewLabel": "Preview rápido ao arrastar os sliders",
+  "settingsPreviewResolutionLabel": "Resolução do preview",
+  "settingsPreviewResolutionHint": "Quanto menor, mais rápido para abrir e editar fotos; a exportação sempre usa a resolução total do sensor",
   "settingsRawOnlyLabel": "Somente arquivos RAW",
   "settingsRawOnlyHint": "Oculta JPEG, PNG e outros formatos comuns de imagem da biblioteca",
   "settingsGpuRenderLabel": "Usar renderização por GPU (experimental)",

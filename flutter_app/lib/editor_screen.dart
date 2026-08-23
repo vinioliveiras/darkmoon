@@ -967,8 +967,30 @@ class _EditorScreenState extends State<EditorScreen> {
           if (next.language != _settings.language) {
             widget.onLanguageChanged(next.language);
           }
-          setState(() => _settings = next);
+          // Every cached EditSourcePair was decoded at the old preview
+          // resolution — drop them so each photo picks up the new setting
+          // next time it's selected, and redecode the one on screen right
+          // now so the change is visible immediately instead of only on
+          // the next photo switch.
+          final previewResolutionChanged =
+              next.previewResolution != _settings.previewResolution;
+          setState(() {
+            _settings = next;
+            if (previewResolutionChanged) {
+              _editSources.clear();
+            }
+          });
           unawaited(saveSettings(next));
+          if (previewResolutionChanged) {
+            final selected = _selectedIndex == null
+                ? null
+                : _files[_selectedIndex!];
+            if (selected != null) {
+              unawaited(
+                _loadEditSourceAndRender(selected.path, _folderGeneration),
+              );
+            }
+          }
         },
         onClearThumbnails: () => unawaited(_clearThumbnailCache()),
         onClearCatalog: () => unawaited(_clearCatalogData()),
@@ -1381,11 +1403,15 @@ class _EditorScreenState extends State<EditorScreen> {
         _loadingOverlayHidden = false;
         _decodeStage = null;
       });
-      sources = await decodeEditSourcesWithProgress(path, (stage) {
-        if (mounted && generation == _folderGeneration) {
-          setState(() => _decodeStage = stage);
-        }
-      });
+      sources = await decodeEditSourcesWithProgress(
+        path,
+        (stage) {
+          if (mounted && generation == _folderGeneration) {
+            setState(() => _decodeStage = stage);
+          }
+        },
+        previewMaxDimension: _settings.previewResolution,
+      );
       if (!mounted || generation != _folderGeneration) {
         return;
       }
@@ -1415,22 +1441,22 @@ class _EditorScreenState extends State<EditorScreen> {
   /// Renders [path]'s cached edit source with the current slider values and
   /// caches the resulting JPEG + histogram + filmstrip thumbnail. Uses the
   /// smaller "live" resolution while [live] is true (a slider is actively
-  /// being dragged) for speed; the settled view always renders at full
-  /// sensor resolution ([EditSourcePair.full]).
+  /// being dragged) for speed; the settled view renders at the downscaled
+  /// [EditSourcePair.preview] resolution otherwise.
   ///
   /// Coalesces overlapping calls via [_renderInFlight]/[_pendingRenderRequest]
   /// rather than letting them run concurrently: harmless for the CPU path
   /// (each render is a separate background isolate/thread, so several in
-  /// flight at once just uses more cores), but a real problem for GPU
-  /// rendering (`AppSettings.useGpuRender`), which must run inline on this
-  /// same UI isolate (see `render_gpu.dart`'s doc comment) — a rapid slider
-  /// drag firing the 25ms debounce repeatedly could otherwise pile up
-  /// several full ~25-shader-pass GPU renders all competing for this one
-  /// isolate's event loop, which is exactly what made the app go
-  /// "Not Responding" during a fast drag before this guard existed. A
-  /// coalesced-away call still counts as superseded for [_renderRequestId]
-  /// purposes once its replacement actually runs, so the existing
-  /// stale-result check below needs no changes.
+  /// flight at once just uses more cores), and also why GPU rendering
+  /// (`AppSettings.useGpuRender`) stays off the `live` path entirely (see
+  /// [_renderPreviewNow]) rather than relying on this guard alone — a rapid
+  /// slider drag firing the 25ms debounce repeatedly once piled up several
+  /// full GPU renders all competing for the one UI isolate they must run
+  /// inline on (see `render_gpu.dart`'s doc comment), which is exactly what
+  /// made the app go "Not Responding" during a fast drag. A coalesced-away
+  /// call still counts as superseded for [_renderRequestId] purposes once
+  /// its replacement actually runs, so the existing stale-result check
+  /// below needs no changes.
   Future<void> _renderPreview(
     String path, {
     bool live = false,
@@ -1514,7 +1540,7 @@ class _EditorScreenState extends State<EditorScreen> {
           )
         : _cropTransform;
     final job = RenderJob(
-      source: live ? sources.live : sources.full,
+      source: live ? sources.live : sources.preview,
       params: RenderParams.fromValues(
         _effectiveParamValues(),
         curves: _effectiveCurves,
@@ -1525,14 +1551,21 @@ class _EditorScreenState extends State<EditorScreen> {
     // The AI Denoise apply action wants real stage progress (it's the
     // slowest single-shot render); ordinary slider-drag renders stay on
     // plain compute() so the 25ms live-preview debounce doesn't pay a
-    // fresh-isolate-spawn cost on every tick. GPU rendering (opt-in, see
-    // AppSettings.useGpuRender) only applies to that plain path — it can't
-    // run inside renderJobToJpegWithProgress's dedicated isolate at all
-    // (dart:ui's GPU-backed primitives need the main isolate).
+    // fresh-isolate-spawn cost on every tick. GPU rendering (see
+    // AppSettings.useGpuRender) only applies to the settled (non-`live`)
+    // plain path: it can't run inside renderJobToJpegWithProgress's
+    // dedicated isolate at all (dart:ui's GPU-backed primitives need the
+    // main isolate), and deliberately stays off the `live` path even
+    // though it *could* run there — every live-drag tick would then run a
+    // full GPU render inline on the UI isolate instead of handing it to a
+    // background isolate the way compute() does, which is what caused the
+    // "Not Responding" freeze [_renderPreview]'s doc comment describes.
     final RenderResult result;
     if (onStage != null) {
       result = await renderJobToJpegWithProgress(job, onStage);
-    } else if (_settings.useGpuRender && await isGpuRenderAvailable()) {
+    } else if (!live &&
+        _settings.useGpuRender &&
+        await isGpuRenderAvailable()) {
       result = await renderJobToJpegGpu(job);
     } else {
       result = await compute(renderJobToJpeg, job);
@@ -1562,7 +1595,7 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     final result = await compute(
       renderJobToJpeg,
-      RenderJob(source: sources.full, params: const RenderParams()),
+      RenderJob(source: sources.preview, params: const RenderParams()),
     );
     if (!mounted) {
       return;
@@ -2509,7 +2542,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                   : _activeMask,
                               editingSource: selected == null
                                   ? null
-                                  : _editSources[selected.path]?.full,
+                                  : _editSources[selected.path]?.preview,
                               onMaskGeometryChanged: _onMaskGeometryChanged,
                               onMaskGeometryChangeEnd: _onMaskGeometryChangeEnd,
                               brushRadius: _brushRadius,

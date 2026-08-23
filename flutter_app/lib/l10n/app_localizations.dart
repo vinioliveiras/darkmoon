@@ -614,6 +614,18 @@ abstract class AppLocalizations {
   /// **'Fast preview while dragging sliders'**
   String get settingsFastPreviewLabel;
 
+  /// No description provided for @settingsPreviewResolutionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview resolution'**
+  String get settingsPreviewResolutionLabel;
+
+  /// No description provided for @settingsPreviewResolutionHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Lower is faster to open and edit photos; export always uses the full sensor resolution'**
+  String get settingsPreviewResolutionHint;
+
   /// No description provided for @settingsRawOnlyLabel.
   ///
   /// In en, this message translates to:

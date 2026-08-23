@@ -28,14 +28,14 @@ Future<void> main(List<String> args) async {
   }
   // ignore: avoid_print
   print(
-    'decode: ${sources.full.width}x${sources.full.height} full, '
+    'decode: ${sources.preview.width}x${sources.preview.height} preview, '
     '${sources.live.width}x${sources.live.height} live, in ${decodeWatch.elapsedMilliseconds}ms',
   );
 
   Future<void> renderAndSave(String label, RenderParams params) async {
     final watch = Stopwatch()..start();
     final result = await renderJobToJpeg(
-      RenderJob(source: sources.full, params: params),
+      RenderJob(source: sources.preview, params: params),
     );
     watch.stop();
     final outPath = '${outPrefix}_$label.jpg';

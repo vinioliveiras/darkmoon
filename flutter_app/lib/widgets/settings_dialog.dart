@@ -108,6 +108,33 @@ class _SettingsDialogState extends State<SettingsDialog> {
               value: _settings.fastPreview,
               onChanged: (v) => _update(_settings.copyWith(fastPreview: v)),
             ),
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Expanded(
+                  child: Text(l10n.settingsPreviewResolutionLabel),
+                ),
+                DropdownButton<int>(
+                  value: _settings.previewResolution,
+                  items: [
+                    for (final size in previewResolutionOptions)
+                      DropdownMenuItem(value: size, child: Text('$size px')),
+                  ],
+                  onChanged: (value) => _update(
+                    _settings.copyWith(
+                      previewResolution: value ?? _settings.previewResolution,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Text(
+                l10n.settingsPreviewResolutionHint,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
               title: Text(l10n.settingsRawOnlyLabel),

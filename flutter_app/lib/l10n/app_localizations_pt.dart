@@ -290,6 +290,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Preview rápido ao arrastar os sliders';
 
   @override
+  String get settingsPreviewResolutionLabel => 'Resolução do preview';
+
+  @override
+  String get settingsPreviewResolutionHint =>
+      'Quanto menor, mais rápido para abrir e editar fotos; a exportação sempre usa a resolução total do sensor';
+
+  @override
   String get settingsRawOnlyLabel => 'Somente arquivos RAW';
 
   @override

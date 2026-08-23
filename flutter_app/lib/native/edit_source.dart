@@ -9,12 +9,20 @@ import 'common_image.dart';
 import 'image_utils.dart';
 import 'libraw.dart';
 
-/// The live-drag preview's target long-edge size — matches the Python
-/// app's LIVE_PREVIEW_MAX_DIM. Used only while a slider is actively being
-/// dragged, so re-rendering stays fast enough to feel live; the settled
-/// view always renders against [EditSourcePair.full] instead (the sensor's
-/// native resolution, no downscale — there's no separate lower-resolution
-/// "preview" tier to fall back to for the non-dragging state).
+/// Default long-edge cap the editing pipeline downscales to instead of the
+/// sensor's native resolution — comfortably above any reasonably-sized
+/// viewport and much cheaper to re-render on every adjustment (both the
+/// RAW decode itself, via [decodeRawImage]'s `fastPreview`, and every
+/// settled-view render afterward). Overridable per call (see
+/// [decodeEditSources]'s `previewMaxDimension` parameter) — this is just
+/// the value used when no explicit choice is passed, and matches the
+/// app settings' own default preview resolution (`app_settings.dart`).
+const int defaultPreviewMaxDimension = 1024;
+
+/// A smaller version of the same buffer: used while a slider is actively
+/// being dragged so re-rendering stays fast enough to feel live, swapped
+/// back out for the settled [EditSourcePair.preview] render as soon as the
+/// drag ends.
 const int livePreviewMaxDimension = 800;
 
 /// One decoded working-resolution RGB buffer (packed, 3 bytes/pixel) that
@@ -31,25 +39,25 @@ class EditSource {
   final Uint8List rgbBytes;
 }
 
-/// The two resolutions [decodeEditSources] produces for one photo: [full]
-/// (sensor-native resolution, what the settled/non-dragging view renders
-/// against) and [live] (downscaled to [livePreviewMaxDimension], for
-/// responsiveness while a slider is being actively dragged).
+/// The two resolutions [decodeEditSources] produces for one photo.
 class EditSourcePair {
-  const EditSourcePair({required this.full, required this.live});
+  const EditSourcePair({required this.preview, required this.live});
 
-  final EditSource full;
+  final EditSource preview;
   final EditSource live;
 }
 
 Uint8List _rgbBytes(img.Image image) =>
     image.getBytes(order: img.ChannelOrder.rgb);
 
-/// Fully decodes the RAW file at [path] once, at full sensor resolution
-/// with LibRaw's best available demosaic — this is what every photo
-/// renders against, not an opt-in mode — and derives the smaller live-drag
-/// buffer from it, so later adjustments only need to re-run the (much
-/// cheaper) pixel-math pipeline, not the RAW decode.
+/// Fully decodes the RAW file at [path] once and derives the two working
+/// resolutions the editor renders against, so later adjustments only need
+/// to re-run the (much cheaper) pixel-math pipeline, not the RAW decode.
+///
+/// [previewMaxDimension] is the long-edge cap [EditSourcePair.preview] is
+/// downscaled to — see [AppSettings.previewResolution], which callers
+/// should pass through here rather than relying on the
+/// [defaultPreviewMaxDimension] fallback.
 ///
 /// [onStage], if given, is called as each [RawDecodeStage] of the
 /// underlying LibRaw decode starts — see [decodeRawImage].
@@ -59,10 +67,11 @@ Uint8List _rgbBytes(img.Image image) =>
 /// stage signals) or via [decodeEditSourcesWithProgress] otherwise.
 EditSourcePair? decodeEditSources(
   String path, {
+  int previewMaxDimension = defaultPreviewMaxDimension,
   void Function(RawDecodeStage stage)? onStage,
 }) {
   final decoded = isRawFile(path)
-      ? decodeRawImage(path, onStage: onStage)
+      ? decodeRawImage(path, fastPreview: true, onStage: onStage)
       : decodeCommonImage(path);
   if (decoded == null) {
     return null;
@@ -74,12 +83,13 @@ EditSourcePair? decodeEditSources(
     numChannels: 3,
     order: img.ChannelOrder.rgb,
   );
-  final liveImage = fitToMaxDimension(full, livePreviewMaxDimension);
+  final previewImage = fitToMaxDimension(full, previewMaxDimension);
+  final liveImage = fitToMaxDimension(previewImage, livePreviewMaxDimension);
   return EditSourcePair(
-    full: EditSource(
-      width: decoded.width,
-      height: decoded.height,
-      rgbBytes: decoded.rgbBytes,
+    preview: EditSource(
+      width: previewImage.width,
+      height: previewImage.height,
+      rgbBytes: _rgbBytes(previewImage),
     ),
     live: EditSource(
       width: liveImage.width,
@@ -90,15 +100,21 @@ EditSourcePair? decodeEditSources(
 }
 
 class _EditSourcesIsolateArgs {
-  const _EditSourcesIsolateArgs(this.path, this.sendPort);
+  const _EditSourcesIsolateArgs(
+    this.path,
+    this.previewMaxDimension,
+    this.sendPort,
+  );
 
   final String path;
+  final int previewMaxDimension;
   final SendPort sendPort;
 }
 
 void _decodeEditSourcesIsolateEntry(_EditSourcesIsolateArgs args) {
   final result = decodeEditSources(
     args.path,
+    previewMaxDimension: args.previewMaxDimension,
     onStage: (stage) => args.sendPort.send(stage),
   );
   args.sendPort.send(result);
@@ -110,12 +126,13 @@ void _decodeEditSourcesIsolateEntry(_EditSourcesIsolateArgs args) {
 /// pattern `export_job.dart`'s `exportPhotoWithProgress` uses.
 Future<EditSourcePair?> decodeEditSourcesWithProgress(
   String path,
-  void Function(RawDecodeStage stage) onProgress,
-) async {
+  void Function(RawDecodeStage stage) onProgress, {
+  int previewMaxDimension = defaultPreviewMaxDimension,
+}) async {
   final receivePort = ReceivePort();
   final isolate = await Isolate.spawn(
     _decodeEditSourcesIsolateEntry,
-    _EditSourcesIsolateArgs(path, receivePort.sendPort),
+    _EditSourcesIsolateArgs(path, previewMaxDimension, receivePort.sendPort),
   );
   try {
     await for (final message in receivePort) {
@@ -130,4 +147,29 @@ Future<EditSourcePair?> decodeEditSourcesWithProgress(
     receivePort.close();
     isolate.kill(priority: Isolate.immediate);
   }
+}
+
+/// Decodes the photo at [path] at full native resolution — no preview
+/// downscale, and (for a RAW file, unlike
+/// [decodeEditSources]) `fastPreview: false` for LibRaw's slower
+/// higher-quality demosaic regardless of sensor, so "full quality" means
+/// the same thing regardless of camera. Backs the editor's opt-in
+/// full-quality view toggle: pixel math over 10s of megapixels instead of
+/// ~1.7M is a real cost, so this is only decoded when the user explicitly
+/// asks for it. Common image formats have no quality knob to skip —
+/// they're always decoded at their one native resolution.
+///
+/// Designed to run via `compute()`.
+EditSource? decodeFullQualitySource(String path) {
+  final decoded = isRawFile(path)
+      ? decodeRawImage(path, fastPreview: false)
+      : decodeCommonImage(path);
+  if (decoded == null) {
+    return null;
+  }
+  return EditSource(
+    width: decoded.width,
+    height: decoded.height,
+    rgbBytes: decoded.rgbBytes,
+  );
 }
