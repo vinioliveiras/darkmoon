@@ -122,6 +122,24 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get menuSettings;
 
+  /// No description provided for @menuAbout.
+  ///
+  /// In en, this message translates to:
+  /// **'About'**
+  String get menuAbout;
+
+  /// No description provided for @aboutDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'About Darkmoon'**
+  String get aboutDialogTitle;
+
+  /// No description provided for @aboutCredits.
+  ///
+  /// In en, this message translates to:
+  /// **'Developed by Vini'**
+  String get aboutCredits;
+
   /// No description provided for @dialogOpenFolderTitle.
   ///
   /// In en, this message translates to:

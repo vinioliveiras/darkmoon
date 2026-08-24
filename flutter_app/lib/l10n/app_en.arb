@@ -5,6 +5,10 @@
   "menuOpenFile": "Open File",
   "menuOpenFolder": "Add Folder",
   "menuSettings": "Settings",
+  "menuAbout": "About",
+
+  "aboutDialogTitle": "About Darkmoon",
+  "aboutCredits": "Developed by Vini",
 
   "dialogOpenFolderTitle": "Add Folder",
   "dialogOpenFileTitle": "Open RAW File",

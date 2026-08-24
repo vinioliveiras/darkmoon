@@ -21,6 +21,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuSettings => 'Settings';
 
   @override
+  String get menuAbout => 'About';
+
+  @override
+  String get aboutDialogTitle => 'About Darkmoon';
+
+  @override
+  String get aboutCredits => 'Developed by Vini';
+
+  @override
   String get dialogOpenFolderTitle => 'Add Folder';
 
   @override

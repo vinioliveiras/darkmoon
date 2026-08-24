@@ -40,6 +40,7 @@ import 'render/render_params.dart';
 import 'render/tone_curve.dart';
 import 'settings/app_settings.dart';
 import 'theme.dart';
+import 'widgets/about_dialog.dart';
 import 'widgets/ai_denoise_dialog.dart';
 import 'widgets/brush_mask_overlay.dart';
 import 'widgets/color_range_overlay.dart';
@@ -956,6 +957,13 @@ class _EditorScreenState extends State<EditorScreen> {
           : _files[selectedIndex].path;
       unawaited(_loadFolder(folder, selectPath: selectPath));
     }
+  }
+
+  void _openAbout() {
+    showDialog<void>(
+      context: context,
+      builder: (_) => const DarkmoonAboutDialog(),
+    );
   }
 
   void _openSettings() {
@@ -2452,6 +2460,7 @@ class _EditorScreenState extends State<EditorScreen> {
             onOpenFile: _openFile,
             onOpenFolder: _openFolder,
             onOpenSettings: _openSettings,
+            onOpenAbout: _openAbout,
           ),
           Expanded(
             child: Stack(
@@ -2690,11 +2699,13 @@ class _TopMenuBar extends StatelessWidget {
     required this.onOpenFile,
     required this.onOpenFolder,
     required this.onOpenSettings,
+    required this.onOpenAbout,
   });
 
   final VoidCallback onOpenFile;
   final VoidCallback onOpenFolder;
   final VoidCallback onOpenSettings;
+  final VoidCallback onOpenAbout;
 
   @override
   Widget build(BuildContext context) {
@@ -2730,6 +2741,11 @@ class _TopMenuBar extends StatelessWidget {
           GestureDetector(
             onTap: onOpenSettings,
             child: _MenuBarLabel(l10n.menuSettings),
+          ),
+          const SizedBox(width: 4),
+          GestureDetector(
+            onTap: onOpenAbout,
+            child: _MenuBarLabel(l10n.menuAbout),
           ),
         ],
       ),

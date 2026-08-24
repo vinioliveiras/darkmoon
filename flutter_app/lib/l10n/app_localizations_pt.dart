@@ -21,6 +21,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get menuSettings => 'Configurações';
 
   @override
+  String get menuAbout => 'Sobre';
+
+  @override
+  String get aboutDialogTitle => 'Sobre o Darkmoon';
+
+  @override
+  String get aboutCredits => 'Desenvolvido por Vini';
+
+  @override
   String get dialogOpenFolderTitle => 'Adicionar pasta';
 
   @override

@@ -5,6 +5,10 @@
   "menuOpenFile": "Abrir arquivo",
   "menuOpenFolder": "Adicionar pasta",
   "menuSettings": "Configurações",
+  "menuAbout": "Sobre",
+
+  "aboutDialogTitle": "Sobre o Darkmoon",
+  "aboutCredits": "Desenvolvido por Vini",
 
   "dialogOpenFolderTitle": "Adicionar pasta",
   "dialogOpenFileTitle": "Abrir arquivo RAW",
