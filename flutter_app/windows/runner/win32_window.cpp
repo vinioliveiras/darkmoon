@@ -150,7 +150,12 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWMAXIMIZED);
+  // Shown at its small, splash-card-sized creation dimensions (see
+  // main.cpp) — not maximized here, so the real desktop is visible around
+  // the splash card the way Lightroom's own launch screen shows it.
+  // FlutterWindow's "darkmoon/window" channel maximizes it once the splash
+  // timer in main.dart finishes — see flutter_window.cpp.
+  return ShowWindow(window_handle_, SW_SHOWNORMAL);
 }
 
 // static

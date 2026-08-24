@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io' show Platform;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import 'editor_screen.dart';
 import 'l10n/app_localizations.dart';
@@ -12,14 +14,38 @@ void main() {
   runApp(const DarkmoonApp());
 }
 
+/// Talks to `FlutterWindow`'s method-call handler in windows/runner/
+/// flutter_window.cpp — the window starts small and centered (see
+/// windows/runner/main.cpp) so the real desktop is visible around the
+/// splash card like Lightroom's own launch screen, and this is what grows
+/// it to maximized once the splash goes away. Windows-only: the window
+/// choreography this exists for is specific to how windows/runner/main.cpp
+/// creates the window, so this channel has no handler (and isn't called)
+/// on any other platform.
+const _windowChannel = MethodChannel('darkmoon/window');
+
+Future<void> _maximizeNativeWindow() async {
+  if (!Platform.isWindows) {
+    return;
+  }
+  try {
+    await _windowChannel.invokeMethod<void>('maximize');
+  } on PlatformException {
+    // Best-effort — worst case the window just stays at its small,
+    // splash-sized dimensions instead of growing to fill the screen.
+  }
+}
+
 /// Minimum time the splash screen stays up, regardless of how fast
 /// [EditorScreen]'s own startup work (settings/catalog/cache loads, opening
 /// the last-active folder) finishes underneath it — long enough to read the
-/// branding without it just flashing by, and to give that background work a
-/// real head start before the editor is revealed. EditorScreen mounts (and
-/// starts loading) immediately, in parallel with this timer, rather than
-/// waiting for it.
-const Duration _splashMinDuration = Duration(milliseconds: 1600);
+/// branding without it just flashing by, and — more importantly — to give
+/// `_preloadPreviewCache`'s background RAW decodes (see editor_screen.dart)
+/// a real window to actually finish in, not just skip straight to whatever
+/// was already cached from a previous run. EditorScreen mounts (and starts
+/// loading) immediately, in parallel with this timer, rather than waiting
+/// for it.
+const Duration _splashMinDuration = Duration(milliseconds: 4000);
 
 Locale? localeForLanguage(String language) {
   switch (language) {
@@ -50,7 +76,8 @@ class _DarkmoonAppState extends State<DarkmoonApp> {
     super.initState();
     unawaited(_loadLanguage());
     unawaited(
-      Future.delayed(_splashMinDuration, () {
+      Future.delayed(_splashMinDuration, () async {
+        await _maximizeNativeWindow();
         if (mounted) {
           setState(() => _showSplash = false);
         }

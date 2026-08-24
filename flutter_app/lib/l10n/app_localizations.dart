@@ -146,6 +146,18 @@ abstract class AppLocalizations {
   /// **'MIT License'**
   String get splashLicense;
 
+  /// No description provided for @splashCopyright.
+  ///
+  /// In en, this message translates to:
+  /// **'© 2026 Vini. All rights reserved under the MIT License.'**
+  String get splashCopyright;
+
+  /// No description provided for @splashLoading.
+  ///
+  /// In en, this message translates to:
+  /// **'Loading your library…'**
+  String get splashLoading;
+
   /// No description provided for @dialogOpenFolderTitle.
   ///
   /// In en, this message translates to:

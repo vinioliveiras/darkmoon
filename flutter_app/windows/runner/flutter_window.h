@@ -3,6 +3,8 @@
 
 #include <flutter/dart_project.h>
 #include <flutter/flutter_view_controller.h>
+#include <flutter/method_channel.h>
+#include <flutter/standard_method_codec.h>
 
 #include <memory>
 
@@ -28,6 +30,15 @@ class FlutterWindow : public Win32Window {
 
   // The Flutter instance hosted by this window.
   std::unique_ptr<flutter::FlutterViewController> flutter_controller_;
+
+  // Lets the Dart side ask for the window to be maximized once the launch
+  // splash screen (see widgets/splash_screen.dart) has run its course —
+  // the window starts small and centered (see main.cpp) so the real
+  // desktop is visible around the splash card, matching Lightroom's own
+  // splash, then grows to maximized only once main.dart's splash timer
+  // fires. See "darkmoon/window"'s "maximize" method.
+  std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>
+      window_channel_;
 };
 
 #endif  // RUNNER_FLUTTER_WINDOW_H_

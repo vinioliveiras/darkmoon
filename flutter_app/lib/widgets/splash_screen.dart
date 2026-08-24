@@ -4,97 +4,138 @@ import '../l10n/app_localizations.dart';
 import '../theme.dart';
 import 'about_dialog.dart' show darkmoonAppVersion;
 
-/// Lightroom-style launch screen — shown for a fixed minimum duration (see
-/// `main.dart`'s `_splashMinDuration`) while [EditorScreen] loads
-/// underneath (settings, catalog, thumbnail/preview caches, the
-/// last-active folder), so that work gets a head start before the editor
-/// is actually revealed instead of the user watching it happen.
+/// Card size, matching real Lightroom's splash proportions (a small
+/// floating panel, not a full-screen takeover) — see the reference
+/// screenshot this was built from.
+const double _cardWidth = 720;
+const double _cardHeight = 420;
+const double _photoWidth = 340;
+
+/// Lightroom-style launch screen — a small dark card (same palette as the
+/// rest of Darkmoon's dialogs, fitting for an app named "Darkmoon" rather
+/// than copying Lightroom's white one), split into a left text/branding
+/// column and a right featured photo. The native window itself starts
+/// small and centered (see windows/runner/main.cpp) so the real desktop
+/// is visible around it, the same way Lightroom's own launch screen
+/// works — this widget only fills that small window, not the whole
+/// screen. Shown for a fixed minimum duration (see `main.dart`'s
+/// `_splashMinDuration`) while [EditorScreen] loads underneath (settings,
+/// catalog, thumbnail/preview caches, the last-active folder, and a
+/// background preview-cache warm-up), so that work gets a head start
+/// before the editor is actually revealed instead of the user watching it
+/// happen.
 class SplashScreen extends StatelessWidget {
   const SplashScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Container(
-      color: DarkmoonColors.canvas,
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          // Full-bleed featured photo, darkened so the centered branding
-          // stays legible over any part of it — same "photo behind glass"
-          // treatment Lightroom's own splash uses.
-          Positioned.fill(
-            child: Image.asset('assets/splash/featured.jpg', fit: BoxFit.cover),
-          ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withValues(alpha: 0.55),
-                    Colors.black.withValues(alpha: 0.75),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
+    return ColoredBox(
+      // Matches the card exactly — the native window is only slightly
+      // larger than the card itself, so this is just the thin margin
+      // between the card's shadow and the window edge, not a full-screen
+      // backdrop.
+      color: DarkmoonColors.surfaceRaised,
+      child: Center(
+        child: Material(
+          color: DarkmoonColors.surfaceRaised,
+          elevation: 24,
+          borderRadius: BorderRadius.circular(10),
+          clipBehavior: Clip.antiAlias,
+          child: SizedBox(
+            width: _cardWidth,
+            height: _cardHeight,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Image.asset(
-                  'assets/splash/app_icon.png',
-                  width: 72,
-                  height: 72,
-                ),
-                const SizedBox(height: 16),
-                const Text(
-                  'Darkmoon',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 28,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 0.5,
+                SizedBox(
+                  width: _cardWidth - _photoWidth,
+                  child: Padding(
+                    padding: const EdgeInsets.fromLTRB(28, 28, 24, 20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.center,
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.asset(
+                                'assets/splash/app_icon.png',
+                                width: 44,
+                                height: 44,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Text(
+                              'Darkmoon',
+                              style: TextStyle(
+                                color: DarkmoonColors.textPrimary,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 20),
+                        Text(
+                          l10n.splashCopyright,
+                          style: const TextStyle(
+                            color: DarkmoonColors.textMuted,
+                            fontSize: 11.5,
+                            height: 1.4,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        Text(
+                          l10n.splashLoading,
+                          style: const TextStyle(
+                            color: DarkmoonColors.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          darkmoonAppVersion,
+                          style: const TextStyle(
+                            color: DarkmoonColors.textMuted,
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Text(
+                              l10n.aboutCredits,
+                              style: const TextStyle(
+                                color: DarkmoonColors.textMuted,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                            const Text(
+                              '  ·  github.com/vinioliveiras',
+                              style: TextStyle(
+                                color: DarkmoonColors.textMuted,
+                                fontSize: 11.5,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  darkmoonAppVersion,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.7),
-                    fontSize: 13,
+                SizedBox(
+                  width: _photoWidth,
+                  child: Image.asset(
+                    'assets/splash/featured.jpg',
+                    fit: BoxFit.cover,
                   ),
                 ),
               ],
             ),
           ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 28,
-            child: Column(
-              children: [
-                Text(
-                  l10n.aboutCredits,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.8),
-                    fontSize: 12.5,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  l10n.splashLicense,
-                  style: TextStyle(
-                    color: Colors.white.withValues(alpha: 0.5),
-                    fontSize: 11,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

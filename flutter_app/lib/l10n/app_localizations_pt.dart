@@ -33,6 +33,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get splashLicense => 'Licença MIT';
 
   @override
+  String get splashCopyright =>
+      '© 2026 Vini. Todos os direitos reservados sob a Licença MIT.';
+
+  @override
+  String get splashLoading => 'Carregando sua biblioteca…';
+
+  @override
   String get dialogOpenFolderTitle => 'Adicionar pasta';
 
   @override

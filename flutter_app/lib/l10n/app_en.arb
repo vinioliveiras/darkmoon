@@ -11,6 +11,8 @@
   "aboutCredits": "Developed by Vini",
 
   "splashLicense": "MIT License",
+  "splashCopyright": "© 2026 Vini. All rights reserved under the MIT License.",
+  "splashLoading": "Loading your library…",
 
   "dialogOpenFolderTitle": "Add Folder",
   "dialogOpenFileTitle": "Open RAW File",

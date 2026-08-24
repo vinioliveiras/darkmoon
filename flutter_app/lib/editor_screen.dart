@@ -135,9 +135,16 @@ const double _maxZoom = 4.0;
 const double _zoomStep = 1.15;
 
 /// How many files (starting right after the selected one) eagerly preload
-/// from the on-disk preview cache when a folder opens — see
+/// (from cache, or a real RAW decode on a miss) when a folder opens — see
 /// `_preloadPreviewCache`.
 const _previewPreloadCount = 8;
+
+/// How many of those preload slots run concurrently — each one that
+/// misses the cache spawns its own RAW-decode Isolate, so this is a
+/// tradeoff between finishing the batch quickly and not competing too
+/// hard with the rest of startup (settings/catalog/thumbnail loads) for
+/// CPU cores.
+const _previewPreloadConcurrency = 3;
 
 /// How long to wait after the last slider change before actually
 /// re-rendering, restarted on every change — matches the Python app's
@@ -1495,15 +1502,19 @@ class _EditorScreenState extends State<EditorScreen> {
   /// Warms [_editSources] for a small window of files starting at
   /// [selectedIndex] (the one right after the selected photo itself,
   /// which [_loadEditSourceAndRender] is already decoding in parallel) —
-  /// cache HITS only, never a real RAW decode, so this is a no-op the
-  /// first time a folder is ever opened and increasingly effective on
-  /// repeat visits/app launches: by the time the user clicks the next few
-  /// thumbnails in the filmstrip, those photos are often already sitting
-  /// in memory instead of triggering a fresh decode.
+  /// a cache hit just decodes the cached JPEG, but a miss runs a real RAW
+  /// decode and populates the cache for next time, same as
+  /// [_loadEditSourceAndRender] itself does. That real-decode cost is
+  /// deliberately spent here, in the background, right after launch —
+  /// see main.dart's `_splashMinDuration`, whose fixed duration exists
+  /// specifically to give this a real window to run in — rather than
+  /// only ever happening reactively when the user clicks each thumbnail.
   ///
-  /// Bounded to [_previewPreloadCount] files so opening a folder with
-  /// thousands of photos doesn't spend a long time JPEG-decoding cached
-  /// previews nobody's looked at yet.
+  /// Bounded to [_previewPreloadCount] files (run with a handful of
+  /// workers in parallel — see [_previewPreloadConcurrency] — so it
+  /// actually finishes within that window instead of one file at a time)
+  /// so opening a folder with thousands of photos doesn't spend a long
+  /// time decoding photos nobody's looked at yet.
   Future<void> _preloadPreviewCache(
     List<RawFile> files,
     int? selectedIndex,
@@ -1514,30 +1525,54 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     final start = selectedIndex ?? 0;
-    final window = files.skip(start).take(_previewPreloadCount);
-    for (final file in window) {
+    final queue = files.skip(start).take(_previewPreloadCount).toList();
+
+    Future<void> preloadOne(RawFile file) async {
       if (!mounted || generation != _folderGeneration) {
         return;
       }
       if (_editSources.containsKey(file.path)) {
-        continue; // Already decoded (e.g. the selected photo, above).
+        return; // Already decoded (e.g. the selected photo, above).
       }
       final cachedJpeg = await cache.lookup(file.path);
-      if (cachedJpeg == null) {
-        continue;
+      EditSourcePair? sources;
+      var fromCache = false;
+      if (cachedJpeg != null) {
+        sources = await compute(decodeEditSourcePairFromCachedJpeg, cachedJpeg);
+        fromCache = sources != null;
       }
-      final sources = await compute(
-        decodeEditSourcePairFromCachedJpeg,
-        cachedJpeg,
+      // Cache miss (or a corrupt cache entry) — a real decode, not
+      // skipped, so this photo's cache exists by the time the user
+      // actually selects it.
+      sources ??= await decodeEditSourcesWithProgress(
+        file.path,
+        (_) {},
+        previewMaxDimension: _settings.previewResolution,
       );
       if (sources == null || !mounted || generation != _folderGeneration) {
-        continue;
+        return;
       }
       if (_editSources.containsKey(file.path)) {
-        continue; // Raced with a real selection/decode of this same photo.
+        return; // Raced with a real selection/decode of this same photo.
       }
-      setState(() => _editSources[file.path] = sources);
+      setState(() => _editSources[file.path] = sources!);
+      if (!fromCache) {
+        unawaited(_storePreviewCache(file.path, sources));
+      }
     }
+
+    Future<void> worker() async {
+      while (queue.isNotEmpty) {
+        if (!mounted || generation != _folderGeneration) {
+          return;
+        }
+        await preloadOne(queue.removeAt(0));
+      }
+    }
+
+    await Future.wait(
+      List.generate(_previewPreloadConcurrency, (_) => worker()),
+    );
   }
 
   /// Loads [path]'s camera/lens/exposure metadata (cheap — no unpack/

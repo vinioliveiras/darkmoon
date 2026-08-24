@@ -33,6 +33,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get splashLicense => 'MIT License';
 
   @override
+  String get splashCopyright =>
+      '© 2026 Vini. All rights reserved under the MIT License.';
+
+  @override
+  String get splashLoading => 'Loading your library…';
+
+  @override
   String get dialogOpenFolderTitle => 'Add Folder';
 
   @override
