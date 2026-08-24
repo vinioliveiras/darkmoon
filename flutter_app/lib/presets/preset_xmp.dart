@@ -75,12 +75,15 @@ const _splitToningFallback = [
 ];
 
 /// Our Exposure is scaled to +-3 stops of actual brightness change (see
-/// render.dart) over a -100..100 slider; Lightroom's Exposure2012 is
-/// stops directly, -5..5. Converting through "stops" (rather than a
-/// direct 1:1 on the raw slider number) is what makes a round trip
-/// (export then re-import) land back on the same value, and is at least
-/// a defensible mapping for a real Lightroom preset's Exposure2012 too.
-const _exposureStopsAtMax = 5.0;
+/// the `exposure / 100.0 * 3.0` factor in render.dart and render_gpu.dart)
+/// over a -100..100 slider; Lightroom's Exposure2012 is stops directly,
+/// -5..5. Converting through "stops" (rather than a direct 1:1 on the raw
+/// slider number) is what makes a round trip (export then re-import) land
+/// back on the same value, and is at least a defensible mapping for a real
+/// Lightroom preset's Exposure2012 too. This must stay in sync with the
+/// `3.0` stops-at-max factor in the renderers, or an imported preset's
+/// Exposure2012 lands on the wrong slider value.
+const _exposureStopsAtMax = 3.0;
 
 /// `crs:` attributes that are structural/metadata rather than an actual
 /// develop setting — present on real Lightroom preset exports but with

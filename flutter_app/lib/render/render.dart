@@ -6,6 +6,7 @@ import 'baseline_chroma.dart';
 import 'color_grading.dart';
 import 'color_mixer.dart';
 import 'dehaze.dart';
+import 'hsl.dart';
 import 'local_contrast.dart';
 import 'luminance.dart';
 import 'mask.dart';
@@ -411,14 +412,21 @@ void _applyHighlightsShadows(
     // luminance after applying the shadows adjustment).
     final luminance = luminanceRgb(img[i], img[i + 1], img[i + 2]) / 255.0;
     if (shadows != 0) {
-      final weight = (1.0 - luminance * 2.0).clamp(0.0, 1.0);
+      // Falls off by luminance 0.4 (not the old hard 0.5, which fully
+      // blanketed Whites/Blacks' own [0, 0.25] region and made Shadows act
+      // like a second, broader Brightness) and uses a smoothstep instead
+      // of a linear ramp for a softer taper — still widest at the true
+      // extreme, just narrower than before and leaving a real midtone gap.
+      final t = (1.0 - luminance / 0.4).clamp(0.0, 1.0);
+      final weight = t * t * (3.0 - 2.0 * t);
       final add = weight * (shadows / 100.0) * 80.0;
       img[i] += add;
       img[i + 1] += add;
       img[i + 2] += add;
     }
     if (highlights != 0) {
-      final weight = ((luminance - 0.5) * 2.0).clamp(0.0, 1.0);
+      final t = ((luminance - 0.6) / 0.4).clamp(0.0, 1.0);
+      final weight = t * t * (3.0 - 2.0 * t);
       final add = weight * (highlights / 100.0) * 80.0;
       img[i] += add;
       img[i + 1] += add;
@@ -467,11 +475,37 @@ void _applyVibrance(Float32List img, int pixelCount, double amount) {
     final maxC = math.max(r, math.max(g, b));
     final minC = math.min(r, math.min(g, b));
     final currentSaturation = (maxC - minC) / 255.0;
-    final factor = 1.0 + (amount / 100.0) * (1.0 - currentSaturation);
+    final skinWeight = _skinToneWeight(r / 255.0, g / 255.0, b / 255.0);
+    final factor =
+        1.0 +
+        (amount / 100.0) * (1.0 - currentSaturation) * (1.0 - skinWeight * 0.75);
     img[i] = luminance + (r - luminance) * factor;
     img[i + 1] = luminance + (g - luminance) * factor;
     img[i + 2] = luminance + (b - luminance) * factor;
   }
+}
+
+/// How strongly a pixel ([r], [g], [b], each 0..1) reads as a skin tone
+/// (0..1) — Lightroom's Vibrance (unlike a plain Saturation slider) damps
+/// its own effect on skin-tone hues so faces don't oversaturate. Centered
+/// on the Color Mixer's Orange band (30°, see `_channelCenterHues` in
+/// color_mixer.dart), with a narrower half-width since skin tones occupy a
+/// tighter hue range than a full Orange mixer band.
+double _skinToneWeight(double r, double g, double b) {
+  final hsl = rgbToHsl(r, g, b);
+  final hue = hsl[0];
+  final sat = hsl[1];
+  var diff = (hue - 30.0).abs();
+  if (diff > 180) {
+    diff = 360 - diff;
+  }
+  const halfWidth = 25.0;
+  final hueWeight = diff >= halfWidth ? 0.0 : 1.0 - diff / halfWidth;
+  // Skin tones are rarely fully desaturated or fully saturated; fade the
+  // protection out toward the extremes so near-neutral or already-vivid
+  // orange pixels aren't affected.
+  final satWeight = (sat * 2.5).clamp(0.0, 1.0);
+  return hueWeight * satWeight;
 }
 
 void _applySaturation(Float32List img, int pixelCount, double amount) {

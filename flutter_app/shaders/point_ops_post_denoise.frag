@@ -127,9 +127,15 @@ void main() {
   // Highlights/shadows + whites/blacks share one Rec.709 luminance sample
   // (matches render.dart computing it once per stage from the
   // *pre*-stage value, not recomputed after each add).
+  // Falls off by 0.4 from each extreme (not the old hard 0.5, which fully
+  // blanketed Whites/Blacks' own [0, 0.25]/[0.75, 1.0] region) with a
+  // smoothstep taper instead of a linear ramp — mirrors render.dart's
+  // _applyHighlightsShadows exactly.
   float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
-  float shadowW = clamp(1.0 - lum * 2.0, 0.0, 1.0);
-  float highlightW = clamp((lum - 0.5) * 2.0, 0.0, 1.0);
+  float shadowT = clamp(1.0 - lum / 0.4, 0.0, 1.0);
+  float shadowW = shadowT * shadowT * (3.0 - 2.0 * shadowT);
+  float highlightT = clamp((lum - 0.6) / 0.4, 0.0, 1.0);
+  float highlightW = highlightT * highlightT * (3.0 - 2.0 * highlightT);
   c += shadowW * uShadowsAdd + highlightW * uHighlightsAdd;
 
   float lum2 = dot(c, vec3(0.2126, 0.7152, 0.0722));

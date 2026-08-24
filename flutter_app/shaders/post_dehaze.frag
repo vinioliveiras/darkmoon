@@ -23,18 +23,57 @@ out vec4 fragColor;
 const vec3 kLumaWeights = vec3(0.2126, 0.7152, 0.0722);
 const float kCornerRadius = 1.4142135623730951; // sqrt(2), a corner's distance.
 
+// Hue in degrees (0-360) of [c] (0..1 components) — same convention as
+// hsl.dart's rgbToHsl.
+float hueOf(vec3 c) {
+  float maxC = max(c.r, max(c.g, c.b));
+  float minC = min(c.r, min(c.g, c.b));
+  float d = maxC - minC;
+  if (d < 1e-6) return 0.0;
+  float hue;
+  if (maxC == c.r) {
+    hue = mod((c.g - c.b) / d, 6.0);
+  } else if (maxC == c.g) {
+    hue = (c.b - c.r) / d + 2.0;
+  } else {
+    hue = (c.r - c.g) / d + 4.0;
+  }
+  hue *= 60.0;
+  if (hue < 0.0) hue += 360.0;
+  return hue;
+}
+
+// How strongly [c] (0..1 components) reads as a skin tone (0..1) — mirrors
+// render.dart's _skinToneWeight, see its doc comment.
+float skinToneWeight(vec3 c) {
+  float maxC = max(c.r, max(c.g, c.b));
+  float minC = min(c.r, min(c.g, c.b));
+  float light = (maxC + minC) * 0.5;
+  float d = maxC - minC;
+  float sat = d < 1e-6 ? 0.0 : (light > 0.5 ? d / (2.0 - maxC - minC) : d / (maxC + minC));
+  float diff = abs(hueOf(c) - 30.0);
+  if (diff > 180.0) diff = 360.0 - diff;
+  const float halfWidth = 25.0;
+  float hueWeight = diff >= halfWidth ? 0.0 : 1.0 - diff / halfWidth;
+  float satWeight = clamp(sat * 2.5, 0.0, 1.0);
+  return hueWeight * satWeight;
+}
+
 void main() {
   vec2 fragCoord = FlutterFragCoord().xy;
   vec2 uv = fragCoord / uSize;
   vec3 c = texture(uSource, uv).rgb;
 
   // Vibrance: saturation-aware gain (less effect on already-saturated
-  // pixels) — matches render.dart's _applyVibrance.
+  // pixels), damped further on skin tones — matches render.dart's
+  // _applyVibrance.
   float luminance = dot(c, kLumaWeights);
   float maxC = max(c.r, max(c.g, c.b));
   float minC = min(c.r, min(c.g, c.b));
   float currentSaturation = maxC - minC;
-  float vibranceFactor = 1.0 + uVibranceAmount * (1.0 - currentSaturation);
+  float skinWeight = skinToneWeight(c);
+  float vibranceFactor =
+      1.0 + uVibranceAmount * (1.0 - currentSaturation) * (1.0 - skinWeight * 0.75);
   c = luminance + (c - luminance) * vibranceFactor;
 
   // Saturation: flat gain, applied on top of Vibrance's already-updated
