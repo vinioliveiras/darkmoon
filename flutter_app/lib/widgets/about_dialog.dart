@@ -47,6 +47,13 @@ class DarkmoonAboutDialog extends StatelessWidget {
               'github.com/vinioliveiras',
               style: TextStyle(color: DarkmoonColors.textSecondary),
             ),
+            const SizedBox(height: 16),
+            Text(
+              l10n.splashLicense,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: DarkmoonColors.textMuted),
+            ),
           ],
         ),
       ),

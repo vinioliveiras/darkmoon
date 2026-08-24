@@ -149,6 +149,58 @@ Future<EditSourcePair?> decodeEditSourcesWithProgress(
   }
 }
 
+/// Encodes [pair]'s preview resolution as a JPEG for the on-disk preview
+/// cache (see `catalog/preview_cache_dir.dart`) — deliberately only the
+/// preview, not the smaller `live` resolution: `live` is always cheaply
+/// re-derived from `preview` via [fitToMaxDimension] (see
+/// [decodeEditSourcePairFromCachedJpeg] below), so caching it separately
+/// would just double the disk cost for no benefit.
+///
+/// Designed to run via `compute()` — JPEG-encoding a full preview isn't
+/// free, and this only runs once per photo (right after a cache-miss RAW
+/// decode), not on every render.
+Uint8List encodePreviewForCache(EditSourcePair pair) {
+  final image = img.Image.fromBytes(
+    width: pair.preview.width,
+    height: pair.preview.height,
+    bytes: pair.preview.rgbBytes.buffer,
+    numChannels: 3,
+    order: img.ChannelOrder.rgb,
+  );
+  return Uint8List.fromList(img.encodeJpg(image, quality: 90));
+}
+
+/// Reconstructs an [EditSourcePair] from a JPEG previously produced by
+/// [encodePreviewForCache] — the fast path a preview-cache *hit* takes,
+/// skipping the RAW decode (and its LibRaw isolate) entirely: decoding an
+/// already-downscaled JPEG back to pixels is a small fraction of the cost
+/// of demosaicing the original sensor data again.
+///
+/// Returns null if [jpegBytes] doesn't decode (corrupt cache entry) —
+/// callers should fall back to a real RAW decode in that case, same as a
+/// cache miss.
+///
+/// Designed to run via `compute()`.
+EditSourcePair? decodeEditSourcePairFromCachedJpeg(Uint8List jpegBytes) {
+  final decoded = img.decodeJpg(jpegBytes);
+  if (decoded == null) {
+    return null;
+  }
+  final liveImage = fitToMaxDimension(decoded, livePreviewMaxDimension);
+  return EditSourcePair(
+    preview: EditSource(
+      width: decoded.width,
+      height: decoded.height,
+      rgbBytes: _rgbBytes(decoded),
+    ),
+    live: EditSource(
+      width: liveImage.width,
+      height: liveImage.height,
+      rgbBytes: _rgbBytes(liveImage),
+    ),
+  );
+}
+
 /// Decodes the photo at [path] at full native resolution — no preview
 /// downscale, and (for a RAW file, unlike
 /// [decodeEditSources]) `fastPreview: false` for LibRaw's slower

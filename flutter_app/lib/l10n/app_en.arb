@@ -10,6 +10,8 @@
   "aboutDialogTitle": "About Darkmoon",
   "aboutCredits": "Developed by Vini",
 
+  "splashLicense": "MIT License",
+
   "dialogOpenFolderTitle": "Add Folder",
   "dialogOpenFileTitle": "Open RAW File",
 

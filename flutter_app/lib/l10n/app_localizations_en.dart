@@ -30,6 +30,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aboutCredits => 'Developed by Vini';
 
   @override
+  String get splashLicense => 'MIT License';
+
+  @override
   String get dialogOpenFolderTitle => 'Add Folder';
 
   @override

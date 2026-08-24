@@ -72,6 +72,11 @@ dev_dependencies:
 flutter:
   generate: true
 
+  # Splash screen assets — see widgets/splash_screen.dart.
+  assets:
+    - assets/splash/featured.jpg
+    - assets/splash/app_icon.png
+
   # GPU render pipeline shaders — see project_gpu_render_plan.md. Phase 0
   # spike only so far; more get added as later phases land.
   shaders:

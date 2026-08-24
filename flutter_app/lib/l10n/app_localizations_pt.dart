@@ -30,6 +30,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get aboutCredits => 'Desenvolvido por Vini';
 
   @override
+  String get splashLicense => 'Licença MIT';
+
+  @override
   String get dialogOpenFolderTitle => 'Adicionar pasta';
 
   @override

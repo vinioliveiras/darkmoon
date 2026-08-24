@@ -14,14 +14,14 @@ import 'package:path/path.dart' as p;
 import 'catalog/catalog_store.dart';
 import 'catalog/curve_store.dart';
 import 'catalog/mask_store.dart';
+import 'catalog/preview_cache_dir.dart';
 import 'catalog/thumbnail_cache.dart';
 import 'catalog/thumbnail_cache_dir.dart';
 import 'export/export_job.dart';
 import 'l10n/app_localizations.dart';
 import 'native/common_image_thumbnail.dart';
 import 'native/edit_source.dart';
-import 'native/libraw.dart'
-    show RawDecodeStage, RawMetadata, extractRawMetadata;
+import 'native/libraw.dart' show RawMetadata, extractRawMetadata;
 import 'native/thumbnail_loader.dart';
 import 'presets/preset.dart';
 import 'presets/preset_store.dart';
@@ -133,6 +133,11 @@ String _sectionLabel(AppLocalizations l10n, String key) {
 const double _minZoom = 0.1;
 const double _maxZoom = 4.0;
 const double _zoomStep = 1.15;
+
+/// How many files (starting right after the selected one) eagerly preload
+/// from the on-disk preview cache when a folder opens — see
+/// `_preloadPreviewCache`.
+const _previewPreloadCount = 8;
 
 /// How long to wait after the last slider change before actually
 /// re-rendering, restarted on every change — matches the Python app's
@@ -455,10 +460,6 @@ class _EditorScreenState extends State<EditorScreen> {
   Timer? _slowRenderTimer;
   static const _slowRenderThreshold = Duration(seconds: 3);
 
-  /// Which stage the in-progress RAW decode is on, for real (if
-  /// stage-granular) loading-overlay progress — see [RawDecodeStage].
-  RawDecodeStage? _decodeStage;
-
   /// Which stage the in-progress AI Denoise render is on — see
   /// [RenderStage]. Only populated for that one render (see
   /// [_renderPreview]'s `onStage`), not routine slider-drag renders.
@@ -588,6 +589,17 @@ class _EditorScreenState extends State<EditorScreen> {
   /// decoded before then skip the cache for that one lookup.
   ThumbnailCacheManager? _thumbnailCache;
 
+  /// Same on-disk format as [_thumbnailCache] (see thumbnail_cache.dart),
+  /// pointed at a resolution-namespaced directory instead — caches
+  /// [EditSourcePair.preview] itself (as a JPEG), not just a small grid
+  /// thumbnail, so reselecting an already-opened photo can skip the RAW
+  /// decode entirely. Re-pointed (a fresh instance, new directory) whenever
+  /// Settings > Preview Resolution changes, so a stale-resolution cache is
+  /// never returned — see `_openSettings`'s `previewResolutionChanged`
+  /// branch. Null until [_loadPreviewCache] resolves, same reasoning as
+  /// [_thumbnailCache] being nullable.
+  ThumbnailCacheManager? _previewCache;
+
   @override
   void initState() {
     super.initState();
@@ -610,6 +622,14 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _thumbnailCache = ThumbnailCacheManager(dir));
   }
 
+  Future<void> _loadPreviewCache() async {
+    final dir = await resolvePreviewCacheDir(_settings.previewResolution);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _previewCache = ThumbnailCacheManager(dir));
+  }
+
   /// Makes sure the current photo's edits are actually on disk before the
   /// window closes — the debounced/fire-and-forget save elsewhere in this
   /// file wouldn't necessarily finish in time for a save made in the last
@@ -620,6 +640,7 @@ class _EditorScreenState extends State<EditorScreen> {
   Future<AppExitResponse> _handleExitRequested() async {
     await _flushCurrentEdits();
     await _thumbnailCache?.flush();
+    await _previewCache?.flush();
     return AppExitResponse.exit;
   }
 
@@ -935,6 +956,10 @@ class _EditorScreenState extends State<EditorScreen> {
       // to pay that cost for every launch when the setting is off anyway.
       unawaited(isGpuRenderAvailable());
     }
+    // Loaded here (after the real settings resolve, not in parallel from
+    // initState) so it's pointed at the right resolution-namespaced
+    // directory from the start, rather than the default's briefly.
+    unawaited(_loadPreviewCache());
     final lastFolder = settings.lastActiveFolder;
     if (lastFolder != null && await Directory(lastFolder).exists()) {
       unawaited(_loadFolder(lastFolder));
@@ -990,6 +1015,7 @@ class _EditorScreenState extends State<EditorScreen> {
           });
           unawaited(saveSettings(next));
           if (previewResolutionChanged) {
+            unawaited(_loadPreviewCache());
             final selected = _selectedIndex == null
                 ? null
                 : _files[_selectedIndex!];
@@ -1307,6 +1333,7 @@ class _EditorScreenState extends State<EditorScreen> {
         _loadEditSourceAndRender(files[selectedIndex].path, generation),
       );
     }
+    unawaited(_preloadPreviewCache(files, selectedIndex, generation));
     await _loadThumbnails(files, generation);
     if (!mounted || generation != _folderGeneration) {
       return;
@@ -1397,9 +1424,10 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   /// Decodes the full editable RAW buffer for [path] (unless already
-  /// cached) and renders it with the current slider values. Guarded by
-  /// [generation] so a slow decode from a folder the user has since
-  /// navigated away from can't clobber state after the fact.
+  /// cached, in memory or on disk) and renders it with the current slider
+  /// values. Guarded by [generation] so a slow decode from a folder the
+  /// user has since navigated away from can't clobber state after the
+  /// fact.
   Future<void> _loadEditSourceAndRender(String path, int generation) async {
     if (!_metadata.containsKey(path)) {
       unawaited(_loadMetadata(path, generation));
@@ -1409,30 +1437,107 @@ class _EditorScreenState extends State<EditorScreen> {
       setState(() {
         _isDecodingPhoto = true;
         _loadingOverlayHidden = false;
-        _decodeStage = null;
       });
-      sources = await decodeEditSourcesWithProgress(
+
+      // Cache lookup/decode happens here in the main isolate/from a
+      // compute() call (same split as ThumbnailCacheManager's own usage,
+      // see _loadThumbnails) — only a genuine cache miss falls through to
+      // the much more expensive RAW decode isolate below.
+      final cachedJpeg = await _previewCache?.lookup(path);
+      var fromCache = false;
+      if (cachedJpeg != null) {
+        sources = await compute(decodeEditSourcePairFromCachedJpeg, cachedJpeg);
+        fromCache = sources != null;
+      }
+
+      // No per-stage progress consumer anymore (the small in-place spinner
+      // is indeterminate — see _ImageArea's usage below), but
+      // decodeEditSourcesWithProgress's dedicated Isolate is still what we
+      // want over decodeEditSources' compute() for a genuine miss: see its
+      // doc comment.
+      sources ??= await decodeEditSourcesWithProgress(
         path,
-        (stage) {
-          if (mounted && generation == _folderGeneration) {
-            setState(() => _decodeStage = stage);
-          }
-        },
+        (_) {},
         previewMaxDimension: _settings.previewResolution,
       );
+
       if (!mounted || generation != _folderGeneration) {
         return;
       }
-      setState(() {
-        _isDecodingPhoto = false;
-        _decodeStage = null;
-      });
+      setState(() => _isDecodingPhoto = false);
       if (sources == null) {
         return;
       }
       setState(() => _editSources[path] = sources!);
+      if (!fromCache) {
+        unawaited(_storePreviewCache(path, sources));
+      }
     }
     await _renderPreview(path);
+  }
+
+  /// Persists a freshly RAW-decoded [sources] to the on-disk preview
+  /// cache so the next time [path] is opened (this session or a future
+  /// one) it can skip straight to [decodeEditSourcePairFromCachedJpeg]
+  /// instead of a full RAW decode. Best-effort and never awaited by
+  /// callers — a failure here just means the next open is slow again, not
+  /// lost data.
+  Future<void> _storePreviewCache(String path, EditSourcePair sources) async {
+    final cache = _previewCache;
+    if (cache == null) {
+      return;
+    }
+    final jpegBytes = await compute(encodePreviewForCache, sources);
+    await cache.store(path, jpegBytes);
+    unawaited(cache.flush());
+  }
+
+  /// Warms [_editSources] for a small window of files starting at
+  /// [selectedIndex] (the one right after the selected photo itself,
+  /// which [_loadEditSourceAndRender] is already decoding in parallel) —
+  /// cache HITS only, never a real RAW decode, so this is a no-op the
+  /// first time a folder is ever opened and increasingly effective on
+  /// repeat visits/app launches: by the time the user clicks the next few
+  /// thumbnails in the filmstrip, those photos are often already sitting
+  /// in memory instead of triggering a fresh decode.
+  ///
+  /// Bounded to [_previewPreloadCount] files so opening a folder with
+  /// thousands of photos doesn't spend a long time JPEG-decoding cached
+  /// previews nobody's looked at yet.
+  Future<void> _preloadPreviewCache(
+    List<RawFile> files,
+    int? selectedIndex,
+    int generation,
+  ) async {
+    final cache = _previewCache;
+    if (cache == null || files.isEmpty) {
+      return;
+    }
+    final start = selectedIndex ?? 0;
+    final window = files.skip(start).take(_previewPreloadCount);
+    for (final file in window) {
+      if (!mounted || generation != _folderGeneration) {
+        return;
+      }
+      if (_editSources.containsKey(file.path)) {
+        continue; // Already decoded (e.g. the selected photo, above).
+      }
+      final cachedJpeg = await cache.lookup(file.path);
+      if (cachedJpeg == null) {
+        continue;
+      }
+      final sources = await compute(
+        decodeEditSourcePairFromCachedJpeg,
+        cachedJpeg,
+      );
+      if (sources == null || !mounted || generation != _folderGeneration) {
+        continue;
+      }
+      if (_editSources.containsKey(file.path)) {
+        continue; // Raced with a real selection/decode of this same photo.
+      }
+      setState(() => _editSources[file.path] = sources);
+    }
   }
 
   /// Loads [path]'s camera/lens/exposure metadata (cheap — no unpack/
@@ -2403,19 +2508,10 @@ class _EditorScreenState extends State<EditorScreen> {
             : null,
       );
     }
-    if (_isDecodingPhoto && selected != null) {
-      final stage = _decodeStage;
-      return _LoadingInfo(
-        message: l10n.loadingImage(selected.name),
-        progress: switch (stage) {
-          null => 0.0,
-          RawDecodeStage.opening => 0.05,
-          RawDecodeStage.unpacking => 0.25,
-          RawDecodeStage.processing => 0.55,
-          RawDecodeStage.extracting => 0.9,
-        },
-      );
-    }
+    // Deliberately NOT handled here: _isDecodingPhoto (opening a single
+    // photo) gets a small spinner centered over just the image area
+    // instead of this full-screen overlay — see _ImageArea's usage in
+    // _buildScaffold.
     if (_isApplyingAiDenoise) {
       final stage = _aiDenoiseRenderStage;
       return _LoadingInfo(
@@ -2530,44 +2626,67 @@ class _EditorScreenState extends State<EditorScreen> {
                             ),
                           ),
                           Expanded(
-                            child: _ImageArea(
-                              selected: selected,
-                              thumbnail: selected == null
-                                  ? null
-                                  : _thumbnails[selected.path],
-                              preview: selected == null
-                                  ? null
-                                  : _renderedPreviews[selected.path],
-                              neutralPreview: selected == null
-                                  ? null
-                                  : _neutralPreviews[selected.path],
-                              beforeAfterMode: _beforeAfterMode,
-                              viewController: _viewController,
-                              viewportKey: _viewportKey,
-                              onPointerSignal: _handlePointerSignal,
-                              editingMask:
-                                  (_beforeAfterMode || selected == null)
-                                  ? null
-                                  : _activeMask,
-                              editingSource: selected == null
-                                  ? null
-                                  : _editSources[selected.path]?.preview,
-                              onMaskGeometryChanged: _onMaskGeometryChanged,
-                              onMaskGeometryChangeEnd: _onMaskGeometryChangeEnd,
-                              brushRadius: _brushRadius,
-                              brushHardness: _brushHardness,
-                              brushErase: _brushErase,
-                              onSampleColor: _onSampleMaskColor,
-                              maskOverlayVisible:
-                                  _maskOverlayVisible && !_isAdjustingMaskValue,
-                              maskOverlayOpacity: _maskOverlayOpacity,
-                              cropOverlayActive:
-                                  !_beforeAfterMode && _cropOverlayActive,
-                              cropTransform: _cropTransform,
-                              cropAspectRatio: _cropAspectRatio,
-                              onCropTransformChanged: _onCropTransformChanged,
-                              onCropTransformChangeEnd:
-                                  _onCropTransformChangeEnd,
+                            child: Stack(
+                              children: [
+                                _ImageArea(
+                                  selected: selected,
+                                  thumbnail: selected == null
+                                      ? null
+                                      : _thumbnails[selected.path],
+                                  preview: selected == null
+                                      ? null
+                                      : _renderedPreviews[selected.path],
+                                  neutralPreview: selected == null
+                                      ? null
+                                      : _neutralPreviews[selected.path],
+                                  beforeAfterMode: _beforeAfterMode,
+                                  viewController: _viewController,
+                                  viewportKey: _viewportKey,
+                                  onPointerSignal: _handlePointerSignal,
+                                  editingMask:
+                                      (_beforeAfterMode || selected == null)
+                                      ? null
+                                      : _activeMask,
+                                  editingSource: selected == null
+                                      ? null
+                                      : _editSources[selected.path]?.preview,
+                                  onMaskGeometryChanged: _onMaskGeometryChanged,
+                                  onMaskGeometryChangeEnd:
+                                      _onMaskGeometryChangeEnd,
+                                  brushRadius: _brushRadius,
+                                  brushHardness: _brushHardness,
+                                  brushErase: _brushErase,
+                                  onSampleColor: _onSampleMaskColor,
+                                  maskOverlayVisible:
+                                      _maskOverlayVisible &&
+                                      !_isAdjustingMaskValue,
+                                  maskOverlayOpacity: _maskOverlayOpacity,
+                                  cropOverlayActive:
+                                      !_beforeAfterMode && _cropOverlayActive,
+                                  cropTransform: _cropTransform,
+                                  cropAspectRatio: _cropAspectRatio,
+                                  onCropTransformChanged:
+                                      _onCropTransformChanged,
+                                  onCropTransformChangeEnd:
+                                      _onCropTransformChangeEnd,
+                                ),
+                                // Opening a photo (RAW decode, or a
+                                // preview-cache hit) gets a small spinner
+                                // over just this area instead of the
+                                // full-screen _LoadingOverlay other
+                                // operations use — see _overlayInfo's doc
+                                // comment.
+                                if (_isDecodingPhoto && selected != null)
+                                  const Center(
+                                    child: SizedBox(
+                                      width: 32,
+                                      height: 32,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2.5,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ),
                           _ControlsPanel(

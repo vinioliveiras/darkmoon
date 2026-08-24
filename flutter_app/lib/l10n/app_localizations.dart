@@ -140,6 +140,12 @@ abstract class AppLocalizations {
   /// **'Developed by Vini'**
   String get aboutCredits;
 
+  /// No description provided for @splashLicense.
+  ///
+  /// In en, this message translates to:
+  /// **'MIT License'**
+  String get splashLicense;
+
   /// No description provided for @dialogOpenFolderTitle.
   ///
   /// In en, this message translates to:
