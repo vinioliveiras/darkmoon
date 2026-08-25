@@ -36,6 +36,10 @@ bool FlutterWindow::OnCreate() {
              std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
                  result) {
         if (call.method_name() == "maximize") {
+          // Restore the standard title bar/close button/resize border
+          // before maximizing — see win32_window.cpp's SetFrameless,
+          // which the window starts with disabled for the splash.
+          SetFrameless(false);
           ShowWindow(GetHandle(), SW_SHOWMAXIMIZED);
           result->Success();
         } else {

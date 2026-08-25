@@ -25,13 +25,14 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   project.set_dart_entrypoint_arguments(std::move(command_line_arguments));
 
   FlutterWindow window(project);
-  // Created small and centered on the primary monitor — just roomy enough
-  // for the launch splash's centered card (see widgets/splash_screen.dart's
-  // _cardWidth/_cardHeight, 720x420) with margin for the title bar/borders
-  // Win32Window::Create's width/height includes — rather than the eventual
-  // maximized size, so the real desktop is visible around the splash card
-  // like Lightroom's own launch screen. FlutterWindow's "darkmoon/window"
-  // channel maximizes it once main.dart's splash timer finishes.
+  // Created small, centered on the primary monitor, and frameless (see
+  // Win32Window::Create's SetFrameless(true) call) — just roomy enough for
+  // the launch splash's centered card (see widgets/splash_screen.dart's
+  // _cardWidth/_cardHeight, 720x420) — rather than the eventual maximized
+  // size, so the real desktop is visible around the splash card with no
+  // native title bar around it, like Lightroom's own launch screen.
+  // FlutterWindow's "darkmoon/window" channel restores the frame and
+  // maximizes it once main.dart's splash timer finishes.
   const int splash_window_width = 800;
   const int splash_window_height = 520;
   const int screen_width = GetSystemMetrics(SM_CXSCREEN);

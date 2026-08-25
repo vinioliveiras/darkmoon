@@ -144,6 +144,10 @@ bool Win32Window::Create(const std::wstring& title,
     return false;
   }
 
+  // Starts frameless — see SetFrameless's own comment. Restored by
+  // FlutterWindow's "darkmoon/window" channel once the splash goes away.
+  SetFrameless(true);
+
   UpdateTheme(window);
 
   return OnCreate();
@@ -266,6 +270,23 @@ HWND Win32Window::GetHandle() {
 
 void Win32Window::SetQuitOnClose(bool quit_on_close) {
   quit_on_close_ = quit_on_close;
+}
+
+void Win32Window::SetFrameless(bool frameless) {
+  if (!window_handle_) {
+    return;
+  }
+  LONG_PTR style = GetWindowLongPtr(window_handle_, GWL_STYLE);
+  constexpr LONG_PTR kFrameStyles = WS_CAPTION | WS_THICKFRAME |
+                                    WS_MINIMIZEBOX | WS_MAXIMIZEBOX |
+                                    WS_SYSMENU;
+  style = frameless ? (style & ~kFrameStyles) : (style | kFrameStyles);
+  SetWindowLongPtr(window_handle_, GWL_STYLE, style);
+  // SWP_FRAMECHANGED forces the non-client area to actually repaint with
+  // the new style — SetWindowLongPtr alone only changes the style bits,
+  // not what's on screen.
+  SetWindowPos(window_handle_, nullptr, 0, 0, 0, 0,
+              SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
 }
 
 bool Win32Window::OnCreate() {

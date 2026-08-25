@@ -55,6 +55,14 @@ class Win32Window {
   // Return a RECT representing the bounds of the current client area.
   RECT GetClientArea();
 
+  // Adds or removes the title bar, system menu, resize border and min/
+  // max/close buttons. Used to show the launch splash (see
+  // widgets/splash_screen.dart, which draws its own card/shadow) without a
+  // mismatched native frame wrapped around it, then restored once the
+  // splash is dismissed — see flutter_window.cpp's "darkmoon/window"
+  // channel.
+  void SetFrameless(bool frameless);
+
  protected:
   // Processes and route salient window messages for mouse handling,
   // size change and DPI. Delegates handling of these to member overloads that

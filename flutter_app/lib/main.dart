@@ -15,9 +15,11 @@ void main() {
 }
 
 /// Talks to `FlutterWindow`'s method-call handler in windows/runner/
-/// flutter_window.cpp — the window starts small and centered (see
-/// windows/runner/main.cpp) so the real desktop is visible around the
-/// splash card like Lightroom's own launch screen, and this is what grows
+/// flutter_window.cpp — the window starts small, centered, and frameless
+/// (see windows/runner/main.cpp and win32_window.cpp's `SetFrameless`) so
+/// the real desktop is visible around the splash card with no mismatched
+/// native title bar/close button wrapped around it, like Lightroom's own
+/// launch screen. This is what restores the normal window frame and grows
 /// it to maximized once the splash goes away. Windows-only: the window
 /// choreography this exists for is specific to how windows/runner/main.cpp
 /// creates the window, so this channel has no handler (and isn't called)
