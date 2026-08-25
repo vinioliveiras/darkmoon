@@ -11,9 +11,11 @@
 
 uniform vec2 uSize;
 
-// Brightness/contrast — render.dart's _applyBrightnessContrast.
+// Brightness/contrast — render.dart's _applyBrightnessContrast. Contrast
+// is an endpoint-preserving S-curve (0->0, 255->255 always), not a plain
+// linear scale toward mid-gray — see that function's doc comment for why.
 uniform float uBrightness255; // brightness param, still 0..100-ish scale
-uniform float uContrastFactor; // 1 + contrast/100
+uniform float uContrastGamma; // pow(2, contrast/100*1.25), 1.0 = no-op
 
 // Highlights/shadows — _applyHighlightsShadows. Precomputed as
 // (param/100)*80/255 on the CPU side so the shader just multiplies by a
@@ -117,12 +119,27 @@ vec3 hslToRgb(float h, float s, float l) {
   );
 }
 
+// Endpoint-preserving S-curve (0->0, 1->1 always, regardless of gamma) —
+// mirrors render.dart's _applyBrightnessContrast per-channel exactly.
+// gamma==1.0 (uContrastGamma's no-contrast value) reduces to the identity
+// algebraically, so this needs no separate off/no-op branch.
+float contrastCurve(float t, float gamma) {
+  float x = clamp(t, 0.0, 1.0);
+  if (x < 0.5) {
+    return 0.5 * pow(2.0 * x, gamma);
+  }
+  return 1.0 - 0.5 * pow(2.0 * (1.0 - x), gamma);
+}
+
 void main() {
   vec2 uv = FlutterFragCoord().xy / uSize;
   vec3 c = texture(uTexture, uv).rgb;
 
   // Brightness/contrast.
-  c = (c - 0.5) * uContrastFactor + 0.5 + uBrightness255 / 255.0;
+  c.r = contrastCurve(c.r, uContrastGamma);
+  c.g = contrastCurve(c.g, uContrastGamma);
+  c.b = contrastCurve(c.b, uContrastGamma);
+  c += uBrightness255 / 255.0;
 
   // Highlights/shadows + whites/blacks share one Rec.709 luminance sample
   // (matches render.dart computing it once per stage from the

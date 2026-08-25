@@ -179,7 +179,12 @@ Future<ui.Image> _runPostDenoise(
   );
   final shader = program.fragmentShader();
 
-  final contrastFactor = 1.0 + params.contrast / 100.0;
+  // Endpoint-preserving S-curve gamma — mirrors render.dart's
+  // _applyBrightnessContrast exactly (see its doc comment for why this
+  // replaced a plain linear contrastFactor).
+  final contrastGamma = params.contrast == 0
+      ? 1.0
+      : math.pow(2.0, params.contrast / 100.0 * 1.25).toDouble();
   final shadowsAdd = params.shadows / 100.0 * 80.0 / 255.0;
   final highlightsAdd = params.highlights / 100.0 * 80.0 / 255.0;
   final whitesAdd = params.whites / 100.0 * 100.0 / 255.0;
@@ -213,7 +218,7 @@ Future<ui.Image> _runPostDenoise(
   shader.setFloat(i++, width.toDouble());
   shader.setFloat(i++, height.toDouble());
   shader.setFloat(i++, params.brightness);
-  shader.setFloat(i++, contrastFactor);
+  shader.setFloat(i++, contrastGamma);
   shader.setFloat(i++, shadowsAdd);
   shader.setFloat(i++, highlightsAdd);
   shader.setFloat(i++, whitesAdd);

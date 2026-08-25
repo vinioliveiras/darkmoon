@@ -382,6 +382,19 @@ void _applyExposure(Float32List img, double exposure) {
   }
 }
 
+/// EXPERIMENTAL (not yet validated against a wide range of presets —
+/// flagged here deliberately): Contrast used to be a pure linear scale
+/// toward 127.5 (`(x-127.5)*factor+127.5`), which has no floor on how far
+/// it can crush blacks up or pull whites down — Contrast=-40 alone lifted
+/// black to 51 and pulled white to 204, *before* Shadows/Whites/Blacks
+/// even ran, compounding into a visibly washed/hazy look on presets that
+/// lean on several Basic sliders at once (e.g. a real preset combining
+/// Contrast=-40, Shadows=+100, Whites=+58). Replaced with an
+/// endpoint-preserving S-curve (0 always maps to 0, 255 always maps to
+/// 255, regardless of strength) — same curve shape used for RapidRAW's
+/// (a sibling project) shader contrast: gamma > 1 steepens the curve
+/// (more contrast), gamma < 1 flattens it (less contrast) while the true
+/// black/white points never move.
 void _applyBrightnessContrast(
   Float32List img,
   double brightness,
@@ -390,9 +403,19 @@ void _applyBrightnessContrast(
   if (brightness == 0 && contrast == 0) {
     return;
   }
-  final contrastFactor = 1.0 + contrast / 100.0;
+  if (contrast == 0) {
+    for (var i = 0; i < img.length; i++) {
+      img[i] = img[i] + brightness;
+    }
+    return;
+  }
+  final gamma = math.pow(2.0, contrast / 100.0 * 1.25).toDouble();
   for (var i = 0; i < img.length; i++) {
-    img[i] = (img[i] - 127.5) * contrastFactor + 127.5 + brightness;
+    final t = (img[i] / 255.0).clamp(0.0, 1.0);
+    final curved = t < 0.5
+        ? 0.5 * math.pow(2.0 * t, gamma)
+        : 1.0 - 0.5 * math.pow(2.0 * (1.0 - t), gamma);
+    img[i] = curved.toDouble().clamp(0.0, 1.0) * 255.0 + brightness;
   }
 }
 
@@ -478,7 +501,9 @@ void _applyVibrance(Float32List img, int pixelCount, double amount) {
     final skinWeight = _skinToneWeight(r / 255.0, g / 255.0, b / 255.0);
     final factor =
         1.0 +
-        (amount / 100.0) * (1.0 - currentSaturation) * (1.0 - skinWeight * 0.75);
+        (amount / 100.0) *
+            (1.0 - currentSaturation) *
+            (1.0 - skinWeight * 0.75);
     img[i] = luminance + (r - luminance) * factor;
     img[i + 1] = luminance + (g - luminance) * factor;
     img[i + 2] = luminance + (b - luminance) * factor;
