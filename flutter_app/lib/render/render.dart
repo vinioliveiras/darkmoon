@@ -441,8 +441,15 @@ void _liftLumaPreservingChroma(
   // dividing by a near-zero oldLuma255 (exactly the near-black pixels
   // Shadows/Blacks are meant to lift) would otherwise blow the ratio up
   // to 50x+ for a strong lift, turning a handful of the darkest pixels
-  // pure white instead of a natural-looking lift.
-  final ratio = (newLuma / math.max(oldLuma255, 0.5)).clamp(0.0, 6.0);
+  // pure white instead of a natural-looking lift. Capped lower than a
+  // first pass at 6.0 (now 2.5): the whole pipeline works in 8-bit space
+  // (decodeRawImage's output is already a Uint8List, not 16-bit/float),
+  // so near-black/near-white regions only have a handful of distinct
+  // source values to begin with — a high ratio can't invent intermediate
+  // values that don't exist there, it just makes the resulting banding
+  // and whatever noise is already in those few values more visible
+  // instead of a smooth lift.
+  final ratio = (newLuma / math.max(oldLuma255, 0.5)).clamp(0.0, 2.5);
   img[i] = (img[i] * ratio).clamp(0.0, 255.0);
   img[i + 1] = (img[i + 1] * ratio).clamp(0.0, 255.0);
   img[i + 2] = (img[i + 2] * ratio).clamp(0.0, 255.0);

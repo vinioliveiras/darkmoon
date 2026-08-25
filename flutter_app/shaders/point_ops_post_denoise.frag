@@ -166,15 +166,20 @@ void main() {
   // by a near-zero lum (exactly the near-black pixels Shadows/Blacks are
   // meant to lift) would otherwise blow the ratio up to 50x+ for a strong
   // lift, turning a handful of the darkest pixels pure white instead of a
-  // natural-looking lift. Mirrors render.dart's _liftLumaPreservingChroma.
+  // natural-looking lift. Capped lower than a first pass at 6.0 (now 2.5):
+  // the whole pipeline works in 8-bit space, so near-black/near-white
+  // regions only have a handful of distinct source values to begin with —
+  // a high ratio can't invent intermediate values that don't exist there,
+  // it just makes banding/noise already in those few values more visible.
+  // Mirrors render.dart's _liftLumaPreservingChroma.
   float shLum = clamp(lum + shadowW * uShadowsAdd + highlightW * uHighlightsAdd, 0.0, 1.0);
-  c *= clamp(shLum / max(lum, 0.5 / 255.0), 0.0, 6.0);
+  c *= clamp(shLum / max(lum, 0.5 / 255.0), 0.0, 2.5);
 
   float lum2 = dot(c, vec3(0.2126, 0.7152, 0.0722));
   float whitesW = clamp((lum2 - 0.75) * 4.0, 0.0, 1.0);
   float blacksW = clamp(1.0 - lum2 * 4.0, 0.0, 1.0);
   float wbLum = clamp(lum2 + whitesW * uWhitesAdd + blacksW * uBlacksAdd, 0.0, 1.0);
-  c *= clamp(wbLum / max(lum2, 0.5 / 255.0), 0.0, 6.0);
+  c *= clamp(wbLum / max(lum2, 0.5 / 255.0), 0.0, 2.5);
 
   // Tone curve (all 3 channels through the same LUT), then per-channel
   // color curves — matches applyToneCurve then applyColorCurves' order.
