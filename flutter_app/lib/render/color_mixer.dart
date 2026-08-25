@@ -111,7 +111,13 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
 
     var hueShift = 0.0;
     var satShift = 0.0;
-    var lumShift = 0.0;
+    // Luminance intentionally not applied — disabled per-channel in the
+    // UI too (see editor_screen.dart's Mixer/HSL panel) after repeated
+    // reports of it blowing out/pixelating pixels, even after fixing the
+    // underlying GPU shader bug (a uniform array indexed by a non-
+    // constant loop variable). A preset's MixerXLuminance value is still
+    // parsed/stored (preset_xmp.dart) — just never applied — so nothing
+    // breaks if it's re-enabled later.
     for (var c = 0; c < channels.length; c++) {
       final weight = _bandWeight(hue, _channelCenterHues[c]);
       if (weight <= 0) {
@@ -119,18 +125,17 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
       }
       hueShift += weight * channels[c].hue;
       satShift += weight * channels[c].saturation;
-      lumShift += weight * channels[c].luminance;
     }
 
     // Scaled down from the raw -100..100 slider range so a full-strength
-    // adjustment shifts hue/lightness noticeably without blowing out —
-    // saturation is left at 1:1 since it's already a relative multiplier.
+    // adjustment shifts hue noticeably without blowing out — saturation
+    // is left at 1:1 since it's already a relative multiplier.
     hue = (hue + hueShift * 0.3) % 360;
     if (hue < 0) {
       hue += 360;
     }
     final newSat = (sat * (1 + satShift / 100)).clamp(0.0, 1.0);
-    final newLight = (light + lumShift / 100 * 0.5).clamp(0.0, 1.0);
+    final newLight = light;
 
     final rgb = hslToRgb(hue, newSat, newLight);
     img[i] = rgb[0] * 255.0;

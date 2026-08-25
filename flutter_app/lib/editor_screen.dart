@@ -4520,11 +4520,19 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   ),
                                 ),
                               ),
-                              for (final suffix in const [
-                                'Hue',
-                                'Saturation',
-                                'Luminance',
-                              ])
+                              // Luminance removed from the Mixer/HSL panel
+                              // (Hue and Saturation only) — repeated
+                              // reports of it blowing out/pixelating
+                              // pixels even after fixing the underlying
+                              // GPU shader bug (a uniform array indexed by
+                              // a non-constant loop variable), so it's
+                              // disabled here rather than risk shipping
+                              // another round of a half-confident fix.
+                              // Color Grading's own separate Luminance
+                              // control (Shadows/Midtones/Highlights/
+                              // Global wheels, `_activeGradeRange`) is
+                              // untouched.
+                              for (final suffix in const ['Hue', 'Saturation'])
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 12),
                                   child: SliderRow(
@@ -4551,11 +4559,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   ),
                                 ),
                             ] else
-                              for (final suffix in const [
-                                'Hue',
-                                'Saturation',
-                                'Luminance',
-                              ])
+                              for (final suffix in const ['Hue', 'Saturation'])
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 14),
                                   child: Column(

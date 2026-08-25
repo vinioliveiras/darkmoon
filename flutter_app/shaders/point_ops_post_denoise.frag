@@ -193,44 +193,42 @@ void main() {
   // produced the blocky, garbage-looking corruption reported when
   // touching a Mixer/Color Grading Luminance slider — every index below
   // is now a compile-time constant.
+  // Luminance (uMixer[c*3+2] for each band) intentionally not applied —
+  // disabled per-channel in the UI too (see editor_screen.dart's Mixer/
+  // HSL panel) after repeated reports of it blowing out/pixelating
+  // pixels, even after fixing the uniform-array-indexed-by-loop-variable
+  // bug that caused the blocky corruption. Mirrors color_mixer.dart's
+  // applyColorMixer exactly.
   vec3 hsl = rgbToHsl(clamp(c, 0.0, 1.0));
-  float hueShift = 0.0, satShift = 0.0, lumShift = 0.0;
+  float hueShift = 0.0, satShift = 0.0;
   float w0 = bandWeight(hsl.x, mixerCenterHue(0));
   hueShift += w0 * uMixer[0];
   satShift += w0 * uMixer[1];
-  lumShift += w0 * uMixer[2];
   float w1 = bandWeight(hsl.x, mixerCenterHue(1));
   hueShift += w1 * uMixer[3];
   satShift += w1 * uMixer[4];
-  lumShift += w1 * uMixer[5];
   float w2 = bandWeight(hsl.x, mixerCenterHue(2));
   hueShift += w2 * uMixer[6];
   satShift += w2 * uMixer[7];
-  lumShift += w2 * uMixer[8];
   float w3 = bandWeight(hsl.x, mixerCenterHue(3));
   hueShift += w3 * uMixer[9];
   satShift += w3 * uMixer[10];
-  lumShift += w3 * uMixer[11];
   float w4 = bandWeight(hsl.x, mixerCenterHue(4));
   hueShift += w4 * uMixer[12];
   satShift += w4 * uMixer[13];
-  lumShift += w4 * uMixer[14];
   float w5 = bandWeight(hsl.x, mixerCenterHue(5));
   hueShift += w5 * uMixer[15];
   satShift += w5 * uMixer[16];
-  lumShift += w5 * uMixer[17];
   float w6 = bandWeight(hsl.x, mixerCenterHue(6));
   hueShift += w6 * uMixer[18];
   satShift += w6 * uMixer[19];
-  lumShift += w6 * uMixer[20];
   float w7 = bandWeight(hsl.x, mixerCenterHue(7));
   hueShift += w7 * uMixer[21];
   satShift += w7 * uMixer[22];
-  lumShift += w7 * uMixer[23];
   float newHue = mod(hsl.x + hueShift * 0.3, 360.0);
   if (newHue < 0.0) newHue += 360.0;
   float newSat = clamp(hsl.y * (1.0 + satShift / 100.0), 0.0, 1.0);
-  float newLight = clamp(hsl.z + lumShift / 100.0 * 0.5, 0.0, 1.0);
+  float newLight = hsl.z;
   c = hslToRgb(newHue, newSat, newLight);
 
   // Color Grading — shadow/midtone/highlight partition-of-unity plus a
