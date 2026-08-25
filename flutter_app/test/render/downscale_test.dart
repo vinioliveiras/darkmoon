@@ -55,4 +55,32 @@ void main() {
       }
     });
   });
+
+  group('scaleByPercent', () {
+    test('returns image unchanged at 100%', () {
+      final image = img.Image(width: 400, height: 200);
+      final result = scaleByPercent(image, 100);
+      expect(result, same(image));
+    });
+
+    test('returns image unchanged above 100%', () {
+      final image = img.Image(width: 400, height: 200);
+      final result = scaleByPercent(image, 150);
+      expect(result, same(image));
+    });
+
+    test('scales down preserving aspect ratio', () {
+      final image = img.Image(width: 400, height: 200);
+      final result = scaleByPercent(image, 50);
+      expect(result.width, 200);
+      expect(result.height, 100);
+    });
+
+    test('default rapid-export percent trims only slightly', () {
+      final image = img.Image(width: 4000, height: 3000);
+      final result = scaleByPercent(image, 95);
+      expect(result.width, 3800);
+      expect(result.height, 2850);
+    });
+  });
 }

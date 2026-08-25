@@ -34,7 +34,12 @@ class Win32Window {
   // consistent size this function will scale the inputted width and height as
   // as appropriate for the default monitor. The window is invisible until
   // |Show| is called. Returns true if the window was created successfully.
-  bool Create(const std::wstring& title, const Point& origin, const Size& size);
+  //
+  // The window starts frameless (see SetFrameless) with |corner_radius|
+  // (logical pixels, scaled the same way |size| is) rounding its actual
+  // window shape — 0 (the default) leaves it a plain rectangle.
+  bool Create(const std::wstring& title, const Point& origin, const Size& size,
+              int corner_radius = 0);
 
   // Show the current window. Returns true if the window was successfully shown.
   bool Show();
@@ -65,7 +70,14 @@ class Win32Window {
   // mismatched native frame wrapped around it, then restored once the
   // splash is dismissed — see flutter_window.cpp's "darkmoon/window"
   // channel.
-  void SetFrameless(bool frameless);
+  //
+  // While going frameless, |corner_radius| (physical pixels, 0 for a
+  // plain rectangle) also clips the actual window shape via SetWindowRgn
+  // — the window's own visible bounds become the rounded card
+  // widgets/splash_screen.dart draws, rather than a plain rectangle the
+  // card floats inside of. Going framed again always clears the region
+  // back to a plain rectangle, regardless of |corner_radius|.
+  void SetFrameless(bool frameless, int corner_radius = 0);
 
  protected:
   // Processes and route salient window messages for mouse handling,

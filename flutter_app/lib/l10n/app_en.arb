@@ -109,6 +109,13 @@
   "exportStageEncoding": "Encoding...",
   "exportStageWriting": "Saving file...",
   "exportPhotoDialogTitle": "Export Photo",
+  "exportRapidLabel": "Rapid export",
+  "exportRapidHint": "Compressed JPEG for social media",
+  "exportRapidScaleLabel": "Resolution",
+  "exportRapidScaleResultLabel": "≈ {width} × {height} px",
+  "@exportRapidScaleResultLabel": {
+    "placeholders": { "width": {"type": "int"}, "height": {"type": "int"} }
+  },
   "exportFormatLabel": "Format",
   "exportQualityLabel": "Quality",
   "exportDialogConfirm": "Export",
@@ -184,6 +191,7 @@
   "maskEnableTooltip": "Enable mask",
   "masksTitle": "Masks",
   "histogramTitle": "Histogram",
+  "filmstripEditedTooltip": "Edited",
   "maskBrushSizeLabel": "Size",
   "maskBrushHardnessLabel": "Hardness",
   "maskBrushEraseLabel": "Erase",

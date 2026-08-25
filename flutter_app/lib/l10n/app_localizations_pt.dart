@@ -262,6 +262,20 @@ class AppLocalizationsPt extends AppLocalizations {
   String get exportPhotoDialogTitle => 'Exportar foto';
 
   @override
+  String get exportRapidLabel => 'Exportação rápida';
+
+  @override
+  String get exportRapidHint => 'JPEG comprimido pra redes sociais';
+
+  @override
+  String get exportRapidScaleLabel => 'Resolução';
+
+  @override
+  String exportRapidScaleResultLabel(int width, int height) {
+    return '≈ $width × $height px';
+  }
+
+  @override
   String get exportFormatLabel => 'Formato';
 
   @override
@@ -471,6 +485,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get histogramTitle => 'Histograma';
+
+  @override
+  String get filmstripEditedTooltip => 'Editada';
 
   @override
   String get maskBrushSizeLabel => 'Tamanho';

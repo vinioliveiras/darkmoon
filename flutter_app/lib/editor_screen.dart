@@ -494,6 +494,7 @@ class _EditorScreenState extends State<EditorScreen> {
   /// to how long opening a folder via a native file dialog takes.
   Map<String, Map<String, double>> _edits = {};
   Timer? _catalogSaveTimer;
+  Timer? _thumbnailFlushTimer;
 
   /// Saved Tone Curve + Color Curve control points per photo, persisted
   /// separately from [_edits] since a curve is a list of points, not a
@@ -1223,6 +1224,53 @@ class _EditorScreenState extends State<EditorScreen> {
     });
   }
 
+  /// Persists [thumbnailBytes] (the filmstrip thumbnail [_renderPreviewNow]
+  /// just rendered from the current edit) to the on-disk thumbnail cache,
+  /// so it reflects the edit on the next launch too — instead of only in
+  /// [_thumbnails], which is lost on restart and left the filmstrip
+  /// showing the camera-original preview again until the photo was
+  /// reselected. Debounced the same way [_scheduleCatalogSave] is, so a
+  /// burst of edits writes the cache's month file once, not once per edit.
+  void _scheduleThumbnailCacheStore(String path, Uint8List thumbnailBytes) {
+    final cache = _thumbnailCache;
+    if (cache == null) {
+      return;
+    }
+    unawaited(cache.store(path, thumbnailBytes));
+    _thumbnailFlushTimer?.cancel();
+    _thumbnailFlushTimer = Timer(_catalogSaveDebounce, () {
+      unawaited(cache.flush());
+    });
+  }
+
+  /// Whether [path] has any saved edit that isn't a fresh photo's defaults
+  /// — curves, masks, or slider values — backing the filmstrip's "edited"
+  /// badge. Checked against the *saved* catalog state ([_edits]/
+  /// [_photoCurves]/[_photoMasks]) rather than live in-editor state, so
+  /// every thumbnail in the strip can be checked, not just the selected
+  /// photo (whose RAW source may not even be decoded yet).
+  bool _isPhotoEdited(String path) {
+    final masks = _photoMasks[path];
+    if (masks != null && masks.isNotEmpty) {
+      return true;
+    }
+    final curves = _photoCurves[path];
+    if (curves != null && !curves.isIdentity) {
+      return true;
+    }
+    final values = _edits[path];
+    if (values == null) {
+      return false;
+    }
+    final defaults = _defaultParamValues();
+    for (final entry in values.entries) {
+      if (entry.value != (defaults[entry.key] ?? 0)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// Adds a folder to the sidebar's persistent library (File > Add Folder)
   /// and loads it into the main view.
   Future<void> _openFolder() async {
@@ -1820,6 +1868,12 @@ class _EditorScreenState extends State<EditorScreen> {
       // instead of staying frozen at the camera-original preview.
       _thumbnails[path] = result.thumbnailBytes;
     });
+    if (!live) {
+      // Only the settled render's thumbnail is worth persisting to disk —
+      // a live-drag tick's thumbnail is superseded almost immediately, and
+      // there'd be one of these for every frame of the drag.
+      _scheduleThumbnailCacheStore(path, result.thumbnailBytes);
+    }
   }
 
   /// Renders [path] with neutral (default) params, for the Before/After
@@ -1949,7 +2003,15 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _onParamChanged(String name, double value) {
     setState(() {
-      _paramValues[name] = value;
+      // A new Map, not an in-place mutation of the existing one —
+      // _pushHistory's no-op check compares _paramValues by *reference*
+      // (see _currentSnapshot/_pushHistory's own doc comment), so
+      // mutating the same object here would make every snapshot taken
+      // after this one `identical()` to whatever was pushed before it,
+      // silently dropping every _onParamChangeEnd push for the rest of
+      // the session — undo/redo across ordinary (non-mask) slider edits
+      // would stop recording new steps entirely.
+      _paramValues = {..._paramValues, name: value};
       _appliedPresetId = null;
     });
     _scheduleRender(live: _settings.fastPreview);
@@ -2535,9 +2597,13 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     final l10n = AppLocalizations.of(context)!;
+    final metadata = _metadata[selected.path];
     final options = await showDialog<ExportOptions>(
       context: context,
-      builder: (_) => const ExportOptionsDialog(),
+      builder: (_) => ExportOptionsDialog(
+        nativeWidth: metadata?.width,
+        nativeHeight: metadata?.height,
+      ),
     );
     if (options == null) {
       return;
@@ -2570,6 +2636,7 @@ class _EditorScreenState extends State<EditorScreen> {
         format: options.format,
         quality: options.quality,
         cropTransform: _cropTransform,
+        scalePercent: options.scalePercent,
       ),
       (stage) {
         if (mounted) {
@@ -2916,6 +2983,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       selectedIndex: _selectedIndex,
                       thumbnails: _thumbnails,
                       onSelect: _selectIndex,
+                      isEdited: _isPhotoEdited,
                     ),
                   ],
                 ),
@@ -5348,12 +5416,17 @@ class _Filmstrip extends StatefulWidget {
     required this.selectedIndex,
     required this.thumbnails,
     required this.onSelect,
+    required this.isEdited,
   });
 
   final List<RawFile> files;
   final int? selectedIndex;
   final Map<String, Uint8List> thumbnails;
   final ValueChanged<int> onSelect;
+
+  /// Whether a photo has any saved edit — shows a small badge over its
+  /// thumbnail when true.
+  final bool Function(String path) isEdited;
 
   @override
   State<_Filmstrip> createState() => _FilmstripState();
@@ -5424,6 +5497,7 @@ class _FilmstripState extends State<_Filmstrip> {
               final file = files[index];
               final isSelected = index == selectedIndex;
               final thumbnail = thumbnails[file.path];
+              final edited = widget.isEdited(file.path);
               return Padding(
                 padding: const EdgeInsets.only(right: 6),
                 child: GestureDetector(
@@ -5471,6 +5545,12 @@ class _FilmstripState extends State<_Filmstrip> {
                                     isRaw: file.isRaw,
                                   ),
                                 ),
+                                if (edited)
+                                  const Positioned(
+                                    right: 3,
+                                    top: 3,
+                                    child: _EditedBadge(),
+                                  ),
                               ],
                             ),
                           ),
@@ -5525,6 +5605,36 @@ class _FileTypeBadge extends StatelessWidget {
           fontSize: 8.5,
           fontWeight: FontWeight.w700,
           height: 1,
+        ),
+      ),
+    );
+  }
+}
+
+/// Small pencil badge shown over a filmstrip thumbnail's corner when
+/// [_EditorScreenState._isPhotoEdited] is true for that photo — a filled
+/// dot rather than a pill (unlike [_FileTypeBadge]) since it carries no
+/// label, just a yes/no signal, matching Lightroom's own edited-photo
+/// indicator.
+class _EditedBadge extends StatelessWidget {
+  const _EditedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Tooltip(
+      message: AppLocalizations.of(context)!.filmstripEditedTooltip,
+      child: Container(
+        width: 15,
+        height: 15,
+        decoration: BoxDecoration(
+          color: DarkmoonColors.accent.withValues(alpha: 0.9),
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: const Icon(
+          CupertinoIcons.pencil,
+          size: 9,
+          color: DarkmoonColors.background,
         ),
       ),
     );

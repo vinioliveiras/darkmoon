@@ -122,7 +122,8 @@ Win32Window::~Win32Window() {
 
 bool Win32Window::Create(const std::wstring& title,
                          const Point& origin,
-                         const Size& size) {
+                         const Size& size,
+                         int corner_radius) {
   Destroy();
 
   const wchar_t* window_class =
@@ -146,7 +147,7 @@ bool Win32Window::Create(const std::wstring& title,
 
   // Starts frameless — see SetFrameless's own comment. Restored by
   // FlutterWindow's "darkmoon/window" channel once the splash goes away.
-  SetFrameless(true);
+  SetFrameless(true, Scale(corner_radius, scale_factor));
 
   UpdateTheme(window);
 
@@ -286,7 +287,7 @@ void Win32Window::SetQuitOnClose(bool quit_on_close) {
   quit_on_close_ = quit_on_close;
 }
 
-void Win32Window::SetFrameless(bool frameless) {
+void Win32Window::SetFrameless(bool frameless, int corner_radius) {
   if (!window_handle_) {
     return;
   }
@@ -302,6 +303,24 @@ void Win32Window::SetFrameless(bool frameless) {
   // not what's on screen.
   SetWindowPos(window_handle_, nullptr, 0, 0, 0, 0,
               SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+
+  if (frameless && corner_radius > 0) {
+    RECT rect;
+    GetWindowRect(window_handle_, &rect);
+    // CreateRoundRectRgn's right/bottom are exclusive, so a region built
+    // from the window's exact width/height would leave a 1px sliver
+    // clipped off the right and bottom edges — padding by 1 covers it.
+    // SetWindowRgn takes ownership of the region handle; it must not be
+    // deleted here.
+    HRGN region = CreateRoundRectRgn(0, 0, rect.right - rect.left + 1,
+                                     rect.bottom - rect.top + 1,
+                                     corner_radius, corner_radius);
+    SetWindowRgn(window_handle_, region, TRUE);
+  } else {
+    // A null region restores the window to its normal, unclipped
+    // rectangular shape.
+    SetWindowRgn(window_handle_, nullptr, TRUE);
+  }
 }
 
 bool Win32Window::OnCreate() {

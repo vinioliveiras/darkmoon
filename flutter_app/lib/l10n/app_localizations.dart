@@ -566,6 +566,30 @@ abstract class AppLocalizations {
   /// **'Export Photo'**
   String get exportPhotoDialogTitle;
 
+  /// No description provided for @exportRapidLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Rapid export'**
+  String get exportRapidLabel;
+
+  /// No description provided for @exportRapidHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Compressed JPEG for social media'**
+  String get exportRapidHint;
+
+  /// No description provided for @exportRapidScaleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Resolution'**
+  String get exportRapidScaleLabel;
+
+  /// No description provided for @exportRapidScaleResultLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'≈ {width} × {height} px'**
+  String exportRapidScaleResultLabel(int width, int height);
+
   /// No description provided for @exportFormatLabel.
   ///
   /// In en, this message translates to:
@@ -955,6 +979,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Histogram'**
   String get histogramTitle;
+
+  /// No description provided for @filmstripEditedTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Edited'**
+  String get filmstripEditedTooltip;
 
   /// No description provided for @maskBrushSizeLabel.
   ///

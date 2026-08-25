@@ -5,6 +5,7 @@ import 'dart:isolate';
 import 'package:image/image.dart' as img;
 
 import '../native/common_image.dart';
+import '../native/image_utils.dart';
 import '../native/libraw.dart';
 import '../raw_files.dart' show isRawFile;
 import '../render/crop_transform.dart';
@@ -23,6 +24,7 @@ class ExportRequest {
     required this.quality,
     this.masks = const [],
     this.cropTransform = const CropTransformParams(),
+    this.scalePercent,
   });
 
   final String sourcePath;
@@ -34,6 +36,15 @@ class ExportRequest {
 
   /// JPEG quality (1-100). Ignored for other formats.
   final int quality;
+
+  /// Scales the exported image to this percent (1-100) of the sensor's
+  /// native resolution — applied right after decode, before crop/render/
+  /// encode, so every later stage works on fewer pixels too. Decode itself
+  /// always stays at full quality (LibRaw's best demosaic) regardless of
+  /// this value — only the final pixel dimensions shrink. Null (or 100)
+  /// exports at full native resolution, same as before this existed.
+  /// Backs the export dialog's "Rapid export" resolution slider.
+  final int? scalePercent;
 }
 
 /// Exceptions thrown inside a `compute()` isolate don't carry back to the
@@ -68,11 +79,30 @@ Future<ExportResult> _exportPhotoInternal(
     if (decoded == null) {
       return ExportResult.failure('Could not decode ${request.sourcePath}');
     }
+    var width = decoded.width;
+    var height = decoded.height;
+    var rgbBytes = decoded.rgbBytes;
+    final scalePercent = request.scalePercent;
+    if (scalePercent != null && scalePercent < 100) {
+      final scaled = scaleByPercent(
+        img.Image.fromBytes(
+          width: width,
+          height: height,
+          bytes: rgbBytes.buffer,
+          numChannels: 3,
+          order: img.ChannelOrder.rgb,
+        ),
+        scalePercent,
+      );
+      width = scaled.width;
+      height = scaled.height;
+      rgbBytes = scaled.getBytes(order: img.ChannelOrder.rgb);
+    }
     onStage?.call(ExportStage.rendering);
     final geometry = applyCropTransform(
-      decoded.rgbBytes,
-      decoded.width,
-      decoded.height,
+      rgbBytes,
+      width,
+      height,
       request.cropTransform,
     );
     // Export never picked up the CPU-parallel render pipeline when it was

@@ -55,6 +55,8 @@ class RawMetadata {
     required this.shutterSeconds,
     required this.apertureFNumber,
     required this.focalLengthMm,
+    required this.width,
+    required this.height,
   });
 
   /// Manufacturer-normalized names (e.g. "Fujifilm" rather than a
@@ -78,6 +80,16 @@ class RawMetadata {
 
   /// 0 if absent.
   final double focalLengthMm;
+
+  /// The final image's pixel dimensions — already flip/rotation-adjusted
+  /// the same way [decodeRawImage]'s actual output is (LibRaw's own
+  /// `sizes.iwidth`/`iheight`, not the pre-flip `sizes.width`/`height`),
+  /// so this is exactly what exporting at 100% would produce. Read from
+  /// the same header-only LibRaw open this whole class is extracted from
+  /// — no extra decode cost. Backs the export dialog's "Rapid export"
+  /// resolution slider preview.
+  final int width;
+  final int height;
 }
 
 /// Reads a null-terminated `Array<Char>` field as a Dart string, stopping
@@ -110,6 +122,7 @@ RawMetadata? extractRawMetadata(String path) {
     final idata = lr.ref.idata;
     final other = lr.ref.other;
     final lens = lr.ref.lens;
+    final sizes = lr.ref.sizes;
     return RawMetadata(
       cameraMake: _charArrayToString(idata.normalized_make, 64),
       cameraModel: _charArrayToString(idata.normalized_model, 64),
@@ -118,6 +131,8 @@ RawMetadata? extractRawMetadata(String path) {
       shutterSeconds: other.shutter,
       apertureFNumber: other.aperture,
       focalLengthMm: other.focal_len,
+      width: sizes.iwidth,
+      height: sizes.iheight,
     );
   } finally {
     lib.libraw_close(lr);
