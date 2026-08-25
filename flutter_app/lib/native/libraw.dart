@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
-import 'camera_match.dart';
 import 'libraw_bindings.dart';
 
 /// A fully decoded/demosaiced RAW image: packed 8-bit RGB, row-major, no
@@ -164,12 +163,7 @@ Uint8List? extractRawThumbnailJpeg(String path) {
   }
 }
 
-/// Shared by [extractRawThumbnailJpeg] (its own freshly-opened handle) and
-/// [decodeRawImage] (reuses the handle it's already unpacked/processed the
-/// main image on, for [applyCameraMatch] — cheaper than a second
-/// `libraw_open_wfile` just to re-read the same file's thumbnail). Same
-/// null-on-anything-but-a-JPEG-thumbnail contract as
-/// [extractRawThumbnailJpeg].
+/// The actual thumbnail-extraction logic behind [extractRawThumbnailJpeg].
 Uint8List? _extractThumbJpeg(LibRawBindings lib, Pointer<libraw_data_t> lr) {
   if (lib.libraw_unpack_thumb(lr) != 0) {
     return null;
@@ -309,21 +303,17 @@ RawImage? decodeRawImage(
         final width = image.ref.width;
         final height = image.ref.height;
         final rgbBytes = _copyProcessedImageData(image);
-        // Nudge toward the camera's own embedded JPEG rendering — see
-        // applyCameraMatch's doc comment. Reuses this same still-open
-        // handle rather than reopening the file; a thumb-extraction
-        // failure (no embedded JPEG, unsupported thumb format, ...) just
-        // means no adjustment, not a decode failure.
-        return RawImage(
-          width: width,
-          height: height,
-          rgbBytes: applyCameraMatch(
-            rgbBytes,
-            width,
-            height,
-            _extractThumbJpeg(lib, lr),
-          ),
-        );
+        // applyCameraMatch (nudging toward the camera's own embedded JPEG
+        // rendering — see its doc comment) is deliberately NOT applied
+        // here: comparing LibRaw's demosaic against a Fuji-JPEG-engine
+        // rendering (its own film-simulation color science, not a neutral
+        // reference) reliably introduced a yellow/green cast and amplified
+        // noise/clipping instead of correcting anything — confirmed by
+        // comparing real presets side-by-side against Lightroom. LibRaw's
+        // own use_camera_wb + use_camera_matrix calibration (set when
+        // opening the file, above) is the actual camera-profile-based
+        // color science and needs no such nudge.
+        return RawImage(width: width, height: height, rgbBytes: rgbBytes);
       } finally {
         lib.libraw_dcraw_clear_mem(image);
       }
