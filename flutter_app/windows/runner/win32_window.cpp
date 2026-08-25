@@ -225,6 +225,20 @@ Win32Window::MessageHandler(HWND hwnd,
     case WM_DWMCOLORIZATIONCOLORCHANGED:
       UpdateTheme(hwnd);
       return 0;
+
+    case WM_NCCALCSIZE:
+      // Without WS_CAPTION/WS_THICKFRAME, DefWindowProc's own WM_NCCALCSIZE
+      // handling still reserves a few pixels of "sizing border" around the
+      // window — invisible as far as the style bits go, but still painted
+      // by DWM as a thin edge. Claiming the entire window rect as client
+      // area (returning 0 rather than falling through to DefWindowProc)
+      // removes that border for as long as the window is frameless; once
+      // framed again, this falls through so the real title bar/border get
+      // their normal sizing back.
+      if (frameless_) {
+        return 0;
+      }
+      break;
   }
 
   return DefWindowProc(window_handle_, message, wparam, lparam);
@@ -276,6 +290,7 @@ void Win32Window::SetFrameless(bool frameless) {
   if (!window_handle_) {
     return;
   }
+  frameless_ = frameless;
   LONG_PTR style = GetWindowLongPtr(window_handle_, GWL_STYLE);
   constexpr LONG_PTR kFrameStyles = WS_CAPTION | WS_THICKFRAME |
                                     WS_MINIMIZEBOX | WS_MAXIMIZEBOX |
