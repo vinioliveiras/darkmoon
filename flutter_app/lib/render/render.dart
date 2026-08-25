@@ -419,6 +419,35 @@ void _applyBrightnessContrast(
   }
 }
 
+/// EXPERIMENTAL: lifts/pulls the luma of the pixel at [img] offset [i] by
+/// [add] (0..255 space) while preserving its R:G:B color ratio (chroma),
+/// by scaling all three channels by the same factor — NOT the same flat
+/// [add] added to each channel independently, which is mathematically the
+/// atmospheric-haze/veil model (adding a constant roughly equally across
+/// channels is literally how classic dehaze equations model airlight).
+/// [_applyHighlightsShadows] and [_applyWhitesBlacks] used to do exactly
+/// that flat add, which produced a visible white/gray veil over the whole
+/// affected tonal region on strong presets (e.g. Shadows=+100) instead of
+/// a natural-looking lift — this is what real photo editors' Highlights/
+/// Shadows/Whites/Blacks controls actually do.
+void _liftLumaPreservingChroma(
+  Float32List img,
+  int i,
+  double oldLuma255,
+  double add,
+) {
+  final newLuma = (oldLuma255 + add).clamp(0.0, 255.0);
+  // The ratio itself is clamped (not just the denominator floored) —
+  // dividing by a near-zero oldLuma255 (exactly the near-black pixels
+  // Shadows/Blacks are meant to lift) would otherwise blow the ratio up
+  // to 50x+ for a strong lift, turning a handful of the darkest pixels
+  // pure white instead of a natural-looking lift.
+  final ratio = (newLuma / math.max(oldLuma255, 0.5)).clamp(0.0, 6.0);
+  img[i] = (img[i] * ratio).clamp(0.0, 255.0);
+  img[i + 1] = (img[i + 1] * ratio).clamp(0.0, 255.0);
+  img[i + 2] = (img[i + 2] * ratio).clamp(0.0, 255.0);
+}
+
 void _applyHighlightsShadows(
   Float32List img,
   int pixelCount,
@@ -443,17 +472,13 @@ void _applyHighlightsShadows(
       final t = (1.0 - luminance / 0.4).clamp(0.0, 1.0);
       final weight = t * t * (3.0 - 2.0 * t);
       final add = weight * (shadows / 100.0) * 80.0;
-      img[i] += add;
-      img[i + 1] += add;
-      img[i + 2] += add;
+      _liftLumaPreservingChroma(img, i, luminance * 255.0, add);
     }
     if (highlights != 0) {
       final t = ((luminance - 0.6) / 0.4).clamp(0.0, 1.0);
       final weight = t * t * (3.0 - 2.0 * t);
       final add = weight * (highlights / 100.0) * 80.0;
-      img[i] += add;
-      img[i + 1] += add;
-      img[i + 2] += add;
+      _liftLumaPreservingChroma(img, i, luminance * 255.0, add);
     }
   }
 }
@@ -473,16 +498,12 @@ void _applyWhitesBlacks(
     if (whites != 0) {
       final weight = ((luminance - 0.75) * 4.0).clamp(0.0, 1.0);
       final add = weight * (whites / 100.0) * 100.0;
-      img[i] += add;
-      img[i + 1] += add;
-      img[i + 2] += add;
+      _liftLumaPreservingChroma(img, i, luminance * 255.0, add);
     }
     if (blacks != 0) {
       final weight = (1.0 - luminance * 4.0).clamp(0.0, 1.0);
       final add = weight * (blacks / 100.0) * 100.0;
-      img[i] += add;
-      img[i + 1] += add;
-      img[i + 2] += add;
+      _liftLumaPreservingChroma(img, i, luminance * 255.0, add);
     }
   }
 }

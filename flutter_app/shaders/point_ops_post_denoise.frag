@@ -148,17 +148,33 @@ void main() {
   // blanketed Whites/Blacks' own [0, 0.25]/[0.75, 1.0] region) with a
   // smoothstep taper instead of a linear ramp — mirrors render.dart's
   // _applyHighlightsShadows exactly.
+  //
+  // EXPERIMENTAL: the lift/pull is applied by scaling all 3 channels by
+  // the same luma ratio (chroma-preserving), NOT by adding the flat
+  // `...Add` constant to each channel independently — that flat add is
+  // mathematically the atmospheric-haze/veil model (adding a constant
+  // roughly equally across channels is literally how classic dehaze
+  // equations model airlight), which produced a visible white/gray veil
+  // on strong Shadows/Highlights/Whites/Blacks presets. Mirrors
+  // render.dart's _liftLumaPreservingChroma exactly.
   float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
   float shadowT = clamp(1.0 - lum / 0.4, 0.0, 1.0);
   float shadowW = shadowT * shadowT * (3.0 - 2.0 * shadowT);
   float highlightT = clamp((lum - 0.6) / 0.4, 0.0, 1.0);
   float highlightW = highlightT * highlightT * (3.0 - 2.0 * highlightT);
-  c += shadowW * uShadowsAdd + highlightW * uHighlightsAdd;
+  // Ratio itself is clamped (not just the denominator floored) — dividing
+  // by a near-zero lum (exactly the near-black pixels Shadows/Blacks are
+  // meant to lift) would otherwise blow the ratio up to 50x+ for a strong
+  // lift, turning a handful of the darkest pixels pure white instead of a
+  // natural-looking lift. Mirrors render.dart's _liftLumaPreservingChroma.
+  float shLum = clamp(lum + shadowW * uShadowsAdd + highlightW * uHighlightsAdd, 0.0, 1.0);
+  c *= clamp(shLum / max(lum, 0.5 / 255.0), 0.0, 6.0);
 
   float lum2 = dot(c, vec3(0.2126, 0.7152, 0.0722));
   float whitesW = clamp((lum2 - 0.75) * 4.0, 0.0, 1.0);
   float blacksW = clamp(1.0 - lum2 * 4.0, 0.0, 1.0);
-  c += whitesW * uWhitesAdd + blacksW * uBlacksAdd;
+  float wbLum = clamp(lum2 + whitesW * uWhitesAdd + blacksW * uBlacksAdd, 0.0, 1.0);
+  c *= clamp(wbLum / max(lum2, 0.5 / 255.0), 0.0, 6.0);
 
   // Tone curve (all 3 channels through the same LUT), then per-channel
   // color curves — matches applyToneCurve then applyColorCurves' order.
