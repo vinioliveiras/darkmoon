@@ -167,7 +167,9 @@ Uint8List encodePreviewForCache(EditSourcePair pair) {
     numChannels: 3,
     order: img.ChannelOrder.rgb,
   );
-  return Uint8List.fromList(img.encodeJpg(image, quality: 90));
+  return Uint8List.fromList(
+    img.encodeJpg(image, quality: 90, chroma: img.JpegChroma.yuv420),
+  );
 }
 
 /// Reconstructs an [EditSourcePair] from a JPEG previously produced by

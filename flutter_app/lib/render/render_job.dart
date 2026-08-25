@@ -127,10 +127,12 @@ Future<RenderResult> renderJobToJpeg(
     numChannels: 3,
     order: img.ChannelOrder.rgb,
   );
-  final jpegBytes = Uint8List.fromList(img.encodeJpg(image, quality: 90));
+  final jpegBytes = Uint8List.fromList(
+    img.encodeJpg(image, quality: 90, chroma: img.JpegChroma.yuv420),
+  );
   final thumbnail = fitToMaxDimension(image, filmstripThumbnailMaxDimension);
   final thumbnailBytes = Uint8List.fromList(
-    img.encodeJpg(thumbnail, quality: 85),
+    img.encodeJpg(thumbnail, quality: 85, chroma: img.JpegChroma.yuv420),
   );
   return RenderResult(
     jpegBytes: jpegBytes,

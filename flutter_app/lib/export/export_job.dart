@@ -105,7 +105,16 @@ Future<ExportResult> _exportPhotoInternal(
     final bytes = switch (request.format) {
       ExportFormat.png => img.encodePng(image),
       ExportFormat.tiff => img.encodeTiff(image),
-      ExportFormat.jpeg => img.encodeJpg(image, quality: request.quality),
+      // 4:2:0 chroma subsampling (half color resolution, full luma) —
+      // this package's default is 4:4:4 (no subsampling at all), which
+      // produces meaningfully larger files for no visible quality gain at
+      // photographic content; 4:2:0 is what cameras, browsers, and
+      // Lightroom's own JPEG export all use by default.
+      ExportFormat.jpeg => img.encodeJpg(
+        image,
+        quality: request.quality,
+        chroma: img.JpegChroma.yuv420,
+      ),
     };
     onStage?.call(ExportStage.writing);
     File(request.destPath).writeAsBytesSync(bytes);

@@ -43,7 +43,9 @@ Uint8List? decodeRawThumbnail(String path) {
     }
     final resized = fitToMaxDimension(decoded, thumbnailMaxDimension);
     final oriented = img.bakeOrientation(resized);
-    return Uint8List.fromList(img.encodeJpg(oriented, quality: 85));
+    return Uint8List.fromList(
+      img.encodeJpg(oriented, quality: 85, chroma: img.JpegChroma.yuv420),
+    );
   }
   final jpegBytes = extractRawThumbnailJpeg(path);
   if (jpegBytes == null) {
@@ -61,5 +63,7 @@ Uint8List? decodeRawThumbnail(String path) {
   // fraction of the pixels touched.
   final resized = fitToMaxDimension(decoded, thumbnailMaxDimension);
   final oriented = img.bakeOrientation(resized);
-  return Uint8List.fromList(img.encodeJpg(oriented, quality: 85));
+  return Uint8List.fromList(
+    img.encodeJpg(oriented, quality: 85, chroma: img.JpegChroma.yuv420),
+  );
 }

@@ -67,7 +67,9 @@ Future<Uint8List?> decodeJpegThumbnailFast(Uint8List bytes) async {
   // for a fraction of the pixels touched.
   decoded.exif.imageIfd.orientation = readJpegExifOrientation(bytes);
   final oriented = img.bakeOrientation(decoded);
-  return Uint8List.fromList(img.encodeJpg(oriented, quality: 85));
+  return Uint8List.fromList(
+    img.encodeJpg(oriented, quality: 85, chroma: img.JpegChroma.yuv420),
+  );
 }
 
 ({int width, int height}) _scaleToFit(int width, int height, int maxDim) {
