@@ -153,16 +153,47 @@ void main() {
   c.g = texture(uLut, vec2(c.g, 0.5)).b;
   c.b = texture(uLut, vec2(c.b, 0.5)).a;
 
-  // Color Mixer.
+  // Color Mixer — unrolled by hand rather than a runtime for-loop indexing
+  // uMixer[band * 3]: that loop-variable ("dynamic") uniform-array index
+  // is exactly the kind of construct some GPU shader compilers miscompile
+  // (SkSL/Impeller's translation varies by backend/driver), which is what
+  // produced the blocky, garbage-looking corruption reported when
+  // touching a Mixer/Color Grading Luminance slider — every index below
+  // is now a compile-time constant.
   vec3 hsl = rgbToHsl(clamp(c, 0.0, 1.0));
   float hueShift = 0.0, satShift = 0.0, lumShift = 0.0;
-  for (int band = 0; band < 8; band++) {
-    float w = bandWeight(hsl.x, mixerCenterHue(band));
-    if (w <= 0.0) continue;
-    hueShift += w * uMixer[band * 3];
-    satShift += w * uMixer[band * 3 + 1];
-    lumShift += w * uMixer[band * 3 + 2];
-  }
+  float w0 = bandWeight(hsl.x, mixerCenterHue(0));
+  hueShift += w0 * uMixer[0];
+  satShift += w0 * uMixer[1];
+  lumShift += w0 * uMixer[2];
+  float w1 = bandWeight(hsl.x, mixerCenterHue(1));
+  hueShift += w1 * uMixer[3];
+  satShift += w1 * uMixer[4];
+  lumShift += w1 * uMixer[5];
+  float w2 = bandWeight(hsl.x, mixerCenterHue(2));
+  hueShift += w2 * uMixer[6];
+  satShift += w2 * uMixer[7];
+  lumShift += w2 * uMixer[8];
+  float w3 = bandWeight(hsl.x, mixerCenterHue(3));
+  hueShift += w3 * uMixer[9];
+  satShift += w3 * uMixer[10];
+  lumShift += w3 * uMixer[11];
+  float w4 = bandWeight(hsl.x, mixerCenterHue(4));
+  hueShift += w4 * uMixer[12];
+  satShift += w4 * uMixer[13];
+  lumShift += w4 * uMixer[14];
+  float w5 = bandWeight(hsl.x, mixerCenterHue(5));
+  hueShift += w5 * uMixer[15];
+  satShift += w5 * uMixer[16];
+  lumShift += w5 * uMixer[17];
+  float w6 = bandWeight(hsl.x, mixerCenterHue(6));
+  hueShift += w6 * uMixer[18];
+  satShift += w6 * uMixer[19];
+  lumShift += w6 * uMixer[20];
+  float w7 = bandWeight(hsl.x, mixerCenterHue(7));
+  hueShift += w7 * uMixer[21];
+  satShift += w7 * uMixer[22];
+  lumShift += w7 * uMixer[23];
   float newHue = mod(hsl.x + hueShift * 0.3, 360.0);
   if (newHue < 0.0) newHue += 360.0;
   float newSat = clamp(hsl.y * (1.0 + satShift / 100.0), 0.0, 1.0);
