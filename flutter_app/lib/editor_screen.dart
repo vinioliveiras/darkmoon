@@ -23,6 +23,9 @@ import 'native/common_image_thumbnail.dart';
 import 'native/edit_source.dart';
 import 'native/libraw.dart' show RawMetadata, extractRawMetadata;
 import 'native/thumbnail_loader.dart';
+import 'palettes/palette.dart';
+import 'palettes/palette_store.dart';
+import 'palettes/swatch_file.dart';
 import 'presets/preset.dart';
 import 'presets/preset_store.dart';
 import 'presets/preset_xmp.dart';
@@ -30,6 +33,7 @@ import 'presets/preset_zip.dart';
 import 'raw_files.dart';
 import 'render/ai_denoise.dart';
 import 'render/histogram.dart';
+import 'render/hsl.dart' show rgbToHsl;
 import 'render/mask.dart';
 import 'render/gpu/gpu_capability.dart';
 import 'render/gpu/render_job_gpu.dart';
@@ -578,6 +582,11 @@ class _EditorScreenState extends State<EditorScreen> {
   /// the user makes a manual edit or switches photos.
   String? _appliedPresetId;
 
+  /// The user's imported Adobe Color palettes (.ase/.aco) — like
+  /// [_presets], not per-photo. Shown in the Color Grading panel so a
+  /// swatch can be clicked to tint the currently active range's wheel.
+  List<ColorPalette> _palettes = [];
+
   bool _exporting = false;
 
   /// Which stage the in-progress export is on, so the loading overlay can
@@ -614,6 +623,7 @@ class _EditorScreenState extends State<EditorScreen> {
     unawaited(_loadPhotoCurves());
     unawaited(_loadPhotoMasks());
     unawaited(_loadPresetsState());
+    unawaited(_loadPalettesState());
     unawaited(_loadSettings());
     unawaited(_loadThumbnailCache());
     _lifecycleListener = AppLifecycleListener(
@@ -679,6 +689,69 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   List<MaskLayer> _masksFor(String path) => _photoMasks[path] ?? const [];
+
+  Future<void> _loadPalettesState() async {
+    final palettes = await loadPalettes();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _palettes = palettes);
+  }
+
+  /// Imports one or more Adobe swatch files (`.ase` from Adobe Color CC/
+  /// Illustrator/Photoshop, or Photoshop's own `.aco`) as a new palette
+  /// each, so their colors show up as clickable swatches in the Color
+  /// Grading panel.
+  Future<void> _importPalette() async {
+    final l10n = AppLocalizations.of(context)!;
+    final result = await FilePicker.pickFiles(
+      dialogTitle: l10n.paletteImportDialogTitle,
+      type: FileType.custom,
+      allowedExtensions: ['ase', 'aco'],
+      allowMultiple: true,
+    );
+    if (result == null) {
+      return;
+    }
+    final imported = <ColorPalette>[];
+    for (final file in result.files) {
+      final path = file.path;
+      if (path == null) {
+        continue;
+      }
+      try {
+        final bytes = await File(path).readAsBytes();
+        final swatches = parseSwatchFile(path, bytes);
+        if (swatches == null || swatches.isEmpty) {
+          continue;
+        }
+        imported.add(
+          ColorPalette(
+            id: '${DateTime.now().microsecondsSinceEpoch}_${imported.length}',
+            name: p.basenameWithoutExtension(path),
+            swatches: swatches,
+          ),
+        );
+      } catch (_) {
+        // Skip files that aren't readable/valid swatch data — best effort
+        // import, same as _importPresets.
+      }
+    }
+    if (imported.isEmpty || !mounted) {
+      return;
+    }
+    setState(() => _palettes = [..._palettes, ...imported]);
+    unawaited(savePalettes(_palettes));
+  }
+
+  void _deletePalette(ColorPalette palette) {
+    setState(
+      () => _palettes = _palettes
+          .where((entry) => entry.id != palette.id)
+          .toList(),
+    );
+    unawaited(savePalettes(_palettes));
+  }
 
   Future<void> _loadPresetsState() async {
     final presets = await loadPresets();
@@ -2797,6 +2870,10 @@ class _EditorScreenState extends State<EditorScreen> {
                             onCropAspectRatioChanged: _setCropAspectRatio,
                             onToggleCropOverlay: _toggleCropOverlay,
                             onResetCropTransform: _resetCropTransform,
+                            palettes: _palettes,
+                            onImportPalette: () =>
+                                unawaited(_importPalette()),
+                            onDeletePalette: _deletePalette,
                           ),
                         ],
                       ),
@@ -4058,6 +4135,9 @@ class _ControlsPanel extends StatefulWidget {
     required this.onCropAspectRatioChanged,
     required this.onToggleCropOverlay,
     required this.onResetCropTransform,
+    required this.palettes,
+    required this.onImportPalette,
+    required this.onDeletePalette,
   });
 
   final Map<String, double> values;
@@ -4118,6 +4198,13 @@ class _ControlsPanel extends StatefulWidget {
   final VoidCallback onToggleCropOverlay;
   final VoidCallback onResetCropTransform;
 
+  /// Imported Adobe Color palettes (.ase/.aco), shown as clickable
+  /// swatches under the Color Grading wheel — tapping one tints whichever
+  /// range's wheel is currently active.
+  final List<ColorPalette> palettes;
+  final VoidCallback onImportPalette;
+  final ValueChanged<ColorPalette> onDeletePalette;
+
   @override
   State<_ControlsPanel> createState() => _ControlsPanelState();
 }
@@ -4150,6 +4237,26 @@ class _ControlsPanelState extends State<_ControlsPanel> {
   /// 'Shadows', 'Midtones', 'Highlights' (the "Grade" + range +
   /// "Hue/Saturation/Luminance" slider key prefix), switched via tabs.
   String _activeGradeRange = 'Shadows';
+
+  /// Tints whichever Color Grading range's wheel is currently active
+  /// ([_activeGradeRange]) with [swatch]'s color — converted to hue/
+  /// saturation the same way the wheel itself reports a drag, so applying
+  /// a swatch is indistinguishable from having dragged the puck there by
+  /// hand (including undo/catalog-save behavior, driven by [widget.onChanged]/
+  /// [widget.onChangeEnd] same as the wheel's own callbacks).
+  void _applyPaletteSwatch(PaletteSwatch swatch) {
+    final hsl = rgbToHsl(
+      ((swatch.rgb >> 16) & 0xFF) / 255.0,
+      ((swatch.rgb >> 8) & 0xFF) / 255.0,
+      (swatch.rgb & 0xFF) / 255.0,
+    );
+    final hue = hsl[0];
+    final saturation = (hsl[1] * 100).clamp(0.0, 100.0);
+    widget.onChanged('Grade${_activeGradeRange}Hue', hue);
+    widget.onChanged('Grade${_activeGradeRange}Saturation', saturation);
+    widget.onChangeEnd('Grade${_activeGradeRange}Hue', hue);
+    widget.onChangeEnd('Grade${_activeGradeRange}Saturation', saturation);
+  }
 
   void _toggleSection(String section) {
     setState(() {
@@ -4699,6 +4806,12 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 ),
                               ),
                             ),
+                            _PaletteSwatchesSection(
+                              palettes: widget.palettes,
+                              onImport: widget.onImportPalette,
+                              onDeletePalette: widget.onDeletePalette,
+                              onApplySwatch: _applyPaletteSwatch,
+                            ),
                           ],
                           _SectionHeader(
                             label: l10n.sectionEffects,
@@ -4953,6 +5066,136 @@ String _gradeRangeLabel(AppLocalizations l10n, String range) {
       return l10n.gradeRangeGlobal;
   }
   throw ArgumentError.value(range, 'range');
+}
+
+/// Imported Adobe Color palettes shown as clickable swatch dots under the
+/// Color Grading wheel — one row per imported .ase/.aco file, its own name
+/// and a delete ("x") button above its swatches. Tapping a swatch tints
+/// whichever range's wheel is currently active (see
+/// `_ControlsPanelState._applyPaletteSwatch`); nothing is shown at all
+/// when no palette has been imported yet, so this stays invisible until
+/// the user actually uses it.
+class _PaletteSwatchesSection extends StatelessWidget {
+  const _PaletteSwatchesSection({
+    required this.palettes,
+    required this.onImport,
+    required this.onDeletePalette,
+    required this.onApplySwatch,
+  });
+
+  final List<ColorPalette> palettes;
+  final VoidCallback onImport;
+  final ValueChanged<ColorPalette> onDeletePalette;
+  final ValueChanged<PaletteSwatch> onApplySwatch;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.colorGradingPalettesLabel,
+                  style: Theme.of(context).textTheme.labelSmall,
+                ),
+              ),
+              SizedBox(
+                height: 22,
+                width: 22,
+                child: IconButton(
+                  tooltip: l10n.paletteImportTooltip,
+                  padding: EdgeInsets.zero,
+                  onPressed: onImport,
+                  icon: const Icon(CupertinoIcons.tray_arrow_down, size: 13),
+                ),
+              ),
+            ],
+          ),
+          if (palettes.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 2),
+              child: Text(
+                l10n.paletteEmptyHint,
+                style: const TextStyle(
+                  color: DarkmoonColors.textMuted,
+                  fontSize: 11,
+                ),
+              ),
+            )
+          else
+            for (final palette in palettes)
+              Padding(
+                padding: const EdgeInsets.only(top: 8),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            palette.name,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              color: DarkmoonColors.textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: IconButton(
+                            tooltip: l10n.paletteDeleteTooltip,
+                            padding: EdgeInsets.zero,
+                            onPressed: () => onDeletePalette(palette),
+                            icon: const Icon(CupertinoIcons.xmark, size: 10),
+                          ),
+                        ),
+                      ],
+                    ),
+                    SizedBox(
+                      height: 24,
+                      child: ListView(
+                        scrollDirection: Axis.horizontal,
+                        children: [
+                          for (final swatch in palette.swatches)
+                            Padding(
+                              padding: const EdgeInsets.only(right: 6),
+                              child: Tooltip(
+                                message: swatch.name,
+                                child: InkWell(
+                                  customBorder: const CircleBorder(),
+                                  onTap: () => onApplySwatch(swatch),
+                                  child: Container(
+                                    width: 22,
+                                    height: 22,
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFF000000 | swatch.rgb),
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: DarkmoonColors.border,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+        ],
+      ),
+    );
+  }
 }
 
 /// Shadows/Midtones/Highlights tab strip for the Color Grading panel —

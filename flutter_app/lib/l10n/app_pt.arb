@@ -130,6 +130,11 @@
   "sectionEffects": "EFEITOS",
   "gradeRangeMidtones": "Meios-tons",
   "gradeRangeGlobal": "Global",
+  "colorGradingPalettesLabel": "Paletas",
+  "paletteImportTooltip": "Importar swatches do Adobe Color (.ase ou .aco)",
+  "paletteImportDialogTitle": "Importar swatches do Adobe Color",
+  "paletteEmptyHint": "Importe um arquivo de swatches do Adobe Color (.ase ou .aco) para aplicar as cores direto na roda ativa.",
+  "paletteDeleteTooltip": "Remover esta paleta",
 
   "maskImageLayer": "Imagem Completa",
   "maskLinearGradient": "Gradiente Linear",
