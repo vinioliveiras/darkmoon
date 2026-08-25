@@ -969,8 +969,21 @@ class _EditorScreenState extends State<EditorScreen> {
     unawaited(_loadPreviewCache());
     final lastFolder = settings.lastActiveFolder;
     if (lastFolder != null && await Directory(lastFolder).exists()) {
-      unawaited(_loadFolder(lastFolder));
+      unawaited(_loadFolder(lastFolder, selectPath: settings.lastActiveFile));
     }
+  }
+
+  /// Persists [path] as the photo to reopen on next launch (see
+  /// `_loadSettings`'s use of `AppSettings.lastActiveFile`) — called
+  /// whenever the selected photo changes, mirroring how `_loadFolder`
+  /// persists `lastActiveFolder`.
+  Future<void> _saveLastActiveFile(String path) async {
+    if (_settings.lastActiveFile == path) {
+      return;
+    }
+    final next = _settings.copyWith(lastActiveFile: path);
+    _settings = next;
+    unawaited(saveSettings(next));
   }
 
   /// Mirrors the Settings dialog's "RAW files only" toggle, exposed
@@ -1336,6 +1349,7 @@ class _EditorScreenState extends State<EditorScreen> {
     });
     _resetHistory();
     if (selectedIndex != null) {
+      unawaited(_saveLastActiveFile(files[selectedIndex].path));
       unawaited(
         _loadEditSourceAndRender(files[selectedIndex].path, generation),
       );
@@ -1424,6 +1438,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _appliedPresetId = null;
     });
     _resetHistory();
+    unawaited(_saveLastActiveFile(path));
     unawaited(_loadEditSourceAndRender(path, _folderGeneration));
     if (_beforeAfterMode && !_neutralPreviews.containsKey(path)) {
       unawaited(_loadNeutralPreview(path));
@@ -3371,17 +3386,21 @@ class _ViewerToolbar extends StatelessWidget {
         children: [
           // Lines up under the folder/preset sidebar above — holds the
           // preset Amount slider, right under the preset list it affects.
-          // A larger label/value size than SliderRow's other call sites,
-          // since this is a standalone toolbar control rather than one of
-          // many stacked panel rows — it can afford to be more readable.
+          // Matches _controlsPanelWidth exactly (was a narrower 220 that
+          // didn't line up with the sidebar's actual 280px width, which
+          // also threw off the zoom controls right after it in the Row
+          // below). A larger label/value size than SliderRow's other call
+          // sites, since this is a standalone toolbar control rather than
+          // one of many stacked panel rows — it can afford to be more
+          // readable.
           SizedBox(
-            width: 220,
+            width: _controlsPanelWidth,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: FittedBox(
                 fit: BoxFit.scaleDown,
                 child: SizedBox(
-                  width: 192,
+                  width: _controlsPanelWidth - 28,
                   child: SliderRow(
                     name: l10n.presetAmountLabel,
                     min: 0,
@@ -3436,6 +3455,12 @@ class _ViewerToolbar extends StatelessWidget {
                     ],
                   ),
                   const Spacer(),
+                  // Centered in this Expanded region (a Spacer on both
+                  // sides, not just before it) — the toolbar's most
+                  // frequently-used controls, deliberately given the most
+                  // visually prominent slot rather than sitting bunched
+                  // against the right-aligned Crop/Denoise/Before-After
+                  // group.
                   _ToolbarPill(
                     children: [
                       _ToolbarSegment(
@@ -3455,7 +3480,7 @@ class _ViewerToolbar extends StatelessWidget {
                       ),
                     ],
                   ),
-                  const SizedBox(width: 6),
+                  const Spacer(),
                   _ToolbarPill(
                     children: [
                       _ToolbarSegment(

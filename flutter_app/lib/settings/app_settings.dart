@@ -39,6 +39,7 @@ class AppSettings {
     this.libraryFolders = const [],
     this.recentFiles = const [],
     this.lastActiveFolder,
+    this.lastActiveFile,
   });
 
   /// 'auto' (follow the system language), 'en', or 'pt'.
@@ -89,6 +90,12 @@ class AppSettings {
   /// the next launch so the app reopens where you left off.
   final String? lastActiveFolder;
 
+  /// The last-selected photo within [lastActiveFolder], restored as the
+  /// initial selection (via `_loadFolder`'s `selectPath`) instead of
+  /// always defaulting to index 0 — so the app reopens on the exact photo
+  /// you were editing, not just the right folder.
+  final String? lastActiveFile;
+
   AppSettings copyWith({
     String? language,
     bool? fastPreview,
@@ -99,6 +106,7 @@ class AppSettings {
     List<String>? libraryFolders,
     List<String>? recentFiles,
     String? lastActiveFolder,
+    String? lastActiveFile,
   }) => AppSettings(
     language: language ?? this.language,
     fastPreview: fastPreview ?? this.fastPreview,
@@ -109,6 +117,7 @@ class AppSettings {
     libraryFolders: libraryFolders ?? this.libraryFolders,
     recentFiles: recentFiles ?? this.recentFiles,
     lastActiveFolder: lastActiveFolder ?? this.lastActiveFolder,
+    lastActiveFile: lastActiveFile ?? this.lastActiveFile,
   );
 
   /// [path] moved (or added) to the front of [recentFiles], deduplicated
@@ -158,6 +167,8 @@ Future<AppSettings> loadSettings() async {
           (raw['recentFiles'] as List?)?.cast<String>() ?? defaults.recentFiles,
       lastActiveFolder:
           raw['lastActiveFolder'] as String? ?? defaults.lastActiveFolder,
+      lastActiveFile:
+          raw['lastActiveFile'] as String? ?? defaults.lastActiveFile,
     );
   } catch (_) {
     return AppSettings(thumbnailConcurrency: defaultConcurrency);
@@ -178,6 +189,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'libraryFolders': settings.libraryFolders,
       'recentFiles': settings.recentFiles,
       'lastActiveFolder': settings.lastActiveFolder,
+      'lastActiveFile': settings.lastActiveFile,
     }),
   );
   await tmp.rename(file.path);
