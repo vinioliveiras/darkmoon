@@ -2759,7 +2759,9 @@ class _EditorScreenState extends State<EditorScreen> {
                         children: [
                           SizedBox(
                             // Same width as the right-side _ControlsPanel
-                            // (_controlsPanelWidth).
+                            // (_controlsPanelWidth) — was 220 vs. the right
+                            // panel's 280, a visibly uneven two-column
+                            // layout the user asked to fix.
                             width: _controlsPanelWidth,
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -3529,8 +3531,9 @@ class _ViewerToolbar extends StatelessWidget {
         children: [
           // Lines up under the folder/preset sidebar above — holds the
           // preset Amount slider, right under the preset list it affects.
-          // Matches _controlsPanelWidth exactly so it lines up with the
-          // sidebar's width.
+          // Matches _controlsPanelWidth exactly (was a narrower 220 that
+          // didn't line up with the sidebar's actual 280px width, which
+          // also threw off the zoom controls right after it in the Row
           // below). A larger label/value size than SliderRow's other call
           // sites, since this is a standalone toolbar control rather than
           // one of many stacked panel rows — it can afford to be more
@@ -3663,7 +3666,7 @@ class _ViewerToolbar extends StatelessWidget {
           // stays reachable regardless of how far the panel above has
           // been scrolled. Reset now lives between Undo/Redo instead.
           SizedBox(
-            width: _controlsPanelWidth,
+            width: 280,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: Row(
@@ -4040,7 +4043,7 @@ class _AspectChip extends StatelessWidget {
 /// Fixed width of the right-hand controls column, and the horizontal inset
 /// its scrolling content sits at. [_SectionHeader] needs both so it can
 /// break back out of that inset and paint its bar edge-to-edge.
-const _controlsPanelWidth = 300.0;
+const _controlsPanelWidth = 280.0;
 const _controlsPanelInset = 16.0;
 
 class _SectionHeader extends StatelessWidget {

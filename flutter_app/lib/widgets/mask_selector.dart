@@ -215,7 +215,7 @@ class MaskSelector extends StatelessWidget {
     final position = RelativeRect.fromRect(
       Rect.fromPoints(
         box.localToGlobal(Offset.zero),
-        box.localToGlobal(box.size.bottomLeft(Offset.zero)),
+        box.localToGlobal(box.size.bottomRight(Offset.zero)),
       ),
       Offset.zero &
           (Overlay.of(context).context.findRenderObject()! as RenderBox).size,
@@ -241,7 +241,7 @@ class MaskSelector extends StatelessWidget {
     final position = RelativeRect.fromRect(
       Rect.fromPoints(
         box.localToGlobal(Offset.zero),
-        box.localToGlobal(box.size.bottomLeft(Offset.zero)),
+        box.localToGlobal(box.size.bottomRight(Offset.zero)),
       ),
       Offset.zero &
           (Overlay.of(context).context.findRenderObject()! as RenderBox).size,
