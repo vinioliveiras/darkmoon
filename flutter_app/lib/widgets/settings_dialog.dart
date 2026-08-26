@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../settings/app_settings.dart';
 import '../theme.dart';
+import 'styled_dropdown.dart';
 
 /// Mirrors the Python app's `SettingsDialog`: every change applies and
 /// saves immediately, rather than waiting for an OK/Cancel to accept. A
@@ -76,30 +77,26 @@ class _SettingsDialogState extends State<SettingsDialog> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(child: Text(l10n.settingsLanguageLabel)),
-                DropdownButton<String>(
-                  value: _settings.language,
-                  items: [
-                    DropdownMenuItem(
-                      value: 'auto',
-                      child: Text(l10n.settingsLanguageAuto),
-                    ),
-                    DropdownMenuItem(
-                      value: 'en',
-                      child: Text(l10n.settingsLanguageEnglish),
-                    ),
-                    DropdownMenuItem(
-                      value: 'pt',
-                      child: Text(l10n.settingsLanguagePortuguese),
-                    ),
-                  ],
-                  onChanged: (value) => _update(
-                    _settings.copyWith(language: value ?? _settings.language),
-                  ),
+            StyledDropdown<String>(
+              value: _settings.language,
+              items: [
+                DropdownMenuItem(
+                  value: 'auto',
+                  child: Text(l10n.settingsLanguageAuto),
+                ),
+                DropdownMenuItem(
+                  value: 'en',
+                  child: Text(l10n.settingsLanguageEnglish),
+                ),
+                DropdownMenuItem(
+                  value: 'pt',
+                  child: Text(l10n.settingsLanguagePortuguese),
                 ),
               ],
+              onChanged: (value) => _update(
+                _settings.copyWith(language: value ?? _settings.language),
+              ),
+              width: 140,
             ),
             const SizedBox(height: 4),
             SwitchListTile(
@@ -109,12 +106,10 @@ class _SettingsDialogState extends State<SettingsDialog> {
               onChanged: (v) => _update(_settings.copyWith(fastPreview: v)),
             ),
             const SizedBox(height: 4),
-            Row(
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Expanded(
-                  child: Text(l10n.settingsPreviewResolutionLabel),
-                ),
-                DropdownButton<int>(
+                StyledDropdown<int>(
                   value: _settings.previewResolution,
                   items: [
                     for (final size in previewResolutionOptions)
@@ -124,6 +119,15 @@ class _SettingsDialogState extends State<SettingsDialog> {
                     _settings.copyWith(
                       previewResolution: value ?? _settings.previewResolution,
                     ),
+                  ),
+                  label: l10n.settingsPreviewResolutionLabel,
+                  width: 140,
+                ),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 4, top: 4),
+                  child: Text(
+                    l10n.settingsPreviewResolutionHint,
+                    style: Theme.of(context).textTheme.bodySmall,
                   ),
                 ),
               ],
