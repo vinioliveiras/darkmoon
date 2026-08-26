@@ -3395,7 +3395,7 @@ class _LoadingOverlay extends StatelessWidget {
         color: Colors.black.withValues(alpha: 0.55),
         alignment: Alignment.center,
         child: Container(
-          width: 280,
+          width: 300,
           padding: const EdgeInsets.fromLTRB(20, 22, 20, 16),
           decoration: BoxDecoration(
             color: DarkmoonColors.surfaceRaised,
@@ -4043,7 +4043,7 @@ class _AspectChip extends StatelessWidget {
 /// Fixed width of the right-hand controls column, and the horizontal inset
 /// its scrolling content sits at. [_SectionHeader] needs both so it can
 /// break back out of that inset and paint its bar edge-to-edge.
-const _controlsPanelWidth = 280.0;
+const _controlsPanelWidth = 300.0;
 const _controlsPanelInset = 16.0;
 
 class _SectionHeader extends StatelessWidget {

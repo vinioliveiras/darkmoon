@@ -47,7 +47,7 @@ class FolderSidebar extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     if (roots.isEmpty && recentFiles.isEmpty) {
       return Container(
-        width: 220,
+        width: 300,
         color: DarkmoonColors.panel,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
