@@ -362,6 +362,18 @@ abstract class AppLocalizations {
   /// **'The preset \"{name}\" has settings this app doesn\'t support yet, so they were skipped:'**
   String presetUnsupportedMessage(String name);
 
+  /// No description provided for @presetUnsupportedCopyAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get presetUnsupportedCopyAction;
+
+  /// No description provided for @presetUnsupportedCopiedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Copied to clipboard'**
+  String get presetUnsupportedCopiedMessage;
+
   /// No description provided for @beforeLabel.
   ///
   /// In en, this message translates to:
@@ -776,6 +788,54 @@ abstract class AppLocalizations {
   /// **'Close'**
   String get closeButton;
 
+  /// No description provided for @filmstripResetEditsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset all edits'**
+  String get filmstripResetEditsAction;
+
+  /// No description provided for @filmstripShowOnDiskAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Show on disk'**
+  String get filmstripShowOnDiskAction;
+
+  /// No description provided for @filmstripDeleteAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete'**
+  String get filmstripDeleteAction;
+
+  /// No description provided for @filmstripResetEditsConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset all edits?'**
+  String get filmstripResetEditsConfirmTitle;
+
+  /// No description provided for @filmstripResetEditsConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This resets \"{name}\" back to its untouched state — every adjustment, curve, and mask. This can\'t be undone.'**
+  String filmstripResetEditsConfirmMessage(String name);
+
+  /// No description provided for @filmstripDeleteConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete photo?'**
+  String get filmstripDeleteConfirmTitle;
+
+  /// No description provided for @filmstripDeleteConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This sends \"{name}\" to the Recycle Bin and deletes its saved edits. You can restore the photo from the Recycle Bin, but not its edits.'**
+  String filmstripDeleteConfirmMessage(String name);
+
+  /// No description provided for @filmstripDeleteFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Couldn\'t delete \"{name}\": {error}'**
+  String filmstripDeleteFailedMessage(String name, String error);
+
   /// No description provided for @sectionWhiteBalance.
   ///
   /// In en, this message translates to:
@@ -944,6 +1004,18 @@ abstract class AppLocalizations {
   /// **'Delete mask'**
   String get maskDeleteTooltip;
 
+  /// No description provided for @maskResetTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset this mask'**
+  String get maskResetTooltip;
+
+  /// No description provided for @maskClearAllTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all masks'**
+  String get maskClearAllTooltip;
+
   /// No description provided for @maskOverlayVisibleTooltip.
   ///
   /// In en, this message translates to:
@@ -989,7 +1061,7 @@ abstract class AppLocalizations {
   /// No description provided for @maskBrushSizeLabel.
   ///
   /// In en, this message translates to:
-  /// **'Size'**
+  /// **'Brush Size'**
   String get maskBrushSizeLabel;
 
   /// No description provided for @maskBrushHardnessLabel.
@@ -1237,6 +1309,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Vignette Feather'**
   String get sliderVignetteFeather;
+
+  /// No description provided for @sectionLensCorrection.
+  ///
+  /// In en, this message translates to:
+  /// **'LENS CORRECTION'**
+  String get sectionLensCorrection;
+
+  /// No description provided for @lensCorrectionNoProfileFound.
+  ///
+  /// In en, this message translates to:
+  /// **'No profile found'**
+  String get lensCorrectionNoProfileFound;
+
+  /// No description provided for @lensCorrectionProfileLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Lens Profile'**
+  String get lensCorrectionProfileLabel;
+
+  /// No description provided for @lensCorrectionAutoDetect.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto-detect'**
+  String get lensCorrectionAutoDetect;
+
+  /// No description provided for @lensCorrectionDistortionLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Distortion'**
+  String get lensCorrectionDistortionLabel;
+
+  /// No description provided for @lensCorrectionVignetteLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Vignetting'**
+  String get lensCorrectionVignetteLabel;
+
+  /// No description provided for @lensCorrectionChromaticAberrationLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Chromatic Aberration'**
+  String get lensCorrectionChromaticAberrationLabel;
+
+  /// No description provided for @lensCorrectionSearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search lenses…'**
+  String get lensCorrectionSearchHint;
+
+  /// No description provided for @lensCorrectionSearchNoMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No matches'**
+  String get lensCorrectionSearchNoMatches;
 }
 
 class _AppLocalizationsDelegate

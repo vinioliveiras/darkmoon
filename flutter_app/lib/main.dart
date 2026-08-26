@@ -35,6 +35,12 @@ Future<void> _maximizeNativeWindow() async {
   } on PlatformException {
     // Best-effort — worst case the window just stays at its small,
     // splash-sized dimensions instead of growing to fill the screen.
+  } on MissingPluginException {
+    // No native handler registered for this channel — always true under
+    // `flutter test`'s widget-test harness (there's no real Windows
+    // runner backing it), and Platform.isWindows above is still true
+    // there since it reflects the *host* OS, not "is a real app window
+    // running". Same best-effort fallback as the PlatformException case.
   }
 }
 

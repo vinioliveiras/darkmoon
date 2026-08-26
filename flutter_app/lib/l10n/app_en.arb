@@ -73,6 +73,8 @@
   "@presetUnsupportedMessage": {
     "placeholders": { "name": {"type": "String"} }
   },
+  "presetUnsupportedCopyAction": "Copy",
+  "presetUnsupportedCopiedMessage": "Copied to clipboard",
 
   "beforeLabel": "Before",
   "afterLabel": "After",
@@ -156,6 +158,24 @@
   "clearButton": "Clear",
   "closeButton": "Close",
 
+  "filmstripResetEditsAction": "Reset all edits",
+  "filmstripShowOnDiskAction": "Show on disk",
+  "filmstripDeleteAction": "Delete",
+  "filmstripResetEditsConfirmTitle": "Reset all edits?",
+  "filmstripResetEditsConfirmMessage": "This resets \"{name}\" back to its untouched state — every adjustment, curve, and mask. This can't be undone.",
+  "@filmstripResetEditsConfirmMessage": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "filmstripDeleteConfirmTitle": "Delete photo?",
+  "filmstripDeleteConfirmMessage": "This sends \"{name}\" to the Recycle Bin and deletes its saved edits. You can restore the photo from the Recycle Bin, but not its edits.",
+  "@filmstripDeleteConfirmMessage": {
+    "placeholders": { "name": {"type": "String"} }
+  },
+  "filmstripDeleteFailedMessage": "Couldn't delete \"{name}\": {error}",
+  "@filmstripDeleteFailedMessage": {
+    "placeholders": { "name": {"type": "String"}, "error": {"type": "String"} }
+  },
+
   "sectionWhiteBalance": "WHITE BALANCE",
   "sectionTone": "TONE",
   "sectionPresence": "PRESENCE",
@@ -185,6 +205,8 @@
   "maskCloneTooltip": "Duplicate mask",
   "maskCloneSuffix": "copy",
   "maskDeleteTooltip": "Delete mask",
+  "maskResetTooltip": "Reset this mask",
+  "maskClearAllTooltip": "Clear all masks",
   "maskOverlayVisibleTooltip": "Hide mask overlay",
   "maskOverlayHiddenTooltip": "Show mask overlay",
   "maskDisableTooltip": "Disable mask",
@@ -192,7 +214,7 @@
   "masksTitle": "Masks",
   "histogramTitle": "Histogram",
   "filmstripEditedTooltip": "Edited",
-  "maskBrushSizeLabel": "Size",
+  "maskBrushSizeLabel": "Brush Size",
   "maskBrushHardnessLabel": "Hardness",
   "maskBrushEraseLabel": "Erase",
   "maskUndoStrokeTooltip": "Undo last stroke",
@@ -236,5 +258,14 @@
 
   "sliderVignetteAmount": "Vignette Amount",
   "sliderVignetteMidpoint": "Vignette Midpoint",
-  "sliderVignetteFeather": "Vignette Feather"
+  "sliderVignetteFeather": "Vignette Feather",
+  "sectionLensCorrection": "LENS CORRECTION",
+  "lensCorrectionNoProfileFound": "No profile found",
+  "lensCorrectionProfileLabel": "Lens Profile",
+  "lensCorrectionAutoDetect": "Auto-detect",
+  "lensCorrectionDistortionLabel": "Distortion",
+  "lensCorrectionVignetteLabel": "Vignetting",
+  "lensCorrectionChromaticAberrationLabel": "Chromatic Aberration",
+  "lensCorrectionSearchHint": "Search lenses…",
+  "lensCorrectionSearchNoMatches": "No matches"
 }

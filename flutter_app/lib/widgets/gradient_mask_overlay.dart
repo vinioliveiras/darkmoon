@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -59,9 +60,23 @@ class GradientMaskOverlay extends StatefulWidget {
   State<GradientMaskOverlay> createState() => _GradientMaskOverlayState();
 }
 
-enum _Handle { linearStart, linearEnd, radialCenter, radialEdge }
+enum _Handle {
+  linearStart,
+  linearEnd,
+  radialCenter,
+  // One pair of opposite rim handles per ellipse axis; dragging either
+  // side resizes that axis symmetrically around the center.
+  radialRadiusX,
+  radialRadiusY,
+  // The detached knob past the ellipse's top rim that spins the shape.
+  radialRotate,
+}
 
 const _hitRadius = 24.0;
+
+/// Distance from the ellipse's top rim to the rotation knob, in px —
+/// far enough out that it doesn't collide with the top axis handle.
+const _rotateHandleGap = 26.0;
 
 class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
   _Handle? _active;
@@ -101,19 +116,31 @@ class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
           ? null
           : (dStart <= dEnd ? _Handle.linearStart : _Handle.linearEnd);
     } else {
-      final center = _toLocal(
-        mask.radial.centerX,
-        mask.radial.centerY,
-        imageRect,
-      );
-      final radiusPx = mask.radial.radius * imageRect.width;
-      final edge = center + Offset(radiusPx, 0);
-      final dCenter = (_lastLocal - center).distance;
-      final dEdge = (_lastLocal - edge).distance;
-      final closest = dCenter <= dEdge ? dCenter : dEdge;
-      _active = closest > _hitRadius
-          ? null
-          : (dCenter <= dEdge ? _Handle.radialCenter : _Handle.radialEdge);
+      final radial = mask.radial;
+      final center = _toLocal(radial.centerX, radial.centerY, imageRect);
+      final rxPx = radial.radius * imageRect.width;
+      final ryPx = radial.effectiveRadiusY * imageRect.width;
+      // The ellipse's own axes in screen space, rotated by its angle.
+      final axisX = Offset(math.cos(radial.angle), math.sin(radial.angle));
+      final axisY = Offset(-axisX.dy, axisX.dx);
+      final candidates = <(_Handle, Offset)>[
+        (_Handle.radialCenter, center),
+        (_Handle.radialRadiusX, center + axisX * rxPx),
+        (_Handle.radialRadiusX, center - axisX * rxPx),
+        (_Handle.radialRadiusY, center + axisY * ryPx),
+        (_Handle.radialRadiusY, center - axisY * ryPx),
+        (_Handle.radialRotate, center - axisY * (ryPx + _rotateHandleGap)),
+      ];
+      _Handle? best;
+      var bestDist = double.infinity;
+      for (final (handle, pos) in candidates) {
+        final d = (_lastLocal - pos).distance;
+        if (d < bestDist) {
+          bestDist = d;
+          best = handle;
+        }
+      }
+      _active = bestDist > _hitRadius ? null : best;
     }
   }
 
@@ -135,14 +162,43 @@ class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
         return mask.copyWith(
           radial: mask.radial.copyWith(centerX: n.dx, centerY: n.dy),
         );
-      case _Handle.radialEdge:
-        final center = _toLocal(
-          mask.radial.centerX,
-          mask.radial.centerY,
-          imageRect,
+      case _Handle.radialRadiusX:
+        final radial = mask.radial;
+        final center = _toLocal(radial.centerX, radial.centerY, imageRect);
+        final d = local - center;
+        // Project the drag onto the ellipse's own X axis; |projection| so
+        // both rim handles of the pair behave identically.
+        final u =
+            (d.dx * math.cos(radial.angle) + d.dy * math.sin(radial.angle))
+                .abs();
+        // Materialize radiusY at its current value so stretching one axis
+        // no longer drags the other along via the circle fallback.
+        return mask.copyWith(
+          radial: radial.copyWith(
+            radius: u / imageRect.width,
+            radiusY: radial.effectiveRadiusY,
+          ),
         );
-        final radius = (local - center).distance / imageRect.width;
-        return mask.copyWith(radial: mask.radial.copyWith(radius: radius));
+      case _Handle.radialRadiusY:
+        final radial = mask.radial;
+        final center = _toLocal(radial.centerX, radial.centerY, imageRect);
+        final d = local - center;
+        final v =
+            (d.dy * math.cos(radial.angle) - d.dx * math.sin(radial.angle))
+                .abs();
+        return mask.copyWith(
+          radial: radial.copyWith(radiusY: v / imageRect.width),
+        );
+      case _Handle.radialRotate:
+        final radial = mask.radial;
+        final center = _toLocal(radial.centerX, radial.centerY, imageRect);
+        final d = local - center;
+        // The knob rides the ellipse's own "up" direction; the angle that
+        // points that direction at the drag position is atan2 of the
+        // swapped, y-negated delta (screen y grows downward).
+        return mask.copyWith(
+          radial: radial.copyWith(angle: math.atan2(d.dx, -d.dy)),
+        );
       case null:
         return mask;
     }
@@ -196,11 +252,12 @@ class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
                         mask.radial.centerY,
                         imageRect,
                       ),
-                      radiusPx: mask.radial.radius * imageRect.width,
-                      innerRadiusPx:
-                          mask.radial.radius *
-                          (1.0 - mask.radial.feather.clamp(0.0, 1.0)) *
-                          imageRect.width,
+                      radiusXPx: mask.radial.radius * imageRect.width,
+                      radiusYPx:
+                          mask.radial.effectiveRadiusY * imageRect.width,
+                      angle: mask.radial.angle,
+                      innerFraction:
+                          1.0 - mask.radial.feather.clamp(0.0, 1.0),
                       shadeAlpha: widget.overlayOpacity,
                     ),
             )
@@ -282,64 +339,119 @@ Paint _tickPaint() => Paint()
 class _RadialHandlesPainter extends CustomPainter {
   const _RadialHandlesPainter({
     required this.center,
-    required this.radiusPx,
-    required this.innerRadiusPx,
+    required this.radiusXPx,
+    required this.radiusYPx,
+    required this.angle,
+    required this.innerFraction,
     required this.shadeAlpha,
   });
 
   final Offset center;
-  final double radiusPx;
-  final double innerRadiusPx;
+  final double radiusXPx;
+  final double radiusYPx;
+
+  /// Rotation of the ellipse, radians, clockwise on screen.
+  final double angle;
+
+  /// Where the full-strength region ends, as a fraction (0..1) of the
+  /// ellipse — `1 - feather`, mirroring the mask's own falloff.
+  final double innerFraction;
   final double shadeAlpha;
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Shades the covered area the same way the linear painter does — a
-    // radial shader fading from the inner (full-strength) radius out to
-    // the outer (zero-strength) radius, matching the mask's own feather.
+    final rx = radiusXPx <= 0 ? 0.001 : radiusXPx;
+    final ry = radiusYPx <= 0 ? 0.001 : radiusYPx;
+
+    // Shades the covered area the same way the linear painter does. The
+    // shader is a *unit* radial gradient stretched into the rotated
+    // ellipse by a matrix, so its falloff matches the mask's normalized
+    // elliptical distance exactly.
+    final m = Matrix4.identity()
+      ..translateByDouble(center.dx, center.dy, 0, 1)
+      ..rotateZ(angle)
+      ..scaleByDouble(rx, ry, 1, 1);
     final shaderPaint = Paint()
       ..shader = ui.Gradient.radial(
-        center,
-        radiusPx <= 0 ? 0.001 : radiusPx,
+        Offset.zero,
+        1.0,
         [
           DarkmoonColors.accent.withValues(alpha: shadeAlpha),
           DarkmoonColors.accent.withValues(alpha: shadeAlpha),
           DarkmoonColors.accent.withValues(alpha: 0),
         ],
-        [
-          0.0,
-          radiusPx <= 0 ? 0.0 : (innerRadiusPx / radiusPx).clamp(0.0, 1.0),
-          1.0,
-        ],
+        [0.0, innerFraction.clamp(0.0, 1.0), 1.0],
+        TileMode.clamp,
+        m.storage,
       );
     canvas.drawRect(Offset.zero & size, shaderPaint);
 
-    canvas.drawCircle(
-      center,
-      radiusPx,
+    // Boundary, feather boundary and the rotation-knob stem are all drawn
+    // in the ellipse's own rotated frame.
+    canvas.save();
+    canvas.translate(center.dx, center.dy);
+    canvas.rotate(angle);
+    canvas.drawOval(
+      Rect.fromCenter(center: Offset.zero, width: rx * 2, height: ry * 2),
       Paint()
         ..color = DarkmoonColors.accent
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );
-    if (innerRadiusPx > 0 && innerRadiusPx < radiusPx) {
-      canvas.drawCircle(
-        center,
-        innerRadiusPx,
+    if (innerFraction > 0 && innerFraction < 1) {
+      canvas.drawOval(
+        Rect.fromCenter(
+          center: Offset.zero,
+          width: rx * 2 * innerFraction,
+          height: ry * 2 * innerFraction,
+        ),
         Paint()
           ..color = DarkmoonColors.accent.withValues(alpha: 0.5)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 1,
       );
     }
+    canvas.drawLine(
+      Offset(0, -ry),
+      Offset(0, -(ry + _rotateHandleGap)),
+      Paint()
+        ..color = DarkmoonColors.accent.withValues(alpha: 0.7)
+        ..strokeWidth = 1,
+    );
+    canvas.restore();
+
+    // Handles sit at the rotated axis endpoints; drawn unrotated so the
+    // dots stay crisp circles.
+    final axisX = Offset(math.cos(angle), math.sin(angle));
+    final axisY = Offset(-axisX.dy, axisX.dx);
     _drawHandle(canvas, center);
-    _drawHandle(canvas, center + Offset(radiusPx, 0));
+    _drawHandle(canvas, center + axisX * rx);
+    _drawHandle(canvas, center - axisX * rx);
+    _drawHandle(canvas, center + axisY * ry);
+    _drawHandle(canvas, center - axisY * ry);
+    _drawRotateHandle(canvas, center - axisY * (ry + _rotateHandleGap));
   }
 
   @override
   bool shouldRepaint(covariant _RadialHandlesPainter oldDelegate) =>
       oldDelegate.center != center ||
-      oldDelegate.radiusPx != radiusPx ||
-      oldDelegate.innerRadiusPx != innerRadiusPx ||
+      oldDelegate.radiusXPx != radiusXPx ||
+      oldDelegate.radiusYPx != radiusYPx ||
+      oldDelegate.angle != angle ||
+      oldDelegate.innerFraction != innerFraction ||
       oldDelegate.shadeAlpha != shadeAlpha;
+}
+
+/// The rotation knob: hollow ring, visually distinct from the filled
+/// resize/move dots so it reads as "spin", not "stretch".
+void _drawRotateHandle(Canvas canvas, Offset center) {
+  canvas.drawCircle(center, 6, Paint()..color = Colors.black54);
+  canvas.drawCircle(
+    center,
+    6,
+    Paint()
+      ..color = DarkmoonColors.accent
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2,
+  );
 }

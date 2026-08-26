@@ -272,13 +272,18 @@ class _CropPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Darkens everything outside the crop rect — the standard "shade the
-    // discarded area" crop-tool convention.
+    // Darkens the discarded part of the IMAGE outside the crop rect — the
+    // standard crop-tool convention. Scoped to imageRect, not the whole
+    // canvas: with no crop yet applied cropRect == imageRect, and shading
+    // the full container would additionally darken the letterbox bars
+    // outside the image itself (already just the plain canvas background,
+    // nothing to "discard" there), turning them visibly near-black the
+    // instant the Crop tool is opened.
     final scrimPaint = Paint()..color = Colors.black.withValues(alpha: 0.55);
-    final fullPath = Path()..addRect(Offset.zero & size);
+    final imagePath = Path()..addRect(imageRect);
     final cropPath = Path()..addRect(cropRect);
     canvas.drawPath(
-      Path.combine(PathOperation.difference, fullPath, cropPath),
+      Path.combine(PathOperation.difference, imagePath, cropPath),
       scrimPaint,
     );
 

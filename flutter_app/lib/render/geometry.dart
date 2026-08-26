@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
 
 /// A 3x3 matrix for 2D homogeneous (projective) point transforms — used by
 /// [Transform]/Crop's perspective correction, which (unlike every other
@@ -132,4 +133,69 @@ List<double> rotatePoint(
   final cosT = math.cos(radians);
   final sinT = math.sin(radians);
   return [cx + dx * cosT - dy * sinT, cy + dx * sinT + dy * cosT];
+}
+
+/// Samples packed RGB [src] ([width]x[height]) at fractional `(u, v)` via
+/// bilinear interpolation, clamping to the image bounds at the edges
+/// rather than producing black — a strong keystone correction or lens
+/// distortion correction can otherwise expose gaps outside the original
+/// frame; clamping stretches the edge pixel into that gap instead, which
+/// reads better before the user crops it away. Shared by `crop_transform.dart`
+/// and `lens_correction.dart` — both resample a source buffer through a
+/// per-pixel geometric mapping.
+void sampleBilinear(
+  Uint8List src,
+  int width,
+  int height,
+  double u,
+  double v,
+  Uint8List out,
+  int outIndex,
+) {
+  final cu = u.clamp(0.0, width - 1.0);
+  final cv = v.clamp(0.0, height - 1.0);
+  final x0 = cu.floor();
+  final y0 = cv.floor();
+  final x1 = math.min(x0 + 1, width - 1);
+  final y1 = math.min(y0 + 1, height - 1);
+  final fx = cu - x0;
+  final fy = cv - y0;
+  final i00 = (y0 * width + x0) * 3;
+  final i10 = (y0 * width + x1) * 3;
+  final i01 = (y1 * width + x0) * 3;
+  final i11 = (y1 * width + x1) * 3;
+  for (var c = 0; c < 3; c++) {
+    final top = src[i00 + c] * (1 - fx) + src[i10 + c] * fx;
+    final bottom = src[i01 + c] * (1 - fx) + src[i11 + c] * fx;
+    out[outIndex + c] = (top * (1 - fy) + bottom * fy).round().clamp(0, 255);
+  }
+}
+
+/// Same fractional-position bilinear sample as [sampleBilinear], but for a
+/// single [channel] (0=R, 1=G, 2=B) of packed RGB [src] — used where only
+/// one channel needs resampling at its own radius (TCA correction resamples
+/// red and blue independently from green, which stays untouched).
+double sampleBilinearChannel(
+  Uint8List src,
+  int width,
+  int height,
+  double u,
+  double v,
+  int channel,
+) {
+  final cu = u.clamp(0.0, width - 1.0);
+  final cv = v.clamp(0.0, height - 1.0);
+  final x0 = cu.floor();
+  final y0 = cv.floor();
+  final x1 = math.min(x0 + 1, width - 1);
+  final y1 = math.min(y0 + 1, height - 1);
+  final fx = cu - x0;
+  final fy = cv - y0;
+  final i00 = (y0 * width + x0) * 3 + channel;
+  final i10 = (y0 * width + x1) * 3 + channel;
+  final i01 = (y1 * width + x0) * 3 + channel;
+  final i11 = (y1 * width + x1) * 3 + channel;
+  final top = src[i00] * (1 - fx) + src[i10] * fx;
+  final bottom = src[i01] * (1 - fx) + src[i11] * fx;
+  return top * (1 - fy) + bottom * fy;
 }

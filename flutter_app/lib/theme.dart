@@ -149,6 +149,24 @@ ThemeData buildDarkmoonTheme() {
         fontSize: 11.5,
       ),
     ),
+    // Without this, SnackBars fall back to Material's own light-surface
+    // default (a near-white bar) regardless of `brightness: Brightness.
+    // dark` above — ThemeData doesn't derive it from colorScheme.surface
+    // the way most other widgets do, so it has to be set explicitly here
+    // like every other themed surface in this file.
+    snackBarTheme: SnackBarThemeData(
+      backgroundColor: DarkmoonColors.surfaceRaised,
+      contentTextStyle: const TextStyle(
+        color: DarkmoonColors.textPrimary,
+        fontSize: 12.5,
+      ),
+      actionTextColor: DarkmoonColors.accent,
+      behavior: SnackBarBehavior.floating,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: const BorderSide(color: DarkmoonColors.border),
+      ),
+    ),
     textTheme: const TextTheme(
       bodyMedium: TextStyle(
         color: DarkmoonColors.textSecondary,

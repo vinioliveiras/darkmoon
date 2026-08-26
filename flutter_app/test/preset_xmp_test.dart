@@ -14,9 +14,10 @@ void main() {
         'Exposure': 40,
         'Contrast': -20,
         'Highlights': -30,
-        'Shadows': 25,
-        'Whites': 10,
-        'Blacks': -10,
+        // Shadows/Whites/Blacks deliberately excluded — see
+        // preset_xmp.dart's `_directMappings` comment (posterization at
+        // strong values on the current 8-bit pipeline; not round-tripped
+        // on import until that's fixed).
         'Texture': 15,
         'Clarity': 20,
         'Dehaze': 5,

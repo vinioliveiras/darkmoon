@@ -211,5 +211,44 @@ void main() {
       expect(result.rgbBytes[centerIndex + 1], closeTo(130, 2));
       expect(result.rgbBytes[centerIndex + 2], closeTo(140, 2));
     });
+
+    test('straighten angle actually rotates content (regression: the '
+        'homography used to bake in +angle while the explicit unrotate '
+        'step applied -angle, canceling out to zero visible effect)', () {
+      const size = 40;
+      final src = Uint8List(size * size * 3);
+      // Bright marker 10px directly ABOVE center (cx=20, cy=20).
+      final markerIndex = (10 * size + 20) * 3;
+      src[markerIndex] = 255;
+      src[markerIndex + 1] = 255;
+      src[markerIndex + 2] = 255;
+
+      final result = applyCropTransform(
+        src,
+        size,
+        size,
+        const CropTransformParams(straightenAngle: 90),
+      );
+
+      // A 90-degree straighten rotates the frame content -90 degrees
+      // (rotatePoint(straightened, -angleRad) in applyCropTransform), so
+      // the marker that was directly above center should land directly to
+      // the RIGHT of center instead — nowhere near its original position.
+      var brightestX = -1;
+      var brightestY = -1;
+      var brightestVal = -1;
+      for (var y = 0; y < result.height; y++) {
+        for (var x = 0; x < result.width; x++) {
+          final v = result.rgbBytes[(y * result.width + x) * 3];
+          if (v > brightestVal) {
+            brightestVal = v;
+            brightestX = x;
+            brightestY = y;
+          }
+        }
+      }
+      expect(brightestX, closeTo(30, 2)); // cx=20 + 10
+      expect(brightestY, closeTo(20, 2)); // cy=20 + 0
+    });
   });
 }

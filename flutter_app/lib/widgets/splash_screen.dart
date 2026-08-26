@@ -103,7 +103,13 @@ class SplashScreen extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 4),
-                        Row(
+                        // Wrap, not Row: the card's fixed width leaves this
+                        // column ~328px wide, and pt-BR's longer
+                        // "Desenvolvido por Vini · github.com/..." doesn't
+                        // fit on one line at this font size — Wrap drops
+                        // the github handle to its own line instead of
+                        // overflowing the card's edge.
+                        Wrap(
                           children: [
                             Text(
                               l10n.aboutCredits,

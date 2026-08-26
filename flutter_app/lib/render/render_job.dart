@@ -8,6 +8,7 @@ import '../native/edit_source.dart';
 import '../native/image_utils.dart';
 import 'crop_transform.dart';
 import 'histogram.dart';
+import 'lens_correction.dart';
 import 'mask.dart';
 import 'render.dart';
 import 'render_parallel.dart';
@@ -28,6 +29,10 @@ class RenderJob {
     required this.params,
     this.masks = const [],
     this.cropTransform = const CropTransformParams(),
+    this.lensCorrection = const LensCorrectionParams(),
+    this.lensProfile,
+    this.focalLengthMm = 0,
+    this.apertureFNumber = 0,
   });
 
   final EditSource source;
@@ -41,6 +46,24 @@ class RenderJob {
   /// all operate in the same already-cropped frame rather than each mask
   /// needing its own independent crop.
   final CropTransformParams cropTransform;
+
+  /// Lens profile geometric/vignetting correction — deliberately kept
+  /// alongside [cropTransform] rather than folded into [RenderParams] for
+  /// the same reason: it's a whole-photo correction applied once, before
+  /// masks exist to stack on top of, not a per-mask-reapplicable slider.
+  /// [lensProfile] is already resolved (matched from EXIF or manually
+  /// picked — see `lens_correction.dart`'s `resolveLensProfile`) by the
+  /// caller before building this job, since that resolution needs the
+  /// bundled JSON asset loaded (`rootBundle`, main-isolate-only) while
+  /// this job itself may run inside a background isolate via `compute()`.
+  final LensCorrectionParams lensCorrection;
+  final LensProfile? lensProfile;
+
+  /// From the photo's own EXIF ([RawMetadata.focalLengthMm]/
+  /// [RawMetadata.apertureFNumber]) — the calibration data is keyed by
+  /// these, not by any slider the user controls.
+  final double focalLengthMm;
+  final double apertureFNumber;
 }
 
 class RenderResult {
@@ -87,18 +110,31 @@ Future<RenderResult> renderJobToJpeg(
   RenderJob job, {
   void Function(RenderStage stage)? onStage,
 }) async {
+  final undistorted = applyResolvedLensDistortion(job);
+  final dechromatized = applyResolvedLensChromaticAberration(
+    job,
+    undistorted.rgbBytes,
+    undistorted.width,
+    undistorted.height,
+  );
   final geometry = applyCropTransform(
-    job.source.rgbBytes,
-    job.source.width,
-    job.source.height,
+    dechromatized.rgbBytes,
+    dechromatized.width,
+    dechromatized.height,
     job.cropTransform,
+  );
+  final correctedRgb = applyResolvedLensVignette(
+    job,
+    geometry.rgbBytes,
+    geometry.width,
+    geometry.height,
   );
   final Uint8List rendered;
   if (job.masks.isEmpty && onStage == null) {
     rendered = await renderAdjustmentsParallel(
       geometry.width,
       geometry.height,
-      geometry.rgbBytes,
+      correctedRgb,
       job.params,
     );
   } else {
@@ -106,14 +142,14 @@ Future<RenderResult> renderJobToJpeg(
         ? renderRgb(
             geometry.width,
             geometry.height,
-            geometry.rgbBytes,
+            correctedRgb,
             job.params,
             onStage: onStage,
           )
         : renderRgbWithMasks(
             geometry.width,
             geometry.height,
-            geometry.rgbBytes,
+            correctedRgb,
             job.params,
             job.masks,
           );
@@ -139,6 +175,111 @@ Future<RenderResult> renderJobToJpeg(
     histogram: histogram,
     thumbnailBytes: thumbnailBytes,
   );
+}
+
+/// Lens distortion correction runs BEFORE [applyCropTransform] (Lightroom
+/// applies profile geometric correction before the user's own manual
+/// Transform/Crop, so crop coordinates are defined against the corrected
+/// image, not the raw distorted one) — a no-op (returns [job.source]'s
+/// own buffer, no copy) unless a profile was actually resolved for this
+/// job. Shared by `renderJobToJpeg` and `render_job_gpu.dart`'s
+/// `renderJobToJpegGpu` so both the CPU and GPU render paths apply the
+/// exact same correction before their own pipelines run — this is a pure
+/// CPU pixel pass either way (no GPU shader was written for it; see
+/// project's lens-correction notes), so it works identically regardless
+/// of which pipeline consumes its output afterward.
+GeometryResult applyResolvedLensDistortion(RenderJob job) {
+  final profile = job.lensProfile;
+  if (!job.lensCorrection.enabled || profile == null) {
+    return GeometryResult(
+      width: job.source.width,
+      height: job.source.height,
+      rgbBytes: job.source.rgbBytes,
+    );
+  }
+  return applyLensDistortionCorrection(
+    job.source.rgbBytes,
+    job.source.width,
+    job.source.height,
+    profile,
+    job.focalLengthMm,
+    job.lensCorrection.distortionAmount / 100.0,
+  );
+}
+
+/// TCA (chromatic aberration) correction, applied right after
+/// [applyResolvedLensDistortion] and before [applyCropTransform] — like
+/// distortion (and unlike vignetting), its radius math is defined against
+/// the photo's own optical center, which only still matches the buffer's
+/// center pre-crop. A no-op (returns the input buffer, no copy) unless a
+/// profile with TCA calibration was actually resolved for this job — same
+/// pattern as [applyResolvedLensDistortion], shared by both the CPU and GPU
+/// render paths.
+GeometryResult applyResolvedLensChromaticAberration(
+  RenderJob job,
+  Uint8List rgbBytes,
+  int width,
+  int height,
+) {
+  final profile = job.lensProfile;
+  if (!job.lensCorrection.enabled || profile == null) {
+    return GeometryResult(width: width, height: height, rgbBytes: rgbBytes);
+  }
+  return applyLensChromaticAberrationCorrection(
+    rgbBytes,
+    width,
+    height,
+    profile,
+    job.focalLengthMm,
+    job.lensCorrection.chromaticAberrationAmount / 100.0,
+  );
+}
+
+/// Lens vignetting correction, applied right after [applyCropTransform]
+/// (crop doesn't change the vignetting math — it's still measured from
+/// the *original* optical center, which [applyLensVignetteCorrection]
+/// recomputes as the buffer's own current center; a crop that's roughly
+/// centered is close enough, and Lightroom itself has the same
+/// limitation for an off-center crop). Runs before the main tone/color
+/// pipeline and before mask compositing — see `RenderJob.lensCorrection`'s
+/// doc comment for why this lives here rather than in `render.dart`'s
+/// per-mask-reapplied point-ops.
+///
+/// Returns the buffer callers should use from here on — NOT necessarily
+/// [rgbBytes] itself. [rgbBytes] may still be the exact same object as
+/// [RenderJob.source]'s own cached buffer at this point: both
+/// [applyResolvedLensDistortion] and [applyCropTransform] return their
+/// input unchanged (no copy) when there's nothing for them to do, which
+/// is the common case for a lens with vignetting-only calibration data
+/// (no distortion entries) and no manual crop. [applyLensVignetteCorrection]
+/// mutates in place, so correcting straight into that shared buffer would
+/// permanently corrupt the cached source — every subsequent render of the
+/// same photo (every further slider tick) would re-darken/re-brighten an
+/// already-corrected buffer instead of starting fresh each time. A
+/// defensive copy, made only when correction is actually going to run,
+/// avoids that at a cost that's negligible next to the correction's own
+/// per-pixel loop right after it.
+Uint8List applyResolvedLensVignette(
+  RenderJob job,
+  Uint8List rgbBytes,
+  int width,
+  int height,
+) {
+  final profile = job.lensProfile;
+  if (!job.lensCorrection.enabled || profile == null) {
+    return rgbBytes;
+  }
+  final buffer = Uint8List.fromList(rgbBytes);
+  applyLensVignetteCorrection(
+    buffer,
+    width,
+    height,
+    profile,
+    job.focalLengthMm,
+    job.apertureFNumber,
+    job.lensCorrection.vignetteAmount / 100.0,
+  );
+  return buffer;
 }
 
 class _RenderJobIsolateArgs {

@@ -49,6 +49,8 @@
   "presetSelectedCount": "{count} selecionado(s)",
   "presetUnsupportedTitle": "Alguns ajustes não foram aplicados",
   "presetUnsupportedMessage": "O preset \"{name}\" tem ajustes que este app ainda não suporta, então foram ignorados:",
+  "presetUnsupportedCopyAction": "Copiar",
+  "presetUnsupportedCopiedMessage": "Copiado para a área de transferência",
 
   "beforeLabel": "Antes",
   "afterLabel": "Depois",
@@ -123,6 +125,15 @@
   "clearButton": "Limpar",
   "closeButton": "Fechar",
 
+  "filmstripResetEditsAction": "Resetar todas as edições",
+  "filmstripShowOnDiskAction": "Mostrar no disco",
+  "filmstripDeleteAction": "Excluir",
+  "filmstripResetEditsConfirmTitle": "Resetar todas as edições?",
+  "filmstripResetEditsConfirmMessage": "Isso volta \"{name}\" ao estado original — todo ajuste, curva e máscara. Não pode ser desfeito.",
+  "filmstripDeleteConfirmTitle": "Excluir foto?",
+  "filmstripDeleteConfirmMessage": "Isso envia \"{name}\" para a Lixeira e apaga suas edições salvas. Você pode restaurar a foto pela Lixeira, mas não as edições.",
+  "filmstripDeleteFailedMessage": "Não foi possível excluir \"{name}\": {error}",
+
   "sectionWhiteBalance": "BALANÇO DE BRANCO",
   "sectionTone": "TOM",
   "sectionPresence": "PRESENÇA",
@@ -152,6 +163,8 @@
   "maskCloneTooltip": "Duplicar máscara",
   "maskCloneSuffix": "cópia",
   "maskDeleteTooltip": "Excluir máscara",
+  "maskResetTooltip": "Redefinir esta máscara",
+  "maskClearAllTooltip": "Limpar todas as máscaras",
   "maskOverlayVisibleTooltip": "Ocultar marcação da máscara",
   "maskOverlayHiddenTooltip": "Mostrar marcação da máscara",
   "maskDisableTooltip": "Desativar máscara",
@@ -159,7 +172,7 @@
   "masksTitle": "Máscaras",
   "histogramTitle": "Histograma",
   "filmstripEditedTooltip": "Editada",
-  "maskBrushSizeLabel": "Tamanho",
+  "maskBrushSizeLabel": "Tamanho do Pincel",
   "maskBrushHardnessLabel": "Dureza",
   "maskBrushEraseLabel": "Apagar",
   "maskUndoStrokeTooltip": "Desfazer último traço",
@@ -203,5 +216,14 @@
 
   "sliderVignetteAmount": "Quantidade da Vinheta",
   "sliderVignetteMidpoint": "Ponto Médio da Vinheta",
-  "sliderVignetteFeather": "Suavização da Vinheta"
+  "sliderVignetteFeather": "Suavização da Vinheta",
+  "sectionLensCorrection": "CORREÇÃO DE LENTE",
+  "lensCorrectionNoProfileFound": "Nenhum perfil encontrado",
+  "lensCorrectionProfileLabel": "Perfil da Lente",
+  "lensCorrectionAutoDetect": "Detectar automaticamente",
+  "lensCorrectionDistortionLabel": "Distorção",
+  "lensCorrectionVignetteLabel": "Vinhetagem",
+  "lensCorrectionChromaticAberrationLabel": "Aberração Cromática",
+  "lensCorrectionSearchHint": "Buscar lentes…",
+  "lensCorrectionSearchNoMatches": "Nenhum resultado"
 }

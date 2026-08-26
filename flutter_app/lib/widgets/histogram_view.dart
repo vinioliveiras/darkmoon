@@ -15,7 +15,7 @@ class HistogramView extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 64,
+      height: 108,
       decoration: BoxDecoration(
         color: DarkmoonColors.canvas,
         borderRadius: BorderRadius.circular(6),

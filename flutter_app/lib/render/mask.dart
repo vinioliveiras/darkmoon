@@ -34,33 +34,58 @@ class LinearGradientGeometry {
   );
 }
 
-/// A radial gradient mask: a circle centered at ([centerX], [centerY])
-/// with normalized [radius] (a fraction of the image's width, so it
-/// renders as a true circle regardless of the photo's aspect ratio) —
-/// full effect inside, fading out over the inner [feather] fraction of
-/// the radius at the edge.
+/// A radial gradient mask: an ellipse centered at ([centerX], [centerY])
+/// with semi-axes [radius] (along the shape's own X axis) and [radiusY]
+/// (along its Y axis), both normalized to the image's width — so equal
+/// values render as a true circle on screen regardless of the photo's
+/// aspect ratio. The whole shape rotates by [angle]. Full effect inside,
+/// fading out over the outer [feather] fraction of the shape.
 class RadialGradientGeometry {
   const RadialGradientGeometry({
     this.centerX = 0.5,
     this.centerY = 0.5,
     this.radius = 0.25,
+    this.radiusY,
+    this.angle = 0.0,
     this.feather = 0.5,
   });
 
   final double centerX;
   final double centerY;
+
+  /// Semi-axis along the ellipse's own X direction, as a fraction of the
+  /// image's width.
   final double radius;
+
+  /// Semi-axis along the ellipse's own Y direction, in the same
+  /// width-relative unit as [radius]. Null means "same as [radius]" — a
+  /// circle — which is also what masks saved before ellipse support
+  /// existed decode to. Use [effectiveRadiusY] when computing.
+  final double? radiusY;
+
+  /// Rotation of the ellipse around its center, in radians — positive is
+  /// clockwise on screen (Flutter's y-down convention). 0 keeps the
+  /// [radius] axis horizontal.
+  final double angle;
+
   final double feather;
+
+  /// [radiusY] with the circle fallback applied.
+  double get effectiveRadiusY => radiusY ?? radius;
 
   RadialGradientGeometry copyWith({
     double? centerX,
     double? centerY,
     double? radius,
+    double? radiusY,
+    double? angle,
     double? feather,
   }) => RadialGradientGeometry(
     centerX: centerX ?? this.centerX,
     centerY: centerY ?? this.centerY,
     radius: radius ?? this.radius,
+    radiusY: radiusY ?? this.radiusY,
+    angle: angle ?? this.angle,
     feather: feather ?? this.feather,
   );
 }
@@ -283,27 +308,38 @@ void _computeRadialAlpha(
   int height,
   RadialGradientGeometry g,
 ) {
-  final radius = g.radius <= 0 ? 0.0001 : g.radius;
-  final innerRadius = radius * (1.0 - g.feather.clamp(0.0, 1.0));
+  // Both semi-axes are fractions of the image *width*, so the pixel-space
+  // shape is exactly what the overlay draws — a true circle when they're
+  // equal — whatever the photo's aspect ratio.
+  final rxFrac = g.radius <= 0 ? 0.0001 : g.radius;
+  final ryFrac = g.effectiveRadiusY <= 0 ? 0.0001 : g.effectiveRadiusY;
+  final invRx = 1.0 / (rxFrac * width);
+  final invRy = 1.0 / (ryFrac * width);
+  // Feather works on the normalized elliptical distance (1.0 exactly on
+  // the boundary), so it scales with the shape instead of being a fixed
+  // pixel band.
+  final innerFrac = 1.0 - g.feather.clamp(0.0, 1.0);
+  final span = 1.0 - innerFrac;
   final cx = g.centerX * width;
   final cy = g.centerY * height;
-  // Scales y-distance into the same unit as x-distance (fractions of
-  // image width) so the mask renders as a true circle regardless of the
-  // photo's aspect ratio, instead of a squashed ellipse.
-  final scaleY = width / height;
+  final cosA = math.cos(g.angle);
+  final sinA = math.sin(g.angle);
   var p = 0;
   for (var y = 0; y < height; y++) {
-    final ddy = (y - cy) * scaleY;
+    final dy = y - cy;
     for (var x = 0; x < width; x++, p++) {
-      final ddx = x - cx;
-      final dist = math.sqrt(ddx * ddx + ddy * ddy) / width;
-      if (dist <= innerRadius) {
+      final dx = x - cx;
+      // Rotate the delta into the ellipse's own frame, then normalize
+      // each component by its semi-axis: t == 1 on the boundary.
+      final u = (dx * cosA + dy * sinA) * invRx;
+      final v = (dy * cosA - dx * sinA) * invRy;
+      final t = math.sqrt(u * u + v * v);
+      if (t <= innerFrac) {
         alpha[p] = 1.0;
-      } else if (dist >= radius) {
+      } else if (t >= 1.0) {
         alpha[p] = 0.0;
       } else {
-        final span = radius - innerRadius;
-        alpha[p] = span <= 0 ? 0.0 : 1.0 - (dist - innerRadius) / span;
+        alpha[p] = span <= 0 ? 0.0 : 1.0 - (t - innerFrac) / span;
       }
     }
   }

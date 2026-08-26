@@ -1,0 +1,25 @@
+Lens correction data bundled with Darkmoon (lensfun_db.json)
+==============================================================
+
+This asset is a compact, machine-generated conversion of the lens/camera
+calibration database from the Lensfun project:
+
+    https://github.com/lensfun/lensfun
+
+Source: lensfun's data/db/*.xml files (distortion, vignetting, and
+transverse chromatic aberration calibration points only -- mount
+compatibility lists, camera-body entries, and calibration comments were
+dropped as unused by this app).
+
+License: Creative Commons Attribution-ShareAlike 3.0 Unported (CC BY-SA 3.0)
+
+    https://creativecommons.org/licenses/by-sa/3.0/
+
+Per the license, any redistribution of this data (including as part of
+this app) must credit the Lensfun project and its contributors, and any
+modified/derivative version of the database itself (not the app's use of
+it) must be shared under the same CC BY-SA 3.0 license.
+
+This JSON encoding was produced by a one-off conversion script (not
+shipped with the app) from an unmodified checkout of Lensfun's data/db
+directory.

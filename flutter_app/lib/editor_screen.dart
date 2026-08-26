@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Directory, File;
+import 'dart:io' show Directory, File, Process;
 import 'dart:ui' show AppExitResponse;
 
 import 'package:file_picker/file_picker.dart';
@@ -34,6 +34,7 @@ import 'raw_files.dart';
 import 'render/ai_denoise.dart';
 import 'render/histogram.dart';
 import 'render/hsl.dart' show rgbToHsl;
+import 'render/lens_correction.dart';
 import 'render/mask.dart';
 import 'render/gpu/gpu_capability.dart';
 import 'render/gpu/render_job_gpu.dart';
@@ -54,6 +55,7 @@ import 'widgets/export_dialog.dart';
 import 'widgets/folder_sidebar.dart';
 import 'widgets/gradient_mask_overlay.dart';
 import 'widgets/histogram_view.dart';
+import 'widgets/lens_correction_panel.dart';
 import 'widgets/mask_selector.dart';
 import 'widgets/photo_metadata_view.dart';
 import 'widgets/preset_panel.dart';
@@ -347,6 +349,12 @@ Map<String, double> _defaultParamValues() {
     // defaults map, or Reset / first-open / preset-merge would leave
     // those keys missing and the sliders would snap to 0.
     for (final spec in _vignetteSliders) spec.name: spec.defaultValue,
+    // Lens Correction is also global-only (see RenderJob.lensCorrection's
+    // doc comment) and lives outside [_sections] for the same reason as
+    // Vignette above -- seeded from the params class's own defaults
+    // (distortion/vignette amount = 100, matching Lightroom's Profile
+    // checkbox starting at full strength) rather than repeating them here.
+    ...const LensCorrectionParams().toValues(),
   };
 }
 
@@ -411,6 +419,12 @@ class _EditorScreenState extends State<EditorScreen> {
   /// folder, since it's supplementary info only the selected photo needs.
   final Map<String, RawMetadata?> _metadata = {};
   int _folderGeneration = 0;
+
+  /// The bundled Lensfun database, loaded once at startup (see
+  /// [_loadLensProfiles]) -- empty until then, which just means Lens
+  /// Correction resolves no profile (and so applies no correction) for
+  /// whatever's rendered before it finishes loading.
+  List<LensProfile> _lensProfiles = const [];
 
   /// Unedited render of whichever photos have had Before/After turned on,
   /// computed lazily (only when first needed) since most photos are never
@@ -627,6 +641,7 @@ class _EditorScreenState extends State<EditorScreen> {
     unawaited(_loadPalettesState());
     unawaited(_loadSettings());
     unawaited(_loadThumbnailCache());
+    unawaited(_loadLensProfiles());
     _lifecycleListener = AppLifecycleListener(
       onExitRequested: _handleExitRequested,
     );
@@ -646,6 +661,24 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     setState(() => _previewCache = ThumbnailCacheManager(dir));
+  }
+
+  /// Loads the bundled lens correction database (a few MB JSON asset) --
+  /// deliberately not awaited from [initState] (see every other `_load*`
+  /// call there), so the first frame isn't blocked on it. If Lens
+  /// Correction was already on for the photo showing when this finishes,
+  /// the render it produced before now had nothing to resolve a profile
+  /// against, so it's redone once the database is actually usable.
+  Future<void> _loadLensProfiles() async {
+    final profiles = await LensProfileDatabase.load();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _lensProfiles = profiles);
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected != null && _lensCorrection.enabled) {
+      unawaited(_renderPreview(selected.path));
+    }
   }
 
   /// Makes sure the current photo's edits are actually on disk before the
@@ -790,60 +823,40 @@ class _EditorScreenState extends State<EditorScreen> {
     _scheduleRender(live: false);
     unawaited(_flushCurrentEdits());
     if (preset.unsupportedAttributes.isNotEmpty) {
-      unawaited(_showUnsupportedPresetAttributes(preset));
+      _showUnsupportedPresetAttributes(preset);
     }
   }
 
-  Future<void> _showUnsupportedPresetAttributes(Preset preset) async {
+  /// Non-blocking notice about a preset's unsupported settings — a
+  /// SnackBar rather than the modal dialog this used to be, matching how
+  /// export completion is surfaced (see `_exportCurrent`'s SnackBar):
+  /// applying a preset already fully committed its supported settings, so
+  /// there's nothing left to confirm/dismiss here, just an FYI the user
+  /// can act on (copy the list) or ignore without it blocking the editor.
+  void _showUnsupportedPresetAttributes(Preset preset) {
     final l10n = AppLocalizations.of(context)!;
-    await showDialog<void>(
-      context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: DarkmoonColors.surfaceRaised,
-        title: Text(l10n.presetUnsupportedTitle),
-        content: SizedBox(
-          width: 320,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(l10n.presetUnsupportedMessage(preset.name)),
-              const SizedBox(height: 12),
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 200),
-                child: SingleChildScrollView(
-                  child: Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      for (final attribute in preset.unsupportedAttributes)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: DarkmoonColors.panel,
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            attribute,
-                            style: const TextStyle(fontSize: 11.5),
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
+    final attributeList = preset.unsupportedAttributes.join(', ');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        duration: const Duration(seconds: 4),
+        content: Text(
+          '${l10n.presetUnsupportedTitle}: '
+          '${l10n.presetUnsupportedMessage(preset.name)} $attributeList',
+          maxLines: 3,
+          overflow: TextOverflow.ellipsis,
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: Text(l10n.closeButton),
-          ),
-        ],
+        action: SnackBarAction(
+          label: l10n.presetUnsupportedCopyAction,
+          onPressed: () {
+            unawaited(Clipboard.setData(ClipboardData(text: attributeList)));
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                duration: const Duration(seconds: 2),
+                content: Text(l10n.presetUnsupportedCopiedMessage),
+              ),
+            );
+          },
+        ),
       ),
     );
   }
@@ -1328,6 +1341,166 @@ class _EditorScreenState extends State<EditorScreen> {
       }
     });
     unawaited(saveSettings(next));
+  }
+
+  /// Resets [file]'s saved edits back to untouched — same fields
+  /// [_resetActive] clears for the currently-open photo, but callable for
+  /// ANY photo in the filmstrip (the context-menu entry point), not just
+  /// whichever one happens to be selected right now.
+  Future<void> _resetAllEditsFor(RawFile file) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: DarkmoonColors.surfaceRaised,
+        title: Text(l10n.filmstripResetEditsConfirmTitle),
+        content: Text(l10n.filmstripResetEditsConfirmMessage(file.name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.cancelButton),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.filmstripResetEditsAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    final path = file.path;
+    final isCurrentPhoto =
+        _selectedIndex != null && _files[_selectedIndex!].path == path;
+    setState(() {
+      _edits.remove(path);
+      _photoCurves.remove(path);
+      _photoMasks.remove(path);
+      if (isCurrentPhoto) {
+        _paramValues = _defaultParamValues();
+        _currentCurves = identityPhotoCurves;
+        _currentMasks = [];
+        _activeMaskId = imageMaskId;
+      }
+    });
+    if (isCurrentPhoto) {
+      _resetHistory();
+      unawaited(_renderPreview(path));
+    }
+    await saveCatalog(_edits);
+    await savePhotoCurves(_photoCurves);
+    await savePhotoMasks(_photoMasks);
+  }
+
+  /// Opens [file]'s containing folder in Windows Explorer with the file
+  /// itself pre-selected — `explorer.exe /select,` is the standard way to
+  /// do this; Explorer's own exit code is unreliable (it can return
+  /// nonzero even on a completely successful reveal), so unlike other
+  /// Process.run call sites in this app, the result isn't checked.
+  Future<void> _revealInExplorer(RawFile file) async {
+    // Verified empirically (this bit explorer.exe twice before landing
+    // here): `/select,` and the path must be TWO separate elements of the
+    // args array, with NO manual quoting around the path. Concatenating
+    // them into one string — `'/select,${file.path}'`, with or without
+    // added `"..."` — makes explorer.exe silently fail on any path
+    // containing spaces and fall back to opening the user's Documents
+    // folder instead of erroring, which is exactly the bug this fixes.
+    await Process.run('explorer.exe', ['/select,', file.path]);
+  }
+
+  /// Sends [path] to the Recycle Bin instead of deleting it outright —
+  /// `dart:io`'s `File.delete()` has no such option (it's a hard delete
+  /// on every platform), so this shells out to the same
+  /// `Microsoft.VisualBasic.FileIO.FileSystem.DeleteFile` helper Windows
+  /// Explorer's own "Delete" (not Shift+Delete) uses, via PowerShell —
+  /// avoids pulling in a whole new Win32 FFI dependency just for this one
+  /// call. Throws (via a nonzero exit code) if PowerShell itself reports
+  /// failure, letting the caller's existing try/catch handle it the same
+  /// way a failed `File.delete()` would have.
+  Future<void> _moveToRecycleBin(String path) async {
+    final escaped = path.replaceAll("'", "''");
+    final result = await Process.run('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      "Add-Type -AssemblyName Microsoft.VisualBasic; "
+          "[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile("
+          "'$escaped', "
+          "'OnlyErrorDialogs', "
+          "'SendToRecycleBin')",
+    ]);
+    if (result.exitCode != 0) {
+      throw Exception(result.stderr.toString().trim());
+    }
+  }
+
+  /// Sends [file] to the Recycle Bin (after confirming) and forgets every
+  /// piece of in-memory/persisted state keyed by its path — mirrors
+  /// [_removeLibraryFolder]'s cleanup list, minus the fields that only
+  /// make sense at folder granularity.
+  Future<void> _deleteFile(RawFile file) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: DarkmoonColors.surfaceRaised,
+        title: Text(l10n.filmstripDeleteConfirmTitle),
+        content: Text(l10n.filmstripDeleteConfirmMessage(file.name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.cancelButton),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.filmstripDeleteAction),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    final path = file.path;
+    try {
+      await _moveToRecycleBin(path);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            duration: const Duration(seconds: 3),
+            content: Text(l10n.filmstripDeleteFailedMessage(file.name, '$e')),
+          ),
+        );
+      }
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    final removedIndex = _files.indexWhere((f) => f.path == path);
+    setState(() {
+      _files = [for (final f in _files) if (f.path != path) f];
+      _thumbnails.remove(path);
+      _editSources.remove(path);
+      _renderedPreviews.remove(path);
+      _histograms.remove(path);
+      _metadata.remove(path);
+      _neutralPreviews.remove(path);
+      _edits.remove(path);
+      _photoCurves.remove(path);
+      _photoMasks.remove(path);
+      if (removedIndex == _selectedIndex) {
+        _selectedIndex = null;
+      } else if (_selectedIndex != null && removedIndex < _selectedIndex!) {
+        // Every index after the removed one shifted down by one — keep
+        // pointing at the same photo, not whatever slid into its old slot.
+        _selectedIndex = _selectedIndex! - 1;
+      }
+    });
+    await saveCatalog(_edits);
+    await savePhotoCurves(_photoCurves);
+    await savePhotoMasks(_photoMasks);
   }
 
   /// Opens just the one selected file — no folder scan, so the filmstrip
@@ -1823,6 +1996,7 @@ class _EditorScreenState extends State<EditorScreen> {
             cropBottom: 1,
           )
         : _cropTransform;
+    final metadata = _metadata[path];
     final job = RenderJob(
       source: live ? sources.live : sources.preview,
       params: RenderParams.fromValues(
@@ -1831,6 +2005,10 @@ class _EditorScreenState extends State<EditorScreen> {
       ),
       masks: _effectiveMasks,
       cropTransform: cropTransform,
+      lensCorrection: _lensCorrection,
+      lensProfile: _resolvedLensProfileFor(path),
+      focalLengthMm: metadata?.focalLengthMm ?? 0,
+      apertureFNumber: metadata?.apertureFNumber ?? 0,
     );
     // The AI Denoise apply action wants real stage progress (it's the
     // slowest single-shot render); ordinary slider-drag renders stay on
@@ -1866,7 +2044,12 @@ class _EditorScreenState extends State<EditorScreen> {
       _histograms[path] = result.histogram;
       // Keeps the filmstrip thumbnail in sync with the current edit
       // instead of staying frozen at the camera-original preview.
-      _thumbnails[path] = result.thumbnailBytes;
+      // Only update the in-memory strip on the settled render — live
+      // drag ticks would otherwise swap the thumbnail dozens of times
+      // per second, triggering pointless rebuilds and cache thrash.
+      if (!live) {
+        _thumbnails[path] = result.thumbnailBytes;
+      }
     });
     if (!live) {
       // Only the settled render's thumbnail is worth persisting to disk —
@@ -1911,8 +2094,48 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
+  /// Locks the crop rect to [ratio] and immediately re-fits it (centered,
+  /// as large as the frame allows) instead of only recording the lock for
+  /// the *next* drag to pick up — Lightroom's aspect picker snaps the
+  /// selection the moment you click a ratio, it doesn't wait for you to
+  /// touch a handle first.
   void _setCropAspectRatio(double? ratio) {
     setState(() => _cropAspectRatio = ratio);
+    if (ratio == null) {
+      return;
+    }
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    final source = selected == null ? null : _editSources[selected.path]?.preview;
+    if (source == null) {
+      return;
+    }
+    final current = _cropTransform;
+    final rotated = current.rotateQuarterTurns.isOdd;
+    final frameWidth = rotated ? source.height : source.width;
+    final frameHeight = rotated ? source.width : source.height;
+    final imageAspect = frameWidth / frameHeight;
+    // Same normalized-space conversion CropOverlay._dragCorner uses to
+    // keep a locked ratio while dragging — kept in sync so picking a
+    // ratio and then nudging a corner never fight each other.
+    final normalizedRatio = ratio / imageAspect;
+    final double w, h;
+    if (normalizedRatio >= 1) {
+      w = 1.0;
+      h = 1.0 / normalizedRatio;
+    } else {
+      w = normalizedRatio;
+      h = 1.0;
+    }
+    final left = (1 - w) / 2;
+    final top = (1 - h) / 2;
+    _onCropTransformChangeEnd(
+      current.copyWith(
+        cropLeft: left,
+        cropTop: top,
+        cropRight: left + w,
+        cropBottom: top + h,
+      ),
+    );
   }
 
   /// Opens the AI Denoise level dialog and, if the user confirms, bakes the
@@ -2072,6 +2295,41 @@ class _EditorScreenState extends State<EditorScreen> {
     _onCropTransformChangeEnd(const CropTransformParams());
   }
 
+  /// Lens Correction state, derived from the same flat `_paramValues` map
+  /// every other global adjustment lives in -- same reasoning as
+  /// [_cropTransform] (global-only, not part of a mask's own values).
+  LensCorrectionParams get _lensCorrection =>
+      LensCorrectionParams.fromValues(_paramValues);
+
+  void _onLensCorrectionChanged(LensCorrectionParams params) {
+    setState(() => _paramValues = {..._paramValues, ...params.toValues()});
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onLensCorrectionChangeEnd(LensCorrectionParams params) {
+    setState(() => _paramValues = {..._paramValues, ...params.toValues()});
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  /// Resolves which [LensProfile] applies to [path] right now -- a manual
+  /// override if the user picked one, else an auto-detected match against
+  /// that photo's own EXIF (see `lens_correction.dart`'s
+  /// [resolveLensProfile]). Used both to build each render's [RenderJob]
+  /// and to drive the panel's "matched profile" display, so the two never
+  /// show/apply a different profile than each other.
+  LensProfile? _resolvedLensProfileFor(String? path) {
+    if (path == null) {
+      return null;
+    }
+    return resolveLensProfile(
+      _lensProfiles,
+      _metadata[path],
+      _lensCorrection.manualProfileKeyHash,
+    );
+  }
+
   void _onToneCurveChanged(List<CurvePoint> points) {
     setState(() => _currentCurves = _currentCurves.copyWith(tone: points));
     _scheduleRender(live: _settings.fastPreview);
@@ -2106,16 +2364,6 @@ class _EditorScreenState extends State<EditorScreen> {
     _pushHistory();
     _scheduleRender(live: false);
     _scheduleCatalogSave();
-  }
-
-  void _resetParams() {
-    setState(() {
-      _paramValues = _defaultParamValues();
-      _currentCurves = identityPhotoCurves;
-    });
-    _pushHistory();
-    _scheduleRender(live: false);
-    unawaited(_flushCurrentEdits());
   }
 
   /// The slider values the panel should currently show/edit — the global
@@ -2235,17 +2483,19 @@ class _EditorScreenState extends State<EditorScreen> {
     _scheduleCatalogSave();
   }
 
-  /// Resets whatever's currently being edited — the global adjustments +
-  /// curves when on the Image layer, or just the active mask's own
-  /// values when one is selected.
+  /// Resets the whole photo back to its untouched state: global
+  /// adjustments, curves, AND every mask — regardless of which layer is
+  /// currently being edited. A partial reset (leaving masks behind) would
+  /// be surprising for a button labeled "Reset", and there's no separate
+  /// per-mask reset affordance, so this is the only way back to a blank
+  /// slate.
   void _resetActive() {
-    if (_activeMaskId == imageMaskId) {
-      _resetParams();
-      return;
-    }
-    _updateActiveMask(
-      (mask) => mask.copyWith(values: const {}, curves: identityPhotoCurves),
-    );
+    setState(() {
+      _paramValues = _defaultParamValues();
+      _currentCurves = identityPhotoCurves;
+      _currentMasks = [];
+      _activeMaskId = imageMaskId;
+    });
     _pushHistory();
     _scheduleRender(live: false);
     _scheduleCatalogSave();
@@ -2653,6 +2903,7 @@ class _EditorScreenState extends State<EditorScreen> {
     });
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
+        duration: const Duration(seconds: 3),
         content: Text(
           result.success
               ? l10n.exportSuccessMessage(result.destPath!)
@@ -2876,6 +3127,42 @@ class _EditorScreenState extends State<EditorScreen> {
                                       ),
                                     ),
                                   ),
+                                // A background op the user dismissed via
+                                // the loading overlay's own "Hide" button
+                                // (_hideLoadingOverlay) still needs SOME
+                                // visible sign it's still running — sits
+                                // in the preview's own bottom breathing
+                                // room (_ImageArea._verticalBreathingRoom)
+                                // rather than covering any actual content.
+                                if (_loadingOverlayHidden)
+                                  Builder(
+                                    builder: (context) {
+                                      final info = _overlayInfo(
+                                        context,
+                                        selected,
+                                      );
+                                      if (info == null) {
+                                        return const SizedBox.shrink();
+                                      }
+                                      return Positioned(
+                                        left: 16,
+                                        right: 16,
+                                        bottom: 12,
+                                        child: Align(
+                                          alignment: Alignment.center,
+                                          child: ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                              maxWidth: 300,
+                                            ),
+                                            child: _HiddenLoadingIndicator(
+                                              info: info,
+                                              onCancel: _cancelLoading,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
                               ],
                             ),
                           ),
@@ -2937,6 +3224,14 @@ class _EditorScreenState extends State<EditorScreen> {
                             onCropAspectRatioChanged: _setCropAspectRatio,
                             onToggleCropOverlay: _toggleCropOverlay,
                             onResetCropTransform: _resetCropTransform,
+                            lensCorrection: _lensCorrection,
+                            onLensCorrectionChanged: _onLensCorrectionChanged,
+                            onLensCorrectionChangeEnd:
+                                _onLensCorrectionChangeEnd,
+                            lensProfiles: _lensProfiles,
+                            resolvedLensProfile: selected == null
+                                ? null
+                                : _resolvedLensProfileFor(selected.path),
                             palettes: _palettes,
                             onImportPalette: () =>
                                 unawaited(_importPalette()),
@@ -2984,6 +3279,11 @@ class _EditorScreenState extends State<EditorScreen> {
                       thumbnails: _thumbnails,
                       onSelect: _selectIndex,
                       isEdited: _isPhotoEdited,
+                      onResetEdits: (file) =>
+                          unawaited(_resetAllEditsFor(file)),
+                      onShowOnDisk: (file) =>
+                          unawaited(_revealInExplorer(file)),
+                      onDelete: (file) => unawaited(_deleteFile(file)),
                     ),
                   ],
                 ),
@@ -3161,6 +3461,13 @@ class _ImageArea extends StatelessWidget {
   final ValueChanged<CropTransformParams> onCropTransformChanged;
   final ValueChanged<CropTransformParams> onCropTransformChangeEnd;
 
+  /// Vertical breathing room around the fitted image — without this, a
+  /// photo whose aspect ratio closely matches the viewport (most photos,
+  /// since BoxFit.contain already maximizes it) sits flush against the
+  /// top/bottom toolbar edges with zero margin, reading as cramped even
+  /// though "Fit" is working exactly as designed.
+  static const double _verticalBreathingRoom = 60;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -3168,6 +3475,7 @@ class _ImageArea extends StatelessWidget {
       key: viewportKey,
       color: DarkmoonColors.canvas,
       alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(vertical: _verticalBreathingRoom),
       child: _buildContent(l10n),
     );
   }
@@ -3463,6 +3771,78 @@ class _LoadingOverlay extends StatelessWidget {
   }
 }
 
+/// Compact stand-in for the Undo/Reset/Redo pill, shown in the same slot
+/// while a long operation is still running in the background after the
+/// user dismissed its [_LoadingOverlay] via "Hide" — plain white text/bar
+/// with no card or scrim (unlike the overlay it replaces), so it reads as
+/// part of the toolbar chrome rather than another modal fighting for
+/// attention.
+class _HiddenLoadingIndicator extends StatelessWidget {
+  const _HiddenLoadingIndicator({required this.info, required this.onCancel});
+
+  final _LoadingInfo info;
+  final VoidCallback onCancel;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final progress = info.progress;
+    return Row(
+      children: [
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                info.message,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: Colors.white, fontSize: 11.5),
+              ),
+              const SizedBox(height: 4),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: SizedBox(
+                  height: 3,
+                  child: progress == null
+                      ? const LinearProgressIndicator(
+                          backgroundColor: Colors.white24,
+                          valueColor: AlwaysStoppedAnimation(Colors.white),
+                        )
+                      : LinearProgressIndicator(
+                          value: progress,
+                          backgroundColor: Colors.white24,
+                          valueColor: const AlwaysStoppedAnimation(
+                            Colors.white,
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 10),
+        TextButton(
+          onPressed: onCancel,
+          style: TextButton.styleFrom(
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 10),
+          ),
+          child: Text(l10n.cancelButton, style: const TextStyle(fontSize: 12)),
+        ),
+      ],
+    );
+  }
+}
+
+/// Side length of the toolbar's square icon-only buttons (Fit to window,
+/// Undo/Reset/Redo, Crop, AI Denoise, Before/After) — the toolbar's most
+/// frequently-tapped controls, sized up from the default pill height (40)
+/// and made exactly 1:1 rather than the usual wider-than-tall rectangle.
+const double _squareButtonSize = 38;
+const double _squareButtonIconSize = 16;
+
 class _ViewerToolbar extends StatelessWidget {
   const _ViewerToolbar({
     required this.zoomLabel,
@@ -3524,7 +3904,7 @@ class _ViewerToolbar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Container(
-      height: 56,
+      height: 64,
       color: DarkmoonColors.background,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
@@ -3573,27 +3953,35 @@ class _ViewerToolbar extends StatelessWidget {
                   // only crush the percentage text unreadable, never
                   // actually save space.
                   _ToolbarPill(
+                    height: _squareButtonSize,
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.minus,
+                        iconSize: _squareButtonIconSize,
+                        width: _squareButtonSize,
                         onTap: onZoomOut,
                       ),
                       _ToolbarSegment(
                         label: zoomLabel,
-                        width: 40,
+                        width: _squareButtonSize,
                         padded: false,
                       ),
                       _ToolbarSegment(
                         icon: CupertinoIcons.add,
+                        iconSize: _squareButtonIconSize,
+                        width: _squareButtonSize,
                         onTap: onZoomIn,
                       ),
                     ],
                   ),
                   const SizedBox(width: 6),
                   _ToolbarPill(
+                    height: _squareButtonSize,
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.arrow_up_left_arrow_down_right,
+                        iconSize: _squareButtonIconSize,
+                        width: _squareButtonSize,
                         onTap: onZoomFit,
                         tooltip: l10n.fitToWindow,
                       ),
@@ -3607,19 +3995,26 @@ class _ViewerToolbar extends StatelessWidget {
                   // against the right-aligned Crop/Denoise/Before-After
                   // group.
                   _ToolbarPill(
+                    height: _squareButtonSize,
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.arrow_uturn_left,
+                        iconSize: _squareButtonIconSize,
+                        width: _squareButtonSize,
                         onTap: canUndo ? onUndo : null,
                         tooltip: l10n.undoButton,
                       ),
                       _ToolbarSegment(
                         icon: CupertinoIcons.arrow_2_circlepath,
+                        iconSize: _squareButtonIconSize,
+                        width: _squareButtonSize,
                         onTap: onReset,
                         tooltip: l10n.resetTooltip,
                       ),
                       _ToolbarSegment(
                         icon: CupertinoIcons.arrow_uturn_right,
+                        iconSize: _squareButtonIconSize,
+                        width: _squareButtonSize,
                         onTap: canRedo ? onRedo : null,
                         tooltip: l10n.redoButton,
                       ),
@@ -3627,9 +4022,12 @@ class _ViewerToolbar extends StatelessWidget {
                   ),
                   const Spacer(),
                   _ToolbarPill(
+                    height: _squareButtonSize,
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.crop,
+                        iconSize: _squareButtonIconSize,
+                        width: _squareButtonSize,
                         selected: cropOverlayActive,
                         onTap: onToggleCropOverlay,
                         tooltip: l10n.cropButton,
@@ -3638,9 +4036,12 @@ class _ViewerToolbar extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   _ToolbarPill(
+                    height: _squareButtonSize,
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.sparkles,
+                        iconSize: _squareButtonIconSize,
+                        width: _squareButtonSize,
                         selected: aiDenoiseActive,
                         onTap: onOpenAiDenoise,
                         tooltip: l10n.aiDenoiseButton,
@@ -3649,9 +4050,12 @@ class _ViewerToolbar extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   _ToolbarPill(
+                    height: _squareButtonSize,
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.square_split_2x1,
+                        iconSize: _squareButtonIconSize,
+                        width: _squareButtonSize,
                         selected: beforeAfterMode,
                         onTap: onToggleBeforeAfter,
                         tooltip: l10n.beforeAfterButton,
@@ -3665,19 +4069,25 @@ class _ViewerToolbar extends StatelessWidget {
           // Lines up under _ControlsPanel above — holds Export, so it
           // stays reachable regardless of how far the panel above has
           // been scrolled. Reset now lives between Undo/Redo instead.
+          // Must match _controlsPanelWidth (not a separate literal): a
+          // stale 280 here (_ControlsPanel is actually 300) shifted this
+          // whole trailing slot 20px narrower than the real column above
+          // it, which pushed the pill Row before it 20px too far right —
+          // visibly spilling the rightmost pill (Before/After) into the
+          // real right-column boundary.
           SizedBox(
-            width: 280,
+            width: _controlsPanelWidth,
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: Row(
                 children: [
                   Expanded(
                     child: SizedBox(
-                      height: 36,
+                      height: _squareButtonSize,
                       child: ElevatedButton.icon(
                         onPressed: exporting ? null : onExport,
                         style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 14),
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
                           side: const BorderSide(
                             color: DarkmoonColors.border,
                             width: 1.0,
@@ -3685,20 +4095,21 @@ class _ViewerToolbar extends StatelessWidget {
                         ),
                         icon: exporting
                             ? const SizedBox(
-                                width: 12,
-                                height: 12,
+                                width: 14,
+                                height: 14,
                                 child: CircularProgressIndicator(
                                   strokeWidth: 2,
                                 ),
                               )
                             : const Icon(
                                 CupertinoIcons.square_arrow_down,
-                                size: 14,
+                                size: 16,
                               ),
                         label: Text(
                           exporting
                               ? l10n.exportingButton
                               : l10n.exportPanelButton,
+                          style: const TextStyle(fontSize: 12.5),
                         ),
                       ),
                     ),
@@ -3718,14 +4129,20 @@ class _ViewerToolbar extends StatelessWidget {
 /// edge with hairline dividers between them, rather than each control
 /// being its own separately-chromed Material button.
 class _ToolbarPill extends StatelessWidget {
-  const _ToolbarPill({required this.children});
+  const _ToolbarPill({required this.children, this.height = 40});
 
   final List<Widget> children;
+
+  /// Lets a pill of purely square icon buttons (see [_ToolbarSegment]'s
+  /// `width` matching this) stand out a bit larger than the default —
+  /// e.g. Crop/AI Denoise/Before-After/Undo/Reset/Redo/Fit-to-window,
+  /// which are tapped far more often than the zoom +/- pair.
+  final double height;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 36,
+      height: height,
       decoration: BoxDecoration(
         color: DarkmoonColors.surfaceRaised,
         borderRadius: BorderRadius.circular(7),
@@ -3766,6 +4183,7 @@ class _ToolbarSegment extends StatelessWidget {
     this.tooltip,
     this.width,
     this.padded = true,
+    this.iconSize = 16,
   });
 
   final IconData? icon;
@@ -3774,6 +4192,7 @@ class _ToolbarSegment extends StatelessWidget {
   final VoidCallback? onTap;
   final String? tooltip;
   final double? width;
+  final double iconSize;
   // A fixed-[width] segment (e.g. the zoom-percent readout) already sizes
   // itself to fit its content exactly — adding the usual label padding on
   // top would eat into that same fixed width and leave too little room for
@@ -3796,12 +4215,12 @@ class _ToolbarSegment extends StatelessWidget {
           : EdgeInsets.zero,
       color: selected ? DarkmoonColors.accent : Colors.transparent,
       child: icon != null
-          ? Icon(icon, size: 14, color: foreground)
+          ? Icon(icon, size: iconSize, color: foreground)
           : Text(
               label!,
               overflow: TextOverflow.ellipsis,
               softWrap: false,
-              style: TextStyle(fontSize: 11.5, color: foreground),
+              style: TextStyle(fontSize: 12.5, color: foreground),
             ),
     );
     final tappable = onTap == null
@@ -4203,6 +4622,11 @@ class _ControlsPanel extends StatefulWidget {
     required this.onCropAspectRatioChanged,
     required this.onToggleCropOverlay,
     required this.onResetCropTransform,
+    required this.lensCorrection,
+    required this.onLensCorrectionChanged,
+    required this.onLensCorrectionChangeEnd,
+    required this.lensProfiles,
+    required this.resolvedLensProfile,
     required this.palettes,
     required this.onImportPalette,
     required this.onDeletePalette,
@@ -4265,6 +4689,15 @@ class _ControlsPanel extends StatefulWidget {
   final ValueChanged<double?> onCropAspectRatioChanged;
   final VoidCallback onToggleCropOverlay;
   final VoidCallback onResetCropTransform;
+
+  final LensCorrectionParams lensCorrection;
+  final ValueChanged<LensCorrectionParams> onLensCorrectionChanged;
+  final ValueChanged<LensCorrectionParams> onLensCorrectionChangeEnd;
+  final List<LensProfile> lensProfiles;
+
+  /// The profile actually in effect for the selected photo right now --
+  /// see `_resolvedLensProfileFor`'s doc comment.
+  final LensProfile? resolvedLensProfile;
 
   /// Imported Adobe Color palettes (.ase/.aco), shown as clickable
   /// swatches under the Color Grading wheel — tapping one tints whichever
@@ -4909,6 +5342,28 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   onChangeEnd: (v) => onChangeEnd(spec.name, v),
                                 ),
                               ),
+                          _SectionHeader(
+                            label: l10n.sectionLensCorrection,
+                            collapsed: _collapsed.contains('LENS CORRECTION'),
+                            onTap: () => _toggleSection('LENS CORRECTION'),
+                            enabled: widget.lensCorrection.enabled,
+                            onEnabledChanged: (v) =>
+                                widget.onLensCorrectionChangeEnd(
+                                  widget.lensCorrection.copyWith(enabled: v),
+                                ),
+                          ),
+                          if (!_collapsed.contains('LENS CORRECTION'))
+                            Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: LensCorrectionPanel(
+                                params: widget.lensCorrection,
+                                resolvedProfile: widget.resolvedLensProfile,
+                                allProfiles: widget.lensProfiles,
+                                cameraMake: widget.metadata?.cameraMake ?? '',
+                                onChanged: widget.onLensCorrectionChanged,
+                                onChangeEnd: widget.onLensCorrectionChangeEnd,
+                              ),
+                            ),
                         ],
                       ],
                     ],
@@ -5417,6 +5872,9 @@ class _Filmstrip extends StatefulWidget {
     required this.thumbnails,
     required this.onSelect,
     required this.isEdited,
+    required this.onResetEdits,
+    required this.onShowOnDisk,
+    required this.onDelete,
   });
 
   final List<RawFile> files;
@@ -5427,6 +5885,14 @@ class _Filmstrip extends StatefulWidget {
   /// Whether a photo has any saved edit — shows a small badge over its
   /// thumbnail when true.
   final bool Function(String path) isEdited;
+
+  /// Right-click menu actions — each takes the photo it was invoked on,
+  /// not necessarily the currently-selected one (right-clicking a
+  /// non-selected thumbnail acts on that thumbnail, matching how a file
+  /// manager's context menu works).
+  final ValueChanged<RawFile> onResetEdits;
+  final ValueChanged<RawFile> onShowOnDisk;
+  final ValueChanged<RawFile> onDelete;
 
   @override
   State<_Filmstrip> createState() => _FilmstripState();
@@ -5459,6 +5925,38 @@ class _FilmstripState extends State<_Filmstrip> {
       _scrollController.position.maxScrollExtent,
     );
     _scrollController.jumpTo(target);
+  }
+
+  Future<void> _showContextMenu(
+    BuildContext context,
+    Offset globalPosition,
+    RawFile file,
+  ) async {
+    final l10n = AppLocalizations.of(context)!;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final action = await showMenu<VoidCallback>(
+      context: context,
+      position: RelativeRect.fromRect(
+        globalPosition & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          value: () => widget.onResetEdits(file),
+          child: Text(l10n.filmstripResetEditsAction),
+        ),
+        PopupMenuItem(
+          value: () => widget.onShowOnDisk(file),
+          child: Text(l10n.filmstripShowOnDiskAction),
+        ),
+        PopupMenuItem(
+          value: () => widget.onDelete(file),
+          child: Text(l10n.filmstripDeleteAction),
+        ),
+      ],
+    );
+    action?.call();
   }
 
   @override
@@ -5502,6 +6000,8 @@ class _FilmstripState extends State<_Filmstrip> {
                 padding: const EdgeInsets.only(right: 6),
                 child: GestureDetector(
                   onTap: () => onSelect(index),
+                  onSecondaryTapUp: (details) =>
+                      _showContextMenu(context, details.globalPosition, file),
                   child: Container(
                     width: 104,
                     padding: const EdgeInsets.all(4),
@@ -5535,6 +6035,7 @@ class _FilmstripState extends State<_Filmstrip> {
                                       : Image.memory(
                                           thumbnail,
                                           fit: BoxFit.cover,
+                                          gaplessPlayback: true,
                                         ),
                                 ),
                                 Positioned(

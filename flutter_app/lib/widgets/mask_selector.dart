@@ -5,6 +5,7 @@ import '../l10n/app_localizations.dart';
 import '../render/mask.dart';
 import '../theme.dart';
 import 'slider_row.dart';
+import 'styled_dropdown.dart';
 
 /// Sentinel id for the always-present base layer — the whole photo, i.e.
 /// the editor's existing global adjustments. Not a real [MaskLayer].
@@ -90,22 +91,58 @@ class MaskSelector extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: _MaskPill(
-                label: active == null ? l10n.maskImageLayer : active.name,
-                icon: active == null
-                    ? CupertinoIcons.photo
-                    : _typeIcon(active.type),
-                onTap: () => _showSwitchMenu(context),
+              child: StyledDropdown<String>(
+                value: activeId,
+                items: [
+                  StyledDropdownItem(
+                    value: imageMaskId,
+                    label: l10n.maskImageLayer,
+                    icon: CupertinoIcons.photo,
+                  ),
+                  for (final mask in masks)
+                    StyledDropdownItem(
+                      value: mask.id,
+                      label: mask.name,
+                      icon: _typeIcon(mask.type),
+                    ),
+                ],
+                onChanged: onSelect,
               ),
             ),
             const SizedBox(width: 6),
-            SizedBox(
-              height: 34,
-              width: 34,
-              child: IconButton(
-                tooltip: l10n.maskAddTooltip,
-                onPressed: () => _showAddMenu(context),
-                icon: const Icon(CupertinoIcons.add, size: 16),
+            Tooltip(
+              message: l10n.maskAddTooltip,
+              child: StyledDropdown<MaskType>(
+                value: null,
+                placeholder: '',
+                leadingIcon: CupertinoIcons.add,
+                showChevron: false,
+                width: 34,
+                menuWidth: 190,
+                menuAlignRight: true,
+                items: [
+                  StyledDropdownItem(
+                    value: MaskType.linearGradient,
+                    label: l10n.maskLinearGradient,
+                    icon: _typeIcon(MaskType.linearGradient),
+                  ),
+                  StyledDropdownItem(
+                    value: MaskType.radialGradient,
+                    label: l10n.maskRadialGradient,
+                    icon: _typeIcon(MaskType.radialGradient),
+                  ),
+                  StyledDropdownItem(
+                    value: MaskType.brush,
+                    label: l10n.maskBrush,
+                    icon: _typeIcon(MaskType.brush),
+                  ),
+                  StyledDropdownItem(
+                    value: MaskType.colorRange,
+                    label: l10n.maskColorRange,
+                    icon: _typeIcon(MaskType.colorRange),
+                  ),
+                ],
+                onChanged: onAdd,
               ),
             ),
           ],
@@ -206,149 +243,6 @@ class MaskSelector extends StatelessWidget {
           ],
         ],
       ],
-    );
-  }
-
-  Future<void> _showSwitchMenu(BuildContext context) async {
-    final l10n = AppLocalizations.of(context)!;
-    final box = context.findRenderObject() as RenderBox;
-    final position = RelativeRect.fromRect(
-      Rect.fromPoints(
-        box.localToGlobal(Offset.zero),
-        box.localToGlobal(box.size.bottomCenter(Offset.zero)),
-      ),
-      Offset.zero &
-          (Overlay.of(context).context.findRenderObject()! as RenderBox).size,
-    );
-    final selected = await showMenu<String>(
-      context: context,
-      position: position,
-      color: DarkmoonColors.surfaceRaised,
-      items: [
-        PopupMenuItem(value: imageMaskId, child: Text(l10n.maskImageLayer)),
-        for (final mask in masks)
-          PopupMenuItem(value: mask.id, child: Text(mask.name)),
-      ],
-    );
-    if (selected != null) {
-      onSelect(selected);
-    }
-  }
-
-  Future<void> _showAddMenu(BuildContext context) async {
-    final l10n = AppLocalizations.of(context)!;
-    final box = context.findRenderObject() as RenderBox;
-    final position = RelativeRect.fromRect(
-      Rect.fromPoints(
-        box.localToGlobal(Offset.zero),
-        box.localToGlobal(box.size.bottomCenter(Offset.zero)),
-      ),
-      Offset.zero &
-          (Overlay.of(context).context.findRenderObject()! as RenderBox).size,
-    );
-    final selected = await showMenu<MaskType>(
-      context: context,
-      position: position,
-      color: DarkmoonColors.surfaceRaised,
-      items: [
-        PopupMenuItem(
-          value: MaskType.linearGradient,
-          child: Row(
-            children: [
-              const Icon(CupertinoIcons.slider_horizontal_3, size: 15),
-              const SizedBox(width: 8),
-              Text(l10n.maskLinearGradient),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: MaskType.radialGradient,
-          child: Row(
-            children: [
-              const Icon(CupertinoIcons.circle_fill, size: 15),
-              const SizedBox(width: 8),
-              Text(l10n.maskRadialGradient),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: MaskType.brush,
-          child: Row(
-            children: [
-              const Icon(CupertinoIcons.paintbrush, size: 15),
-              const SizedBox(width: 8),
-              Text(l10n.maskBrush),
-            ],
-          ),
-        ),
-        PopupMenuItem(
-          value: MaskType.colorRange,
-          child: Row(
-            children: [
-              const Icon(CupertinoIcons.eyedropper, size: 15),
-              const SizedBox(width: 8),
-              Text(l10n.maskColorRange),
-            ],
-          ),
-        ),
-      ],
-    );
-    if (selected != null) {
-      onAdd(selected);
-    }
-  }
-}
-
-class _MaskPill extends StatelessWidget {
-  const _MaskPill({
-    required this.label,
-    required this.icon,
-    required this.onTap,
-  });
-
-  final String label;
-  final IconData icon;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: DarkmoonColors.surfaceRaised,
-      borderRadius: BorderRadius.circular(8),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(8),
-        onTap: onTap,
-        child: Container(
-          height: 34,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: DarkmoonColors.border),
-          ),
-          child: Row(
-            children: [
-              Icon(icon, size: 15, color: DarkmoonColors.textSecondary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: DarkmoonColors.textPrimary,
-                    fontSize: 12.5,
-                  ),
-                ),
-              ),
-              const Icon(
-                CupertinoIcons.chevron_down,
-                size: 13,
-                color: DarkmoonColors.textMuted,
-              ),
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

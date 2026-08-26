@@ -158,6 +158,13 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get presetUnsupportedCopyAction => 'Copiar';
+
+  @override
+  String get presetUnsupportedCopiedMessage =>
+      'Copiado para a área de transferência';
+
+  @override
   String get beforeLabel => 'Antes';
 
   @override
@@ -382,6 +389,36 @@ class AppLocalizationsPt extends AppLocalizations {
   String get closeButton => 'Fechar';
 
   @override
+  String get filmstripResetEditsAction => 'Resetar todas as edições';
+
+  @override
+  String get filmstripShowOnDiskAction => 'Mostrar no disco';
+
+  @override
+  String get filmstripDeleteAction => 'Excluir';
+
+  @override
+  String get filmstripResetEditsConfirmTitle => 'Resetar todas as edições?';
+
+  @override
+  String filmstripResetEditsConfirmMessage(String name) {
+    return 'Isso volta \"$name\" ao estado original — todo ajuste, curva e máscara. Não pode ser desfeito.';
+  }
+
+  @override
+  String get filmstripDeleteConfirmTitle => 'Excluir foto?';
+
+  @override
+  String filmstripDeleteConfirmMessage(String name) {
+    return 'Isso envia \"$name\" para a Lixeira e apaga suas edições salvas. Você pode restaurar a foto pela Lixeira, mas não as edições.';
+  }
+
+  @override
+  String filmstripDeleteFailedMessage(String name, String error) {
+    return 'Não foi possível excluir \"$name\": $error';
+  }
+
+  @override
   String get sectionWhiteBalance => 'BALANÇO DE BRANCO';
 
   @override
@@ -468,6 +505,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get maskDeleteTooltip => 'Excluir máscara';
 
   @override
+  String get maskResetTooltip => 'Redefinir esta máscara';
+
+  @override
+  String get maskClearAllTooltip => 'Limpar todas as máscaras';
+
+  @override
   String get maskOverlayVisibleTooltip => 'Ocultar marcação da máscara';
 
   @override
@@ -489,7 +532,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get filmstripEditedTooltip => 'Editada';
 
   @override
-  String get maskBrushSizeLabel => 'Tamanho';
+  String get maskBrushSizeLabel => 'Tamanho do Pincel';
 
   @override
   String get maskBrushHardnessLabel => 'Dureza';
@@ -613,4 +656,31 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get sliderVignetteFeather => 'Suavização da Vinheta';
+
+  @override
+  String get sectionLensCorrection => 'CORREÇÃO DE LENTE';
+
+  @override
+  String get lensCorrectionNoProfileFound => 'Nenhum perfil encontrado';
+
+  @override
+  String get lensCorrectionProfileLabel => 'Perfil da Lente';
+
+  @override
+  String get lensCorrectionAutoDetect => 'Detectar automaticamente';
+
+  @override
+  String get lensCorrectionDistortionLabel => 'Distorção';
+
+  @override
+  String get lensCorrectionVignetteLabel => 'Vinhetagem';
+
+  @override
+  String get lensCorrectionChromaticAberrationLabel => 'Aberração Cromática';
+
+  @override
+  String get lensCorrectionSearchHint => 'Buscar lentes…';
+
+  @override
+  String get lensCorrectionSearchNoMatches => 'Nenhum resultado';
 }

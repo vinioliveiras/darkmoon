@@ -176,41 +176,6 @@ GeometryResult _rotateQuarterTurns(
   return GeometryResult(width: newWidth, height: newHeight, rgbBytes: out);
 }
 
-/// Samples packed RGB [src] at fractional `(u, v)` via bilinear
-/// interpolation, clamping to the image bounds at the edges rather than
-/// producing black — a strong keystone correction can otherwise expose
-/// gaps outside the original frame; clamping stretches the edge pixel
-/// into that gap instead, which reads better before the user crops it
-/// away (Lightroom's own "Fill Edges" content-aware option is well out of
-/// scope here).
-void _sampleBilinear(
-  Uint8List src,
-  int width,
-  int height,
-  double u,
-  double v,
-  Uint8List out,
-  int outIndex,
-) {
-  final cu = u.clamp(0.0, width - 1.0);
-  final cv = v.clamp(0.0, height - 1.0);
-  final x0 = cu.floor();
-  final y0 = cv.floor();
-  final x1 = math.min(x0 + 1, width - 1);
-  final y1 = math.min(y0 + 1, height - 1);
-  final fx = cu - x0;
-  final fy = cv - y0;
-  final i00 = (y0 * width + x0) * 3;
-  final i10 = (y0 * width + x1) * 3;
-  final i01 = (y1 * width + x0) * 3;
-  final i11 = (y1 * width + x1) * 3;
-  for (var c = 0; c < 3; c++) {
-    final top = src[i00 + c] * (1 - fx) + src[i10 + c] * fx;
-    final bottom = src[i01 + c] * (1 - fx) + src[i11 + c] * fx;
-    out[outIndex + c] = (top * (1 - fy) + bottom * fy).round().clamp(0, 255);
-  }
-}
-
 /// Applies [params]'s straighten/keystone/scale/crop as a single combined
 /// geometric resample of packed RGB [sourceRgb] — the only stage in the
 /// render pipeline that changes the buffer's width/height rather than
@@ -245,14 +210,21 @@ GeometryResult applyCropTransform(
   final cy = h / 2;
   final angleRad = params.straightenAngle * math.pi / 180.0;
 
-  // The straightened rectangle's corners — where the original frame's
-  // corners land after just the continuous-angle rotation, before
-  // keystone. Order: top-left, top-right, bottom-right, bottom-left.
+  // The plain canvas rect, AS IT APPEARS in "straightened-source-space" —
+  // by definition that space is already upright (that's what "straightened"
+  // means), so these corners are just (0,0)-(w,h), not rotated. The actual
+  // rotation is applied once, explicitly, in the sampling loop below
+  // (`rotatePoint(..., -angleRad)`) — rotating these corners here too was
+  // a bug: `forward` would then be an actual rotation, `inverse` its
+  // opposite, and composing that with the explicit -angleRad rotation
+  // below canceled out exactly whenever keystone was off (the overwhelming
+  // common case), making the Straighten slider a visible no-op. Order:
+  // top-left, top-right, bottom-right, bottom-left.
   final srcCorners = [
-    rotatePoint(0, 0, cx, cy, angleRad),
-    rotatePoint(w, 0, cx, cy, angleRad),
-    rotatePoint(w, h, cx, cy, angleRad),
-    rotatePoint(0, h, cx, cy, angleRad),
+    [0.0, 0.0],
+    [w, 0.0],
+    [w, h],
+    [0.0, h],
   ];
 
   // Keystone: pulls the narrower-appearing edge's corners toward the
@@ -305,7 +277,7 @@ GeometryResult applyCropTransform(
         cy,
         -angleRad,
       );
-      _sampleBilinear(
+      sampleBilinear(
         rotated.rgbBytes,
         rotated.width,
         rotated.height,

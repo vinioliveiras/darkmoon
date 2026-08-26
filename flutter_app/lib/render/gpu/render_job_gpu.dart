@@ -24,23 +24,47 @@ import 'render_gpu.dart';
 /// to the GPU render itself — not worth the extra complexity for a first
 /// cut. Revisit if profiling shows it matters.
 Future<RenderResult> renderJobToJpegGpu(RenderJob job) async {
+  final undistorted = applyResolvedLensDistortion(job);
+  // Same CPU pixel pass `renderJobToJpeg` runs before crop -- no GPU
+  // shader for TCA was written either, see `applyResolvedLensVignette`'s
+  // doc comment just below for why baking these into the buffer here is
+  // fine either way.
+  final dechromatized = applyResolvedLensChromaticAberration(
+    job,
+    undistorted.rgbBytes,
+    undistorted.width,
+    undistorted.height,
+  );
   final geometry = applyCropTransform(
-    job.source.rgbBytes,
-    job.source.width,
-    job.source.height,
+    dechromatized.rgbBytes,
+    dechromatized.width,
+    dechromatized.height,
     job.cropTransform,
+  );
+  // Same CPU pixel pass `renderJobToJpeg` runs -- no GPU shader for lens
+  // vignetting was written (see `RenderJob.lensCorrection`'s doc comment),
+  // so this bakes the correction into the buffer before it's handed to
+  // the GPU pipeline below as a `ui.Image` upload. See
+  // `applyResolvedLensVignette`'s own doc comment for why its return
+  // value (not necessarily `geometry.rgbBytes` itself) is what must be
+  // used from here on.
+  final correctedRgb = applyResolvedLensVignette(
+    job,
+    geometry.rgbBytes,
+    geometry.width,
+    geometry.height,
   );
   final rendered = job.masks.isEmpty
       ? await renderRgbGpu(
           geometry.width,
           geometry.height,
-          geometry.rgbBytes,
+          correctedRgb,
           job.params,
         )
       : await renderRgbWithMasksGpu(
           geometry.width,
           geometry.height,
-          geometry.rgbBytes,
+          correctedRgb,
           job.params,
           job.masks,
         );

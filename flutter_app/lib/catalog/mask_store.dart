@@ -120,6 +120,11 @@ MaskLayer _decodeMask(Map<String, dynamic> raw) {
             centerX: (radialRaw['centerX'] as num).toDouble(),
             centerY: (radialRaw['centerY'] as num).toDouble(),
             radius: (radialRaw['radius'] as num).toDouble(),
+            // Ellipse + rotation shipped after circles-only masks were
+            // already in catalogs — nullable casts so old entries load
+            // (null radiusY = circle, angle 0 = unrotated).
+            radiusY: (radialRaw['radiusY'] as num?)?.toDouble(),
+            angle: (radialRaw['angle'] as num?)?.toDouble() ?? 0.0,
             feather: (radialRaw['feather'] as num).toDouble(),
           ),
     brush: _decodeBrush(raw['brush'] as List<dynamic>?),
@@ -157,6 +162,10 @@ Map<String, dynamic> _encodeMask(MaskLayer mask) => {
     'centerX': mask.radial.centerX,
     'centerY': mask.radial.centerY,
     'radius': mask.radial.radius,
+    // Written only once the user actually stretched/rotated the shape,
+    // keeping untouched circles identical to pre-ellipse catalog entries.
+    if (mask.radial.radiusY != null) 'radiusY': mask.radial.radiusY,
+    if (mask.radial.angle != 0.0) 'angle': mask.radial.angle,
     'feather': mask.radial.feather,
   },
   'brush': _encodeBrush(mask.brush),

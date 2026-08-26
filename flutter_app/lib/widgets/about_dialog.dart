@@ -26,25 +26,47 @@ class DarkmoonAboutDialog extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              'darkmoon',
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: DarkmoonColors.textPrimary,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              darkmoonAppVersion,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: DarkmoonColors.textMuted),
+            Row(
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.asset(
+                    'assets/splash/app_icon.png',
+                    width: 40,
+                    height: 40,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'darkmoon',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        color: DarkmoonColors.textPrimary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    Text(
+                      darkmoonAppVersion,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: DarkmoonColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             Text(l10n.aboutCredits),
             const SizedBox(height: 4),
+            // Selectable, not a launchable link: the app has no
+            // url_launcher dependency anywhere else, and adding one for
+            // this single label isn't worth the new native-plugin surface
+            // — select-and-copy already gets the user to the repo.
             const SelectableText(
-              'github.com/vinioliveiras',
+              'github.com/vinioliveiras/darkmoon',
               style: TextStyle(color: DarkmoonColors.textSecondary),
             ),
             const SizedBox(height: 16),

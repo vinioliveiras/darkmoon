@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../settings/app_settings.dart';
 import '../theme.dart';
+import 'styled_dropdown.dart';
 
 /// Mirrors the Python app's `SettingsDialog`: every change applies and
 /// saves immediately, rather than waiting for an OK/Cancel to accept. A
@@ -68,91 +69,117 @@ class _SettingsDialogState extends State<SettingsDialog> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+
+    const labelStyle = TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w500,
+      color: DarkmoonColors.textSecondary,
+    );
+    const hintStyle = TextStyle(
+      fontSize: 11,
+      color: DarkmoonColors.textMuted,
+    );
+
     return AlertDialog(
       backgroundColor: DarkmoonColors.surfaceRaised,
-      title: Text(l10n.settingsDialogTitle),
+      title: Text(
+        l10n.settingsDialogTitle,
+        style: theme.textTheme.titleMedium?.copyWith(
+          fontWeight: FontWeight.w600,
+        ),
+      ),
       content: SingleChildScrollView(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(child: Text(l10n.settingsLanguageLabel)),
-                DropdownButton<String>(
-                  value: _settings.language,
-                  items: [
-                    DropdownMenuItem(
-                      value: 'auto',
-                      child: Text(l10n.settingsLanguageAuto),
-                    ),
-                    DropdownMenuItem(
-                      value: 'en',
-                      child: Text(l10n.settingsLanguageEnglish),
-                    ),
-                    DropdownMenuItem(
-                      value: 'pt',
-                      child: Text(l10n.settingsLanguagePortuguese),
-                    ),
-                  ],
-                  onChanged: (value) => _update(
-                    _settings.copyWith(language: value ?? _settings.language),
-                  ),
+            // Language
+            Text(l10n.settingsLanguageLabel, style: labelStyle),
+            const SizedBox(height: 8),
+            StyledDropdown<String>(
+              value: _settings.language,
+              width: 170,
+              items: [
+                StyledDropdownItem(
+                  value: 'auto',
+                  label: l10n.settingsLanguageAuto,
+                ),
+                StyledDropdownItem(
+                  value: 'en',
+                  label: l10n.settingsLanguageEnglish,
+                ),
+                StyledDropdownItem(
+                  value: 'pt',
+                  label: l10n.settingsLanguagePortuguese,
                 ),
               ],
+              onChanged: (value) =>
+                  _update(_settings.copyWith(language: value)),
             ),
-            const SizedBox(height: 4),
+
+            const SizedBox(height: 16),
+
+            // Fast preview
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text(l10n.settingsFastPreviewLabel),
+              dense: true,
+              title: Text(l10n.settingsFastPreviewLabel, style: labelStyle),
               value: _settings.fastPreview,
               onChanged: (v) => _update(_settings.copyWith(fastPreview: v)),
             ),
-            const SizedBox(height: 4),
-            Row(
-              children: [
-                Expanded(
-                  child: Text(l10n.settingsPreviewResolutionLabel),
-                ),
-                DropdownButton<int>(
-                  value: _settings.previewResolution,
-                  items: [
-                    for (final size in previewResolutionOptions)
-                      DropdownMenuItem(value: size, child: Text('$size px')),
-                  ],
-                  onChanged: (value) => _update(
-                    _settings.copyWith(
-                      previewResolution: value ?? _settings.previewResolution,
-                    ),
-                  ),
-                ),
+
+            const SizedBox(height: 8),
+
+            // Preview resolution
+            Text(l10n.settingsPreviewResolutionLabel, style: labelStyle),
+            const SizedBox(height: 8),
+            StyledDropdown<int>(
+              value: _settings.previewResolution,
+              width: 170,
+              items: [
+                for (final size in previewResolutionOptions)
+                  StyledDropdownItem(value: size, label: '$size px'),
               ],
+              onChanged: (value) =>
+                  _update(_settings.copyWith(previewResolution: value)),
             ),
-            Padding(
-              padding: const EdgeInsets.only(bottom: 4),
-              child: Text(
-                l10n.settingsPreviewResolutionHint,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ),
+            const SizedBox(height: 4),
+            Text(l10n.settingsPreviewResolutionHint, style: hintStyle),
+
+            const SizedBox(height: 16),
+
+            // RAW only
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text(l10n.settingsRawOnlyLabel),
-              subtitle: Text(l10n.settingsRawOnlyHint),
+              dense: true,
+              title: Text(l10n.settingsRawOnlyLabel, style: labelStyle),
+              subtitle: Text(l10n.settingsRawOnlyHint, style: hintStyle),
               value: _settings.rawOnly,
               onChanged: (v) => _update(_settings.copyWith(rawOnly: v)),
             ),
+
+            const SizedBox(height: 8),
+
+            // GPU render
             SwitchListTile(
               contentPadding: EdgeInsets.zero,
-              title: Text(l10n.settingsGpuRenderLabel),
-              subtitle: Text(l10n.settingsGpuRenderHint),
+              dense: true,
+              title: Text(l10n.settingsGpuRenderLabel, style: labelStyle),
+              subtitle: Text(l10n.settingsGpuRenderHint, style: hintStyle),
               value: _settings.useGpuRender,
-              onChanged: (v) => _update(_settings.copyWith(useGpuRender: v)),
+              onChanged: (v) =>
+                  _update(_settings.copyWith(useGpuRender: v)),
             ),
+
+            const SizedBox(height: 16),
+
+            // Thumbnail threads
+            Text(l10n.settingsThumbnailThreadsLabel, style: labelStyle),
             const SizedBox(height: 8),
             Row(
               children: [
-                Expanded(child: Text(l10n.settingsThumbnailThreadsLabel)),
+                const Expanded(child: SizedBox()),
                 IconButton(
                   onPressed: _settings.thumbnailConcurrency > 1
                       ? () => _update(
@@ -165,10 +192,14 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   icon: const Icon(CupertinoIcons.minus, size: 15),
                 ),
                 SizedBox(
-                  width: 24,
+                  width: 28,
                   child: Text(
                     '${_settings.thumbnailConcurrency}',
                     textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: DarkmoonColors.textPrimary,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -184,13 +215,17 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 ),
               ],
             ),
-            const SizedBox(height: 8),
+
+            const SizedBox(height: 16),
+
             const Divider(),
             Padding(
               padding: const EdgeInsets.only(top: 8, bottom: 4),
               child: Text(
                 l10n.settingsUserDataSection,
-                style: Theme.of(context).textTheme.labelSmall,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: DarkmoonColors.textMuted,
+                ),
               ),
             ),
             _ClearDataRow(
@@ -241,8 +276,21 @@ class _ClearDataRow extends StatelessWidget {
         width: double.infinity,
         child: OutlinedButton(
           onPressed: onPressed,
-          style: OutlinedButton.styleFrom(alignment: Alignment.centerLeft),
-          child: Text(label),
+          style: OutlinedButton.styleFrom(
+            alignment: Alignment.centerLeft,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(7),
+            ),
+            side: const BorderSide(color: DarkmoonColors.border),
+          ),
+          child: Text(
+            label,
+            style: const TextStyle(
+              fontSize: 12.5,
+              color: DarkmoonColors.textPrimary,
+            ),
+          ),
         ),
       ),
     );

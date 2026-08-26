@@ -21,6 +21,12 @@ void main() {
     (WidgetTester tester) async {
       _setDesktopSurfaceSize(tester);
       await tester.pumpWidget(const DarkmoonApp());
+      // DarkmoonApp's splash screen holds a fixed-duration Future.delayed
+      // timer (see main.dart's _splashMinDuration) that's still pending
+      // after a single pump — the test harness asserts no timers are left
+      // running when the test ends, so it must actually fire before this
+      // test finishes, not just before the assertions below run.
+      await tester.pump(const Duration(seconds: 5));
 
       expect(
         find.text('Open a folder with RAW files to get started'),
@@ -41,6 +47,10 @@ void main() {
       addTearDown(tester.platformDispatcher.clearLocalesTestValue);
 
       await tester.pumpWidget(const DarkmoonApp());
+      // Same splash-timer reasoning as the test above — pumpAndSettle
+      // alone doesn't advance a bare Future.delayed that isn't itself
+      // scheduling animation frames.
+      await tester.pump(const Duration(seconds: 5));
       await tester.pumpAndSettle();
 
       expect(

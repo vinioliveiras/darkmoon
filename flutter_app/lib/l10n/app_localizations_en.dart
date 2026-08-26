@@ -158,6 +158,12 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get presetUnsupportedCopyAction => 'Copy';
+
+  @override
+  String get presetUnsupportedCopiedMessage => 'Copied to clipboard';
+
+  @override
   String get beforeLabel => 'Before';
 
   @override
@@ -378,6 +384,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get closeButton => 'Close';
 
   @override
+  String get filmstripResetEditsAction => 'Reset all edits';
+
+  @override
+  String get filmstripShowOnDiskAction => 'Show on disk';
+
+  @override
+  String get filmstripDeleteAction => 'Delete';
+
+  @override
+  String get filmstripResetEditsConfirmTitle => 'Reset all edits?';
+
+  @override
+  String filmstripResetEditsConfirmMessage(String name) {
+    return 'This resets \"$name\" back to its untouched state — every adjustment, curve, and mask. This can\'t be undone.';
+  }
+
+  @override
+  String get filmstripDeleteConfirmTitle => 'Delete photo?';
+
+  @override
+  String filmstripDeleteConfirmMessage(String name) {
+    return 'This sends \"$name\" to the Recycle Bin and deletes its saved edits. You can restore the photo from the Recycle Bin, but not its edits.';
+  }
+
+  @override
+  String filmstripDeleteFailedMessage(String name, String error) {
+    return 'Couldn\'t delete \"$name\": $error';
+  }
+
+  @override
   String get sectionWhiteBalance => 'WHITE BALANCE';
 
   @override
@@ -464,6 +500,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get maskDeleteTooltip => 'Delete mask';
 
   @override
+  String get maskResetTooltip => 'Reset this mask';
+
+  @override
+  String get maskClearAllTooltip => 'Clear all masks';
+
+  @override
   String get maskOverlayVisibleTooltip => 'Hide mask overlay';
 
   @override
@@ -485,7 +527,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filmstripEditedTooltip => 'Edited';
 
   @override
-  String get maskBrushSizeLabel => 'Size';
+  String get maskBrushSizeLabel => 'Brush Size';
 
   @override
   String get maskBrushHardnessLabel => 'Hardness';
@@ -609,4 +651,31 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sliderVignetteFeather => 'Vignette Feather';
+
+  @override
+  String get sectionLensCorrection => 'LENS CORRECTION';
+
+  @override
+  String get lensCorrectionNoProfileFound => 'No profile found';
+
+  @override
+  String get lensCorrectionProfileLabel => 'Lens Profile';
+
+  @override
+  String get lensCorrectionAutoDetect => 'Auto-detect';
+
+  @override
+  String get lensCorrectionDistortionLabel => 'Distortion';
+
+  @override
+  String get lensCorrectionVignetteLabel => 'Vignetting';
+
+  @override
+  String get lensCorrectionChromaticAberrationLabel => 'Chromatic Aberration';
+
+  @override
+  String get lensCorrectionSearchHint => 'Search lenses…';
+
+  @override
+  String get lensCorrectionSearchNoMatches => 'No matches';
 }
