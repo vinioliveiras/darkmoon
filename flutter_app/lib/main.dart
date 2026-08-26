@@ -104,7 +104,7 @@ class _DarkmoonAppState extends State<DarkmoonApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Darkmoon',
+      title: 'darkmoon',
       debugShowCheckedModeBanner: false,
       theme: buildDarkmoonTheme(),
       locale: _locale,

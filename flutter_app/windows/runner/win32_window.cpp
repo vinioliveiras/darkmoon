@@ -88,7 +88,12 @@ WindowClassRegistrar* WindowClassRegistrar::instance_ = nullptr;
 
 const wchar_t* WindowClassRegistrar::GetWindowClass() {
   if (!class_registered_) {
-    WNDCLASS window_class{};
+    // WNDCLASSEX (not WNDCLASS) so hIconSm can be set — that's the glyph
+    // Windows paints next to the title text. WNDCLASS only has hIcon, which
+    // is the large Alt+Tab icon; without hIconSm the title bar falls back
+    // to a generic application icon (or nothing, after a frameless round-trip).
+    WNDCLASSEX window_class{};
+    window_class.cbSize = sizeof(WNDCLASSEX);
     window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
     window_class.lpszClassName = kWindowClassName;
     window_class.style = CS_HREDRAW | CS_VREDRAW;
@@ -97,10 +102,14 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     window_class.hInstance = GetModuleHandle(nullptr);
     window_class.hIcon =
         LoadIcon(window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
+    window_class.hIconSm = static_cast<HICON>(LoadImage(
+        window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
+        GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON),
+        LR_DEFAULTCOLOR));
     window_class.hbrBackground = 0;
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = Win32Window::WndProc;
-    RegisterClass(&window_class);
+    RegisterClassEx(&window_class);
     class_registered_ = true;
   }
   return kWindowClassName;
@@ -240,6 +249,25 @@ Win32Window::MessageHandler(HWND hwnd,
         return 0;
       }
       break;
+
+    case WM_GETICON:
+      // Flutter's engine intercepts WM_GETICON and can return null after the
+      // splash's frameless round-trip, which is exactly how the title-bar
+      // glyph next to "darkmoon" disappears. Answer it here (and, for the
+      // FlutterWindow subclass, *before* the engine sees the message — see
+      // flutter_window.cpp) so the caption always has the app icon.
+      {
+        const bool small_icon = (wparam == ICON_SMALL || wparam == ICON_SMALL2);
+        HICON icon = static_cast<HICON>(LoadImage(
+            GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
+            GetSystemMetrics(small_icon ? SM_CXSMICON : SM_CXICON),
+            GetSystemMetrics(small_icon ? SM_CYSMICON : SM_CYICON),
+            LR_DEFAULTCOLOR | LR_SHARED));
+        if (icon) {
+          return reinterpret_cast<LRESULT>(icon);
+        }
+      }
+      break;
   }
 
   return DefWindowProc(window_handle_, message, wparam, lparam);
@@ -292,6 +320,16 @@ void Win32Window::SetFrameless(bool frameless, int corner_radius) {
     return;
   }
   frameless_ = frameless;
+
+  // SetWindowRgn disables DWM composition of the non-client area. If we
+  // restore WS_CAPTION / fire SWP_FRAMECHANGED while a region is still
+  // attached, DWM never paints the title-bar icon (or paints a blank
+  // caption). Clear the region *before* restoring the frame; apply a new
+  // rounded region only *after* the frameless style is in place.
+  if (!frameless) {
+    SetWindowRgn(window_handle_, nullptr, TRUE);
+  }
+
   LONG_PTR style = GetWindowLongPtr(window_handle_, GWL_STYLE);
   constexpr LONG_PTR kFrameStyles = WS_CAPTION | WS_THICKFRAME |
                                     WS_MINIMIZEBOX | WS_MAXIMIZEBOX |
@@ -316,10 +354,30 @@ void Win32Window::SetFrameless(bool frameless, int corner_radius) {
                                      rect.bottom - rect.top + 1,
                                      corner_radius, corner_radius);
     SetWindowRgn(window_handle_, region, TRUE);
-  } else {
-    // A null region restores the window to its normal, unclipped
-    // rectangular shape.
-    SetWindowRgn(window_handle_, nullptr, TRUE);
+  }
+
+  // When restoring the standard frame, explicitly set both the small
+  // title-bar icon and the large Alt+Tab icon. Stripping WS_CAPTION (for
+  // the splash) and putting it back does not re-query the class icon —
+  // WM_SETICON is what actually paints the glyph next to the window title.
+  if (!frameless) {
+    HINSTANCE instance = GetModuleHandle(nullptr);
+    HICON small_icon = static_cast<HICON>(LoadImage(
+        instance, MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
+        GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON),
+        LR_DEFAULTCOLOR | LR_SHARED));
+    HICON big_icon = static_cast<HICON>(LoadImage(
+        instance, MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
+        GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON),
+        LR_DEFAULTCOLOR | LR_SHARED));
+    if (small_icon) {
+      SendMessage(window_handle_, WM_SETICON, ICON_SMALL,
+                  reinterpret_cast<LPARAM>(small_icon));
+    }
+    if (big_icon) {
+      SendMessage(window_handle_, WM_SETICON, ICON_BIG,
+                  reinterpret_cast<LPARAM>(big_icon));
+    }
   }
 }
 

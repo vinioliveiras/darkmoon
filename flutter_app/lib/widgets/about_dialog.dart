@@ -27,7 +27,7 @@ class DarkmoonAboutDialog extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Darkmoon',
+              'darkmoon',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: DarkmoonColors.textPrimary,
                 fontWeight: FontWeight.w600,

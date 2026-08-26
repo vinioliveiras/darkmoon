@@ -24,17 +24,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get menuAbout => 'Sobre';
 
   @override
-  String get aboutDialogTitle => 'Sobre o Darkmoon';
+  String get aboutDialogTitle => 'Sobre o darkmoon';
 
   @override
   String get aboutCredits => 'Desenvolvido por Vini';
 
   @override
-  String get splashLicense => 'Licença MIT';
+  String get splashLicense => 'GNU Affero General Public License v3.0';
 
   @override
-  String get splashCopyright =>
-      '© 2026 Vini. Todos os direitos reservados sob a Licença MIT.';
+  String get splashCopyright => '© 2026 Vini. Licenciado sob GNU AGPL v3.0.';
 
   @override
   String get splashLoading => 'Carregando sua biblioteca…';

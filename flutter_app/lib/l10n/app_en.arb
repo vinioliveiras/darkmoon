@@ -7,11 +7,11 @@
   "menuSettings": "Settings",
   "menuAbout": "About",
 
-  "aboutDialogTitle": "About Darkmoon",
+  "aboutDialogTitle": "About darkmoon",
   "aboutCredits": "Developed by Vini",
 
-  "splashLicense": "MIT License",
-  "splashCopyright": "© 2026 Vini. All rights reserved under the MIT License.",
+  "splashLicense": "GNU Affero General Public License v3.0",
+  "splashCopyright": "© 2026 Vini. Licensed under GNU AGPL v3.0.",
   "splashLoading": "Loading your library…",
 
   "dialogOpenFolderTitle": "Add Folder",

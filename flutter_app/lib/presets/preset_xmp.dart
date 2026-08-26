@@ -145,7 +145,7 @@ String xmpFromPreset(Preset preset) {
   builder.element(
     'x:xmpmeta',
     namespaces: {'adobe:ns:meta/': 'x'},
-    attributes: {'x:xmptk': 'Darkmoon'},
+    attributes: {'x:xmptk': 'darkmoon'},
     nest: () {
       builder.element(
         'rdf:RDF',

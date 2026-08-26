@@ -131,7 +131,7 @@ abstract class AppLocalizations {
   /// No description provided for @aboutDialogTitle.
   ///
   /// In en, this message translates to:
-  /// **'About Darkmoon'**
+  /// **'About darkmoon'**
   String get aboutDialogTitle;
 
   /// No description provided for @aboutCredits.
@@ -143,13 +143,13 @@ abstract class AppLocalizations {
   /// No description provided for @splashLicense.
   ///
   /// In en, this message translates to:
-  /// **'MIT License'**
+  /// **'GNU Affero General Public License v3.0'**
   String get splashLicense;
 
   /// No description provided for @splashCopyright.
   ///
   /// In en, this message translates to:
-  /// **'© 2026 Vini. All rights reserved under the MIT License.'**
+  /// **'© 2026 Vini. Licensed under GNU AGPL v3.0.'**
   String get splashCopyright;
 
   /// No description provided for @splashLoading.

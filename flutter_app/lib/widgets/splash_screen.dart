@@ -68,7 +68,7 @@ class SplashScreen extends StatelessWidget {
                             ),
                             const SizedBox(width: 12),
                             const Text(
-                              'Darkmoon',
+                              'darkmoon',
                               style: TextStyle(
                                 color: DarkmoonColors.textPrimary,
                                 fontSize: 19,
