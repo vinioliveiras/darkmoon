@@ -61,6 +61,20 @@ class ExportResult {
   bool get success => error == null;
 }
 
+class ExportCancellationToken {
+  final Completer<void> _completer = Completer<void>();
+
+  bool get isCancelled => _completer.isCompleted;
+
+  Future<void> get cancelled => _completer.future;
+
+  void cancel() {
+    if (!isCancelled) {
+      _completer.complete();
+    }
+  }
+}
+
 /// The stages [exportPhotoWithProgress] reports as an export moves through
 /// them — coarse (one signal per stage boundary, not a percentage within
 /// a stage), but real: each fires exactly when that stage of work starts,
@@ -189,22 +203,32 @@ void _exportIsolateEntry(_ExportIsolateArgs args) async {
 /// spinner for the whole export.
 Future<ExportResult> exportPhotoWithProgress(
   ExportRequest request,
-  void Function(ExportStage stage) onProgress,
-) async {
+  void Function(ExportStage stage) onProgress, {
+  ExportCancellationToken? cancellationToken,
+}) async {
   final receivePort = ReceivePort();
   final isolate = await Isolate.spawn(
     _exportIsolateEntry,
     _ExportIsolateArgs(request, receivePort.sendPort),
   );
   try {
-    await for (final message in receivePort) {
-      if (message is ExportStage) {
-        onProgress(message);
-      } else if (message is ExportResult) {
-        return message;
+    Future<ExportResult> receiveResult() async {
+      await for (final message in receivePort) {
+        if (message is ExportStage) {
+          onProgress(message);
+        } else if (message is ExportResult) {
+          return message;
+        }
       }
+      return const ExportResult.failure('Export isolate closed unexpectedly');
     }
-    return const ExportResult.failure('Export isolate closed unexpectedly');
+
+    final cancellation = cancellationToken == null
+        ? Completer<ExportResult>().future
+        : cancellationToken.cancelled.then(
+            (_) => const ExportResult.failure('Export cancelled'),
+          );
+    return await Future.any([receiveResult(), cancellation]);
   } finally {
     receivePort.close();
     isolate.kill(priority: Isolate.immediate);

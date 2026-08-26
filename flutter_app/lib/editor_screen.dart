@@ -395,6 +395,7 @@ class _EditorScreenState extends State<EditorScreen> {
   List<RawFile> _files = const [];
   int? _selectedIndex;
   bool _loading = false;
+  ExportCancellationToken? _exportCancellation;
 
   /// True while the user has dismissed the loading overlay via "Hide" but
   /// the underlying operation is still running — the app stays usable
@@ -1480,7 +1481,10 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     final removedIndex = _files.indexWhere((f) => f.path == path);
     setState(() {
-      _files = [for (final f in _files) if (f.path != path) f];
+      _files = [
+        for (final f in _files)
+          if (f.path != path) f,
+      ];
       _thumbnails.remove(path);
       _editSources.remove(path);
       _renderedPreviews.remove(path);
@@ -1597,6 +1601,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _folderGeneration++;
     _renderRequestId++;
     _slowRenderTimer?.cancel();
+    _exportCancellation?.cancel();
     setState(() {
       _loading = false;
       _isDecodingPhoto = false;
@@ -2105,7 +2110,9 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
-    final source = selected == null ? null : _editSources[selected.path]?.preview;
+    final source = selected == null
+        ? null
+        : _editSources[selected.path]?.preview;
     if (source == null) {
       return;
     }
@@ -2871,6 +2878,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
     setState(() {
       _exporting = true;
+      _exportCancellation = ExportCancellationToken();
       _loadingOverlayHidden = false;
       _exportStage = null;
     });
@@ -2893,7 +2901,10 @@ class _EditorScreenState extends State<EditorScreen> {
           setState(() => _exportStage = stage);
         }
       },
+      cancellationToken: _exportCancellation,
     );
+    final wasCancelled = result.error == 'Export cancelled';
+    _exportCancellation = null;
     if (!mounted) {
       return;
     }
@@ -2901,16 +2912,18 @@ class _EditorScreenState extends State<EditorScreen> {
       _exporting = false;
       _exportStage = null;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 3),
-        content: Text(
-          result.success
-              ? l10n.exportSuccessMessage(result.destPath!)
-              : l10n.exportFailureMessage(result.error!),
+    if (!wasCancelled) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 3),
+          content: Text(
+            result.success
+                ? l10n.exportSuccessMessage(result.destPath!)
+                : l10n.exportFailureMessage(result.error!),
+          ),
         ),
-      ),
-    );
+      );
+    }
   }
 
   @override
@@ -3233,8 +3246,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                 ? null
                                 : _resolvedLensProfileFor(selected.path),
                             palettes: _palettes,
-                            onImportPalette: () =>
-                                unawaited(_importPalette()),
+                            onImportPalette: () => unawaited(_importPalette()),
                             onDeletePalette: _deletePalette,
                           ),
                         ],
