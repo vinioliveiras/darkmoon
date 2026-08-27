@@ -1535,7 +1535,10 @@ class _EditorScreenState extends State<EditorScreen> {
     final result = await FilePicker.pickFiles(
       dialogTitle: l10n.dialogOpenFileTitle,
       type: FileType.custom,
-      allowedExtensions: rawExtensions.map((ext) => ext.substring(1)).toList(),
+      allowedExtensions: [
+        ...rawExtensions,
+        ...commonImageExtensions,
+      ].map((ext) => ext.substring(1)).toList(),
     );
     final path = result?.files.single.path;
     if (path == null) {
