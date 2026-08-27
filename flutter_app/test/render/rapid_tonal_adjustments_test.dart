@@ -86,4 +86,63 @@ void main() {
     expect(dark[0], lessThan(32));
     expect(bright[0], greaterThan(224));
   });
+
+  // The next three cases lock in RapidRAW's apply_creative_color: both
+  // Saturation and Vibrance mix toward luminance in *scene-linear* light
+  // (not the gamma-encoded byte values), and Saturation runs before
+  // Vibrance so Vibrance's own saturation/hue masks read the
+  // already-saturated color. Expected values below were computed from the
+  // same sRGB<->linear conversion and mix formula in a reference Python
+  // script, independent of render.dart's implementation.
+
+  test('saturation mixes toward luminance in linear light', () {
+    final saturated = renderRgb(
+      1,
+      1,
+      Uint8List.fromList([204, 51, 51]),
+      const RenderParams(saturation: 50),
+    );
+    final desaturated = renderRgb(
+      1,
+      1,
+      Uint8List.fromList([204, 51, 51]),
+      const RenderParams(saturation: -50),
+    );
+
+    expect(saturated[0], closeTo(235, 1));
+    expect(saturated[1], closeTo(0, 1));
+    expect(saturated[2], closeTo(0, 1));
+    expect(desaturated[0], closeTo(166, 1));
+    expect(desaturated[1], closeTo(86, 1));
+    expect(desaturated[2], closeTo(86, 1));
+  });
+
+  test('vibrance mixes toward luminance in linear light', () {
+    final source = Uint8List.fromList([120, 150, 180]);
+    final boosted = renderRgb(1, 1, source, const RenderParams(vibrance: 50));
+    final reduced = renderRgb(1, 1, source, const RenderParams(vibrance: -50));
+
+    expect(boosted[0], closeTo(81, 1));
+    expect(boosted[1], closeTo(153, 1));
+    expect(boosted[2], closeTo(207, 1));
+    expect(reduced[0], closeTo(124, 1));
+    expect(reduced[1], closeTo(150, 1));
+    expect(reduced[2], closeTo(176, 1));
+  });
+
+  test('saturation runs before vibrance, matching apply_creative_color', () {
+    final result = renderRgb(
+      1,
+      1,
+      Uint8List.fromList([120, 150, 180]),
+      const RenderParams(saturation: 30, vibrance: 40),
+    );
+
+    // Applying the two steps in the opposite order (vibrance's masks
+    // reading the *original* color) would instead land near (61, 154, 215)
+    // — well outside this tolerance.
+    expect(result[0], closeTo(87, 1));
+    expect(result[1], closeTo(153, 1));
+    expect(result[2], closeTo(204, 1));
+  });
 }

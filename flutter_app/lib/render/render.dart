@@ -9,7 +9,6 @@ import 'color_mixer.dart';
 import 'color_space.dart';
 import 'dehaze.dart';
 import 'local_contrast.dart';
-import 'luminance.dart';
 import 'mask.dart';
 import 'render_params.dart';
 import 'sharpen.dart';
@@ -303,8 +302,10 @@ void applyGlobalAdjustmentSteps(
   applyDehaze(buffer, width, height, params.dehaze);
   _applyWhiteBalance(buffer, params.temperature, params.tint);
   applyPostDenoisePointOps(buffer, width, height, params);
-  _applyVibrance(buffer, pixelCount, params.vibrance);
+  // Saturation before Vibrance, matching RapidRAW's apply_creative_color:
+  // Vibrance's saturation/hue masks read the already-saturated color.
   _applySaturation(buffer, pixelCount, params.saturation);
+  _applyVibrance(buffer, pixelCount, params.vibrance);
   applyVignette(buffer, width, height, params.vignette);
 }
 
@@ -571,29 +572,44 @@ void _applyRapidHighlights(Float32List img, int pixelCount, double highlights) {
   }
 }
 
+/// How strongly a pixel ([r], [g], [b], each 0..1) reads as a skin tone
+/// (0..1) — Lightroom's Vibrance (unlike a plain Saturation slider) damps
+/// its own effect on skin-tone hues so faces don't oversaturate. Centered
+/// on the Color Mixer's Orange band (30°, see `_channelCenterHues` in
+/// color_mixer.dart), with a narrower half-width since skin tones occupy a
+/// tighter hue range than a full Orange mixer band.
+///
+/// RapidRAW's `apply_creative_color` does this math on scene-linear RGB
+/// (its whole pipeline stays linear until final display encode), so both
+/// the luminance mix and the saturation/hue readings driving the masks
+/// below must run on linear values too — computing them on gamma-encoded
+/// bytes (as this used to) systematically under-masks shadows and
+/// over-masks highlights relative to RapidRAW, since sRGB's gamma curve
+/// compresses the same linear-light saturation differently at each end.
 void _applyVibrance(Float32List img, int pixelCount, double amount) {
   if (amount == 0) {
     return;
   }
+  final normalizedAmount = amount / 100.0;
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
-    final r = img[i], g = img[i + 1], b = img[i + 2];
-    final luminance = luminanceRgb(r, g, b);
+    final r = srgbToLinear(img[i] / 255.0);
+    final g = srgbToLinear(img[i + 1] / 255.0);
+    final b = srgbToLinear(img[i + 2] / 255.0);
+    final luminance = _linearLuminance(r, g, b);
     final maxC = math.max(r, math.max(g, b));
     final minC = math.min(r, math.min(g, b));
-    if (maxC - minC < 0.02 * 255.0) {
+    if (maxC - minC < 0.02) {
       continue;
     }
-    final safeMax = math.max(maxC, 0.001);
-    final currentSaturation = (maxC - minC) / safeMax;
-    final hsv = _rgbToHsv(r / 255.0, g / 255.0, b / 255.0);
+    final currentSaturation = (maxC - minC) / math.max(maxC, 0.001);
+    final hsv = _rgbToHsv(r, g, b);
     final hueDistance = math.min(
       (hsv[0] - 25.0).abs(),
       360.0 - (hsv[0] - 25.0).abs(),
     );
     final skin = _smoothstep(35.0, 10.0, hueDistance);
     final skinDampener = 1.0 + (0.6 - 1.0) * skin;
-    final normalizedAmount = amount / 100.0;
     final factor = normalizedAmount >= 0
       ? 1.0 + normalizedAmount *
         (1.0 - _smoothstep(0.4, 0.9, currentSaturation)) *
@@ -601,9 +617,9 @@ void _applyVibrance(Float32List img, int pixelCount, double amount) {
         3.0
       : 1.0 + normalizedAmount *
         (1.0 - _smoothstep(0.2, 0.8, currentSaturation));
-    img[i] = luminance + (r - luminance) * factor;
-    img[i + 1] = luminance + (g - luminance) * factor;
-    img[i + 2] = luminance + (b - luminance) * factor;
+    img[i] = linearToSrgb(luminance + (r - luminance) * factor) * 255.0;
+    img[i + 1] = linearToSrgb(luminance + (g - luminance) * factor) * 255.0;
+    img[i + 2] = linearToSrgb(luminance + (b - luminance) * factor) * 255.0;
   }
 }
 
@@ -630,12 +646,11 @@ List<double> _rgbToHsv(double r, double g, double b) {
   return [hue, maxC == 0 ? 0.0 : delta / maxC, maxC];
 }
 
-/// How strongly a pixel ([r], [g], [b], each 0..1) reads as a skin tone
-/// (0..1) — Lightroom's Vibrance (unlike a plain Saturation slider) damps
-/// its own effect on skin-tone hues so faces don't oversaturate. Centered
-/// on the Color Mixer's Orange band (30°, see `_channelCenterHues` in
-/// color_mixer.dart), with a narrower half-width since skin tones occupy a
-/// tighter hue range than a full Orange mixer band.
+/// Flat saturation gain, same linear-light mix as [_applyVibrance] but
+/// without any saturation/hue-dependent masking — matches RapidRAW's
+/// `apply_creative_color`, which runs this step first (see the call order
+/// in [applyGlobalAdjustmentSteps]) so Vibrance's masks read the
+/// already-saturated color, not the original.
 void _applySaturation(Float32List img, int pixelCount, double amount) {
   if (amount == 0) {
     return;
@@ -643,10 +658,12 @@ void _applySaturation(Float32List img, int pixelCount, double amount) {
   final factor = 1.0 + amount / 100.0;
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
-    final r = img[i], g = img[i + 1], b = img[i + 2];
-    final luminance = luminanceRgb(r, g, b);
-    img[i] = luminance + (r - luminance) * factor;
-    img[i + 1] = luminance + (g - luminance) * factor;
-    img[i + 2] = luminance + (b - luminance) * factor;
+    final r = srgbToLinear(img[i] / 255.0);
+    final g = srgbToLinear(img[i + 1] / 255.0);
+    final b = srgbToLinear(img[i + 2] / 255.0);
+    final luminance = _linearLuminance(r, g, b);
+    img[i] = linearToSrgb(luminance + (r - luminance) * factor) * 255.0;
+    img[i + 1] = linearToSrgb(luminance + (g - luminance) * factor) * 255.0;
+    img[i + 2] = linearToSrgb(luminance + (b - luminance) * factor) * 255.0;
   }
 }

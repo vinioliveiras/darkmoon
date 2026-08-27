@@ -1,7 +1,8 @@
 #version 460 core
 #include <flutter/runtime_effect.glsl>
 
-// Fused GPU pass for Vibrance + Saturation + Vignette — the three stages
+// Fused GPU pass for Saturation + Vibrance + Vignette (in that order,
+// matching RapidRAW's apply_creative_color) — the three stages
 // render.dart's applyGlobalAdjustmentSteps runs *after* Dehaze. Kept as
 // their own small pass (rather than folded into point_ops_post_denoise.frag)
 // specifically to preserve render.dart's exact stage order without
@@ -23,6 +24,18 @@ out vec4 fragColor;
 const vec3 kLumaWeights = vec3(0.2126, 0.7152, 0.0722);
 const float kCornerRadius = 1.4142135623730951; // sqrt(2), a corner's distance.
 
+float srgbToLinear(float value) {
+  float c = clamp(value, 0.0, 1.0);
+  if (c <= 0.04045) return c / 12.92;
+  return pow((c + 0.055) / 1.055, 2.4);
+}
+
+float linearToSrgb(float value) {
+  float c = clamp(value, 0.0, 1.0);
+  if (c <= 0.0031308) return c * 12.92;
+  return 1.055 * pow(c, 1.0 / 2.4) - 0.055;
+}
+
 // Hue in degrees (0-360) of [c] (0..1 components) — same convention as
 // hsl.dart's rgbToHsl.
 float hueOf(vec3 c) {
@@ -43,43 +56,51 @@ float hueOf(vec3 c) {
   return hue;
 }
 
-float saturationOf(vec3 c) {
-  float maxC = max(c.r, max(c.g, c.b));
-  float minC = min(c.r, min(c.g, c.b));
-  return (maxC - minC) / max(maxC, 0.001);
-}
-
 void main() {
   vec2 fragCoord = FlutterFragCoord().xy;
   vec2 uv = fragCoord / uSize;
   vec3 c = texture(uSource, uv).rgb;
 
+  // RapidRAW's apply_creative_color runs on scene-linear RGB (its whole
+  // pipeline stays linear until final display encode) — the luminance mix
+  // below, and the saturation/hue readings driving Vibrance's masks, must
+  // therefore run on linear values too, not the gamma-encoded source
+  // texture directly.
+  c = vec3(srgbToLinear(c.r), srgbToLinear(c.g), srgbToLinear(c.b));
+
+  // Saturation: flat gain, applied before Vibrance — matches
+  // apply_creative_color in WGSL, so Vibrance's masks below read the
+  // already-saturated color, not the original.
+  float luminance = dot(c, kLumaWeights);
+  c = luminance + (c - luminance) * uSaturationFactor;
+
   // RapidRAW Vibrance: saturation-aware gain with a soft skin-tone
   // dampener. The positive and negative branches intentionally use
   // different saturation masks, matching apply_creative_color in WGSL.
-  float luminance = dot(c, kLumaWeights);
-  float currentSaturation = saturationOf(c);
-  float hue = hueOf(c);
-  float hueDistance = min(abs(hue - 25.0), 360.0 - abs(hue - 25.0));
-  float isSkin = smoothstep(35.0, 10.0, hueDistance);
-  float skinDampener = mix(1.0, 0.6, isSkin);
-  float vibranceFactor;
-  if (uVibranceAmount >= 0.0) {
-    vibranceFactor = 1.0 + uVibranceAmount *
-        (1.0 - smoothstep(0.4, 0.9, currentSaturation)) *
-        skinDampener * 3.0;
-  } else {
-    vibranceFactor = 1.0 + uVibranceAmount *
-        (1.0 - smoothstep(0.2, 0.8, currentSaturation));
+  // Near-gray pixels (delta below 0.02, same threshold as render.dart's
+  // _applyVibrance) are left untouched entirely, not just lightly masked,
+  // matching apply_creative_color's own early return.
+  float maxC = max(c.r, max(c.g, c.b));
+  float minC = min(c.r, min(c.g, c.b));
+  if (uVibranceAmount != 0.0 && maxC - minC >= 0.02) {
+    float currentSaturation = (maxC - minC) / max(maxC, 0.001);
+    float hue = hueOf(c);
+    float hueDistance = min(abs(hue - 25.0), 360.0 - abs(hue - 25.0));
+    float isSkin = smoothstep(35.0, 10.0, hueDistance);
+    float skinDampener = mix(1.0, 0.6, isSkin);
+    float vibranceFactor;
+    if (uVibranceAmount >= 0.0) {
+      vibranceFactor = 1.0 + uVibranceAmount *
+          (1.0 - smoothstep(0.4, 0.9, currentSaturation)) *
+          skinDampener * 3.0;
+    } else {
+      vibranceFactor = 1.0 + uVibranceAmount *
+          (1.0 - smoothstep(0.2, 0.8, currentSaturation));
+    }
+    c = luminance + (c - luminance) * vibranceFactor;
   }
-  c = luminance + (c - luminance) * vibranceFactor;
 
-  // Saturation: flat gain, applied on top of Vibrance's already-updated
-  // channel/luminance values — matches _applySaturation running after
-  // _applyVibrance in render.dart's serial pipeline, not the original
-  // pre-Vibrance pixel.
-  luminance = dot(c, kLumaWeights);
-  c = luminance + (c - luminance) * uSaturationFactor;
+  c = vec3(linearToSrgb(c.r), linearToSrgb(c.g), linearToSrgb(c.b));
 
   // Vignette: radial multiplicative darkening/lightening, ellipse-shaped
   // to match the photo's aspect ratio (per-axis normalization by

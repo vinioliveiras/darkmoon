@@ -16,7 +16,7 @@ import 'sharpen_gpu.dart';
 /// `_applyAdjustmentSteps` — the full 18-stage pipeline, assembled in
 /// Phases 1-6 of `project_gpu_render_plan.md`. Reproduces
 /// `applyLocalAdjustmentSteps` (white balance through Clarity) followed by
-/// `applyGlobalAdjustmentSteps` (Dehaze, Vibrance, Saturation, Vignette) in
+/// `applyGlobalAdjustmentSteps` (Dehaze, Saturation, Vibrance, Vignette) in
 /// the exact same order, each stage delegating to its own phase's module
 /// (`denoise_gpu.dart`, `sharpen_gpu.dart`, `local_contrast_gpu.dart`,
 /// `dehaze_gpu.dart`) rather than being reimplemented here.
@@ -305,7 +305,7 @@ Future<ui.Image> _runPostDenoise(
   return _rasterize(shader, width, height);
 }
 
-/// Fused Vibrance + Saturation + Vignette pass — see
+/// Fused Saturation + Vibrance + Vignette pass — see
 /// `shaders/post_dehaze.frag`'s doc comment for why these three are their
 /// own small post-Dehaze pass rather than folded into
 /// `_runPostDenoise`'s shader.
