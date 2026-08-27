@@ -2,73 +2,53 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'blur.dart';
+import 'color_space.dart';
 
-Float32List _minAcrossChannels(Float32List rgb, int pixelCount) {
-  final out = Float32List(pixelCount);
-  for (var p = 0; p < pixelCount; p++) {
-    final i = p * 3;
-    var m = rgb[i];
-    if (rgb[i + 1] < m) {
-      m = rgb[i + 1];
-    }
-    if (rgb[i + 2] < m) {
-      m = rgb[i + 2];
-    }
-    out[p] = m;
-  }
-  return out;
+/// Dark-channel-prior atmospheric light RapidRAW assumes for every photo
+/// (a fixed near-white, slightly blue sky color) rather than estimating it
+/// per image — see [applyDehaze]'s doc comment for why this replaced a
+/// full-image dark-channel percentile search.
+const double _atmR = 0.95;
+const double _atmG = 0.97;
+const double _atmB = 1.0;
+
+/// Wide-radius blur RapidRAW's structure_blur_view uses, both for its
+/// Structure local-contrast control (which Darkmoon doesn't expose — see
+/// `local_contrast.dart`'s Texture/Clarity for the two it does) and,
+/// separately, as Dehaze's "regional" dark-channel source below.
+const double _structureBlurSigma = 40.0;
+
+double _linearLuma(double r, double g, double b) =>
+    0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+double _smoothstep(double edge0, double edge1, double value) {
+  final t = ((value - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
+  return t * t * (3.0 - 2.0 * t);
 }
 
-/// Estimates the scene's atmospheric light (one value per RGB channel,
-/// 0..1) from the pixels least likely to be haze-free — the ones with the
-/// largest dark-channel value. This is the one genuinely global step in
-/// [applyDehaze]'s algorithm (a full-image sort by dark-channel value), so
-/// it's the piece the GPU render path (`lib/render/gpu/dehaze_gpu.dart`)
-/// keeps on CPU after reading back its current buffer, rather than
-/// reimplementing a full-image reduction in GLSL — see
-/// `project_gpu_render_plan.md`'s Phase 5. Extracted out of [applyDehaze]
-/// as a behavior-preserving refactor (same logic, same result), so both
-/// paths share one implementation instead of risking drift.
-///
-/// [norm] is packed RGB (3 values/pixel, already normalized to 0..1) —
-/// the GPU render path (`dehaze_gpu.dart`) builds this from a
-/// `gpu_pass.dart` readback (`rgbaToRgb` output / 255), and [applyDehaze]
-/// passes its own already-normalized `norm` buffer directly.
-Float32List estimateAtmosphericLight(Float32List norm, int width, int height) {
-  final pixelCount = width * height;
-  final darkChannel = minFilter(
-    _minAcrossChannels(norm, pixelCount),
-    width,
-    height,
-    15,
-  );
-
-  // Per-channel max among the 0.1% of pixels with the largest dark-channel
-  // value (the pixels least likely to be in shadow or deeply saturated
-  // color, i.e. most likely to be pure haze/sky).
-  final numPixels = math.max((pixelCount * 0.001).toInt(), 1);
-  final orderedByDarkChannel = List<int>.generate(pixelCount, (i) => i)
-    ..sort((a, b) => darkChannel[a].compareTo(darkChannel[b]));
-  final atmosphericLight = Float32List(3);
-  for (var c = 0; c < 3; c++) {
-    var maxV = 0.0;
-    for (var k = pixelCount - numPixels; k < pixelCount; k++) {
-      final v = norm[orderedByDarkChannel[k] * 3 + c];
-      if (v > maxV) {
-        maxV = v;
-      }
-    }
-    atmosphericLight[c] = maxV.clamp(0.5, 1.0);
-  }
-  return atmosphericLight;
-}
+double _min3(double a, double b, double c) => math.min(a, math.min(b, c));
 
 /// A single-image haze removal / addition effect based on the dark-channel
-/// prior (He, Sun & Tang), matching the Python app's `apply_dehaze`:
-/// estimate atmospheric light from the pixels least likely to be haze-free
-/// (largest dark-channel value), derive a transmission map, then invert the
-/// haze model to recover the scene (positive [amount]) or blend toward the
-/// atmospheric light to add haze (negative [amount]).
+/// prior (He, Sun & Tang) — a faithful port of RapidRAW's `apply_dehaze`
+/// (shader.wgsl), replacing this function's previous, considerably
+/// different implementation (a port of the Python app's own dehaze, which
+/// estimated atmospheric light per photo from a full-image dark-channel
+/// percentile search, then derived transmission from a large min-filter +
+/// box-blur pair).
+///
+/// RapidRAW instead: assumes a fixed atmospheric light ([_atmR]/[_atmG]/
+/// [_atmB]) rather than estimating one (cheaper, and the estimation step
+/// was the one genuinely-global, GPU-unfriendly part of the old
+/// algorithm); derives each pixel's transmission from *two* dark-channel
+/// readings — the exact per-pixel value and a wide-radius (sigma
+/// [_structureBlurSigma]) blurred/"regional" one — blended by a
+/// halo-protection mask so a strong haze pull near a sharp edge doesn't
+/// drag a visible glow across it (a per-pixel-only dark channel is noisy
+/// there; a regional-only one bleeds across the edge); and finishes with a
+/// shadow lift and a saturation boost proportional to how much haze was
+/// actually removed. Operates in scene-linear light (not the gamma-encoded
+/// byte buffer this pipeline otherwise stays in between stages), same as
+/// the rest of RapidRAW's tonal pipeline.
 ///
 /// Operates in place on a packed RGB [Float32List] (3 values/pixel, 0-255).
 void applyDehaze(Float32List img, int width, int height, double amount) {
@@ -76,65 +56,113 @@ void applyDehaze(Float32List img, int width, int height, double amount) {
     return;
   }
   final pixelCount = width * height;
-  final norm = Float32List(img.length);
-  for (var i = 0; i < img.length; i++) {
-    norm[i] = img[i] / 255.0;
-  }
   final strength = amount / 100.0;
 
-  final atmosphericLight = estimateAtmosphericLight(norm, width, height);
-
-  final normalizedByAtm = Float32List(norm.length);
+  // The "regional" dark-channel source: blur the gamma-encoded buffer
+  // (this pipeline's universal between-stage convention) at sigma 40, then
+  // linearize the blurred result per pixel below — mirrors apply_dehaze's
+  // own non-RAW-input branch (`srgb_to_linear(blurred_color_input_space)`),
+  // since Darkmoon's byte buffer is always gamma-encoded at this point in
+  // the pipeline regardless of whether the source was a RAW file.
+  final rChannel = Float32List(pixelCount);
+  final gChannel = Float32List(pixelCount);
+  final bChannel = Float32List(pixelCount);
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
-    normalizedByAtm[i] = norm[i] / atmosphericLight[0];
-    normalizedByAtm[i + 1] = norm[i + 1] / atmosphericLight[1];
-    normalizedByAtm[i + 2] = norm[i + 2] / atmosphericLight[2];
+    rChannel[p] = img[i];
+    gChannel[p] = img[i + 1];
+    bChannel[p] = img[i + 2];
   }
-  final normalizedDark = minFilter(
-    _minAcrossChannels(normalizedByAtm, pixelCount),
+  final blurredR = gaussianBlurChannel(
+    rChannel,
     width,
     height,
-    15,
+    _structureBlurSigma,
+  );
+  final blurredG = gaussianBlurChannel(
+    gChannel,
+    width,
+    height,
+    _structureBlurSigma,
+  );
+  final blurredB = gaussianBlurChannel(
+    bChannel,
+    width,
+    height,
+    _structureBlurSigma,
   );
 
-  final preTransmission = Float32List(pixelCount);
   for (var p = 0; p < pixelCount; p++) {
-    preTransmission[p] = 1.0 - 0.9 * normalizedDark[p];
-  }
-  final transmission = boxBlurMean(preTransmission, width, height, 20);
-  for (var p = 0; p < pixelCount; p++) {
-    transmission[p] = transmission[p].clamp(0.2, 1.0);
-  }
+    final i = p * 3;
+    final r = srgbToLinear(img[i] / 255.0);
+    final g = srgbToLinear(img[i + 1] / 255.0);
+    final b = srgbToLinear(img[i + 2] / 255.0);
+    final br = srgbToLinear(blurredR[p] / 255.0);
+    final bg = srgbToLinear(blurredG[p] / 255.0);
+    final bb = srgbToLinear(blurredB[p] / 255.0);
 
-  if (strength >= 0) {
-    for (var p = 0; p < pixelCount; p++) {
-      final t = 1.0 - strength * (1.0 - transmission[p]);
-      final i = p * 3;
-      img[i] =
-          ((norm[i] - atmosphericLight[0]) / t + atmosphericLight[0]) * 255.0;
-      img[i + 1] =
-          ((norm[i + 1] - atmosphericLight[1]) / t + atmosphericLight[1]) *
-          255.0;
-      img[i + 2] =
-          ((norm[i + 2] - atmosphericLight[2]) / t + atmosphericLight[2]) *
-          255.0;
+    double outR, outG, outB;
+    if (strength > 0) {
+      final pixelDark = _min3(r, g, b);
+      final regionalDark = _min3(br, bg, bb);
+      final pixelLuma = _linearLuma(
+        math.max(r, 0.0),
+        math.max(g, 0.0),
+        math.max(b, 0.0),
+      );
+      final blurredLuma = _linearLuma(
+        math.max(br, 0.0),
+        math.max(bg, 0.0),
+        math.max(bb, 0.0),
+      );
+      final edgeDiff = (math.sqrt(math.max(pixelLuma, 0.0)) -
+              math.sqrt(math.max(blurredLuma, 0.0)))
+          .abs();
+      final haloProtection = _smoothstep(0.02, 0.15, edgeDiff);
+      final spatialDark =
+          regionalDark + (pixelDark - regionalDark) * haloProtection;
+      final safeDark = math.max(spatialDark - 0.02, 0.0);
+      final mappedHaze = safeDark / (safeDark + 0.2);
+      final t = math.max(1.0 - strength * mappedHaze * 0.85, 0.15);
+
+      var recR = (r - _atmR) / t + _atmR;
+      var recG = (g - _atmG) / t + _atmG;
+      var recB = (b - _atmB) / t + _atmB;
+
+      final recLuma = _linearLuma(
+        math.max(recR, 0.0),
+        math.max(recG, 0.0),
+        math.max(recB, 0.0),
+      );
+      final shadowLift = _smoothstep(0.1, 0.0, recLuma) * (1.0 - t) * 0.15;
+      recR += shadowLift;
+      recG += shadowLift;
+      recB += shadowLift;
+
+      final satBoost = (1.0 - t) * 0.5;
+      final finalLuma = _linearLuma(
+        math.max(recR, 0.0),
+        math.max(recG, 0.0),
+        math.max(recB, 0.0),
+      );
+      final satFactor = 1.0 + satBoost;
+      outR = math.max(finalLuma + (recR - finalLuma) * satFactor, 0.0);
+      outG = math.max(finalLuma + (recG - finalLuma) * satFactor, 0.0);
+      outB = math.max(finalLuma + (recB - finalLuma) * satFactor, 0.0);
+    } else {
+      final regionalDark = _min3(br, bg, bb);
+      final safeDark = math.max(regionalDark - 0.02, 0.0);
+      final mappedDepth = safeDark / (safeDark + 0.2);
+      final depthFactor = 0.4 + 0.6 * mappedDepth;
+      final hazeAmount = -strength;
+      final mixAmount = hazeAmount * 0.7 * depthFactor;
+      outR = r + (_atmR - r) * mixAmount;
+      outG = g + (_atmG - g) * mixAmount;
+      outB = b + (_atmB - b) * mixAmount;
     }
-  } else {
-    final hazeAmount = -strength;
-    for (var p = 0; p < pixelCount; p++) {
-      final i = p * 3;
-      img[i] =
-          (norm[i] * (1.0 - hazeAmount) + atmosphericLight[0] * hazeAmount) *
-          255.0;
-      img[i + 1] =
-          (norm[i + 1] * (1.0 - hazeAmount) +
-              atmosphericLight[1] * hazeAmount) *
-          255.0;
-      img[i + 2] =
-          (norm[i + 2] * (1.0 - hazeAmount) +
-              atmosphericLight[2] * hazeAmount) *
-          255.0;
-    }
+
+    img[i] = linearToSrgb(outR) * 255.0;
+    img[i + 1] = linearToSrgb(outG) * 255.0;
+    img[i + 2] = linearToSrgb(outB) * 255.0;
   }
 }

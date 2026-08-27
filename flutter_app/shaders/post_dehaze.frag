@@ -5,11 +5,12 @@
 // matching RapidRAW's apply_creative_color) — the three stages
 // render.dart's applyGlobalAdjustmentSteps runs *after* Dehaze. Kept as
 // their own small pass (rather than folded into point_ops_post_denoise.frag)
-// specifically to preserve render.dart's exact stage order without
-// restructuring it: Dehaze's CPU<->GPU atmospheric-light readback has to
-// sit between the point-ops pass and this one, even though none of these
-// three stages themselves needs a readback — see
-// project_gpu_render_plan.md's Phase 5/6 notes.
+// to preserve render.dart's exact stage order without restructuring it:
+// Dehaze (dehaze_apply.frag) has to sit between the point-ops pass and
+// this one — see project_gpu_render_plan.md's Phase 5/6 notes. (Dehaze
+// itself no longer needs a CPU readback since it moved to RapidRAW's
+// fixed-atmospheric-light algorithm — see dehaze_gpu.dart — but the pass
+// split here was never about that, so it stays.)
 
 uniform vec2 uSize;
 uniform float uVibranceAmount; // params.vibrance / 100.0

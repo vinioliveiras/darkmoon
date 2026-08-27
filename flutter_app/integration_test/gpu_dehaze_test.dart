@@ -52,10 +52,11 @@ void main() {
     final meanDiff = sumDiff / cpu.length;
     // ignore: avoid_print
     print('[gpu_dehaze] $label: mean=$meanDiff max=$maxDiff');
-    // Widest tolerance yet: the CPU->GPU->CPU atmospheric-light readback
-    // round trip alone is one 8-bit quantization step, on top of the
-    // ~6-pass GPU shader chain (min-channel + min-filter x2 + pretransmission
-    // + box-blur x2 + apply) that follows it.
+    // RapidRAW's apply_dehaze port: a fixed atmospheric light (no more
+    // CPU<->GPU readback round trip) plus a sigma-40 Gaussian blur (3-pass
+    // box-blur approximation on both sides) feeding one per-pixel apply
+    // shader — tolerance kept from before this rewrite since it's still
+    // comfortably wide for that approximation's own rounding.
     expect(meanDiff, lessThan(5.0), reason: '$label: mean diff $meanDiff');
     expect(maxDiff, lessThan(28), reason: '$label: max diff $maxDiff');
   }

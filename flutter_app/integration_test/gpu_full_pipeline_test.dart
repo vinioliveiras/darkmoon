@@ -69,8 +69,7 @@ void main() {
     // Widest tolerance of any test file: every stage's own quantization
     // compounds across the full ~25-pass chain (point ops x2, chroma
     // smoothing ~10 passes, AI denoise ~20 passes, sharpen ~10 passes,
-    // texture+clarity ~14 passes, dehaze ~8 passes, post-dehaze), plus one
-    // CPU<->GPU readback for Dehaze's atmospheric-light estimate.
+    // texture+clarity ~14 passes, dehaze ~7 passes, post-dehaze).
     expect(
       meanDiff,
       lessThan(6.0),

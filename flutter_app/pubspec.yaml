@@ -99,8 +99,6 @@ flutter:
     - shaders/abs_residual.frag
     - shaders/sharpen_combine.frag
     - shaders/local_contrast_combine.frag
-    - shaders/dehaze_min_channel.frag
-    - shaders/dehaze_pretransmission.frag
     - shaders/dehaze_apply.frag
     - shaders/post_dehaze.frag
     - shaders/mask_blend.frag
