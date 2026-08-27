@@ -1,5 +1,7 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'color_space.dart';
 import 'hsl.dart';
 
 /// One color band's Hue/Saturation/Luminance adjustment, each -100..100
@@ -15,8 +17,8 @@ class ChannelAdjust {
   bool get isIdentity => hue == 0 && saturation == 0 && luminance == 0;
 }
 
-/// The 8 HSL color bands Lightroom's Color Mixer / HSL panel exposes,
-/// centered on these approximate hue angles (degrees, 0-360).
+/// The 8 HSL color bands Lightroom's Color Mixer / HSL panel exposes —
+/// see [_hslRanges] for each band's actual hue center/width.
 class ColorMixerValues {
   const ColorMixerValues({
     this.red = const ChannelAdjust(),
@@ -60,7 +62,7 @@ class ColorMixerValues {
   final ChannelAdjust purple;
   final ChannelAdjust magenta;
 
-  /// In hue order (0-360) — must line up 1:1 with [_channelCenterHues].
+  /// In hue order (0-360) — must line up 1:1 with [_hslRanges].
   List<ChannelAdjust> get _channels => [
     red,
     orange,
@@ -75,23 +77,73 @@ class ColorMixerValues {
   bool get isIdentity => _channels.every((c) => c.isIdentity);
 }
 
-const _channelCenterHues = [0.0, 30.0, 60.0, 120.0, 180.0, 240.0, 275.0, 315.0];
-
-/// How much weight a pixel at [hue] gives to a band centered at
-/// [center] — 1 at the center, falling off linearly to 0 at 45° away
-/// (adjacent bands' influence overlaps near their shared boundary, for a
-/// smooth transition instead of a hard cutoff).
-double _bandWeight(double hue, double center) {
-  var diff = (hue - center).abs();
-  if (diff > 180) {
-    diff = 360 - diff;
-  }
-  const halfWidth = 45.0;
-  return diff >= halfWidth ? 0.0 : 1.0 - diff / halfWidth;
+/// One color band's hue center and half-influence width (degrees) — the
+/// exact values RapidRAW's `HSL_RANGES` uses in shader.wgsl. Notably not
+/// evenly spaced (Red centers on 358°, not 0°; Green is the widest band
+/// at 90°) and not paired with a matching per-band width the way a naive
+/// "45° apart, 45° wide" model would assume.
+class _HslRange {
+  const _HslRange(this.center, this.width);
+  final double center;
+  final double width;
 }
+
+/// In the same order as [ColorMixerValues._channels].
+const _hslRanges = [
+  _HslRange(358.0, 35.0), // Red
+  _HslRange(25.0, 45.0), // Orange
+  _HslRange(60.0, 40.0), // Yellow
+  _HslRange(115.0, 90.0), // Green
+  _HslRange(180.0, 60.0), // Aqua
+  _HslRange(225.0, 60.0), // Blue
+  _HslRange(280.0, 55.0), // Purple
+  _HslRange(330.0, 50.0), // Magenta
+];
+
+/// A band's raw (pre-normalization) influence on a pixel at [hue] —
+/// RapidRAW's `get_raw_hsl_influence`: a Gaussian falloff around [center],
+/// scaled by [width], rather than a hard cutoff — every band has *some*
+/// (if vanishingly small) influence on every hue, which is what makes the
+/// per-pixel normalization in [applyColorMixer] meaningful (all 8 raw
+/// influences always sum to something usable, never all-zero).
+double _rawHslInfluence(double hue, double center, double width) {
+  var dist = (hue - center).abs();
+  if (dist > 180) {
+    dist = 360 - dist;
+  }
+  const sharpness = 1.5;
+  final falloff = dist / (width * 0.5);
+  return math.exp(-sharpness * falloff * falloff);
+}
+
+double _smoothstep(double edge0, double edge1, double value) {
+  final t = ((value - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
+  return t * t * (3.0 - 2.0 * t);
+}
+
+double _linearLuma(double r, double g, double b) =>
+    0.2126 * r + 0.7152 * g + 0.0722 * b;
 
 /// Applies Lightroom-style selective HSL adjustments to packed RGB [img]
 /// in place — a no-op when every channel is at its default.
+///
+/// A faithful port of RapidRAW's `apply_hsl_panel` (shader.wgsl) for the
+/// Hue/Saturation sliders: works in scene-linear light (not the
+/// gamma-encoded byte buffer directly), uses HSV rather than HSL (so
+/// brightness is tracked as luma rather than relying on HSL's lightness
+/// channel, which isn't the same thing perceptually), and weighs each of
+/// the 8 bands by a per-pixel-normalized Gaussian influence
+/// ([_rawHslInfluence]) instead of a linear cutoff. The whole adjustment is
+/// also gated by how saturated the source pixel already is
+/// ([_smoothstep]-based mask), same as RapidRAW: a Hue/Saturation shift on
+/// a desaturated pixel has nothing to grab onto and is left alone.
+///
+/// Luminance intentionally not applied, same as before this port — still
+/// disabled per-channel in the UI too (see editor_screen.dart's Mixer/HSL
+/// panel) after repeated reports of it blowing out/pixelating pixels, a
+/// separate issue from the dynamic-uniform-array-indexing GPU bug
+/// `shaders/point_ops_post_denoise.frag` describes fixing. A preset's
+/// MixerXLuminance value is still parsed/stored — just never applied.
 ///
 /// Designed to run via `compute()`: pure function over simple,
 /// isolate-transferable data (same as the rest of render.dart).
@@ -101,45 +153,70 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
   }
   final channels = mixer._channels;
   for (var i = 0; i < img.length; i += 3) {
-    final r = (img[i] / 255.0).clamp(0.0, 1.0);
-    final g = (img[i + 1] / 255.0).clamp(0.0, 1.0);
-    final b = (img[i + 2] / 255.0).clamp(0.0, 1.0);
-    final hsl = rgbToHsl(r, g, b);
-    var hue = hsl[0];
-    final sat = hsl[1];
-    final light = hsl[2];
+    final r = srgbToLinear(img[i] / 255.0);
+    final g = srgbToLinear(img[i + 1] / 255.0);
+    final b = srgbToLinear(img[i + 2] / 255.0);
+    if ((r - g).abs() < 0.001 && (g - b).abs() < 0.001) {
+      continue;
+    }
 
-    var hueShift = 0.0;
-    var satShift = 0.0;
-    // Luminance intentionally not applied — disabled per-channel in the
-    // UI too (see editor_screen.dart's Mixer/HSL panel) after repeated
-    // reports of it blowing out/pixelating pixels, even after fixing the
-    // underlying GPU shader bug (a uniform array indexed by a non-
-    // constant loop variable). A preset's MixerXLuminance value is still
-    // parsed/stored (preset_xmp.dart) — just never applied — so nothing
-    // breaks if it's re-enabled later.
+    final hsv = rgbToHsv(r, g, b);
+    final originalHue = hsv[0];
+    final originalSat = hsv[1];
+    final originalVal = hsv[2];
+    final originalLuma = _linearLuma(r, g, b);
+
+    final saturationMask = _smoothstep(0.05, 0.20, originalSat);
+    if (saturationMask < 0.001) {
+      continue;
+    }
+
+    final rawInfluences = List<double>.filled(channels.length, 0.0);
+    var totalRawInfluence = 0.0;
     for (var c = 0; c < channels.length; c++) {
-      final weight = _bandWeight(hue, _channelCenterHues[c]);
-      if (weight <= 0) {
-        continue;
-      }
-      hueShift += weight * channels[c].hue;
-      satShift += weight * channels[c].saturation;
+      final influence = _rawHslInfluence(
+        originalHue,
+        _hslRanges[c].center,
+        _hslRanges[c].width,
+      );
+      rawInfluences[c] = influence;
+      totalRawInfluence += influence;
     }
 
-    // Scaled down from the raw -100..100 slider range so a full-strength
-    // adjustment shifts hue noticeably without blowing out — saturation
-    // is left at 1:1 since it's already a relative multiplier.
-    hue = (hue + hueShift * 0.3) % 360;
+    var totalHueShift = 0.0;
+    var totalSatMultiplier = 0.0;
+    for (var c = 0; c < channels.length; c++) {
+      final hueSatInfluence =
+          (rawInfluences[c] / totalRawInfluence) * saturationMask;
+      // The 0.3-per-unit hue scale and /100 saturation scale match
+      // RapidRAW's SCALES.hsl_hue_multiplier/hsl_saturation; the extra
+      // *2.0 on hue matches the shader's own `hsl_adjustments[i].hue *
+      // 2.0`.
+      totalHueShift += channels[c].hue * 0.3 * 2.0 * hueSatInfluence;
+      totalSatMultiplier += (channels[c].saturation / 100.0) * hueSatInfluence;
+    }
+
+    final sat = (originalSat * (1.0 + totalSatMultiplier)).clamp(0.0, 1.0);
+    if (sat < 0.0001) {
+      // Matches apply_hsl_panel's own near-zero-saturation fallback: the
+      // pixel collapses to gray at its original *luma*, not its HSV value
+      // (the max channel) — those two aren't the same number for a
+      // non-gray color, and luma is what a viewer actually perceives as
+      // brightness.
+      final v = linearToSrgb(originalLuma.clamp(0.0, 1.0)) * 255.0;
+      img[i] = v;
+      img[i + 1] = v;
+      img[i + 2] = v;
+      continue;
+    }
+
+    var hue = (originalHue + totalHueShift + 360.0) % 360.0;
     if (hue < 0) {
-      hue += 360;
+      hue += 360.0;
     }
-    final newSat = (sat * (1 + satShift / 100)).clamp(0.0, 1.0);
-    final newLight = light;
-
-    final rgb = hslToRgb(hue, newSat, newLight);
-    img[i] = rgb[0] * 255.0;
-    img[i + 1] = rgb[1] * 255.0;
-    img[i + 2] = rgb[2] * 255.0;
+    final shifted = hsvToRgb(hue, sat, originalVal);
+    img[i] = linearToSrgb(shifted[0]) * 255.0;
+    img[i + 1] = linearToSrgb(shifted[1]) * 255.0;
+    img[i + 2] = linearToSrgb(shifted[2]) * 255.0;
   }
 }

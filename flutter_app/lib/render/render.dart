@@ -8,6 +8,7 @@ import 'color_grading.dart';
 import 'color_mixer.dart';
 import 'color_space.dart';
 import 'dehaze.dart';
+import 'hsl.dart';
 import 'local_contrast.dart';
 import 'mask.dart';
 import 'render_params.dart';
@@ -575,9 +576,10 @@ void _applyRapidHighlights(Float32List img, int pixelCount, double highlights) {
 /// How strongly a pixel ([r], [g], [b], each 0..1) reads as a skin tone
 /// (0..1) — Lightroom's Vibrance (unlike a plain Saturation slider) damps
 /// its own effect on skin-tone hues so faces don't oversaturate. Centered
-/// on the Color Mixer's Orange band (30°, see `_channelCenterHues` in
-/// color_mixer.dart), with a narrower half-width since skin tones occupy a
-/// tighter hue range than a full Orange mixer band.
+/// on the same 25° hue RapidRAW's own Color Mixer/HSL panel centers its
+/// Orange band on (see `_hslRanges` in color_mixer.dart), with a narrower
+/// half-width since skin tones occupy a tighter hue range than a full
+/// Orange mixer band.
 ///
 /// RapidRAW's `apply_creative_color` does this math on scene-linear RGB
 /// (its whole pipeline stays linear until final display encode), so both
@@ -603,7 +605,7 @@ void _applyVibrance(Float32List img, int pixelCount, double amount) {
       continue;
     }
     final currentSaturation = (maxC - minC) / math.max(maxC, 0.001);
-    final hsv = _rgbToHsv(r, g, b);
+    final hsv = rgbToHsv(r, g, b);
     final hueDistance = math.min(
       (hsv[0] - 25.0).abs(),
       360.0 - (hsv[0] - 25.0).abs(),
@@ -626,24 +628,6 @@ void _applyVibrance(Float32List img, int pixelCount, double amount) {
 double _smoothstep(double edge0, double edge1, double value) {
   final t = ((value - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
   return t * t * (3.0 - 2.0 * t);
-}
-
-List<double> _rgbToHsv(double r, double g, double b) {
-  final maxC = math.max(r, math.max(g, b));
-  final minC = math.min(r, math.min(g, b));
-  final delta = maxC - minC;
-  var hue = 0.0;
-  if (delta > 0) {
-    if (maxC == r) {
-      hue = 60.0 * ((g - b) / delta % 6.0);
-    } else if (maxC == g) {
-      hue = 60.0 * ((b - r) / delta + 2.0);
-    } else {
-      hue = 60.0 * ((r - g) / delta + 4.0);
-    }
-    if (hue < 0) hue += 360.0;
-  }
-  return [hue, maxC == 0 ? 0.0 : delta / maxC, maxC];
 }
 
 /// Flat saturation gain, same linear-light mix as [_applyVibrance] but

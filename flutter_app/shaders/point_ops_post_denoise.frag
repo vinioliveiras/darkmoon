@@ -71,68 +71,75 @@ float linearToSrgb(float value) {
 }
 
 // Skia's runtime-effect SkSL compiler rejects `const T arr[n] = T[](...)`
-// (array initializers) — matches color_mixer.dart's _channelCenterHues via
-// an if-chain instead of an array literal.
-float mixerCenterHue(int band) {
-  if (band == 0) return 0.0;
-  if (band == 1) return 30.0;
+// (array initializers) — matches color_mixer.dart's _hslRanges via an
+// if-chain instead of an array literal. Exact values RapidRAW's own
+// HSL_RANGES uses in shader.wgsl (not evenly spaced, not a fixed width).
+float hslRangeCenter(int band) {
+  if (band == 0) return 358.0;
+  if (band == 1) return 25.0;
   if (band == 2) return 60.0;
-  if (band == 3) return 120.0;
+  if (band == 3) return 115.0;
   if (band == 4) return 180.0;
-  if (band == 5) return 240.0;
-  if (band == 6) return 275.0;
-  return 315.0; // band == 7
+  if (band == 5) return 225.0;
+  if (band == 6) return 280.0;
+  return 330.0; // band == 7
 }
 
-// Mirrors color_mixer.dart's _bandWeight exactly.
-float bandWeight(float hue, float center) {
-  float diff = abs(hue - center);
-  if (diff > 180.0) diff = 360.0 - diff;
-  const float halfWidth = 45.0;
-  return diff >= halfWidth ? 0.0 : 1.0 - diff / halfWidth;
+float hslRangeWidth(int band) {
+  if (band == 0) return 35.0;
+  if (band == 1) return 45.0;
+  if (band == 2) return 40.0;
+  if (band == 3) return 90.0;
+  if (band == 4) return 60.0;
+  if (band == 5) return 60.0;
+  if (band == 6) return 55.0;
+  return 50.0; // band == 7
 }
 
-// Mirrors hsl.dart's rgbToHsl (h in degrees, s/l in 0..1).
-vec3 rgbToHsl(vec3 c) {
+// Mirrors color_mixer.dart's _rawHslInfluence exactly (RapidRAW's
+// get_raw_hsl_influence): a Gaussian falloff around center rather than a
+// hard cutoff.
+float rawHslInfluence(float hue, float center, float width) {
+  float dist = abs(hue - center);
+  if (dist > 180.0) dist = 360.0 - dist;
+  const float sharpness = 1.5;
+  float falloff = dist / (width * 0.5);
+  return exp(-sharpness * falloff * falloff);
+}
+
+// Mirrors hsl.dart's rgbToHsv (h in degrees, s/v in 0..1) — HSV, not HSL:
+// value is the max channel, not (max+min)/2.
+vec3 rgbToHsv(vec3 c) {
   float maxC = max(c.r, max(c.g, c.b));
   float minC = min(c.r, min(c.g, c.b));
-  float light = (maxC + minC) * 0.5;
-  if (maxC == minC) return vec3(0.0, 0.0, light);
-  float d = maxC - minC;
-  float sat = light > 0.5 ? d / (2.0 - maxC - minC) : d / (maxC + minC);
-  float hue;
-  if (maxC == c.r) {
-    hue = (c.g - c.b) / d + (c.g < c.b ? 6.0 : 0.0);
-  } else if (maxC == c.g) {
-    hue = (c.b - c.r) / d + 2.0;
-  } else {
-    hue = (c.r - c.g) / d + 4.0;
+  float delta = maxC - minC;
+  float hue = 0.0;
+  if (delta > 0.0) {
+    if (maxC == c.r) {
+      hue = 60.0 * mod((c.g - c.b) / delta, 6.0);
+    } else if (maxC == c.g) {
+      hue = 60.0 * ((c.b - c.r) / delta + 2.0);
+    } else {
+      hue = 60.0 * ((c.r - c.g) / delta + 4.0);
+    }
+    if (hue < 0.0) hue += 360.0;
   }
-  hue *= 60.0;
-  return vec3(hue, sat, light);
+  return vec3(hue, maxC == 0.0 ? 0.0 : delta / maxC, maxC);
 }
 
-// Mirrors hsl.dart's _hueToRgbComponent + hslToRgb.
-float hueToRgbComponent(float p, float q, float t) {
-  float tt = t;
-  if (tt < 0.0) tt += 1.0;
-  if (tt > 1.0) tt -= 1.0;
-  if (tt < 1.0 / 6.0) return p + (q - p) * 6.0 * tt;
-  if (tt < 0.5) return q;
-  if (tt < 2.0 / 3.0) return p + (q - p) * (2.0 / 3.0 - tt) * 6.0;
-  return p;
-}
-
-vec3 hslToRgb(float h, float s, float l) {
-  if (s == 0.0) return vec3(l, l, l);
-  float q = l < 0.5 ? l * (1.0 + s) : l + s - l * s;
-  float p = 2.0 * l - q;
-  float hk = h / 360.0;
-  return vec3(
-    hueToRgbComponent(p, q, hk + 1.0 / 3.0),
-    hueToRgbComponent(p, q, hk),
-    hueToRgbComponent(p, q, hk - 1.0 / 3.0)
-  );
+// Mirrors hsl.dart's hsvToRgb.
+vec3 hsvToRgb(float h, float s, float v) {
+  float cc = v * s;
+  float x = cc * (1.0 - abs(mod(h / 60.0, 2.0) - 1.0));
+  float m = v - cc;
+  vec3 rgbPrime;
+  if (h < 60.0) { rgbPrime = vec3(cc, x, 0.0); }
+  else if (h < 120.0) { rgbPrime = vec3(x, cc, 0.0); }
+  else if (h < 180.0) { rgbPrime = vec3(0.0, cc, x); }
+  else if (h < 240.0) { rgbPrime = vec3(0.0, x, cc); }
+  else if (h < 300.0) { rgbPrime = vec3(x, 0.0, cc); }
+  else { rgbPrime = vec3(cc, 0.0, x); }
+  return rgbPrime + vec3(m, m, m);
 }
 
 // Endpoint-preserving S-curve (0->0, 1->1 always, regardless of gamma) —
@@ -304,50 +311,81 @@ void main() {
   c.g = texture(uLut, vec2(c.g, 0.5)).b;
   c.b = texture(uLut, vec2(c.b, 0.5)).a;
 
-  // Color Mixer — unrolled by hand rather than a runtime for-loop indexing
-  // uMixer[band * 3]: that loop-variable ("dynamic") uniform-array index
-  // is exactly the kind of construct some GPU shader compilers miscompile
-  // (SkSL/Impeller's translation varies by backend/driver), which is what
-  // produced the blocky, garbage-looking corruption reported when
-  // touching a Mixer/Color Grading Luminance slider — every index below
-  // is now a compile-time constant.
-  // Luminance (uMixer[c*3+2] for each band) intentionally not applied —
-  // disabled per-channel in the UI too (see editor_screen.dart's Mixer/
-  // HSL panel) after repeated reports of it blowing out/pixelating
-  // pixels, even after fixing the uniform-array-indexed-by-loop-variable
-  // bug that caused the blocky corruption. Mirrors color_mixer.dart's
-  // applyColorMixer exactly.
-  vec3 hsl = rgbToHsl(clamp(c, 0.0, 1.0));
-  float hueShift = 0.0, satShift = 0.0;
-  float w0 = bandWeight(hsl.x, mixerCenterHue(0));
-  hueShift += w0 * uMixer[0];
-  satShift += w0 * uMixer[1];
-  float w1 = bandWeight(hsl.x, mixerCenterHue(1));
-  hueShift += w1 * uMixer[3];
-  satShift += w1 * uMixer[4];
-  float w2 = bandWeight(hsl.x, mixerCenterHue(2));
-  hueShift += w2 * uMixer[6];
-  satShift += w2 * uMixer[7];
-  float w3 = bandWeight(hsl.x, mixerCenterHue(3));
-  hueShift += w3 * uMixer[9];
-  satShift += w3 * uMixer[10];
-  float w4 = bandWeight(hsl.x, mixerCenterHue(4));
-  hueShift += w4 * uMixer[12];
-  satShift += w4 * uMixer[13];
-  float w5 = bandWeight(hsl.x, mixerCenterHue(5));
-  hueShift += w5 * uMixer[15];
-  satShift += w5 * uMixer[16];
-  float w6 = bandWeight(hsl.x, mixerCenterHue(6));
-  hueShift += w6 * uMixer[18];
-  satShift += w6 * uMixer[19];
-  float w7 = bandWeight(hsl.x, mixerCenterHue(7));
-  hueShift += w7 * uMixer[21];
-  satShift += w7 * uMixer[22];
-  float newHue = mod(hsl.x + hueShift * 0.3, 360.0);
-  if (newHue < 0.0) newHue += 360.0;
-  float newSat = clamp(hsl.y * (1.0 + satShift / 100.0), 0.0, 1.0);
-  float newLight = hsl.z;
-  c = hslToRgb(newHue, newSat, newLight);
+  // Color Mixer — color_mixer.dart's applyColorMixer, a faithful port of
+  // RapidRAW's apply_hsl_panel for Hue/Saturation: HSV (not HSL) in
+  // scene-linear light, Gaussian-weighted per-band influence normalized
+  // per pixel, and the whole effect gated by how saturated the source
+  // pixel already is. Luminance (uMixer[c*3+2] for each band)
+  // intentionally not applied — see applyColorMixer's own doc comment for
+  // why. Still fully unrolled by hand (no loops, no dynamic uMixer
+  // indexing — every index below stays a compile-time constant) for the
+  // same reason as before: a loop-variable ("dynamic") uniform-array
+  // index is exactly the kind of construct some GPU shader compilers
+  // miscompile (SkSL/Impeller's translation varies by backend/driver),
+  // which is what produced the blocky, garbage-looking corruption
+  // previously reported when touching a Mixer/Color Grading Luminance
+  // slider.
+  vec3 linC = vec3(srgbToLinear(c.r), srgbToLinear(c.g), srgbToLinear(c.b));
+  if (abs(linC.r - linC.g) >= 0.001 || abs(linC.g - linC.b) >= 0.001) {
+    vec3 mixerHsv = rgbToHsv(linC);
+    float originalHue = mixerHsv.x;
+    float originalSat = mixerHsv.y;
+    float originalVal = mixerHsv.z;
+
+    float saturationMask = smoothstep(0.05, 0.20, originalSat);
+    if (saturationMask >= 0.001) {
+      float w0 = rawHslInfluence(originalHue, hslRangeCenter(0), hslRangeWidth(0));
+      float w1 = rawHslInfluence(originalHue, hslRangeCenter(1), hslRangeWidth(1));
+      float w2 = rawHslInfluence(originalHue, hslRangeCenter(2), hslRangeWidth(2));
+      float w3 = rawHslInfluence(originalHue, hslRangeCenter(3), hslRangeWidth(3));
+      float w4 = rawHslInfluence(originalHue, hslRangeCenter(4), hslRangeWidth(4));
+      float w5 = rawHslInfluence(originalHue, hslRangeCenter(5), hslRangeWidth(5));
+      float w6 = rawHslInfluence(originalHue, hslRangeCenter(6), hslRangeWidth(6));
+      float w7 = rawHslInfluence(originalHue, hslRangeCenter(7), hslRangeWidth(7));
+      float totalRaw = w0 + w1 + w2 + w3 + w4 + w5 + w6 + w7;
+
+      float totalHueShift = 0.0, totalSatMul = 0.0;
+      float hs0 = (w0 / totalRaw) * saturationMask;
+      totalHueShift += uMixer[0] * 0.3 * 2.0 * hs0;
+      totalSatMul += (uMixer[1] / 100.0) * hs0;
+      float hs1 = (w1 / totalRaw) * saturationMask;
+      totalHueShift += uMixer[3] * 0.3 * 2.0 * hs1;
+      totalSatMul += (uMixer[4] / 100.0) * hs1;
+      float hs2 = (w2 / totalRaw) * saturationMask;
+      totalHueShift += uMixer[6] * 0.3 * 2.0 * hs2;
+      totalSatMul += (uMixer[7] / 100.0) * hs2;
+      float hs3 = (w3 / totalRaw) * saturationMask;
+      totalHueShift += uMixer[9] * 0.3 * 2.0 * hs3;
+      totalSatMul += (uMixer[10] / 100.0) * hs3;
+      float hs4 = (w4 / totalRaw) * saturationMask;
+      totalHueShift += uMixer[12] * 0.3 * 2.0 * hs4;
+      totalSatMul += (uMixer[13] / 100.0) * hs4;
+      float hs5 = (w5 / totalRaw) * saturationMask;
+      totalHueShift += uMixer[15] * 0.3 * 2.0 * hs5;
+      totalSatMul += (uMixer[16] / 100.0) * hs5;
+      float hs6 = (w6 / totalRaw) * saturationMask;
+      totalHueShift += uMixer[18] * 0.3 * 2.0 * hs6;
+      totalSatMul += (uMixer[19] / 100.0) * hs6;
+      float hs7 = (w7 / totalRaw) * saturationMask;
+      totalHueShift += uMixer[21] * 0.3 * 2.0 * hs7;
+      totalSatMul += (uMixer[22] / 100.0) * hs7;
+
+      float newSat = clamp(originalSat * (1.0 + totalSatMul), 0.0, 1.0);
+      if (newSat < 0.0001) {
+        // Matches apply_hsl_panel's own near-zero-saturation fallback:
+        // collapse to gray at the original *luma*, not the HSV value (the
+        // max channel) — those two aren't the same number for a non-gray
+        // color.
+        float originalLuma = dot(linC, vec3(0.2126, 0.7152, 0.0722));
+        linC = vec3(clamp(originalLuma, 0.0, 1.0));
+      } else {
+        float newHue = mod(originalHue + totalHueShift + 360.0, 360.0);
+        if (newHue < 0.0) newHue += 360.0;
+        linC = hsvToRgb(newHue, newSat, originalVal);
+      }
+    }
+  }
+  c = vec3(linearToSrgb(linC.r), linearToSrgb(linC.g), linearToSrgb(linC.b));
 
   // Color Grading — shadow/midtone/highlight partition-of-unity plus a
   // uniform-strength global tint, matching applyColorGrading exactly.
