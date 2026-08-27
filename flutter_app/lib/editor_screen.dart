@@ -587,7 +587,7 @@ class _EditorScreenState extends State<EditorScreen> {
   /// to be visible at all.
   final Map<MaskType, double> _maskOverlayOpacity = {
     MaskType.linearGradient: 0.15,
-    MaskType.radialGradient: 0.15,
+    MaskType.radialGradient: 0.00,
     MaskType.brush: 0.01,
     MaskType.colorRange: 0.20,
   };
@@ -1513,7 +1513,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _neutralPreviews.remove(path);
       _edits.remove(path);
       _photoCurves.remove(path);
-      _photoMasks.remove(path);
+     
       if (removedIndex == _selectedIndex) {
         _selectedIndex = null;
       } else if (_selectedIndex != null && removedIndex < _selectedIndex!) {
@@ -3958,6 +3958,7 @@ class _HiddenLoadingIndicator extends StatelessWidget {
           ),
           Positioned(
             right: 0,
+            top: 0,
             child: IconButton(
               onPressed: onCancel,
               tooltip: l10n.cancelButton,

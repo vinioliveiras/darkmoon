@@ -15,7 +15,7 @@ import '../native/edit_source.dart' show defaultPreviewMaxDimension;
 /// without much extra throughput. Users who want it faster can still raise
 /// the value in Settings.
 int _defaultThumbnailConcurrency() =>
-    (Platform.numberOfProcessors - 2).clamp(2, 5);
+    (Platform.numberOfProcessors - 2).clamp(2, 4);
 
 /// Recent single-file opens are capped so the sidebar list doesn't grow
 /// unbounded over months of use.
