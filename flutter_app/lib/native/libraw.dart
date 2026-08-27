@@ -6,6 +6,62 @@ import 'package:ffi/ffi.dart';
 
 import 'libraw_bindings.dart';
 
+/// LibRaw (this file) vs. RapidRAW's own decoder (Rawler, a pure-Rust RAW
+/// library) — investigated as part of trying to match RapidRAW's tonal
+/// pipeline pixel-for-pixel (see render.dart/color_mixer.dart/dehaze.dart's
+/// own doc comments for the adjustment-level ports). The short version:
+/// **RAW decode is the one part of this pipeline that can't realistically
+/// be made to match** — not a specific bug to fix, a different library
+/// with its own demosaic algorithm, denoising, and highlight handling.
+/// Two differences matter most for anyone chasing pixel parity downstream:
+///
+/// 1. **Output precision/color-space.** [decodeRawImage] below explicitly
+///    sets `params.output_bps = 8` and a real sRGB gamma
+///    (`params.gamm = [1/2.4, 12.92]`), so LibRaw hands back gamma-encoded
+///    8-bit-per-channel bytes — which is *why* every adjustment ported
+///    from RapidRAW elsewhere in this codebase has to convert back to
+///    linear internally (`srgbToLinear`/`linearToSrgb`) before doing its
+///    own math, then re-encode afterward. RapidRAW's Rust decoder
+///    (`raw_processing.rs`'s `develop_internal`) does the opposite: it
+///    explicitly *strips* the sRGB-encode step from Rawler's own develop
+///    pipeline (`developer.steps.retain(|&step| step != ProcessingStep::
+///    SRgb)`) and keeps the whole image as 32-bit-float scene-linear data
+///    all the way through its render pipeline, only gamma-encoding once,
+///    right before display/export. That's a real precision ceiling this
+///    app's decode stage puts under every downstream fix: once a shadow
+///    tone has been quantized into one of 8-bit gamma's few distinct
+///    near-black levels, no amount of "operate on linear values" in a
+///    later adjustment recovers detail that quantization already
+///    discarded — a difference no per-adjustment port can undo.
+///
+/// 2. **The demosaic/highlight-recovery algorithms themselves differ.**
+///    LibRaw here uses linear interpolation for [fastPreview] (a real
+///    demosaic, not `half_size`'s box average — see that param's own
+///    comment) or its own AHD-class default otherwise, plus blend-mode
+///    highlight reconstruction (`params.highlight = 2`). RapidRAW's
+///    `raw_processing.rs` sets `DemosaicAlgorithm::Speed` for its own fast
+///    path and otherwise leaves Rawler's own default algorithm (a
+///    different, unrelated implementation — Rawler is vendored as a
+///    crates.io dependency, not in this checkout, so its exact algorithm
+///    name isn't derivable from here), plus its own highlight-compression
+///    formula (`raw_processing.rs`'s `safe_highlight_compression`
+///    blend). Both use the camera's own embedded white balance and color
+///    calibration matrix (LibRaw: `use_camera_wb`/`use_camera_matrix`;
+///    Rawler: `raw_image.wb_coeffs`/`ProcessingStep::Calibrate`) — that
+///    part is conceptually aligned even if the exact matrix math isn't
+///    verified to be numerically identical.
+///
+/// **Practical takeaway**: pixel-identical output between the two apps is
+/// only achievable, if at all, by feeding both the *same already-decoded*
+/// RGB buffer (e.g. compare a step further down the pipeline, not from a
+/// RAW file), or by replacing this decoder with Rawler outright — a much
+/// larger, separate undertaking (new native/FFI story entirely, since
+/// Rawler is Rust, not a C library like LibRaw) than any adjustment-level
+/// port. Matching RapidRAW's math for each slider (as the rest of this
+/// codebase's ports do) gets the *relative* effect of each adjustment
+/// right; it can't erase the baseline difference the decoder itself
+/// already introduced before any slider runs.
+
 /// A fully decoded/demosaiced RAW image: packed 8-bit RGB, row-major, no
 /// padding — 3 bytes per pixel, matching libraw_dcraw_make_mem_image's
 /// default (non-TIFF) output.
