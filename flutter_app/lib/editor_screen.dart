@@ -148,9 +148,19 @@ const _previewPreloadCount = 8;
 /// How many of those preload slots run concurrently — each one that
 /// misses the cache spawns its own RAW-decode Isolate, so this is a
 /// tradeoff between finishing the batch quickly and not competing too
-/// hard with the rest of startup (settings/catalog/thumbnail loads) for
-/// CPU cores.
-const _previewPreloadConcurrency = 3;
+/// hard with the rest of startup (settings/catalog/thumbnail loads, and
+/// especially the thumbnail-decode batch) for CPU cores. Kept low
+/// deliberately: these isolates also run at below-normal thread priority
+/// (see [lowerBackgroundThreadPriority]).
+const _previewPreloadConcurrency = 2;
+
+/// [_preloadPreviewCache] holds off until the thumbnail batch has produced
+/// at least this many thumbnails (or has finished) — enough to fill the
+/// visible filmstrip, so speculative RAW decodes for photos nobody's
+/// looked at don't compete with the thumbnails the user is waiting to
+/// see. Past that point the two run concurrently, which is fine: the
+/// preload isolates run at below-normal priority.
+const _thumbnailsBeforePreload = 24;
 
 /// How long to wait after the last slider change before actually
 /// re-rendering, restarted on every change — matches the Python app's
@@ -502,6 +512,18 @@ class _EditorScreenState extends State<EditorScreen> {
   /// being decoded — [_thumbnailsTotal] is 0 until the file list is known.
   int _thumbnailsLoaded = 0;
   int _thumbnailsTotal = 0;
+
+  /// Coalesces the rebuilds [_loadThumbnails]'s concurrent workers trigger
+  /// as each thumbnail lands — see [_scheduleThumbnailUiFlush]. Non-null
+  /// only while a flush is pending.
+  Timer? _thumbnailUiFlushTimer;
+
+  /// Completed once [_loadThumbnails] has filled the visible filmstrip (or
+  /// finished the whole batch) — [_preloadPreviewCache] awaits it before
+  /// starting any speculative RAW decode. Recreated per folder load; any
+  /// prior one is completed when the next load starts or loading is
+  /// cancelled, so a waiter never hangs.
+  Completer<void>? _visibleThumbnailsReady;
 
   /// Saved slider values per photo (absolute path), persisted to disk.
   /// Loaded once at startup; not guarded against edits made before that
@@ -1186,6 +1208,9 @@ class _EditorScreenState extends State<EditorScreen> {
     _renderDebounceTimer?.cancel();
     _catalogSaveTimer?.cancel();
     _slowRenderTimer?.cancel();
+    _thumbnailFlushTimer?.cancel();
+    _thumbnailUiFlushTimer?.cancel();
+    _completeVisibleThumbnailsReady();
     _viewController.dispose();
     _lifecycleListener.dispose();
     super.dispose();
@@ -1601,6 +1626,9 @@ class _EditorScreenState extends State<EditorScreen> {
     _folderGeneration++;
     _renderRequestId++;
     _slowRenderTimer?.cancel();
+    _thumbnailUiFlushTimer?.cancel();
+    _thumbnailUiFlushTimer = null;
+    _completeVisibleThumbnailsReady();
     _exportCancellation?.cancel();
     setState(() {
       _loading = false;
@@ -1623,7 +1651,9 @@ class _EditorScreenState extends State<EditorScreen> {
   /// Applies a freshly-listed folder/file set, kicks off thumbnail loading
   /// (awaited, so the loading overlay's real progress reflects it) and the
   /// selected photo's decode/render (unawaited, so it proceeds in parallel
-  /// rather than waiting behind the thumbnail batch).
+  /// rather than waiting behind the thumbnail batch). The preview-cache
+  /// preload is also started here but internally waits for the visible
+  /// thumbnails first — see [_preloadPreviewCache].
   Future<void> _applyFiles(
     List<RawFile> files,
     int? selectedIndex,
@@ -1653,6 +1683,10 @@ class _EditorScreenState extends State<EditorScreen> {
         _loadEditSourceAndRender(files[selectedIndex].path, generation),
       );
     }
+    // Recreate the gate the preload waits on (releasing any prior waiter),
+    // then start both — the preload blocks on _loadThumbnails' progress.
+    _completeVisibleThumbnailsReady();
+    _visibleThumbnailsReady = Completer<void>();
     unawaited(_preloadPreviewCache(files, selectedIndex, generation));
     await _loadThumbnails(files, generation);
     if (!mounted || generation != _folderGeneration) {
@@ -1677,12 +1711,19 @@ class _EditorScreenState extends State<EditorScreen> {
         if (!mounted || generation != _folderGeneration) {
           return;
         }
-        setState(() {
-          _thumbnailsLoaded++;
-          if (bytes != null) {
-            _thumbnails[file.path] = bytes;
-          }
-        });
+        // Mutate state directly, then schedule one coalesced rebuild
+        // instead of a setState per thumbnail: with several workers each
+        // finishing a decode every few hundred ms, a rebuild apiece floods
+        // the build pipeline and is a big part of what makes opening a
+        // large folder feel unresponsive.
+        _thumbnailsLoaded++;
+        if (bytes != null) {
+          _thumbnails[file.path] = bytes;
+        }
+        _scheduleThumbnailUiFlush();
+        if (_thumbnailsLoaded >= _thumbnailsBeforePreload) {
+          _completeVisibleThumbnailsReady();
+        }
         if (bytes != null && !fromCache) {
           unawaited(cache?.store(file.path, bytes));
         }
@@ -1692,7 +1733,42 @@ class _EditorScreenState extends State<EditorScreen> {
     await Future.wait(
       List.generate(_settings.thumbnailConcurrency, (_) => worker()),
     );
+    // Land the final counts immediately rather than waiting on a pending
+    // coalesced flush.
+    _thumbnailUiFlushTimer?.cancel();
+    _thumbnailUiFlushTimer = null;
+    if (mounted && generation == _folderGeneration) {
+      setState(() {});
+    }
+    // Release the preload even for a folder with fewer than
+    // _thumbnailsBeforePreload photos, or if workers exited early.
+    _completeVisibleThumbnailsReady();
     unawaited(cache?.flush());
+  }
+
+  /// Completes [_visibleThumbnailsReady] once, if it's live and pending.
+  void _completeVisibleThumbnailsReady() {
+    final completer = _visibleThumbnailsReady;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  /// Schedules a single catch-up [setState] for the batch of thumbnail
+  /// fields [_loadThumbnails]'s workers mutate directly — folding a burst
+  /// of concurrent decodes into ~one rebuild per frame-ish interval. The
+  /// fields are already updated by the time this fires; the empty setState
+  /// just marks the tree dirty.
+  void _scheduleThumbnailUiFlush() {
+    if (_thumbnailUiFlushTimer != null) {
+      return;
+    }
+    _thumbnailUiFlushTimer = Timer(const Duration(milliseconds: 90), () {
+      _thumbnailUiFlushTimer = null;
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   /// A JPEG common image (by far the usual case for a "loading photos is
@@ -1718,7 +1794,7 @@ class _EditorScreenState extends State<EditorScreen> {
         // Fall through to the general decode path below.
       }
     }
-    return compute(decodeRawThumbnail, file.path);
+    return compute(decodeRawThumbnailLowPriority, file.path);
   }
 
   void _selectIndex(int index) {
@@ -1829,6 +1905,10 @@ class _EditorScreenState extends State<EditorScreen> {
   /// actually finishes within that window instead of one file at a time)
   /// so opening a folder with thousands of photos doesn't spend a long
   /// time decoding photos nobody's looked at yet.
+  ///
+  /// Starts only once the thumbnail batch has filled the visible filmstrip
+  /// (see [_thumbnailsBeforePreload]), so the RAW decodes here never
+  /// out-compete the thumbnails the user is waiting to see.
   Future<void> _preloadPreviewCache(
     List<RawFile> files,
     int? selectedIndex,
@@ -1836,6 +1916,12 @@ class _EditorScreenState extends State<EditorScreen> {
   ) async {
     final cache = _previewCache;
     if (cache == null || files.isEmpty) {
+      return;
+    }
+    // Wait for the visible filmstrip to fill in before spending cores on
+    // photos nobody's selected — see [_thumbnailsBeforePreload].
+    await _visibleThumbnailsReady?.future;
+    if (!mounted || generation != _folderGeneration) {
       return;
     }
     final start = selectedIndex ?? 0;
@@ -1852,16 +1938,21 @@ class _EditorScreenState extends State<EditorScreen> {
       EditSourcePair? sources;
       var fromCache = false;
       if (cachedJpeg != null) {
-        sources = await compute(decodeEditSourcePairFromCachedJpeg, cachedJpeg);
+        sources = await compute(
+          decodeEditSourcePairFromCachedJpegLowPriority,
+          cachedJpeg,
+        );
         fromCache = sources != null;
       }
       // Cache miss (or a corrupt cache entry) — a real decode, not
       // skipped, so this photo's cache exists by the time the user
-      // actually selects it.
+      // actually selects it. Low priority: nobody's waiting on this photo
+      // yet, so it must not out-compete the UI or the thumbnail batch.
       sources ??= await decodeEditSourcesWithProgress(
         file.path,
         (_) {},
         previewMaxDimension: _settings.previewResolution,
+        lowPriority: true,
       );
       if (sources == null || !mounted || generation != _folderGeneration) {
         return;

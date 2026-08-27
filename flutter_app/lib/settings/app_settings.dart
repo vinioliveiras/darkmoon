@@ -6,11 +6,16 @@ import 'package:path_provider/path_provider.dart';
 
 import '../native/edit_source.dart' show defaultPreviewMaxDimension;
 
-/// Cap concurrency at 8 even on many-core machines — thumbnail decode is
+/// Leave at least two cores for the UI isolate and the preview-cache
+/// prewarm that runs alongside this batch when a folder opens — pinning
+/// every core to thumbnail decode is what made opening a big folder freeze
+/// the app. Capped at 5 even on many-core machines: thumbnail decode is
 /// bottlenecked on the same LibRaw/JPEG-decode work per photo regardless
-/// of core count, and spawning too many isolates at once just adds
-/// scheduling overhead without much extra throughput.
-int _defaultThumbnailConcurrency() => Platform.numberOfProcessors.clamp(2, 8);
+/// of core count, so more isolates past that just add scheduling overhead
+/// without much extra throughput. Users who want it faster can still raise
+/// the value in Settings.
+int _defaultThumbnailConcurrency() =>
+    (Platform.numberOfProcessors - 2).clamp(2, 5);
 
 /// Recent single-file opens are capped so the sidebar list doesn't grow
 /// unbounded over months of use.
