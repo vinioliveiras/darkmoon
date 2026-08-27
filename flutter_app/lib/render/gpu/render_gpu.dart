@@ -185,10 +185,12 @@ Future<ui.Image> _runPreDenoise(
   final rapidTint = applyWhiteBalance ? params.tint / 100.0 : 0.0;
   final gTintGain = 1.0 - rapidTint * 0.25;
   final rbTintGain = 1.0 + rapidTint * 0.25;
-  final tintNormalization = 1.0 / ((2.0 * rbTintGain + gTintGain) / 3.0);
-  final gGain = gTemperatureGain * gTintGain * tintNormalization;
-  final normalizedRGain = rGain * rbTintGain * tintNormalization;
-  final normalizedBGain = bGain * rbTintGain * tintNormalization;
+  // No overall-brightness renormalization — matches render.dart's own
+  // _applyWhiteBalance (see its doc comment: RapidRAW's apply_white_balance
+  // doesn't renormalize either).
+  final gGain = gTemperatureGain * gTintGain;
+  final normalizedRGain = rGain * rbTintGain;
+  final normalizedBGain = bGain * rbTintGain;
   final exposureFactor = applyExposure
       ? math.pow(2.0, params.exposure / 20.0).toDouble()
       : 1.0;

@@ -68,11 +68,22 @@ void main() {
       expect(out[0], out[2]);
     });
 
-    test('tint keeps overall luminance roughly stable', () {
-      final src = flatGray(4, 4, 150);
-      final out = renderRgb(4, 4, src, const RenderParams(tint: 80));
-      final lum = (out[0] + out[1] + out[2]) / 3.0;
-      expect(lum, closeTo(150, 6));
-    });
+    test(
+      'tint follows RapidRAW\'s un-normalized formula exactly, no '
+      'brightness compensation',
+      () {
+        // RapidRAW's apply_white_balance (shader.wgsl) multiplies
+        // temp_kelvin_mult * tint_mult directly, with no renormalization
+        // step — so a strong Tint does shift overall brightness a little,
+        // by design; matching that (rather than adding a compensation
+        // step RapidRAW doesn't have) is the point of this port.
+        final src = flatGray(4, 4, 150);
+        final out = renderRgb(4, 4, src, const RenderParams(tint: 80));
+        // tint=80 -> rapidTint=0.8 -> r,b *= 1.2, g *= 0.8.
+        expect(out[0], closeTo(180, 1));
+        expect(out[1], closeTo(120, 1));
+        expect(out[2], closeTo(180, 1));
+      },
+    );
   });
 }

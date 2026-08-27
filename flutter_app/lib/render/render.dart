@@ -323,6 +323,42 @@ Uint8List _toUint8(Float32List buffer) {
 /// the old Kelvin-linear model's feel around 5500K, while the mired scale
 /// (rather than raw Kelvin) makes larger deviations track Lightroom's
 /// actual Temp-slider curve instead of under- or over-correcting them.
+///
+/// Equivalence table — this file's Kelvin UI value vs. the RapidRAW
+/// "-100..100" raw slider value that produces the same `rapidTemperature`
+/// gain below (i.e. what a preset's Kelvin value would need to be entered
+/// as on RapidRAW's own Temperature slider for matching output). Useful
+/// for judging any future preset-migration mapping; not itself consumed by
+/// any code here.
+///
+///  Kelvin | RapidRAW-equivalent
+///  -------|--------------------
+///   2000K | -207  (beyond RapidRAW's own -100 floor)
+///   2500K | -142  (beyond RapidRAW's own -100 floor)
+///   2979K | -100  (RapidRAW's coldest reachable value)
+///   3200K |  -85
+///   4000K |  -44
+///   5000K |  -12
+///   5500K |    0  (neutral, both scales)
+///   6000K |   10
+///   7000K |   25
+///   8000K |   37
+///  10000K |   53
+///  15000K |   75
+///  20000K |   86
+///  35750K |  100  (RapidRAW's warmest reachable value)
+///  50000K |  105  (beyond RapidRAW's own +100 ceiling)
+///
+/// The asymmetry (RapidRAW's full range spans roughly 2979K-35750K here,
+/// not a symmetric window around 5500K) falls straight out of the mired
+/// scale's own warm/cool asymmetry (see the doc comment on
+/// [_applyWhiteBalance] below). Darkmoon's 2000K-50000K slider range
+/// slightly overshoots RapidRAW's reachable range at both ends, so a
+/// preset built at those extremes has no exact RapidRAW-side equivalent
+/// to match against — this file's own internal safety clamp
+/// (`tempGain.clamp(-0.6, 0.6)`) never actually engages anywhere in that
+/// 2000K-50000K UI range, though (it only kicks in below ~1554K or above
+/// 100000K), so it isn't what causes the overshoot.
 const double _miredGainPerUnit = 0.0013;
 
 void _applyWhiteBalance(
@@ -365,21 +401,21 @@ void _applyWhiteBalance(
   final bTemperatureGain = 1.0 - rapidTemperature * 0.2;
 
   // Tint moves along the green/magenta axis: green shifts one way, red and
-  // blue shift the other, so overall luminance stays roughly put instead
-  // of drifting with the color shift (unlike nudging green alone). Sign
-  // matches Lightroom and this slider's own green->magenta gradient
-  // (editor_screen.dart's 'Tint' _SliderSpec): positive = magenta (green
-  // down, red/blue up), negative = green (green up, red/blue down).
+  // blue shift the other. Sign matches Lightroom and this slider's own
+  // green->magenta gradient (editor_screen.dart's 'Tint' _SliderSpec):
+  // positive = magenta (green down, red/blue up), negative = green (green
+  // up, red/blue down). No overall-brightness renormalization here —
+  // RapidRAW's own apply_white_balance (shader.wgsl) doesn't renormalize
+  // either, it just multiplies temp_kelvin_mult * tint_mult directly, so
+  // a strong Tint does shift overall luminance slightly, same as there.
   final rapidTint = tint / 100.0;
   final gTintGain = 1.0 - rapidTint * 0.25;
   final rbTintGain = 1.0 + rapidTint * 0.25;
-  final tintMean = (2.0 * rbTintGain + gTintGain) / 3.0;
-  final tintNormalization = 1.0 / tintMean;
 
   for (var i = 0; i < img.length; i += 3) {
-    img[i] *= rTemperatureGain * rbTintGain * tintNormalization;
-    img[i + 1] *= gTemperatureGain * gTintGain * tintNormalization;
-    img[i + 2] *= bTemperatureGain * rbTintGain * tintNormalization;
+    img[i] *= rTemperatureGain * rbTintGain;
+    img[i + 1] *= gTemperatureGain * gTintGain;
+    img[i + 2] *= bTemperatureGain * rbTintGain;
   }
 }
 
