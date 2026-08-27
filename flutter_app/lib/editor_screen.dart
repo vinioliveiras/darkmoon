@@ -877,18 +877,34 @@ class _EditorScreenState extends State<EditorScreen> {
         blendedValues[entry.key] = entry.value;
       }
     }
-    // White Balance: blend Temperature/Tint only if the preset carries
-    // them, and flip the mode to Custom; otherwise leave WB untouched.
-    if (preset.values.containsKey('Temperature') ||
-        preset.values.containsKey('Tint')) {
-      final asShot = _asShotFor(_files[_selectedIndex!].path);
+    // White Balance:
+    //  - preset defines a real WB -> apply it (mode Custom, or the
+    //    preset's own mode if it stored one);
+    //  - preset defines none      -> reset to the photo's As Shot.
+    // "Defines a real WB" ignores a bare 5500/0 with no mode key: that's
+    // the old fixed neutral every pre-feature preset carries incidentally,
+    // not an intended white-balance edit.
+    final asShot = _asShotFor(_files[_selectedIndex!].path);
+    final presetTemp = preset.values['Temperature'];
+    final presetTint = preset.values['Tint'];
+    final presetMode = preset.values[_wbModeKey];
+    final presetDefinesWb =
+        (presetTemp != null && presetTemp != wbDefaultKelvin) ||
+        (presetTint != null && presetTint != wbDefaultTint) ||
+        (presetMode != null && presetMode != WbMode.asShot.index.toDouble());
+    if (presetDefinesWb) {
       final baseTemp = baseValues['Temperature'] ?? asShot.kelvin;
       final baseTint = baseValues['Tint'] ?? asShot.tint;
-      final tgtTemp = preset.values['Temperature'] ?? asShot.kelvin;
-      final tgtTint = preset.values['Tint'] ?? asShot.tint;
+      final tgtTemp = presetTemp ?? asShot.kelvin;
+      final tgtTint = presetTint ?? asShot.tint;
       blendedValues['Temperature'] = baseTemp + (tgtTemp - baseTemp) * fraction;
       blendedValues['Tint'] = baseTint + (tgtTint - baseTint) * fraction;
-      blendedValues[_wbModeKey] = WbMode.custom.index.toDouble();
+      blendedValues[_wbModeKey] =
+          presetMode ?? WbMode.custom.index.toDouble();
+    } else {
+      blendedValues['Temperature'] = asShot.kelvin;
+      blendedValues['Tint'] = asShot.tint;
+      blendedValues[_wbModeKey] = WbMode.asShot.index.toDouble();
     }
     setState(() {
       _paramValues = blendedValues;
@@ -1233,7 +1249,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _edits = {};
       _photoCurves = {};
       _photoMasks = {};
-      _paramValues = _defaultParamValues();
+      _paramValues = _freshParamValues();
       _currentCurves = identityPhotoCurves;
       _currentMasks = [];
       _activeMaskId = imageMaskId;
@@ -1266,16 +1282,16 @@ class _EditorScreenState extends State<EditorScreen> {
   /// instead of being silently dropped.
   Map<String, double> _paramValuesFor(String path) {
     final saved = _edits[path];
-    final base = saved == null
-        ? _defaultParamValues()
-        : {..._defaultParamValues(), ...saved};
-    // Seed Temperature/Tint from the camera as-shot white balance unless
-    // the photo has a saved WB edit — so a fresh photo opens on "As Shot"
-    // showing the camera's own numbers, not a generic 5500 K.
-    if (saved == null || !saved.containsKey('Temperature')) {
-      final meta = _metadata[path];
-      base['Temperature'] = meta?.asShotKelvin ?? wbDefaultKelvin;
-      base['Tint'] = meta?.asShotTint ?? wbDefaultTint;
+    if (saved == null) {
+      return _freshParamValues(path);
+    }
+    final base = {..._defaultParamValues(), ...saved};
+    // No saved WB edit -> open on "As Shot" showing the camera's own
+    // numbers, not a generic 5500 K.
+    if (!saved.containsKey('Temperature')) {
+      final asShot = _asShotFor(path);
+      base['Temperature'] = asShot.kelvin;
+      base['Tint'] = asShot.tint;
       base[_wbModeKey] = WbMode.asShot.index.toDouble();
     }
     return base;
@@ -1486,7 +1502,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _photoCurves.remove(path);
       _photoMasks.remove(path);
       if (isCurrentPhoto) {
-        _paramValues = _defaultParamValues();
+        _paramValues = _freshParamValues(path);
         _currentCurves = identityPhotoCurves;
         _currentMasks = [];
         _activeMaskId = imageMaskId;
@@ -2744,7 +2760,7 @@ class _EditorScreenState extends State<EditorScreen> {
   /// slate.
   void _resetActive() {
     setState(() {
-      _paramValues = _defaultParamValues();
+      _paramValues = _freshParamValues();
       _currentCurves = identityPhotoCurves;
       _currentMasks = [];
       _activeMaskId = imageMaskId;
@@ -3013,6 +3029,25 @@ class _EditorScreenState extends State<EditorScreen> {
       kelvin: meta?.asShotKelvin ?? wbDefaultKelvin,
       tint: meta?.asShotTint ?? wbDefaultTint,
     );
+  }
+
+  /// [_defaultParamValues] with Temperature/Tint seeded to the photo's
+  /// camera as-shot white balance and the mode set to "As Shot" — the
+  /// real "untouched" state now that the WB neutral is per-photo. Use this
+  /// instead of `_defaultParamValues()` wherever `_paramValues` is reset.
+  Map<String, double> _freshParamValues([String? path]) {
+    final target =
+        path ??
+        (_selectedIndex == null ? null : _files[_selectedIndex!].path);
+    final asShot = target == null
+        ? (kelvin: wbDefaultKelvin, tint: wbDefaultTint)
+        : _asShotFor(target);
+    return {
+      ..._defaultParamValues(),
+      'Temperature': asShot.kelvin,
+      'Tint': asShot.tint,
+      _wbModeKey: WbMode.asShot.index.toDouble(),
+    };
   }
 
   /// Sets Temperature/Tint (and the stored mode) for a White Balance mode
