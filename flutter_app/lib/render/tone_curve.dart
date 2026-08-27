@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 /// A single draggable control point on the tone curve, normalized to
@@ -35,8 +36,18 @@ bool isIdentityToneCurve(List<CurvePoint> points) {
 }
 
 /// Builds a 256-entry 0-255 -> 0-255 lookup table from [points] (assumed
-/// already sorted by x) using Catmull-Rom interpolation through the
-/// control points, for a smooth curve rather than sharp linear segments.
+/// already sorted by x) using the same monotone cubic Hermite spline as
+/// RapidRAW's `apply_curve` (a Fritsch-Carlson-style construction: each
+/// point's tangent is the average of its neighboring secant slopes,
+/// zeroed at a local extremum and rescaled if it would overshoot), for a
+/// smooth curve rather than sharp linear segments.
+///
+/// This replaced a plain Catmull-Rom spline, which (unlike this one) can
+/// overshoot past its control points' y-range and — for `identityToneCurve`
+/// specifically — didn't reduce to a true straight line: with the first/
+/// last point's neighbor duplicated (Catmull-Rom's usual way of handling a
+/// spline's ends), it evaluated to a visible S-curve (~0.203 at t=0.25
+/// instead of 0.25) even for two collinear points.
 Uint8List buildToneCurveLut(List<CurvePoint> points) {
   final lut = Uint8List(256);
   if (points.length < 2) {
@@ -59,30 +70,63 @@ double _evaluateCurve(List<CurvePoint> points, double x) {
   if (x >= points.last.x) {
     return points.last.y;
   }
-  var seg = points.length - 2;
-  for (var i = 0; i < points.length - 1; i++) {
-    if (x <= points[i + 1].x) {
-      seg = i;
-      break;
+  final lastIndex = points.length - 1;
+  for (var i = 0; i < lastIndex; i++) {
+    final p1 = points[i];
+    final p2 = points[i + 1];
+    if (x > p2.x) {
+      continue;
     }
+    final p0 = points[math.max(0, i - 1)];
+    final p3 = points[math.min(lastIndex, i + 2)];
+    final deltaBefore = (p1.y - p0.y) / math.max(0.001, p1.x - p0.x);
+    final deltaCurrent = (p2.y - p1.y) / math.max(0.001, p2.x - p1.x);
+    final deltaAfter = (p3.y - p2.y) / math.max(0.001, p3.x - p2.x);
+    var tangentAtP1 = i == 0
+        ? deltaCurrent
+        : (deltaBefore * deltaCurrent <= 0
+            ? 0.0
+            : (deltaBefore + deltaCurrent) / 2.0);
+    var tangentAtP2 = i + 1 == lastIndex
+        ? deltaCurrent
+        : (deltaCurrent * deltaAfter <= 0
+            ? 0.0
+            : (deltaCurrent + deltaAfter) / 2.0);
+    if (deltaCurrent != 0) {
+      final alpha = tangentAtP1 / deltaCurrent;
+      final beta = tangentAtP2 / deltaCurrent;
+      final magnitudeSq = alpha * alpha + beta * beta;
+      if (magnitudeSq > 9.0) {
+        final tau = 3.0 / math.sqrt(magnitudeSq);
+        tangentAtP1 *= tau;
+        tangentAtP2 *= tau;
+      }
+    }
+    return _interpolateCubicHermite(x, p1, p2, tangentAtP1, tangentAtP2)
+        .clamp(0.0, 1.0);
   }
-  final p1 = points[seg];
-  final p2 = points[seg + 1];
-  final p0 = seg > 0 ? points[seg - 1] : p1;
-  final p3 = seg + 2 < points.length ? points[seg + 2] : p2;
-  final segWidth = p2.x - p1.x;
-  final t = segWidth <= 0 ? 0.0 : (x - p1.x) / segWidth;
-  return _catmullRom(p0.y, p1.y, p2.y, p3.y, t);
+  return points.last.y;
 }
 
-double _catmullRom(double p0, double p1, double p2, double p3, double t) {
+double _interpolateCubicHermite(
+  double x,
+  CurvePoint p1,
+  CurvePoint p2,
+  double m1,
+  double m2,
+) {
+  final dx = p2.x - p1.x;
+  if (dx <= 0) {
+    return p1.y;
+  }
+  final t = (x - p1.x) / dx;
   final t2 = t * t;
   final t3 = t2 * t;
-  return 0.5 *
-      ((2 * p1) +
-          (-p0 + p2) * t +
-          (2 * p0 - 5 * p1 + 4 * p2 - p3) * t2 +
-          (-p0 + 3 * p1 - 3 * p2 + p3) * t3);
+  final h00 = 2 * t3 - 3 * t2 + 1;
+  final h10 = t3 - 2 * t2 + t;
+  final h01 = -2 * t3 + 3 * t2;
+  final h11 = t3 - t2;
+  return h00 * p1.y + h10 * m1 * dx + h01 * p2.y + h11 * m2 * dx;
 }
 
 /// Applies the curve to every channel of packed RGB [img] in place — a

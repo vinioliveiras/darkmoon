@@ -355,21 +355,25 @@ Future<ui.Image> _rasterize(
   return picture.toImage(width, height);
 }
 
-/// Identity mapping (lut[i] == i) — used in place of
-/// [buildToneCurveLut]'s own output for the default 2-point curve.
-/// `buildToneCurveLut`'s Catmull-Rom interpolation does NOT reduce to a
-/// true straight line even for `identityToneCurve`'s two collinear points
-/// (verified empirically: it evaluates to a visible S-curve, e.g. ~0.203
-/// at t=0.25 instead of 0.25) — `tone_curve.dart`'s own `applyToneCurve`/
-/// `applyColorCurves` never actually hit this, because they early-return
-/// via `isIdentityToneCurve` before ever calling `buildToneCurveLut` on an
-/// identity curve. The GPU path has no such early-return (the shader
-/// always samples the LUT texture), so it must substitute a genuinely
-/// identity LUT itself here instead of feeding the distorted one to the
-/// shader — this was Phase 1's first real bug, caught by
-/// integration_test/gpu_point_ops_test.dart's "neutral params" case
-/// showing a ~15/255 mean diff that had nothing to do with the params
-/// under test.
+/// Identity mapping (lut[i] == i) — used in place of [buildToneCurveLut]'s
+/// own output for the default 2-point curve, purely as a cheap shortcut
+/// (skips the per-entry Hermite evaluation for the overwhelmingly common
+/// no-curve case). `tone_curve.dart`'s own `applyToneCurve`/
+/// `applyColorCurves` take the equivalent shortcut via `isIdentityToneCurve`
+/// before ever calling `buildToneCurveLut`, but the GPU path has no such
+/// early-return (the shader always samples the LUT texture), so it
+/// substitutes this identity LUT directly instead.
+///
+/// Historical note: back when [buildToneCurveLut] used a plain Catmull-Rom
+/// spline, this substitution wasn't just a shortcut but a correctness fix —
+/// that spline didn't reduce to a true straight line even for
+/// `identityToneCurve`'s two collinear points (it evaluated to a visible
+/// S-curve, e.g. ~0.203 at t=0.25 instead of 0.25), which is what
+/// integration_test/gpu_point_ops_test.dart's "neutral params" case (a
+/// ~15/255 mean diff unrelated to the params under test) first caught.
+/// [buildToneCurveLut] now uses the same monotone cubic Hermite spline as
+/// RapidRAW's `apply_curve`, which doesn't have that flaw for *any* input
+/// (collinear or not) — this substitution stays only for performance.
 final Uint8List _identityLut = Uint8List.fromList(
   List<int>.generate(256, (i) => i),
 );
