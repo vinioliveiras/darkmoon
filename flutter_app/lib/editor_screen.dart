@@ -294,14 +294,14 @@ const _sections = <String, List<_SliderSpec>>{
     _SliderSpec(
       'Tint',
       -100,
-      100,
+      -150,
+      150,
       0,
       gradientColors: [Color(0xFF3DD16B), Color(0xFFE362D8)],
     ),
   ],
   'TONE': [
-    _SliderSpec('Exposure', -100, 100, 0, decimals: 1),
-    _SliderSpec('Brightness', -100, 100, 0),
+    _SliderSpec('Exposure', -5, 5, 0, decimals: 2),
     _SliderSpec('Contrast', -100, 100, 0),
     _SliderSpec('Highlights', -100, 100, 0),
     _SliderSpec('Shadows', -100, 100, 0),
