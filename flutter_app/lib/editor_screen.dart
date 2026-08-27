@@ -148,9 +148,19 @@ const _previewPreloadCount = 8;
 /// How many of those preload slots run concurrently — each one that
 /// misses the cache spawns its own RAW-decode Isolate, so this is a
 /// tradeoff between finishing the batch quickly and not competing too
-/// hard with the rest of startup (settings/catalog/thumbnail loads) for
-/// CPU cores.
-const _previewPreloadConcurrency = 3;
+/// hard with the rest of startup (settings/catalog/thumbnail loads, and
+/// especially the thumbnail-decode batch) for CPU cores. Kept low
+/// deliberately: these isolates also run at below-normal thread priority
+/// (see [lowerBackgroundThreadPriority]).
+const _previewPreloadConcurrency = 2;
+
+/// [_preloadPreviewCache] holds off until the thumbnail batch has produced
+/// at least this many thumbnails (or has finished) — enough to fill the
+/// visible filmstrip, so speculative RAW decodes for photos nobody's
+/// looked at don't compete with the thumbnails the user is waiting to
+/// see. Past that point the two run concurrently, which is fine: the
+/// preload isolates run at below-normal priority.
+const _thumbnailsBeforePreload = 24;
 
 /// How long to wait after the last slider change before actually
 /// re-rendering, restarted on every change — matches the Python app's
@@ -397,18 +407,26 @@ class _EditorScreenState extends State<EditorScreen> {
   bool _loading = false;
   ExportCancellationToken? _exportCancellation;
 
-  /// True while the user has dismissed the loading overlay via "Hide" but
-  /// the underlying operation is still running — the app stays usable
-  /// (browsing the filmstrip, opening another photo) while it finishes in
-  /// the background. Reset to false whenever a new loading state starts,
-  /// so the next long operation shows its overlay again rather than
-  /// staying permanently hidden from one dismissal.
-  bool _loadingOverlayHidden = false;
+  /// Every loading operation now surfaces through the compact docked
+  /// [_HiddenLoadingIndicator] rather than the dark modal [_LoadingOverlay]
+  /// — so this is effectively always true. The modal and its "Hide" path
+  /// ([_hideLoadingOverlay]) are kept wired up but never triggered; flip
+  /// this back to `false` (and restore the per-operation resets that used
+  /// to set it) to bring the modal back.
+  bool _loadingOverlayHidden = true;
 
   /// Whichever folder is actually loaded into [_files] right now — may be
   /// one of [AppSettings.libraryFolders] or one of its subfolders. Used to
-  /// highlight the active folder in the sidebar.
+  /// highlight the active folder in the sidebar. Null while a single file
+  /// (from Open File / the recent-files list) is what's loaded — see
+  /// [_currentSingleFile].
   String? _currentFolder;
+
+  /// The single file loaded into [_files] right now (via Open File or the
+  /// sidebar's recent-files list), or null when a folder is loaded
+  /// instead. Mutually exclusive with [_currentFolder]; used to highlight
+  /// the active entry in the sidebar's recent-files list.
+  String? _currentSingleFile;
   final Map<String, Uint8List> _thumbnails = {};
   final Map<String, EditSourcePair> _editSources = {};
   final Map<String, Uint8List> _renderedPreviews = {};
@@ -503,6 +521,18 @@ class _EditorScreenState extends State<EditorScreen> {
   int _thumbnailsLoaded = 0;
   int _thumbnailsTotal = 0;
 
+  /// Coalesces the rebuilds [_loadThumbnails]'s concurrent workers trigger
+  /// as each thumbnail lands — see [_scheduleThumbnailUiFlush]. Non-null
+  /// only while a flush is pending.
+  Timer? _thumbnailUiFlushTimer;
+
+  /// Completed once [_loadThumbnails] has filled the visible filmstrip (or
+  /// finished the whole batch) — [_preloadPreviewCache] awaits it before
+  /// starting any speculative RAW decode. Recreated per folder load; any
+  /// prior one is completed when the next load starts or loading is
+  /// cancelled, so a waiter never hangs.
+  Completer<void>? _visibleThumbnailsReady;
+
   /// Saved slider values per photo (absolute path), persisted to disk.
   /// Loaded once at startup; not guarded against edits made before that
   /// finishes, since reading a small JSON file is effectively instant next
@@ -557,7 +587,7 @@ class _EditorScreenState extends State<EditorScreen> {
   /// to be visible at all.
   final Map<MaskType, double> _maskOverlayOpacity = {
     MaskType.linearGradient: 0.15,
-    MaskType.radialGradient: 0.15,
+    MaskType.radialGradient: 0.00,
     MaskType.brush: 0.01,
     MaskType.colorRange: 0.20,
   };
@@ -823,43 +853,10 @@ class _EditorScreenState extends State<EditorScreen> {
     _pushHistory();
     _scheduleRender(live: false);
     unawaited(_flushCurrentEdits());
-    if (preset.unsupportedAttributes.isNotEmpty) {
-      _showUnsupportedPresetAttributes(preset);
-    }
-  }
-
-  /// Non-blocking notice about a preset's unsupported settings — a
-  /// SnackBar rather than the modal dialog this used to be, matching how
-  /// export completion is surfaced (see `_exportCurrent`'s SnackBar):
-  /// applying a preset already fully committed its supported settings, so
-  /// there's nothing left to confirm/dismiss here, just an FYI the user
-  /// can act on (copy the list) or ignore without it blocking the editor.
-  void _showUnsupportedPresetAttributes(Preset preset) {
-    final l10n = AppLocalizations.of(context)!;
-    final attributeList = preset.unsupportedAttributes.join(', ');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: const Duration(seconds: 4),
-        content: Text(
-          '${l10n.presetUnsupportedTitle}: '
-          '${l10n.presetUnsupportedMessage(preset.name)} $attributeList',
-          maxLines: 3,
-          overflow: TextOverflow.ellipsis,
-        ),
-        action: SnackBarAction(
-          label: l10n.presetUnsupportedCopyAction,
-          onPressed: () {
-            unawaited(Clipboard.setData(ClipboardData(text: attributeList)));
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                duration: const Duration(seconds: 2),
-                content: Text(l10n.presetUnsupportedCopiedMessage),
-              ),
-            );
-          },
-        ),
-      ),
-    );
+    // Preset attributes this app can't render yet (see
+    // Preset.unsupportedAttributes / preset_xmp.dart) are silently
+    // ignored — no user-facing warning. The gap is tracked in the repo's
+    // PENDING.md; the goal is full preset compatibility.
   }
 
   /// Whether [preset] is the one currently applied to the selected photo.
@@ -992,6 +989,26 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     await File(destPath).writeAsString(xmpFromPreset(preset));
+  }
+
+  /// Exports the multi-selected presets as a single `.zip` of `.xmp` files
+  /// — the bulk counterpart to [_exportPreset], reachable from the Presets
+  /// panel's selection-mode header.
+  Future<void> _exportPresets(List<Preset> presets) async {
+    if (presets.isEmpty) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final destPath = await FilePicker.saveFile(
+      dialogTitle: l10n.presetExportManyDialogTitle,
+      fileName: 'darkmoon-presets.zip',
+      type: FileType.custom,
+      allowedExtensions: ['zip'],
+    );
+    if (destPath == null) {
+      return;
+    }
+    await File(destPath).writeAsBytes(presetsToZipBytes(presets));
   }
 
   /// Imports one or more `.xmp` presets, or `.zip` bundles of them (how
@@ -1186,6 +1203,9 @@ class _EditorScreenState extends State<EditorScreen> {
     _renderDebounceTimer?.cancel();
     _catalogSaveTimer?.cancel();
     _slowRenderTimer?.cancel();
+    _thumbnailFlushTimer?.cancel();
+    _thumbnailUiFlushTimer?.cancel();
+    _completeVisibleThumbnailsReady();
     _viewController.dispose();
     _lifecycleListener.dispose();
     super.dispose();
@@ -1493,7 +1513,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _neutralPreviews.remove(path);
       _edits.remove(path);
       _photoCurves.remove(path);
-      _photoMasks.remove(path);
+     
       if (removedIndex == _selectedIndex) {
         _selectedIndex = null;
       } else if (_selectedIndex != null && removedIndex < _selectedIndex!) {
@@ -1530,9 +1550,38 @@ class _EditorScreenState extends State<EditorScreen> {
   /// Loads a single recently-opened file from the sidebar (moves it back to
   /// the front of the recent list rather than duplicating the entry).
   Future<void> _selectRecentFile(String path) async {
+    if (path == _currentSingleFile) {
+      return;
+    }
     await _loadSingleFile(path);
     final next = _settings.withRecentFile(path);
     setState(() => _settings = next);
+    unawaited(saveSettings(next));
+  }
+
+  /// Drops [path] from the sidebar's recent-files list and persists the
+  /// change. Clears the main view if it was showing that file, mirroring
+  /// [_removeLibraryFolder].
+  void _removeRecentFile(String path) {
+    final next = _settings.copyWith(
+      recentFiles: _settings.recentFiles.where((f) => f != path).toList(),
+    );
+    final showingRemoved = _currentSingleFile == path;
+    setState(() {
+      _settings = next;
+      if (showingRemoved) {
+        _files = const [];
+        _selectedIndex = null;
+        _currentSingleFile = null;
+        _thumbnails.clear();
+        _editSources.clear();
+        _renderedPreviews.clear();
+        _histograms.clear();
+        _metadata.clear();
+        _neutralPreviews.clear();
+        _beforeAfterMode = false;
+      }
+    });
     unawaited(saveSettings(next));
   }
 
@@ -1541,6 +1590,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final generation = ++_folderGeneration;
     _beginLoadingFiles();
     _currentFolder = folder;
+    _currentSingleFile = null;
     if (_settings.lastActiveFolder != folder) {
       final next = _settings.copyWith(lastActiveFolder: folder);
       _settings = next;
@@ -1561,6 +1611,8 @@ class _EditorScreenState extends State<EditorScreen> {
     unawaited(_flushCurrentEdits());
     final generation = ++_folderGeneration;
     _beginLoadingFiles();
+    _currentFolder = null;
+    _currentSingleFile = path;
     DateTime modified;
     try {
       modified = (await File(path).stat()).modified;
@@ -1579,7 +1631,6 @@ class _EditorScreenState extends State<EditorScreen> {
   void _beginLoadingFiles() {
     setState(() {
       _loading = true;
-      _loadingOverlayHidden = false;
       _thumbnails.clear();
       _editSources.clear();
       _renderedPreviews.clear();
@@ -1601,6 +1652,9 @@ class _EditorScreenState extends State<EditorScreen> {
     _folderGeneration++;
     _renderRequestId++;
     _slowRenderTimer?.cancel();
+    _thumbnailUiFlushTimer?.cancel();
+    _thumbnailUiFlushTimer = null;
+    _completeVisibleThumbnailsReady();
     _exportCancellation?.cancel();
     setState(() {
       _loading = false;
@@ -1623,7 +1677,9 @@ class _EditorScreenState extends State<EditorScreen> {
   /// Applies a freshly-listed folder/file set, kicks off thumbnail loading
   /// (awaited, so the loading overlay's real progress reflects it) and the
   /// selected photo's decode/render (unawaited, so it proceeds in parallel
-  /// rather than waiting behind the thumbnail batch).
+  /// rather than waiting behind the thumbnail batch). The preview-cache
+  /// preload is also started here but internally waits for the visible
+  /// thumbnails first — see [_preloadPreviewCache].
   Future<void> _applyFiles(
     List<RawFile> files,
     int? selectedIndex,
@@ -1653,6 +1709,10 @@ class _EditorScreenState extends State<EditorScreen> {
         _loadEditSourceAndRender(files[selectedIndex].path, generation),
       );
     }
+    // Recreate the gate the preload waits on (releasing any prior waiter),
+    // then start both — the preload blocks on _loadThumbnails' progress.
+    _completeVisibleThumbnailsReady();
+    _visibleThumbnailsReady = Completer<void>();
     unawaited(_preloadPreviewCache(files, selectedIndex, generation));
     await _loadThumbnails(files, generation);
     if (!mounted || generation != _folderGeneration) {
@@ -1677,12 +1737,19 @@ class _EditorScreenState extends State<EditorScreen> {
         if (!mounted || generation != _folderGeneration) {
           return;
         }
-        setState(() {
-          _thumbnailsLoaded++;
-          if (bytes != null) {
-            _thumbnails[file.path] = bytes;
-          }
-        });
+        // Mutate state directly, then schedule one coalesced rebuild
+        // instead of a setState per thumbnail: with several workers each
+        // finishing a decode every few hundred ms, a rebuild apiece floods
+        // the build pipeline and is a big part of what makes opening a
+        // large folder feel unresponsive.
+        _thumbnailsLoaded++;
+        if (bytes != null) {
+          _thumbnails[file.path] = bytes;
+        }
+        _scheduleThumbnailUiFlush();
+        if (_thumbnailsLoaded >= _thumbnailsBeforePreload) {
+          _completeVisibleThumbnailsReady();
+        }
         if (bytes != null && !fromCache) {
           unawaited(cache?.store(file.path, bytes));
         }
@@ -1692,7 +1759,42 @@ class _EditorScreenState extends State<EditorScreen> {
     await Future.wait(
       List.generate(_settings.thumbnailConcurrency, (_) => worker()),
     );
+    // Land the final counts immediately rather than waiting on a pending
+    // coalesced flush.
+    _thumbnailUiFlushTimer?.cancel();
+    _thumbnailUiFlushTimer = null;
+    if (mounted && generation == _folderGeneration) {
+      setState(() {});
+    }
+    // Release the preload even for a folder with fewer than
+    // _thumbnailsBeforePreload photos, or if workers exited early.
+    _completeVisibleThumbnailsReady();
     unawaited(cache?.flush());
+  }
+
+  /// Completes [_visibleThumbnailsReady] once, if it's live and pending.
+  void _completeVisibleThumbnailsReady() {
+    final completer = _visibleThumbnailsReady;
+    if (completer != null && !completer.isCompleted) {
+      completer.complete();
+    }
+  }
+
+  /// Schedules a single catch-up [setState] for the batch of thumbnail
+  /// fields [_loadThumbnails]'s workers mutate directly — folding a burst
+  /// of concurrent decodes into ~one rebuild per frame-ish interval. The
+  /// fields are already updated by the time this fires; the empty setState
+  /// just marks the tree dirty.
+  void _scheduleThumbnailUiFlush() {
+    if (_thumbnailUiFlushTimer != null) {
+      return;
+    }
+    _thumbnailUiFlushTimer = Timer(const Duration(milliseconds: 90), () {
+      _thumbnailUiFlushTimer = null;
+      if (mounted) {
+        setState(() {});
+      }
+    });
   }
 
   /// A JPEG common image (by far the usual case for a "loading photos is
@@ -1718,7 +1820,7 @@ class _EditorScreenState extends State<EditorScreen> {
         // Fall through to the general decode path below.
       }
     }
-    return compute(decodeRawThumbnail, file.path);
+    return compute(decodeRawThumbnailLowPriority, file.path);
   }
 
   void _selectIndex(int index) {
@@ -1757,7 +1859,6 @@ class _EditorScreenState extends State<EditorScreen> {
     if (sources == null) {
       setState(() {
         _isDecodingPhoto = true;
-        _loadingOverlayHidden = false;
       });
 
       // Cache lookup/decode happens here in the main isolate/from a
@@ -1829,6 +1930,10 @@ class _EditorScreenState extends State<EditorScreen> {
   /// actually finishes within that window instead of one file at a time)
   /// so opening a folder with thousands of photos doesn't spend a long
   /// time decoding photos nobody's looked at yet.
+  ///
+  /// Starts only once the thumbnail batch has filled the visible filmstrip
+  /// (see [_thumbnailsBeforePreload]), so the RAW decodes here never
+  /// out-compete the thumbnails the user is waiting to see.
   Future<void> _preloadPreviewCache(
     List<RawFile> files,
     int? selectedIndex,
@@ -1836,6 +1941,12 @@ class _EditorScreenState extends State<EditorScreen> {
   ) async {
     final cache = _previewCache;
     if (cache == null || files.isEmpty) {
+      return;
+    }
+    // Wait for the visible filmstrip to fill in before spending cores on
+    // photos nobody's selected — see [_thumbnailsBeforePreload].
+    await _visibleThumbnailsReady?.future;
+    if (!mounted || generation != _folderGeneration) {
       return;
     }
     final start = selectedIndex ?? 0;
@@ -1852,16 +1963,21 @@ class _EditorScreenState extends State<EditorScreen> {
       EditSourcePair? sources;
       var fromCache = false;
       if (cachedJpeg != null) {
-        sources = await compute(decodeEditSourcePairFromCachedJpeg, cachedJpeg);
+        sources = await compute(
+          decodeEditSourcePairFromCachedJpegLowPriority,
+          cachedJpeg,
+        );
         fromCache = sources != null;
       }
       // Cache miss (or a corrupt cache entry) — a real decode, not
       // skipped, so this photo's cache exists by the time the user
-      // actually selects it.
+      // actually selects it. Low priority: nobody's waiting on this photo
+      // yet, so it must not out-compete the UI or the thumbnail batch.
       sources ??= await decodeEditSourcesWithProgress(
         file.path,
         (_) {},
         previewMaxDimension: _settings.previewResolution,
+        lowPriority: true,
       );
       if (sources == null || !mounted || generation != _folderGeneration) {
         return;
@@ -2172,7 +2288,6 @@ class _EditorScreenState extends State<EditorScreen> {
             : (AiDenoiseLevel.values.indexOf(level) + 1).toDouble(),
       };
       _isApplyingAiDenoise = true;
-      _loadingOverlayHidden = false;
       _aiDenoiseRenderStage = null;
     });
     await _renderPreview(
@@ -2879,7 +2994,6 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() {
       _exporting = true;
       _exportCancellation = ExportCancellationToken();
-      _loadingOverlayHidden = false;
       _exportStage = null;
     });
     final result = await exportPhotoWithProgress(
@@ -3035,11 +3149,13 @@ class _EditorScreenState extends State<EditorScreen> {
                                     roots: _settings.libraryFolders,
                                     recentFiles: _settings.recentFiles,
                                     selectedPath: _currentFolder,
+                                    selectedRecentFile: _currentSingleFile,
                                     onSelect: (path) =>
                                         unawaited(_selectSidebarFolder(path)),
                                     onRemove: _removeLibraryFolder,
                                     onSelectRecentFile: (path) =>
                                         unawaited(_selectRecentFile(path)),
+                                    onRemoveRecentFile: _removeRecentFile,
                                     rawOnly: _settings.rawOnly,
                                     onRawOnlyChanged: _setRawOnly,
                                   ),
@@ -3073,6 +3189,8 @@ class _EditorScreenState extends State<EditorScreen> {
                                           unawaited(_deletePreset(preset)),
                                       onDeleteMany: (presets) =>
                                           unawaited(_deletePresets(presets)),
+                                      onExportMany: (presets) =>
+                                          unawaited(_exportPresets(presets)),
                                     ),
                                   ),
                                 ),
@@ -3140,13 +3258,12 @@ class _EditorScreenState extends State<EditorScreen> {
                                       ),
                                     ),
                                   ),
-                                // A background op the user dismissed via
-                                // the loading overlay's own "Hide" button
-                                // (_hideLoadingOverlay) still needs SOME
-                                // visible sign it's still running — sits
-                                // in the preview's own bottom breathing
-                                // room (_ImageArea._verticalBreathingRoom)
-                                // rather than covering any actual content.
+                                // Every loading operation surfaces here now
+                                // (see _loadingOverlayHidden) — a compact
+                                // status line in the preview's own bottom
+                                // breathing room
+                                // (_ImageArea._verticalBreathingRoom) rather
+                                // than a modal covering the editor.
                                 if (_loadingOverlayHidden)
                                   Builder(
                                     builder: (context) {
@@ -3161,16 +3278,10 @@ class _EditorScreenState extends State<EditorScreen> {
                                         left: 16,
                                         right: 16,
                                         bottom: 12,
-                                        child: Align(
-                                          alignment: Alignment.center,
-                                          child: ConstrainedBox(
-                                            constraints: const BoxConstraints(
-                                              maxWidth: 300,
-                                            ),
-                                            child: _HiddenLoadingIndicator(
-                                              info: info,
-                                              onCancel: _cancelLoading,
-                                            ),
+                                        child: Center(
+                                          child: _HiddenLoadingIndicator(
+                                            info: info,
+                                            onCancel: _cancelLoading,
                                           ),
                                         ),
                                       );
@@ -3783,34 +3894,46 @@ class _LoadingOverlay extends StatelessWidget {
   }
 }
 
-/// Compact stand-in for the Undo/Reset/Redo pill, shown in the same slot
-/// while a long operation is still running in the background after the
-/// user dismissed its [_LoadingOverlay] via "Hide" — plain white text/bar
-/// with no card or scrim (unlike the overlay it replaces), so it reads as
-/// part of the toolbar chrome rather than another modal fighting for
-/// attention.
+/// The compact loading status line every operation now shows (folder
+/// open, AI denoise, slow render, export) — plain white text + bar with no
+/// card or scrim, sitting in the preview's bottom breathing room so it
+/// reads as chrome rather than a modal. The message and bar are centred on
+/// the preview; the Cancel button is pinned to the right edge without
+/// stealing width from the bar, so the status doesn't look off-centre.
 class _HiddenLoadingIndicator extends StatelessWidget {
   const _HiddenLoadingIndicator({required this.info, required this.onCancel});
 
   final _LoadingInfo info;
   final VoidCallback onCancel;
 
+  /// Fixed width so the bar length (and the centring) is stable regardless
+  /// of message length — matches [_LoadingOverlay]'s card width.
+  static const double _width = 300;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final progress = info.progress;
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
+    return SizedBox(
+      width: _width,
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          Column(
             mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Text(
-                info.message,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: Colors.white, fontSize: 11.5),
+              Padding(
+                // Keep the centred message clear of the Cancel button on
+                // both sides so it stays visually centred.
+                padding: const EdgeInsets.symmetric(horizontal: 28),
+                child: Text(
+                  info.message,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Colors.white, fontSize: 11.5),
+                ),
               ),
               const SizedBox(height: 4),
               ClipRRect(
@@ -3833,17 +3956,22 @@ class _HiddenLoadingIndicator extends StatelessWidget {
               ),
             ],
           ),
-        ),
-        const SizedBox(width: 10),
-        TextButton(
-          onPressed: onCancel,
-          style: TextButton.styleFrom(
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 10),
+          Positioned(
+            right: 0,
+            top: 0,
+            child: IconButton(
+              onPressed: onCancel,
+              tooltip: l10n.cancelButton,
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
+              iconSize: 15,
+              color: Colors.white,
+              icon: const Icon(CupertinoIcons.xmark),
+            ),
           ),
-          child: Text(l10n.cancelButton, style: const TextStyle(fontSize: 12)),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

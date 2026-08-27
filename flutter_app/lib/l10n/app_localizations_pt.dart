@@ -82,6 +82,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sidebarRemoveFolderTooltip => 'Remover pasta';
 
   @override
+  String get sidebarRemoveRecentFileTooltip => 'Remover dos arquivos recentes';
+
+  @override
   String get sidebarPresetsSection => 'PRESETS';
 
   @override
@@ -126,6 +129,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get presetExportDialogTitle => 'Exportar preset';
 
   @override
+  String get presetExportManyTooltip => 'Exportar selecionados em .zip';
+
+  @override
+  String get presetExportManyDialogTitle => 'Exportar presets';
+
+  @override
   String get presetImportDialogTitle => 'Importar presets';
 
   @override
@@ -148,21 +157,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String presetSelectedCount(int count) {
     return '$count selecionado(s)';
   }
-
-  @override
-  String get presetUnsupportedTitle => 'Alguns ajustes não foram aplicados';
-
-  @override
-  String presetUnsupportedMessage(String name) {
-    return 'O preset \"$name\" tem ajustes que este app ainda não suporta, então foram ignorados:';
-  }
-
-  @override
-  String get presetUnsupportedCopyAction => 'Copiar';
-
-  @override
-  String get presetUnsupportedCopiedMessage =>
-      'Copiado para a área de transferência';
 
   @override
   String get beforeLabel => 'Antes';

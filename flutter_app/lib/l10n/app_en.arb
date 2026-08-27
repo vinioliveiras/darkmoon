@@ -36,6 +36,7 @@
   "sidebarRecentFilesSection": "RECENT FILES",
   "sidebarFoldersSection": "FOLDERS",
   "sidebarRemoveFolderTooltip": "Remove folder",
+  "sidebarRemoveRecentFileTooltip": "Remove from recent files",
   "sidebarPresetsSection": "PRESETS",
   "presetImportTooltip": "Import presets (.xmp or .zip)",
   "presetSaveNewTooltip": "Save current edits as a preset",
@@ -53,6 +54,8 @@
   "presetSaveNewTitle": "Save preset",
   "presetRenameTitle": "Rename preset",
   "presetExportDialogTitle": "Export preset",
+  "presetExportManyTooltip": "Export selected as .zip",
+  "presetExportManyDialogTitle": "Export presets",
   "presetImportDialogTitle": "Import presets",
   "presetDeleteConfirmMessage": "Delete the preset \"{name}\"? This can't be undone.",
   "@presetDeleteConfirmMessage": {
@@ -68,13 +71,6 @@
   "@presetSelectedCount": {
     "placeholders": { "count": {"type": "int"} }
   },
-  "presetUnsupportedTitle": "Some settings weren't applied",
-  "presetUnsupportedMessage": "The preset \"{name}\" has settings this app doesn't support yet, so they were skipped:",
-  "@presetUnsupportedMessage": {
-    "placeholders": { "name": {"type": "String"} }
-  },
-  "presetUnsupportedCopyAction": "Copy",
-  "presetUnsupportedCopiedMessage": "Copied to clipboard",
 
   "beforeLabel": "Before",
   "afterLabel": "After",

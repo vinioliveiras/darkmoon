@@ -2,5 +2,3 @@ build/
 dist/
 *.zip
 .claude/*
-pending.md
-Copilot chat.json

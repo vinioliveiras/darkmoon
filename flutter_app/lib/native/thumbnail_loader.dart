@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
 import '../raw_files.dart' show isRawFile;
+import 'background_priority.dart';
 import 'image_utils.dart';
 import 'libraw.dart';
 
@@ -66,4 +67,15 @@ Uint8List? decodeRawThumbnail(String path) {
   return Uint8List.fromList(
     img.encodeJpg(oriented, quality: 85, chroma: img.JpegChroma.yuv420),
   );
+}
+
+/// [decodeRawThumbnail] wrapped to run at below-normal OS-thread priority
+/// — the form the folder-open thumbnail batch uses via `compute()`, so a
+/// big folder's decode storm yields to the UI isolate instead of freezing
+/// it. Kept as a separate top-level entry point (rather than baking the
+/// priority drop into [decodeRawThumbnail]) so the smoke tests and any
+/// future foreground caller keep the plain, normal-priority version.
+Uint8List? decodeRawThumbnailLowPriority(String path) {
+  lowerBackgroundThreadPriority();
+  return decodeRawThumbnail(path);
 }

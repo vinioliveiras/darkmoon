@@ -7,6 +7,30 @@ import 'package:path/path.dart' as p;
 import 'preset.dart';
 import 'preset_xmp.dart';
 
+/// Encodes [presets] into a `.zip` of one `.xmp` per preset — the bulk
+/// counterpart to [presetsFromZip], used by the Presets panel's
+/// multi-select "export" action. Names are sanitised and de-duplicated so
+/// two presets called the same thing don't collide inside the archive.
+List<int> presetsToZipBytes(List<Preset> presets) {
+  final archive = Archive();
+  final usedNames = <String>{};
+  for (final preset in presets) {
+    var base = preset.name.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+    if (base.isEmpty) {
+      base = 'preset';
+    }
+    var name = '$base.xmp';
+    var counter = 2;
+    while (!usedNames.add(name.toLowerCase())) {
+      name = '$base ($counter).xmp';
+      counter++;
+    }
+    final bytes = utf8.encode(xmpFromPreset(preset));
+    archive.addFile(ArchiveFile(name, bytes.length, bytes));
+  }
+  return ZipEncoder().encode(archive);
+}
+
 /// Extracts every `.xmp` preset found anywhere inside a Lightroom preset
 /// export `.zip` — Lightroom bundles multiple presets this way, often
 /// nested under a group/folder structure inside the archive, so this

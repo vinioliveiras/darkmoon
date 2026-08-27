@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
 import '../raw_files.dart' show isRawFile;
+import 'background_priority.dart';
 import 'common_image.dart';
 import 'image_utils.dart';
 import 'libraw.dart';
@@ -103,15 +104,20 @@ class _EditSourcesIsolateArgs {
   const _EditSourcesIsolateArgs(
     this.path,
     this.previewMaxDimension,
-    this.sendPort,
-  );
+    this.sendPort, {
+    this.lowPriority = false,
+  });
 
   final String path;
   final int previewMaxDimension;
   final SendPort sendPort;
+  final bool lowPriority;
 }
 
 void _decodeEditSourcesIsolateEntry(_EditSourcesIsolateArgs args) {
+  if (args.lowPriority) {
+    lowerBackgroundThreadPriority();
+  }
   final result = decodeEditSources(
     args.path,
     previewMaxDimension: args.previewMaxDimension,
@@ -124,15 +130,26 @@ void _decodeEditSourcesIsolateEntry(_EditSourcesIsolateArgs args) {
 /// (rather than `compute()`, which only returns once at the very end) so
 /// [onProgress] can be called as each [RawDecodeStage] starts — the same
 /// pattern `export_job.dart`'s `exportPhotoWithProgress` uses.
+///
+/// [lowPriority] drops the decode isolate's OS thread to below-normal
+/// priority — pass it for speculative prewarming (the preview-cache
+/// preload when a folder opens), never for a decode the user is actively
+/// waiting on.
 Future<EditSourcePair?> decodeEditSourcesWithProgress(
   String path,
   void Function(RawDecodeStage stage) onProgress, {
   int previewMaxDimension = defaultPreviewMaxDimension,
+  bool lowPriority = false,
 }) async {
   final receivePort = ReceivePort();
   final isolate = await Isolate.spawn(
     _decodeEditSourcesIsolateEntry,
-    _EditSourcesIsolateArgs(path, previewMaxDimension, receivePort.sendPort),
+    _EditSourcesIsolateArgs(
+      path,
+      previewMaxDimension,
+      receivePort.sendPort,
+      lowPriority: lowPriority,
+    ),
   );
   try {
     await for (final message in receivePort) {
@@ -201,6 +218,18 @@ EditSourcePair? decodeEditSourcePairFromCachedJpeg(Uint8List jpegBytes) {
       rgbBytes: _rgbBytes(liveImage),
     ),
   );
+}
+
+/// [decodeEditSourcePairFromCachedJpeg] wrapped to run at below-normal
+/// OS-thread priority — the form the folder-open preview-cache preload
+/// uses via `compute()`, so prewarming photos nobody's selected yet
+/// yields to the UI isolate. A genuine selection decodes at normal
+/// priority (the plain function above), since the user is waiting on it.
+EditSourcePair? decodeEditSourcePairFromCachedJpegLowPriority(
+  Uint8List jpegBytes,
+) {
+  lowerBackgroundThreadPriority();
+  return decodeEditSourcePairFromCachedJpeg(jpegBytes);
 }
 
 /// Decodes the photo at [path] at full native resolution — no preview
