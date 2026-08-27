@@ -293,7 +293,6 @@ const _sections = <String, List<_SliderSpec>>{
     ),
     _SliderSpec(
       'Tint',
-      -100,
       -150,
       150,
       0,
