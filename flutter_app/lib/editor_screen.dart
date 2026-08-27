@@ -854,13 +854,42 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     final fraction = _presetAmount / 100.0;
     final baseValues = _paramValues;
-    final targetValues = {..._defaultParamValues(), ...preset.values};
-    final blendedValues = {
-      for (final key in {...baseValues.keys, ...targetValues.keys})
-        key:
-            (baseValues[key] ?? 0) +
-            ((targetValues[key] ?? 0) - (baseValues[key] ?? 0)) * fraction,
-    };
+    // Only the continuous slider keys get blended by [_presetAmount].
+    // Everything else in the flat map — the per-section enable toggles
+    // (_categoryEnabled_*), the White Balance mode, preserve-brightness —
+    // is a discrete flag: numerically lerping it against a missing key
+    // (treated as 0) silently turns it off. Those keys are taken from the
+    // preset when it sets them, otherwise left exactly as they were.
+    final defaults = _defaultParamValues();
+    final sliderKeys = defaults.keys.toSet()
+      ..remove('Temperature')
+      ..remove('Tint');
+    final blendedValues = <String, double>{...baseValues};
+    for (final key in sliderKeys) {
+      final base = baseValues[key] ?? 0;
+      final target = preset.values[key] ?? defaults[key] ?? 0;
+      blendedValues[key] = base + (target - base) * fraction;
+    }
+    for (final entry in preset.values.entries) {
+      if (!sliderKeys.contains(entry.key) &&
+          entry.key != 'Temperature' &&
+          entry.key != 'Tint') {
+        blendedValues[entry.key] = entry.value;
+      }
+    }
+    // White Balance: blend Temperature/Tint only if the preset carries
+    // them, and flip the mode to Custom; otherwise leave WB untouched.
+    if (preset.values.containsKey('Temperature') ||
+        preset.values.containsKey('Tint')) {
+      final asShot = _asShotFor(_files[_selectedIndex!].path);
+      final baseTemp = baseValues['Temperature'] ?? asShot.kelvin;
+      final baseTint = baseValues['Tint'] ?? asShot.tint;
+      final tgtTemp = preset.values['Temperature'] ?? asShot.kelvin;
+      final tgtTint = preset.values['Tint'] ?? asShot.tint;
+      blendedValues['Temperature'] = baseTemp + (tgtTemp - baseTemp) * fraction;
+      blendedValues['Tint'] = baseTint + (tgtTint - baseTint) * fraction;
+      blendedValues[_wbModeKey] = WbMode.custom.index.toDouble();
+    }
     setState(() {
       _paramValues = blendedValues;
       _currentCurves = lerpPhotoCurves(_currentCurves, preset.curves, fraction);
@@ -899,7 +928,10 @@ class _EditorScreenState extends State<EditorScreen> {
     final preset = Preset(
       id: 'preset_${DateTime.now().microsecondsSinceEpoch}',
       name: name,
-      values: Map<String, double>.from(_paramValues),
+      // _catalogParams() drops Temperature/Tint while on "As Shot", so a
+      // preset saved without a deliberate WB doesn't force one on other
+      // photos.
+      values: _catalogParams(),
       curves: _currentCurves,
     );
     setState(() => _presets = [..._presets, preset]);
@@ -5456,7 +5488,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                         if (!_collapsed.contains(entry.key)) ...[
                           if (entry.key == 'WHITE BALANCE')
                             Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.only(top: 6, bottom: 14),
                               child: _buildWhiteBalanceModeRow(l10n, values),
                             ),
                           for (final spec in entry.value)
