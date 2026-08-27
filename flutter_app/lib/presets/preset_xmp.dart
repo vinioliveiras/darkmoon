@@ -20,22 +20,14 @@ const _rdfNamespace = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 
 /// (our slider key, crs: attribute name) — same numeric meaning and
 /// range on both sides, no conversion needed.
-// TEMPORARY: Shadows2012/Whites2012/Blacks2012 deliberately excluded —
-// presets no longer set these three on import (still fully manually
-// adjustable in the Tone panel; only preset-driven values are skipped;
-// Highlights2012 is unaffected, kept below). Their underlying luma-
-// preserving lift still visibly posterizes/adds noise in near-black/
-// near-white regions on strong values, even after two rounds of
-// mitigation (v0.8.6, v0.8.9) — real presets reliably hit exactly those
-// strong values, manual dragging usually doesn't. Re-add
-// ('Shadows', 'Shadows2012') etc. once that's properly fixed (needs
-// higher render-pipeline precision than the current 8-bit-throughout
-// design allows).
 const _directMappings = [
   ('Temperature', 'Temperature'),
   ('Tint', 'Tint'),
   ('Contrast', 'Contrast2012'),
   ('Highlights', 'Highlights2012'),
+  ('Shadows', 'Shadows2012'),
+  ('Whites', 'Whites2012'),
+  ('Blacks', 'Blacks2012'),
   ('Texture', 'Texture'),
   ('Clarity', 'Clarity2012'),
   ('Dehaze', 'Dehaze'),
