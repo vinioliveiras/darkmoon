@@ -5182,13 +5182,24 @@ class _ControlsPanelState extends State<_ControlsPanel> {
     tint: widget.metadata?.asShotTint ?? wbDefaultTint,
   );
 
-  /// Slider default/fallback for Temperature/Tint = the camera as-shot
-  /// value; null for any other slider.
-  double? _wbSliderFallback(String name) => switch (name) {
-    'Temperature' => _asShot.kelvin,
-    'Tint' => _asShot.tint,
-    _ => null,
-  };
+  /// The neutral point for the Temperature/Tint sliders — where the value
+  /// marker sits and what a double-click resets to. It follows the
+  /// selected White Balance mode: a fixed lighting preset uses that
+  /// preset's Kelvin/Tint, everything else (As Shot / Auto / Custom) uses
+  /// the camera as-shot. Null for any non-WB slider.
+  double? _wbSliderFallback(String name) {
+    if (name != 'Temperature' && name != 'Tint') {
+      return null;
+    }
+    final modeIndex = (widget.values['WhiteBalanceMode'] ?? 0)
+        .toInt()
+        .clamp(0, WbMode.values.length - 1);
+    final preset = wbModePreset(WbMode.values[modeIndex]);
+    if (preset != null) {
+      return name == 'Temperature' ? preset.kelvin : preset.tint;
+    }
+    return name == 'Temperature' ? _asShot.kelvin : _asShot.tint;
+  }
 
   String _wbModeLabel(AppLocalizations l10n, WbMode mode) => switch (mode) {
     WbMode.asShot => l10n.wbModeAsShot,
