@@ -312,28 +312,30 @@ void main() {
   c.b = texture(uLut, vec2(c.b, 0.5)).a;
 
   // Color Mixer — color_mixer.dart's applyColorMixer, a faithful port of
-  // RapidRAW's apply_hsl_panel for Hue/Saturation: HSV (not HSL) in
-  // scene-linear light, Gaussian-weighted per-band influence normalized
-  // per pixel, and the whole effect gated by how saturated the source
-  // pixel already is. Luminance (uMixer[c*3+2] for each band)
-  // intentionally not applied — see applyColorMixer's own doc comment for
-  // why. Still fully unrolled by hand (no loops, no dynamic uMixer
-  // indexing — every index below stays a compile-time constant) for the
-  // same reason as before: a loop-variable ("dynamic") uniform-array
-  // index is exactly the kind of construct some GPU shader compilers
-  // miscompile (SkSL/Impeller's translation varies by backend/driver),
-  // which is what produced the blocky, garbage-looking corruption
-  // previously reported when touching a Mixer/Color Grading Luminance
-  // slider.
+  // RapidRAW's apply_hsl_panel: HSV (not HSL) in scene-linear light,
+  // Gaussian-weighted per-band influence normalized per pixel, and the
+  // whole effect gated by how saturated the source pixel already is.
+  // Luminance (uMixer[c*3+2] for each band) included — a different code
+  // path from the one previously disabled after reports of it blowing
+  // out/pixelating pixels (see applyColorMixer's own doc comment). Still
+  // fully unrolled by hand (no loops, no dynamic uMixer indexing — every
+  // index below stays a compile-time constant): a loop-variable
+  // ("dynamic") uniform-array index is exactly the kind of construct some
+  // GPU shader compilers miscompile (SkSL/Impeller's translation varies
+  // by backend/driver), which is what produced the blocky, garbage-
+  // looking corruption previously reported when touching a Mixer/Color
+  // Grading Luminance slider.
   vec3 linC = vec3(srgbToLinear(c.r), srgbToLinear(c.g), srgbToLinear(c.b));
   if (abs(linC.r - linC.g) >= 0.001 || abs(linC.g - linC.b) >= 0.001) {
     vec3 mixerHsv = rgbToHsv(linC);
     float originalHue = mixerHsv.x;
     float originalSat = mixerHsv.y;
     float originalVal = mixerHsv.z;
+    float originalLuma = dot(linC, vec3(0.2126, 0.7152, 0.0722));
 
     float saturationMask = smoothstep(0.05, 0.20, originalSat);
-    if (saturationMask >= 0.001) {
+    float luminanceWeight = smoothstep(0.0, 1.0, originalSat);
+    if (saturationMask >= 0.001 || luminanceWeight >= 0.001) {
       float w0 = rawHslInfluence(originalHue, hslRangeCenter(0), hslRangeWidth(0));
       float w1 = rawHslInfluence(originalHue, hslRangeCenter(1), hslRangeWidth(1));
       float w2 = rawHslInfluence(originalHue, hslRangeCenter(2), hslRangeWidth(2));
@@ -344,44 +346,58 @@ void main() {
       float w7 = rawHslInfluence(originalHue, hslRangeCenter(7), hslRangeWidth(7));
       float totalRaw = w0 + w1 + w2 + w3 + w4 + w5 + w6 + w7;
 
-      float totalHueShift = 0.0, totalSatMul = 0.0;
-      float hs0 = (w0 / totalRaw) * saturationMask;
+      float totalHueShift = 0.0, totalSatMul = 0.0, totalLumAdj = 0.0;
+      float n0 = w0 / totalRaw; float hs0 = n0 * saturationMask; float lu0 = n0 * luminanceWeight;
       totalHueShift += uMixer[0] * 0.3 * 2.0 * hs0;
       totalSatMul += (uMixer[1] / 100.0) * hs0;
-      float hs1 = (w1 / totalRaw) * saturationMask;
+      totalLumAdj += (uMixer[2] / 100.0) * lu0;
+      float n1 = w1 / totalRaw; float hs1 = n1 * saturationMask; float lu1 = n1 * luminanceWeight;
       totalHueShift += uMixer[3] * 0.3 * 2.0 * hs1;
       totalSatMul += (uMixer[4] / 100.0) * hs1;
-      float hs2 = (w2 / totalRaw) * saturationMask;
+      totalLumAdj += (uMixer[5] / 100.0) * lu1;
+      float n2 = w2 / totalRaw; float hs2 = n2 * saturationMask; float lu2 = n2 * luminanceWeight;
       totalHueShift += uMixer[6] * 0.3 * 2.0 * hs2;
       totalSatMul += (uMixer[7] / 100.0) * hs2;
-      float hs3 = (w3 / totalRaw) * saturationMask;
+      totalLumAdj += (uMixer[8] / 100.0) * lu2;
+      float n3 = w3 / totalRaw; float hs3 = n3 * saturationMask; float lu3 = n3 * luminanceWeight;
       totalHueShift += uMixer[9] * 0.3 * 2.0 * hs3;
       totalSatMul += (uMixer[10] / 100.0) * hs3;
-      float hs4 = (w4 / totalRaw) * saturationMask;
+      totalLumAdj += (uMixer[11] / 100.0) * lu3;
+      float n4 = w4 / totalRaw; float hs4 = n4 * saturationMask; float lu4 = n4 * luminanceWeight;
       totalHueShift += uMixer[12] * 0.3 * 2.0 * hs4;
       totalSatMul += (uMixer[13] / 100.0) * hs4;
-      float hs5 = (w5 / totalRaw) * saturationMask;
+      totalLumAdj += (uMixer[14] / 100.0) * lu4;
+      float n5 = w5 / totalRaw; float hs5 = n5 * saturationMask; float lu5 = n5 * luminanceWeight;
       totalHueShift += uMixer[15] * 0.3 * 2.0 * hs5;
       totalSatMul += (uMixer[16] / 100.0) * hs5;
-      float hs6 = (w6 / totalRaw) * saturationMask;
+      totalLumAdj += (uMixer[17] / 100.0) * lu5;
+      float n6 = w6 / totalRaw; float hs6 = n6 * saturationMask; float lu6 = n6 * luminanceWeight;
       totalHueShift += uMixer[18] * 0.3 * 2.0 * hs6;
       totalSatMul += (uMixer[19] / 100.0) * hs6;
-      float hs7 = (w7 / totalRaw) * saturationMask;
+      totalLumAdj += (uMixer[20] / 100.0) * lu6;
+      float n7 = w7 / totalRaw; float hs7 = n7 * saturationMask; float lu7 = n7 * luminanceWeight;
       totalHueShift += uMixer[21] * 0.3 * 2.0 * hs7;
       totalSatMul += (uMixer[22] / 100.0) * hs7;
+      totalLumAdj += (uMixer[23] / 100.0) * lu7;
 
-      float newSat = clamp(originalSat * (1.0 + totalSatMul), 0.0, 1.0);
-      if (newSat < 0.0001) {
+      if (originalSat * (1.0 + totalSatMul) < 0.0001) {
         // Matches apply_hsl_panel's own near-zero-saturation fallback:
-        // collapse to gray at the original *luma*, not the HSV value (the
-        // max channel) — those two aren't the same number for a non-gray
-        // color.
-        float originalLuma = dot(linC, vec3(0.2126, 0.7152, 0.0722));
-        linC = vec3(clamp(originalLuma, 0.0, 1.0));
+        // collapse to gray at the (Luminance-adjusted) luma, not the HSV
+        // value (the max channel) — those two aren't the same number for
+        // a non-gray color.
+        linC = vec3(clamp(originalLuma * (1.0 + totalLumAdj), 0.0, 1.0));
       } else {
         float newHue = mod(originalHue + totalHueShift + 360.0, 360.0);
         if (newHue < 0.0) newHue += 360.0;
-        linC = hsvToRgb(newHue, newSat, originalVal);
+        float newSat = clamp(originalSat * (1.0 + totalSatMul), 0.0, 1.0);
+        vec3 shifted = hsvToRgb(newHue, newSat, originalVal);
+        float newLuma = dot(shifted, vec3(0.2126, 0.7152, 0.0722));
+        float targetLuma = originalLuma * (1.0 + totalLumAdj);
+        if (newLuma < 0.0001) {
+          linC = vec3(max(0.0, targetLuma));
+        } else {
+          linC = shifted * (targetLuma / newLuma);
+        }
       }
     }
   }

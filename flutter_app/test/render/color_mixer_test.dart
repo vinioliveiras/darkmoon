@@ -70,6 +70,38 @@ void main() {
     expect(result[2], closeTo(154, 1));
   });
 
+  test('a luminance boost brightens a pixel near a band center', () {
+    final source = Uint8List.fromList([120, 150, 180]); // hue ~214, near Blue's 225° center
+    final result = renderRgb(
+      1,
+      1,
+      source,
+      const RenderParams(
+        colorMixer: ColorMixerValues(blue: ChannelAdjust(luminance: 60)),
+      ),
+    );
+
+    expect(result[0], closeTo(136, 1));
+    expect(result[1], closeTo(170, 1));
+    expect(result[2], closeTo(204, 1));
+  });
+
+  test('a luminance cut darkens a pixel near a band center', () {
+    final source = Uint8List.fromList([120, 150, 180]);
+    final result = renderRgb(
+      1,
+      1,
+      source,
+      const RenderParams(
+        colorMixer: ColorMixerValues(blue: ChannelAdjust(luminance: -60)),
+      ),
+    );
+
+    expect(result[0], closeTo(100, 1));
+    expect(result[1], closeTo(126, 1));
+    expect(result[2], closeTo(151, 1));
+  });
+
   test('a fully neutral gray pixel is left untouched', () {
     final source = Uint8List.fromList([128, 128, 128]);
     final result = renderRgb(

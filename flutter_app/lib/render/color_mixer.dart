@@ -127,23 +127,23 @@ double _linearLuma(double r, double g, double b) =>
 /// Applies Lightroom-style selective HSL adjustments to packed RGB [img]
 /// in place — a no-op when every channel is at its default.
 ///
-/// A faithful port of RapidRAW's `apply_hsl_panel` (shader.wgsl) for the
-/// Hue/Saturation sliders: works in scene-linear light (not the
-/// gamma-encoded byte buffer directly), uses HSV rather than HSL (so
-/// brightness is tracked as luma rather than relying on HSL's lightness
-/// channel, which isn't the same thing perceptually), and weighs each of
-/// the 8 bands by a per-pixel-normalized Gaussian influence
+/// A faithful port of RapidRAW's `apply_hsl_panel` (shader.wgsl): works in
+/// scene-linear light (not the gamma-encoded byte buffer directly), uses
+/// HSV rather than HSL (so brightness is tracked as luma and explicitly
+/// restored after the hue/saturation shift, rather than relying on HSL's
+/// lightness channel — the two aren't the same thing perceptually), and
+/// weighs each of the 8 bands by a per-pixel-normalized Gaussian influence
 /// ([_rawHslInfluence]) instead of a linear cutoff. The whole adjustment is
 /// also gated by how saturated the source pixel already is
-/// ([_smoothstep]-based mask), same as RapidRAW: a Hue/Saturation shift on
+/// ([_smoothstep]-based masks), same as RapidRAW: a Hue/Saturation shift on
 /// a desaturated pixel has nothing to grab onto and is left alone.
 ///
-/// Luminance intentionally not applied, same as before this port — still
-/// disabled per-channel in the UI too (see editor_screen.dart's Mixer/HSL
-/// panel) after repeated reports of it blowing out/pixelating pixels, a
-/// separate issue from the dynamic-uniform-array-indexing GPU bug
-/// `shaders/point_ops_post_denoise.frag` describes fixing. A preset's
-/// MixerXLuminance value is still parsed/stored — just never applied.
+/// Luminance is included (re-enabled in editor_screen.dart's Mixer/HSL
+/// panel alongside this port) — a different code path from the one
+/// previously disabled after reports of it blowing out/pixelating pixels:
+/// that one relied on HSL lightness directly; this one tracks luma
+/// explicitly and restores it via a proportional rescale after the
+/// hue/saturation shift, same as RapidRAW.
 ///
 /// Designed to run via `compute()`: pure function over simple,
 /// isolate-transferable data (same as the rest of render.dart).
@@ -167,7 +167,8 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
     final originalLuma = _linearLuma(r, g, b);
 
     final saturationMask = _smoothstep(0.05, 0.20, originalSat);
-    if (saturationMask < 0.001) {
+    final luminanceWeight = _smoothstep(0.0, 1.0, originalSat);
+    if (saturationMask < 0.001 && luminanceWeight < 0.001) {
       continue;
     }
 
@@ -185,25 +186,28 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
 
     var totalHueShift = 0.0;
     var totalSatMultiplier = 0.0;
+    var totalLumAdjust = 0.0;
     for (var c = 0; c < channels.length; c++) {
-      final hueSatInfluence =
-          (rawInfluences[c] / totalRawInfluence) * saturationMask;
-      // The 0.3-per-unit hue scale and /100 saturation scale match
-      // RapidRAW's SCALES.hsl_hue_multiplier/hsl_saturation; the extra
-      // *2.0 on hue matches the shader's own `hsl_adjustments[i].hue *
-      // 2.0`.
+      final normalizedInfluence = rawInfluences[c] / totalRawInfluence;
+      final hueSatInfluence = normalizedInfluence * saturationMask;
+      final lumaInfluence = normalizedInfluence * luminanceWeight;
+      // The 0.3-per-unit hue scale and /100 saturation/luminance scales
+      // match RapidRAW's SCALES.hsl_hue_multiplier/hsl_saturation/
+      // hsl_luminance; the extra *2.0 on hue matches the shader's own
+      // `hsl_adjustments[i].hue * 2.0`.
       totalHueShift += channels[c].hue * 0.3 * 2.0 * hueSatInfluence;
       totalSatMultiplier += (channels[c].saturation / 100.0) * hueSatInfluence;
+      totalLumAdjust += (channels[c].luminance / 100.0) * lumaInfluence;
     }
 
-    final sat = (originalSat * (1.0 + totalSatMultiplier)).clamp(0.0, 1.0);
-    if (sat < 0.0001) {
+    if (originalSat * (1.0 + totalSatMultiplier) < 0.0001) {
       // Matches apply_hsl_panel's own near-zero-saturation fallback: the
-      // pixel collapses to gray at its original *luma*, not its HSV value
-      // (the max channel) — those two aren't the same number for a
-      // non-gray color, and luma is what a viewer actually perceives as
-      // brightness.
-      final v = linearToSrgb(originalLuma.clamp(0.0, 1.0)) * 255.0;
+      // pixel collapses to gray at its (Luminance-adjusted) luma, not its
+      // HSV value (the max channel) — those two aren't the same number
+      // for a non-gray color.
+      final finalLuma =
+          (originalLuma * (1.0 + totalLumAdjust)).clamp(0.0, 1.0);
+      final v = linearToSrgb(finalLuma) * 255.0;
       img[i] = v;
       img[i + 1] = v;
       img[i + 2] = v;
@@ -214,9 +218,21 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
     if (hue < 0) {
       hue += 360.0;
     }
+    final sat = (originalSat * (1.0 + totalSatMultiplier)).clamp(0.0, 1.0);
     final shifted = hsvToRgb(hue, sat, originalVal);
-    img[i] = linearToSrgb(shifted[0]) * 255.0;
-    img[i + 1] = linearToSrgb(shifted[1]) * 255.0;
-    img[i + 2] = linearToSrgb(shifted[2]) * 255.0;
+    final newLuma = _linearLuma(shifted[0], shifted[1], shifted[2]);
+    final targetLuma = originalLuma * (1.0 + totalLumAdjust);
+
+    List<double> finalColor;
+    if (newLuma < 0.0001) {
+      final v = math.max(0.0, targetLuma);
+      finalColor = [v, v, v];
+    } else {
+      final scale = targetLuma / newLuma;
+      finalColor = [shifted[0] * scale, shifted[1] * scale, shifted[2] * scale];
+    }
+    img[i] = linearToSrgb(finalColor[0]) * 255.0;
+    img[i + 1] = linearToSrgb(finalColor[1]) * 255.0;
+    img[i + 2] = linearToSrgb(finalColor[2]) * 255.0;
   }
 }

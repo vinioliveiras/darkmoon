@@ -5140,19 +5140,21 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   ),
                                 ),
                               ),
-                              // Luminance removed from the Mixer/HSL panel
-                              // (Hue and Saturation only) — repeated
-                              // reports of it blowing out/pixelating
-                              // pixels even after fixing the underlying
-                              // GPU shader bug (a uniform array indexed by
-                              // a non-constant loop variable), so it's
-                              // disabled here rather than risk shipping
-                              // another round of a half-confident fix.
-                              // Color Grading's own separate Luminance
-                              // control (Shadows/Midtones/Highlights/
-                              // Global wheels, `_activeGradeRange`) is
-                              // untouched.
-                              for (final suffix in const ['Hue', 'Saturation'])
+                              // Luminance re-enabled: color_mixer.dart now
+                              // ports RapidRAW's apply_hsl_panel in full
+                              // (scene-linear HSV, per-band Gaussian
+                              // influence, saturation-gated), including its
+                              // luma-preserving-then-adjusting Luminance
+                              // term — a different code path from the one
+                              // previously disabled after reports of it
+                              // blowing out/pixelating pixels (that one
+                              // relied on HSL lightness directly, not luma
+                              // explicitly restored after the shift).
+                              for (final suffix in const [
+                                'Hue',
+                                'Saturation',
+                                'Luminance',
+                              ])
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 12),
                                   child: SliderRow(
@@ -5179,7 +5181,11 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   ),
                                 ),
                             ] else
-                              for (final suffix in const ['Hue', 'Saturation'])
+                              for (final suffix in const [
+                                'Hue',
+                                'Saturation',
+                                'Luminance',
+                              ])
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 14),
                                   child: Column(
