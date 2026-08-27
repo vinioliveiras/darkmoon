@@ -320,6 +320,18 @@ abstract class AppLocalizations {
   /// **'Export preset'**
   String get presetExportDialogTitle;
 
+  /// No description provided for @presetExportManyTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Export selected as .zip'**
+  String get presetExportManyTooltip;
+
+  /// No description provided for @presetExportManyDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export presets'**
+  String get presetExportManyDialogTitle;
+
   /// No description provided for @presetImportDialogTitle.
   ///
   /// In en, this message translates to:
@@ -355,30 +367,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'{count} selected'**
   String presetSelectedCount(int count);
-
-  /// No description provided for @presetUnsupportedTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Some settings weren\'t applied'**
-  String get presetUnsupportedTitle;
-
-  /// No description provided for @presetUnsupportedMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'The preset \"{name}\" has settings this app doesn\'t support yet, so they were skipped:'**
-  String presetUnsupportedMessage(String name);
-
-  /// No description provided for @presetUnsupportedCopyAction.
-  ///
-  /// In en, this message translates to:
-  /// **'Copy'**
-  String get presetUnsupportedCopyAction;
-
-  /// No description provided for @presetUnsupportedCopiedMessage.
-  ///
-  /// In en, this message translates to:
-  /// **'Copied to clipboard'**
-  String get presetUnsupportedCopiedMessage;
 
   /// No description provided for @beforeLabel.
   ///

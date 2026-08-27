@@ -24,6 +24,7 @@ class PresetPanel extends StatefulWidget {
     required this.onExport,
     required this.onDelete,
     required this.onDeleteMany,
+    required this.onExportMany,
   });
 
   final List<Preset> presets;
@@ -42,6 +43,7 @@ class PresetPanel extends StatefulWidget {
   final void Function(Preset) onExport;
   final void Function(Preset) onDelete;
   final void Function(List<Preset>) onDeleteMany;
+  final void Function(List<Preset>) onExportMany;
 
   @override
   State<PresetPanel> createState() => _PresetPanelState();
@@ -87,13 +89,21 @@ class _PresetPanelState extends State<PresetPanel> {
     });
   }
 
+  List<Preset> get _selectedPresets => [
+    for (final preset in widget.presets)
+      if (_selectedIds.contains(preset.id)) preset,
+  ];
+
   void _confirmBulkDelete() {
-    final selected = [
-      for (final preset in widget.presets)
-        if (_selectedIds.contains(preset.id)) preset,
-    ];
+    final selected = _selectedPresets;
     _exitSelectionMode();
     widget.onDeleteMany(selected);
+  }
+
+  void _bulkExport() {
+    final selected = _selectedPresets;
+    _exitSelectionMode();
+    widget.onExportMany(selected);
   }
 
   @override
@@ -124,6 +134,12 @@ class _PresetPanelState extends State<PresetPanel> {
                       ? CupertinoIcons.checkmark_circle_fill
                       : CupertinoIcons.checkmark_circle,
                   onPressed: _toggleSelectAll,
+                ),
+                const SizedBox(width: 10),
+                _HeaderIconButton(
+                  tooltip: l10n.presetExportManyTooltip,
+                  icon: CupertinoIcons.tray_arrow_up,
+                  onPressed: _selectedIds.isEmpty ? null : _bulkExport,
                 ),
                 const SizedBox(width: 10),
                 _HeaderIconButton(

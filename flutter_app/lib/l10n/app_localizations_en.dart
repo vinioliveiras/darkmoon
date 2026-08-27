@@ -129,6 +129,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get presetExportDialogTitle => 'Export preset';
 
   @override
+  String get presetExportManyTooltip => 'Export selected as .zip';
+
+  @override
+  String get presetExportManyDialogTitle => 'Export presets';
+
+  @override
   String get presetImportDialogTitle => 'Import presets';
 
   @override
@@ -151,20 +157,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String presetSelectedCount(int count) {
     return '$count selected';
   }
-
-  @override
-  String get presetUnsupportedTitle => 'Some settings weren\'t applied';
-
-  @override
-  String presetUnsupportedMessage(String name) {
-    return 'The preset \"$name\" has settings this app doesn\'t support yet, so they were skipped:';
-  }
-
-  @override
-  String get presetUnsupportedCopyAction => 'Copy';
-
-  @override
-  String get presetUnsupportedCopiedMessage => 'Copied to clipboard';
 
   @override
   String get beforeLabel => 'Before';
