@@ -1,8 +1,8 @@
-# Darkmoon
+# darkmoon
 
 A fast, native RAW and JPEG photo editor for Windows — built with Flutter, inspired by Lightroom and Photomator.
 
-![Darkmoon main editing view](.github/assets/screenshot-main.png)
+![darkmoon main editing view](.github/assets/screenshot-main.png)
 
 ## Features
 
