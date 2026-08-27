@@ -417,8 +417,16 @@ class _EditorScreenState extends State<EditorScreen> {
 
   /// Whichever folder is actually loaded into [_files] right now — may be
   /// one of [AppSettings.libraryFolders] or one of its subfolders. Used to
-  /// highlight the active folder in the sidebar.
+  /// highlight the active folder in the sidebar. Null while a single file
+  /// (from Open File / the recent-files list) is what's loaded — see
+  /// [_currentSingleFile].
   String? _currentFolder;
+
+  /// The single file loaded into [_files] right now (via Open File or the
+  /// sidebar's recent-files list), or null when a folder is loaded
+  /// instead. Mutually exclusive with [_currentFolder]; used to highlight
+  /// the active entry in the sidebar's recent-files list.
+  String? _currentSingleFile;
   final Map<String, Uint8List> _thumbnails = {};
   final Map<String, EditSourcePair> _editSources = {};
   final Map<String, Uint8List> _renderedPreviews = {};
@@ -1555,9 +1563,38 @@ class _EditorScreenState extends State<EditorScreen> {
   /// Loads a single recently-opened file from the sidebar (moves it back to
   /// the front of the recent list rather than duplicating the entry).
   Future<void> _selectRecentFile(String path) async {
+    if (path == _currentSingleFile) {
+      return;
+    }
     await _loadSingleFile(path);
     final next = _settings.withRecentFile(path);
     setState(() => _settings = next);
+    unawaited(saveSettings(next));
+  }
+
+  /// Drops [path] from the sidebar's recent-files list and persists the
+  /// change. Clears the main view if it was showing that file, mirroring
+  /// [_removeLibraryFolder].
+  void _removeRecentFile(String path) {
+    final next = _settings.copyWith(
+      recentFiles: _settings.recentFiles.where((f) => f != path).toList(),
+    );
+    final showingRemoved = _currentSingleFile == path;
+    setState(() {
+      _settings = next;
+      if (showingRemoved) {
+        _files = const [];
+        _selectedIndex = null;
+        _currentSingleFile = null;
+        _thumbnails.clear();
+        _editSources.clear();
+        _renderedPreviews.clear();
+        _histograms.clear();
+        _metadata.clear();
+        _neutralPreviews.clear();
+        _beforeAfterMode = false;
+      }
+    });
     unawaited(saveSettings(next));
   }
 
@@ -1566,6 +1603,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final generation = ++_folderGeneration;
     _beginLoadingFiles();
     _currentFolder = folder;
+    _currentSingleFile = null;
     if (_settings.lastActiveFolder != folder) {
       final next = _settings.copyWith(lastActiveFolder: folder);
       _settings = next;
@@ -1586,6 +1624,8 @@ class _EditorScreenState extends State<EditorScreen> {
     unawaited(_flushCurrentEdits());
     final generation = ++_folderGeneration;
     _beginLoadingFiles();
+    _currentFolder = null;
+    _currentSingleFile = path;
     DateTime modified;
     try {
       modified = (await File(path).stat()).modified;
@@ -3126,11 +3166,13 @@ class _EditorScreenState extends State<EditorScreen> {
                                     roots: _settings.libraryFolders,
                                     recentFiles: _settings.recentFiles,
                                     selectedPath: _currentFolder,
+                                    selectedRecentFile: _currentSingleFile,
                                     onSelect: (path) =>
                                         unawaited(_selectSidebarFolder(path)),
                                     onRemove: _removeLibraryFolder,
                                     onSelectRecentFile: (path) =>
                                         unawaited(_selectRecentFile(path)),
+                                    onRemoveRecentFile: _removeRecentFile,
                                     rawOnly: _settings.rawOnly,
                                     onRawOnlyChanged: _setRawOnly,
                                   ),

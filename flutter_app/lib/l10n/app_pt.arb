@@ -27,6 +27,7 @@
   "sidebarRecentFilesSection": "ARQUIVOS RECENTES",
   "sidebarFoldersSection": "PASTAS",
   "sidebarRemoveFolderTooltip": "Remover pasta",
+  "sidebarRemoveRecentFileTooltip": "Remover dos arquivos recentes",
   "sidebarPresetsSection": "PRESETS",
   "presetImportTooltip": "Importar presets (.xmp ou .zip)",
   "presetSaveNewTooltip": "Salvar edições atuais como preset",

@@ -36,6 +36,7 @@
   "sidebarRecentFilesSection": "RECENT FILES",
   "sidebarFoldersSection": "FOLDERS",
   "sidebarRemoveFolderTooltip": "Remove folder",
+  "sidebarRemoveRecentFileTooltip": "Remove from recent files",
   "sidebarPresetsSection": "PRESETS",
   "presetImportTooltip": "Import presets (.xmp or .zip)",
   "presetSaveNewTooltip": "Save current edits as a preset",

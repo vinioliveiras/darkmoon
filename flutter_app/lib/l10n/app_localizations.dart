@@ -230,6 +230,12 @@ abstract class AppLocalizations {
   /// **'Remove folder'**
   String get sidebarRemoveFolderTooltip;
 
+  /// No description provided for @sidebarRemoveRecentFileTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove from recent files'**
+  String get sidebarRemoveRecentFileTooltip;
+
   /// No description provided for @sidebarPresetsSection.
   ///
   /// In en, this message translates to:

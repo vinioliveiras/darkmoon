@@ -23,9 +23,11 @@ class FolderSidebar extends StatelessWidget {
     required this.roots,
     required this.recentFiles,
     required this.selectedPath,
+    required this.selectedRecentFile,
     required this.onSelect,
     required this.onRemove,
     required this.onSelectRecentFile,
+    required this.onRemoveRecentFile,
     required this.rawOnly,
     required this.onRawOnlyChanged,
   });
@@ -33,9 +35,14 @@ class FolderSidebar extends StatelessWidget {
   final List<String> roots;
   final List<String> recentFiles;
   final String? selectedPath;
+
+  /// The recent-files entry that's currently loaded into the editor, or
+  /// null when a folder is loaded instead — highlighted in the list.
+  final String? selectedRecentFile;
   final ValueChanged<String> onSelect;
   final ValueChanged<String> onRemove;
   final ValueChanged<String> onSelectRecentFile;
+  final ValueChanged<String> onRemoveRecentFile;
 
   /// Mirrors [AppSettings.rawOnly] — surfaced here too (not just in
   /// Settings) since it directly affects what this browser shows.
@@ -89,7 +96,9 @@ class FolderSidebar extends StatelessWidget {
                       _RecentFileRow(
                         key: ValueKey(path),
                         path: path,
+                        isSelected: path == selectedRecentFile,
                         onTap: () => onSelectRecentFile(path),
+                        onRemove: () => onRemoveRecentFile(path),
                       ),
                     const SizedBox(height: 8),
                   ],
@@ -183,15 +192,25 @@ class _RawOnlyCheckboxRow extends StatelessWidget {
 }
 
 class _RecentFileRow extends StatelessWidget {
-  const _RecentFileRow({super.key, required this.path, required this.onTap});
+  const _RecentFileRow({
+    super.key,
+    required this.path,
+    required this.isSelected,
+    required this.onTap,
+    required this.onRemove,
+  });
 
   final String path;
+  final bool isSelected;
   final VoidCallback onTap;
+  final VoidCallback onRemove;
 
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.transparent,
+      color: isSelected
+          ? DarkmoonColors.accent.withValues(alpha: 0.22)
+          : Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Padding(
@@ -200,10 +219,12 @@ class _RecentFileRow extends StatelessWidget {
             children: [
               const SizedBox(width: 18),
               const SizedBox(width: 2),
-              const Icon(
+              Icon(
                 CupertinoIcons.doc,
                 size: 14,
-                color: DarkmoonColors.textMuted,
+                color: isSelected
+                    ? DarkmoonColors.accent
+                    : DarkmoonColors.textMuted,
               ),
               const SizedBox(width: 6),
               Expanded(
@@ -211,9 +232,25 @@ class _RecentFileRow extends StatelessWidget {
                   p.basename(path),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: DarkmoonColors.textSecondary,
+                  style: TextStyle(
+                    color: isSelected
+                        ? DarkmoonColors.textPrimary
+                        : DarkmoonColors.textSecondary,
                     fontSize: 12,
+                  ),
+                ),
+              ),
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onTap: onRemove,
+                child: Tooltip(
+                  message: AppLocalizations.of(
+                    context,
+                  )!.sidebarRemoveRecentFileTooltip,
+                  child: const Icon(
+                    CupertinoIcons.xmark,
+                    size: 12,
+                    color: DarkmoonColors.textMuted,
                   ),
                 ),
               ),

@@ -82,6 +82,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sidebarRemoveFolderTooltip => 'Remover pasta';
 
   @override
+  String get sidebarRemoveRecentFileTooltip => 'Remover dos arquivos recentes';
+
+  @override
   String get sidebarPresetsSection => 'PRESETS';
 
   @override
