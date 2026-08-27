@@ -54,14 +54,21 @@ git merge --ff-only <branch-de-trabalho>
 Se o `--ff-only` falhar (a master andou), rebaseie a branch antes:
 `git checkout <branch>; git rebase master; git checkout master; git merge --ff-only <branch>`.
 
-### 3. Bump da versão no `pubspec.yaml`
+### 3. Bump da versão (dois lugares)
 
-Editar `flutter_app/pubspec.yaml`, linha `version:` — subir o nome e
-incrementar o build number:
+1. `flutter_app/pubspec.yaml`, linha `version:` — subir o nome e
+   incrementar o build number:
 
-```
-version: 1.2.0+1     # era 1.1.0+1
-```
+   ```
+   version: 1.2.0+1     # era 1.1.0+1
+   ```
+
+2. `flutter_app/lib/widgets/about_dialog.dart`, `darkmoonAppVersion` — é o
+   que aparece no diálogo "Sobre":
+
+   ```dart
+   const String darkmoonAppVersion = 'v1.2.0';
+   ```
 
 ### 4. Verificar
 
@@ -166,8 +173,10 @@ git checkout master
 git pull --ff-only
 git merge --ff-only $branch
 
-# bump manual do pubspec.yaml (version: $name+1) antes de continuar
-Read-Host "Edite flutter_app/pubspec.yaml para 'version: $name+1' e tecle Enter"
+# bump manual antes de continuar:
+#   flutter_app/pubspec.yaml           -> version: $name+1
+#   flutter_app/lib/widgets/about_dialog.dart -> darkmoonAppVersion = '$ver'
+Read-Host "Edite pubspec.yaml e about_dialog.dart e tecle Enter"
 
 Push-Location flutter_app
 flutter analyze
@@ -175,7 +184,7 @@ flutter test
 flutter build windows --release
 Pop-Location
 
-git add flutter_app/pubspec.yaml
+git add flutter_app/pubspec.yaml flutter_app/lib/widgets/about_dialog.dart
 git commit -m "Release $ver`n`nCo-Authored-By: Claude Sonnet 5 <noreply@anthropic.com>"
 git push origin master
 
