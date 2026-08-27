@@ -85,5 +85,20 @@ void main() {
         expect(out[2], closeTo(180, 1));
       },
     );
+
+    test(
+      'preserveTintBrightness opts back into brightness-preserving tint',
+      () {
+        final src = flatGray(4, 4, 150);
+        final out = renderRgb(
+          4,
+          4,
+          src,
+          const RenderParams(tint: 80, preserveTintBrightness: true),
+        );
+        final lum = (out[0] + out[1] + out[2]) / 3.0;
+        expect(lum, closeTo(150, 6));
+      },
+    );
   });
 }

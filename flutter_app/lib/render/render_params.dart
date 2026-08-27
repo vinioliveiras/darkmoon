@@ -12,6 +12,7 @@ class RenderParams {
   const RenderParams({
     this.temperature = 5500,
     this.tint = 0,
+    this.preserveTintBrightness = false,
     this.exposure = 0,
     this.brightness = 0,
     this.contrast = 0,
@@ -46,6 +47,8 @@ class RenderParams {
     return RenderParams(
       temperature: values['Temperature'] ?? defaults.temperature,
       tint: values['Tint'] ?? defaults.tint,
+      preserveTintBrightness:
+          (values['WhiteBalancePreserveTintBrightness'] ?? 0) != 0,
       exposure: values['Exposure'] ?? defaults.exposure,
       brightness: values['Brightness'] ?? defaults.brightness,
       contrast: values['Contrast'] ?? defaults.contrast,
@@ -69,6 +72,16 @@ class RenderParams {
 
   final double temperature;
   final double tint;
+
+  /// Off by default — matches RapidRAW's `apply_white_balance` (shader.wgsl),
+  /// which multiplies its Temperature/Tint gains directly with no
+  /// brightness-compensation step, so a strong Tint does shift overall
+  /// luminance slightly. Turning this on restores Darkmoon's own older
+  /// behavior (dividing by the mean of the three combined gains so a Tint
+  /// shift leaves the image's average brightness unchanged) — see
+  /// `_applyWhiteBalance`'s own doc comment in render.dart for the exact
+  /// math either way.
+  final bool preserveTintBrightness;
   final double exposure;
   final double brightness;
   final double contrast;

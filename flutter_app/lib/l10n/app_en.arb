@@ -238,6 +238,7 @@
 
   "sliderTemperature": "Temperature",
   "sliderTint": "Tint",
+  "whiteBalancePreserveBrightnessLabel": "Preserve brightness",
   "sliderExposure": "Exposure",
   "sliderBrightness": "Brightness",
   "sliderContrast": "Contrast",

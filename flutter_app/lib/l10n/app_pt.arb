@@ -196,6 +196,7 @@
 
   "sliderTemperature": "Temperatura",
   "sliderTint": "Matiz",
+  "whiteBalancePreserveBrightnessLabel": "Preservar brilho",
   "sliderExposure": "Exposição",
   "sliderBrightness": "Brilho",
   "sliderContrast": "Contraste",

@@ -301,7 +301,12 @@ void applyGlobalAdjustmentSteps(
   final pixelCount = width * height;
   _applyExposure(buffer, params.exposure);
   applyDehaze(buffer, width, height, params.dehaze);
-  _applyWhiteBalance(buffer, params.temperature, params.tint);
+  _applyWhiteBalance(
+    buffer,
+    params.temperature,
+    params.tint,
+    params.preserveTintBrightness,
+  );
   applyPostDenoisePointOps(buffer, width, height, params);
   // Saturation before Vibrance, matching RapidRAW's apply_creative_color:
   // Vibrance's saturation/hue masks read the already-saturated color.
@@ -365,6 +370,7 @@ void _applyWhiteBalance(
   Float32List img,
   double temperatureKelvin,
   double tint,
+  bool preserveTintBrightness,
 ) {
   if (temperatureKelvin == _temperatureNeutralKelvin && tint == 0) {
     return;
@@ -404,18 +410,28 @@ void _applyWhiteBalance(
   // blue shift the other. Sign matches Lightroom and this slider's own
   // green->magenta gradient (editor_screen.dart's 'Tint' _SliderSpec):
   // positive = magenta (green down, red/blue up), negative = green (green
-  // up, red/blue down). No overall-brightness renormalization here —
-  // RapidRAW's own apply_white_balance (shader.wgsl) doesn't renormalize
-  // either, it just multiplies temp_kelvin_mult * tint_mult directly, so
-  // a strong Tint does shift overall luminance slightly, same as there.
+  // up, red/blue down).
   final rapidTint = tint / 100.0;
   final gTintGain = 1.0 - rapidTint * 0.25;
   final rbTintGain = 1.0 + rapidTint * 0.25;
 
+  // No overall-brightness renormalization by default — RapidRAW's own
+  // apply_white_balance (shader.wgsl) doesn't renormalize either, it just
+  // multiplies temp_kelvin_mult * tint_mult directly, so a strong Tint
+  // does shift overall luminance slightly there too. [preserveTintBrightness]
+  // (the White Balance panel's "Preserve brightness" checkbox, off by
+  // default) opts back into Darkmoon's exact older behavior: dividing
+  // every channel by the mean of the three Tint gains alone (not
+  // Temperature's own — this is the original formula, unchanged) so a
+  // Tint shift leaves the image's average brightness unchanged, at the
+  // cost of no longer matching RapidRAW exactly.
+  final tintMean = (2.0 * rbTintGain + gTintGain) / 3.0;
+  final tintNormalization = preserveTintBrightness ? 1.0 / tintMean : 1.0;
+
   for (var i = 0; i < img.length; i += 3) {
-    img[i] *= rTemperatureGain * rbTintGain;
-    img[i + 1] *= gTemperatureGain * gTintGain;
-    img[i + 2] *= bTemperatureGain * rbTintGain;
+    img[i] *= rTemperatureGain * rbTintGain * tintNormalization;
+    img[i + 1] *= gTemperatureGain * gTintGain * tintNormalization;
+    img[i + 2] *= bTemperatureGain * rbTintGain * tintNormalization;
   }
 }
 

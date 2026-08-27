@@ -5010,7 +5010,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                             onChangeEnd(key, v ? 1 : 0);
                           },
                         ),
-                        if (!_collapsed.contains(entry.key))
+                        if (!_collapsed.contains(entry.key)) ...[
                           for (final spec in entry.value)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 12),
@@ -5027,6 +5027,52 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 onChangeEnd: (v) => onChangeEnd(spec.name, v),
                               ),
                             ),
+                          // Off by default: RapidRAW's apply_white_balance
+                          // (shader.wgsl) doesn't renormalize brightness
+                          // after Temperature/Tint either, so matching it
+                          // exactly means Tint can shift brightness a
+                          // little — see _applyWhiteBalance's doc comment
+                          // in render.dart for the full story. This
+                          // checkbox opts back into Darkmoon's older,
+                          // brightness-preserving behavior.
+                          if (entry.key == 'WHITE BALANCE')
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Text(
+                                      l10n.whiteBalancePreserveBrightnessLabel,
+                                      style: TextStyle(
+                                        color: DarkmoonColors.textMuted,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ),
+                                  SizedBox(
+                                    width: 26,
+                                    height: 16,
+                                    child: FittedBox(
+                                      child: Switch(
+                                        value:
+                                            (values['WhiteBalancePreserveTintBrightness'] ??
+                                                0) !=
+                                            0,
+                                        onChanged: (v) {
+                                          const key =
+                                              'WhiteBalancePreserveTintBrightness';
+                                          onChanged(key, v ? 1 : 0);
+                                          onChangeEnd(key, v ? 1 : 0);
+                                        },
+                                        materialTapTargetSize:
+                                            MaterialTapTargetSize.shrinkWrap,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                         // Tone Curve/Color Curve/Color Mixer/Color Grading/
                         // Effects are available for masks too — `curves`/
                         // `onChanged`/`onChangeEnd` above already resolve to
