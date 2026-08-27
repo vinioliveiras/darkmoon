@@ -3918,17 +3918,16 @@ class _HiddenLoadingIndicator extends StatelessWidget {
     final progress = info.progress;
     return SizedBox(
       width: _width,
-      child: Stack(
-        alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
+          Row(
             children: [
-              Padding(
-                // Keep the centred message clear of the Cancel button on
-                // both sides so it stays visually centred.
-                padding: const EdgeInsets.symmetric(horizontal: 28),
+              // Balances the Cancel button on the right so the message
+              // stays visually centred over the bar.
+              const SizedBox(width: 24),
+              Expanded(
                 child: Text(
                   info.message,
                   maxLines: 1,
@@ -3937,39 +3936,39 @@ class _HiddenLoadingIndicator extends StatelessWidget {
                   style: const TextStyle(color: Colors.white, fontSize: 11.5),
                 ),
               ),
-              const SizedBox(height: 4),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(2),
-                child: SizedBox(
-                  height: 3,
-                  child: progress == null
-                      ? const LinearProgressIndicator(
-                          backgroundColor: Colors.white24,
-                          valueColor: AlwaysStoppedAnimation(Colors.white),
-                        )
-                      : LinearProgressIndicator(
-                          value: progress,
-                          backgroundColor: Colors.white24,
-                          valueColor: const AlwaysStoppedAnimation(
-                            Colors.white,
-                          ),
-                        ),
+              SizedBox(
+                width: 24,
+                height: 20,
+                child: IconButton(
+                  onPressed: onCancel,
+                  tooltip: l10n.cancelButton,
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                  constraints: const BoxConstraints(minWidth: 24, minHeight: 20),
+                  iconSize: 15,
+                  color: Colors.white,
+                  icon: const Icon(CupertinoIcons.xmark),
                 ),
               ),
             ],
           ),
-          Positioned(
-            right: 0,
-            top: 0,
-            child: IconButton(
-              onPressed: onCancel,
-              tooltip: l10n.cancelButton,
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(minWidth: 24, minHeight: 24),
-              iconSize: 15,
-              color: Colors.white,
-              icon: const Icon(CupertinoIcons.xmark),
+          const SizedBox(height: 4),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(2),
+            child: SizedBox(
+              height: 3,
+              child: progress == null
+                  ? const LinearProgressIndicator(
+                      backgroundColor: Colors.white24,
+                      valueColor: AlwaysStoppedAnimation(Colors.white),
+                    )
+                  : LinearProgressIndicator(
+                      value: progress,
+                      backgroundColor: Colors.white24,
+                      valueColor: const AlwaysStoppedAnimation(
+                        Colors.white,
+                      ),
+                    ),
             ),
           ),
         ],
