@@ -1196,6 +1196,66 @@ abstract class AppLocalizations {
   /// **'Preserve brightness'**
   String get whiteBalancePreserveBrightnessLabel;
 
+  /// No description provided for @wbModeAsShot.
+  ///
+  /// In en, this message translates to:
+  /// **'As Shot'**
+  String get wbModeAsShot;
+
+  /// No description provided for @wbModeAuto.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get wbModeAuto;
+
+  /// No description provided for @wbModeDaylight.
+  ///
+  /// In en, this message translates to:
+  /// **'Daylight'**
+  String get wbModeDaylight;
+
+  /// No description provided for @wbModeCloudy.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloudy'**
+  String get wbModeCloudy;
+
+  /// No description provided for @wbModeShade.
+  ///
+  /// In en, this message translates to:
+  /// **'Shade'**
+  String get wbModeShade;
+
+  /// No description provided for @wbModeTungsten.
+  ///
+  /// In en, this message translates to:
+  /// **'Tungsten'**
+  String get wbModeTungsten;
+
+  /// No description provided for @wbModeFluorescent.
+  ///
+  /// In en, this message translates to:
+  /// **'Fluorescent'**
+  String get wbModeFluorescent;
+
+  /// No description provided for @wbModeFlash.
+  ///
+  /// In en, this message translates to:
+  /// **'Flash'**
+  String get wbModeFlash;
+
+  /// No description provided for @wbModeCustom.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom'**
+  String get wbModeCustom;
+
+  /// No description provided for @wbEyedropperTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a neutral gray to set white balance'**
+  String get wbEyedropperTooltip;
+
   /// No description provided for @sliderExposure.
   ///
   /// In en, this message translates to:

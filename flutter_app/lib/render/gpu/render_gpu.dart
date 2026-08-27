@@ -172,17 +172,18 @@ Future<ui.Image> _runPreDenoise(
   );
   final shader = program.fragmentShader();
 
-  const neutralKelvin = 5500.0;
   const miredGainPerUnit = 0.0013;
   final miredDelta = applyWhiteBalance
-      ? 1.0e6 / neutralKelvin - 1.0e6 / params.temperature
+      ? 1.0e6 / params.asShotKelvin - 1.0e6 / params.temperature
       : 0.0;
   final tempGain = (miredDelta * miredGainPerUnit).clamp(-0.6, 0.6);
   final rapidTemperature = tempGain / 0.2;
   final rGain = 1.0 + rapidTemperature * 0.2;
   final gTemperatureGain = 1.0 + rapidTemperature * 0.05;
   final bGain = 1.0 - rapidTemperature * 0.2;
-  final rapidTint = applyWhiteBalance ? params.tint / 100.0 : 0.0;
+  final rapidTint = applyWhiteBalance
+      ? (params.tint - params.asShotTint) / 100.0
+      : 0.0;
   final gTintGain = 1.0 - rapidTint * 0.25;
   final rbTintGain = 1.0 + rapidTint * 0.25;
   // No overall-brightness renormalization by default — matches

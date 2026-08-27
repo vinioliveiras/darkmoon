@@ -12,6 +12,8 @@ class RenderParams {
   const RenderParams({
     this.temperature = 5500,
     this.tint = 0,
+    this.asShotKelvin = 5500,
+    this.asShotTint = 0,
     this.preserveTintBrightness = false,
     this.exposure = 0,
     this.brightness = 0,
@@ -42,11 +44,15 @@ class RenderParams {
   factory RenderParams.fromValues(
     Map<String, double> values, {
     PhotoCurves? curves,
+    double asShotKelvin = 5500,
+    double asShotTint = 0,
   }) {
     const defaults = RenderParams();
     return RenderParams(
-      temperature: values['Temperature'] ?? defaults.temperature,
-      tint: values['Tint'] ?? defaults.tint,
+      temperature: values['Temperature'] ?? asShotKelvin,
+      tint: values['Tint'] ?? asShotTint,
+      asShotKelvin: asShotKelvin,
+      asShotTint: asShotTint,
       preserveTintBrightness:
           (values['WhiteBalancePreserveTintBrightness'] ?? 0) != 0,
       exposure: values['Exposure'] ?? defaults.exposure,
@@ -72,6 +78,14 @@ class RenderParams {
 
   final double temperature;
   final double tint;
+
+  /// The photo's camera as-shot white balance (from `RawMetadata`), used
+  /// as the neutral reference for [temperature]/[tint]: at
+  /// `temperature == asShotKelvin && tint == asShotTint` the White Balance
+  /// step is a no-op. 5500 K / 0 for non-RAW files and RAWs without camera
+  /// multipliers — the pre-existing fixed reference.
+  final double asShotKelvin;
+  final double asShotTint;
 
   /// Off by default — matches RapidRAW's `apply_white_balance` (shader.wgsl),
   /// which multiplies its Temperature/Tint gains directly with no

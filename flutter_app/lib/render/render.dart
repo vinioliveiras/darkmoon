@@ -16,9 +16,6 @@ import 'sharpen.dart';
 import 'tone_curve.dart';
 import 'vignette.dart';
 
-/// Absolute color temperature (Kelvin) treated as "no white-balance shift",
-/// matching the Python app's TEMPERATURE_NEUTRAL_KELVIN.
-const double _temperatureNeutralKelvin = 5500.0;
 
 /// Applies the tonal/color adjustment pipeline to packed 8-bit RGB pixel
 /// data (3 bytes/pixel, row-major, no padding) and returns a new buffer of
@@ -85,7 +82,12 @@ Uint8List renderRgbWithMasks(
       layerBuffer,
       width,
       height,
-      RenderParams.fromValues(mask.values, curves: mask.curves),
+      RenderParams.fromValues(
+        mask.values,
+        curves: mask.curves,
+        asShotKelvin: globalParams.asShotKelvin,
+        asShotTint: globalParams.asShotTint,
+      ),
     );
     final alpha = computeMaskAlpha(
       mask,
@@ -305,6 +307,8 @@ void applyGlobalAdjustmentSteps(
     buffer,
     params.temperature,
     params.tint,
+    params.asShotKelvin,
+    params.asShotTint,
     params.preserveTintBrightness,
   );
   applyPostDenoisePointOps(buffer, width, height, params);
@@ -370,9 +374,11 @@ void _applyWhiteBalance(
   Float32List img,
   double temperatureKelvin,
   double tint,
+  double asShotKelvin,
+  double asShotTint,
   bool preserveTintBrightness,
 ) {
-  if (temperatureKelvin == _temperatureNeutralKelvin && tint == 0) {
+  if (temperatureKelvin == asShotKelvin && tint == asShotTint) {
     return;
   }
   // Color temperature correction is approximately linear in "mired"
@@ -394,8 +400,7 @@ void _applyWhiteBalance(
   // (orange), a lower one renders cooler (blue). (This was previously
   // inverted here — verified against a real Canon 350D CR2 where raising
   // Temperature visibly cooled the image instead of warming it.)
-  final miredDelta =
-      1.0e6 / _temperatureNeutralKelvin - 1.0e6 / temperatureKelvin;
+  final miredDelta = 1.0e6 / asShotKelvin - 1.0e6 / temperatureKelvin;
   final tempGain = (miredDelta * _miredGainPerUnit).clamp(-0.6, 0.6);
   // RapidRAW represents temperature as a normalized -1..1 control with
   // multipliers (1 + temp*0.2, 1 + temp*0.05, 1 - temp*0.2). Keep
@@ -411,7 +416,7 @@ void _applyWhiteBalance(
   // green->magenta gradient (editor_screen.dart's 'Tint' _SliderSpec):
   // positive = magenta (green down, red/blue up), negative = green (green
   // up, red/blue down).
-  final rapidTint = tint / 100.0;
+  final rapidTint = (tint - asShotTint) / 100.0;
   final gTintGain = 1.0 - rapidTint * 0.25;
   final rbTintGain = 1.0 + rapidTint * 0.25;
 

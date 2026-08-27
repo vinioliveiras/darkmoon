@@ -52,6 +52,15 @@ Tone Curve + Color Curves (Process Version 2012).
   `PerspectiveScale`, `PerspectiveAspect`, `PerspectiveUpright`.
 - **Grão**: `GrainAmount`, `GrainSize`, `GrainFrequency`.
 
+### White Balance — paridade total (futuro)
+O seletor de modo (As Shot/Auto/Daylight/…) e o conta-gotas já existem, mas
+o "As Shot" é uma **aproximação** do `cam_mul`/`cam_xyz` do LibRaw (McCamy +
+matriz da câmera, sem dados espectrais) e o RAW ainda é decodificado com
+`use_camera_wb = 1`. Paridade real com o Lightroom exigiria: decodificar o
+RAW **sem** a WB da câmera, ler `AsShotNeutral`/`WB_Coeffs` e converter via o
+perfil de câmera do Adobe (que o LibRaw não tem). O modelo de neutro por-foto
+(`RenderParams.asShotKelvin/asShotTint`) já está pronto pra receber isso.
+
 ### Baixa prioridade / estrutural
 - **Point Color** (`PointColors`) — ajuste de cor por amostra.
 - **Máscaras / ajustes locais** (`MaskGroupBasedCorrections`,

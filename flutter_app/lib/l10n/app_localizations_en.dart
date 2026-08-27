@@ -594,6 +594,36 @@ class AppLocalizationsEn extends AppLocalizations {
   String get whiteBalancePreserveBrightnessLabel => 'Preserve brightness';
 
   @override
+  String get wbModeAsShot => 'As Shot';
+
+  @override
+  String get wbModeAuto => 'Auto';
+
+  @override
+  String get wbModeDaylight => 'Daylight';
+
+  @override
+  String get wbModeCloudy => 'Cloudy';
+
+  @override
+  String get wbModeShade => 'Shade';
+
+  @override
+  String get wbModeTungsten => 'Tungsten';
+
+  @override
+  String get wbModeFluorescent => 'Fluorescent';
+
+  @override
+  String get wbModeFlash => 'Flash';
+
+  @override
+  String get wbModeCustom => 'Custom';
+
+  @override
+  String get wbEyedropperTooltip => 'Pick a neutral gray to set white balance';
+
+  @override
   String get sliderExposure => 'Exposure';
 
   @override

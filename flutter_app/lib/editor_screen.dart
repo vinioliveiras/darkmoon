@@ -43,6 +43,7 @@ import 'render/render_job.dart';
 import 'render/crop_transform.dart';
 import 'render/render_params.dart';
 import 'render/tone_curve.dart';
+import 'render/white_balance.dart';
 import 'settings/app_settings.dart';
 import 'theme.dart';
 import 'widgets/about_dialog.dart';
@@ -61,8 +62,10 @@ import 'widgets/photo_metadata_view.dart';
 import 'widgets/preset_panel.dart';
 import 'widgets/settings_dialog.dart';
 import 'widgets/slider_row.dart';
+import 'widgets/styled_dropdown.dart';
 import 'widgets/text_prompt_dialog.dart';
 import 'widgets/tone_curve_editor.dart';
+import 'widgets/white_balance_eyedropper_overlay.dart';
 
 /// Maps a slider's stable internal key (also used for _paramValues,
 /// RenderParams.fromValues, and catalog storage — must NOT be translated)
@@ -223,14 +226,24 @@ const _gradeRanges = ['Shadows', 'Midtones', 'Highlights', 'Global'];
 /// pipeline reads param values, so a disabled category renders as if its
 /// sliders were never touched, while the underlying stored values stay
 /// untouched underneath (re-enabling restores them exactly).
-Map<String, double> _withCategoriesApplied(Map<String, double> values) {
+Map<String, double> _withCategoriesApplied(
+  Map<String, double> values, {
+  double asShotKelvin = 5500,
+  double asShotTint = 0,
+}) {
   bool disabled(String category) =>
       (values[_categoryEnabledKey(category)] ?? 1) == 0;
   final overrides = <String, double>{};
   for (final entry in _sections.entries) {
     if (disabled(entry.key)) {
       for (final spec in entry.value) {
-        overrides[spec.name] = spec.defaultValue;
+        // A disabled White Balance section means "no WB shift" — that's
+        // the per-photo as-shot value, not the fixed 5500/0 default.
+        overrides[spec.name] = switch (spec.name) {
+          'Temperature' => asShotKelvin,
+          'Tint' => asShotTint,
+          _ => spec.defaultValue,
+        };
       }
     }
   }
@@ -568,6 +581,10 @@ class _EditorScreenState extends State<EditorScreen> {
   /// handles, brush cursor) is drawn — a session-wide UI preference, not
   /// per-photo state, so it isn't persisted with the catalog.
   bool _maskOverlayVisible = true;
+
+  /// True while the White Balance eyedropper is armed — the next click on
+  /// the preview samples a neutral and sets Temperature/Tint. Session-only.
+  bool _wbEyedropperActive = false;
 
   /// True for the duration of a slider drag on one of the active mask's
   /// own values (Tone/Presence/etc., opacity, Color Range tolerance/
@@ -1217,10 +1234,19 @@ class _EditorScreenState extends State<EditorScreen> {
   /// instead of being silently dropped.
   Map<String, double> _paramValuesFor(String path) {
     final saved = _edits[path];
-    if (saved == null) {
-      return _defaultParamValues();
+    final base = saved == null
+        ? _defaultParamValues()
+        : {..._defaultParamValues(), ...saved};
+    // Seed Temperature/Tint from the camera as-shot white balance unless
+    // the photo has a saved WB edit — so a fresh photo opens on "As Shot"
+    // showing the camera's own numbers, not a generic 5500 K.
+    if (saved == null || !saved.containsKey('Temperature')) {
+      final meta = _metadata[path];
+      base['Temperature'] = meta?.asShotKelvin ?? wbDefaultKelvin;
+      base['Tint'] = meta?.asShotTint ?? wbDefaultTint;
+      base[_wbModeKey] = WbMode.asShot.index.toDouble();
     }
-    return {..._defaultParamValues(), ...saved};
+    return base;
   }
 
   /// Writes the currently-selected photo's slider values into [_edits] and
@@ -1233,12 +1259,27 @@ class _EditorScreenState extends State<EditorScreen> {
     if (selected == null) {
       return;
     }
-    _edits[selected.path] = Map<String, double>.from(_paramValues);
+    _edits[selected.path] = _catalogParams();
     _photoCurves[selected.path] = _currentCurves;
     _photoMasks[selected.path] = _currentMasks;
     await saveCatalog(_edits);
     await savePhotoCurves(_photoCurves);
     await savePhotoMasks(_photoMasks);
+  }
+
+  /// [_paramValues] as persisted to the catalog: Temperature/Tint/mode are
+  /// dropped while the White Balance mode is "As Shot", so the camera
+  /// as-shot value (which is metadata, not an edit) doesn't get frozen
+  /// into the catalog or trip the filmstrip "edited" badge.
+  Map<String, double> _catalogParams() {
+    final out = Map<String, double>.from(_paramValues);
+    final mode = (out[_wbModeKey] ?? 0).toInt();
+    if (mode == WbMode.asShot.index) {
+      out.remove('Temperature');
+      out.remove('Tint');
+      out.remove(_wbModeKey);
+    }
+    return out;
   }
 
   void _scheduleCatalogSave() {
@@ -1248,7 +1289,7 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     _catalogSaveTimer?.cancel();
     _catalogSaveTimer = Timer(_catalogSaveDebounce, () {
-      _edits[selected.path] = Map<String, double>.from(_paramValues);
+      _edits[selected.path] = _catalogParams();
       _photoCurves[selected.path] = _currentCurves;
       _photoMasks[selected.path] = _currentMasks;
       unawaited(saveCatalog(_edits));
@@ -1296,7 +1337,22 @@ class _EditorScreenState extends State<EditorScreen> {
       return false;
     }
     final defaults = _defaultParamValues();
+    final meta = _metadata[path];
+    final asShotKelvin = meta?.asShotKelvin ?? wbDefaultKelvin;
+    final asShotTint = meta?.asShotTint ?? wbDefaultTint;
     for (final entry in values.entries) {
+      // Temperature/Tint sitting at the camera as-shot value (mode "As
+      // Shot") is not a user edit even though it differs from 5500/0.
+      if (entry.key == 'Temperature' && entry.value == asShotKelvin) {
+        continue;
+      }
+      if (entry.key == 'Tint' && entry.value == asShotTint) {
+        continue;
+      }
+      if (entry.key == _wbModeKey &&
+          entry.value == WbMode.asShot.index.toDouble()) {
+        continue;
+      }
       if (entry.value != (defaults[entry.key] ?? 0)) {
         return true;
       }
@@ -2015,7 +2071,28 @@ class _EditorScreenState extends State<EditorScreen> {
     if (!mounted || generation != _folderGeneration) {
       return;
     }
-    setState(() => _metadata[path] = metadata);
+    final isCurrent =
+        _selectedIndex != null && _files[_selectedIndex!].path == path;
+    final savedWb = _edits[path]?.containsKey('Temperature') ?? false;
+    setState(() {
+      _metadata[path] = metadata;
+      // The WB neutral reference is per-photo. A photo sitting on "As Shot"
+      // with no saved WB edit was seeded with 5500/0 before its metadata
+      // resolved — move the sliders onto the real camera value now.
+      if (isCurrent && metadata != null && !savedWb) {
+        final mode = (_paramValues[_wbModeKey] ?? 0).toInt();
+        if (mode == WbMode.asShot.index) {
+          _paramValues = {
+            ..._paramValues,
+            'Temperature': metadata.asShotKelvin,
+            'Tint': metadata.asShotTint,
+          };
+        }
+      }
+    });
+    if (isCurrent) {
+      _scheduleRender(live: false);
+    }
   }
 
   /// Renders [path]'s cached edit source with the current slider values and
@@ -2125,6 +2202,8 @@ class _EditorScreenState extends State<EditorScreen> {
       params: RenderParams.fromValues(
         _effectiveParamValues(),
         curves: _effectiveCurves,
+        asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
+        asShotTint: metadata?.asShotTint ?? wbDefaultTint,
       ),
       masks: _effectiveMasks,
       cropTransform: cropTransform,
@@ -2358,12 +2437,21 @@ class _EditorScreenState extends State<EditorScreen> {
       // silently dropping every _onParamChangeEnd push for the rest of
       // the session — undo/redo across ordinary (non-mask) slider edits
       // would stop recording new steps entirely.
-      _paramValues = {..._paramValues, name: value};
+      _paramValues = {
+        ..._paramValues,
+        name: value,
+        // Nudging Temperature/Tint by hand drops the WB mode to Custom,
+        // matching Lightroom.
+        if (name == 'Temperature' || name == 'Tint')
+          _wbModeKey: WbMode.custom.index.toDouble(),
+      };
       _appliedPresetId = null;
     });
     _scheduleRender(live: _settings.fastPreview);
     _scheduleCatalogSave();
   }
+
+  static const _wbModeKey = 'WhiteBalanceMode';
 
   void _onParamChangeEnd(String name, double value) {
     _pushHistory();
@@ -2374,8 +2462,17 @@ class _EditorScreenState extends State<EditorScreen> {
   /// [_paramValues] with every disabled category's sliders swapped for
   /// their defaults — used wherever the render pipeline reads the global
   /// layer's param values. See [_withCategoriesApplied]'s doc comment.
-  Map<String, double> _effectiveParamValues() =>
-      _withCategoriesApplied(_paramValues);
+  Map<String, double> _effectiveParamValues() {
+    final path = _selectedIndex == null ? null : _files[_selectedIndex!].path;
+    final asShot = path == null
+        ? (kelvin: wbDefaultKelvin, tint: wbDefaultTint)
+        : _asShotFor(path);
+    return _withCategoriesApplied(
+      _paramValues,
+      asShotKelvin: asShot.kelvin,
+      asShotTint: asShot.tint,
+    );
+  }
 
   /// [_currentCurves] with Tone Curve/Color Curve reset to identity if
   /// either is disabled — the curve equivalent of [_effectiveParamValues],
@@ -2876,6 +2973,115 @@ class _EditorScreenState extends State<EditorScreen> {
     _scheduleCatalogSave();
   }
 
+  /// The camera as-shot white balance for [path] (5500/0 for non-RAW or
+  /// before its metadata resolves).
+  ({double kelvin, double tint}) _asShotFor(String path) {
+    final meta = _metadata[path];
+    return (
+      kelvin: meta?.asShotKelvin ?? wbDefaultKelvin,
+      tint: meta?.asShotTint ?? wbDefaultTint,
+    );
+  }
+
+  /// Sets Temperature/Tint (and the stored mode) for a White Balance mode
+  /// pick from the panel dropdown.
+  void _applyWbMode(WbMode mode) {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null) {
+      return;
+    }
+    final asShot = _asShotFor(selected.path);
+    ({double kelvin, double tint}) target;
+    switch (mode) {
+      case WbMode.asShot:
+        target = asShot;
+      case WbMode.custom:
+        target = (
+          kelvin: _paramValues['Temperature'] ?? asShot.kelvin,
+          tint: _paramValues['Tint'] ?? asShot.tint,
+        );
+      case WbMode.auto:
+        final src = _editSources[selected.path]?.preview;
+        target = src == null
+            ? asShot
+            : grayWorldTempTint(
+                src.rgbBytes,
+                asShotKelvin: asShot.kelvin,
+                asShotTint: asShot.tint,
+              );
+      default:
+        final preset = wbModePreset(mode)!;
+        target = (kelvin: preset.kelvin, tint: preset.tint);
+    }
+    setState(() {
+      _paramValues = {
+        ..._paramValues,
+        'Temperature': target.kelvin,
+        'Tint': target.tint,
+        _wbModeKey: mode.index.toDouble(),
+      };
+      _appliedPresetId = null;
+    });
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  /// White Balance eyedropper: samples a small neighbourhood of the
+  /// decoded (pre-adjustment) source at normalized ([nx],[ny]) and solves
+  /// for the Temperature/Tint that make it neutral.
+  void _onSampleWhiteBalance(double nx, double ny) {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null) {
+      return;
+    }
+    final src = _editSources[selected.path]?.preview;
+    if (src == null) {
+      setState(() => _wbEyedropperActive = false);
+      return;
+    }
+    final cx = (nx * (src.width - 1)).round().clamp(0, src.width - 1);
+    final cy = (ny * (src.height - 1)).round().clamp(0, src.height - 1);
+    var sumR = 0.0, sumG = 0.0, sumB = 0.0, n = 0;
+    for (var dy = -2; dy <= 2; dy++) {
+      for (var dx = -2; dx <= 2; dx++) {
+        final x = cx + dx, y = cy + dy;
+        if (x < 0 || y < 0 || x >= src.width || y >= src.height) {
+          continue;
+        }
+        final i = (y * src.width + x) * 3;
+        sumR += src.rgbBytes[i];
+        sumG += src.rgbBytes[i + 1];
+        sumB += src.rgbBytes[i + 2];
+        n++;
+      }
+    }
+    if (n == 0) {
+      return;
+    }
+    final asShot = _asShotFor(selected.path);
+    final res = solveNeutralizingTempTint(
+      sumR / n,
+      sumG / n,
+      sumB / n,
+      asShotKelvin: asShot.kelvin,
+      asShotTint: asShot.tint,
+    );
+    setState(() {
+      _wbEyedropperActive = false;
+      _paramValues = {
+        ..._paramValues,
+        'Temperature': res.kelvin,
+        'Tint': res.tint,
+        _wbModeKey: WbMode.custom.index.toDouble(),
+      };
+      _appliedPresetId = null;
+    });
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
   _EditSnapshot get _currentSnapshot => _EditSnapshot(
     paramValues: _paramValues,
     curves: _currentCurves,
@@ -3005,6 +3211,8 @@ class _EditorScreenState extends State<EditorScreen> {
         params: RenderParams.fromValues(
           _effectiveParamValues(),
           curves: _effectiveCurves,
+          asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
+          asShotTint: metadata?.asShotTint ?? wbDefaultTint,
         ),
         masks: _effectiveMasks,
         format: options.format,
@@ -3231,6 +3439,9 @@ class _EditorScreenState extends State<EditorScreen> {
                                   brushHardness: _brushHardness,
                                   brushErase: _brushErase,
                                   onSampleColor: _onSampleMaskColor,
+                                  wbEyedropperActive:
+                                      _wbEyedropperActive && !_beforeAfterMode,
+                                  onSampleWhiteBalance: _onSampleWhiteBalance,
                                   maskOverlayVisible:
                                       _maskOverlayVisible &&
                                       !_isAdjustingMaskValue,
@@ -3303,6 +3514,11 @@ class _EditorScreenState extends State<EditorScreen> {
                             onChanged: _onActiveChanged,
                             onChangeEnd: _onActiveChangeEnd,
                             onReset: _resetActive,
+                            onWhiteBalanceMode: _applyWbMode,
+                            wbEyedropperActive: _wbEyedropperActive,
+                            onToggleWbEyedropper: () => setState(
+                              () => _wbEyedropperActive = !_wbEyedropperActive,
+                            ),
                             onExport: selected == null ? null : _exportCurrent,
                             exporting: _exporting,
                             enabled: selected != null,
@@ -3530,6 +3746,8 @@ class _ImageArea extends StatelessWidget {
     required this.brushHardness,
     required this.brushErase,
     required this.onSampleColor,
+    required this.wbEyedropperActive,
+    required this.onSampleWhiteBalance,
     required this.maskOverlayVisible,
     required this.maskOverlayOpacity,
     required this.cropOverlayActive,
@@ -3569,6 +3787,11 @@ class _ImageArea extends StatelessWidget {
   /// Fires with normalized image coordinates when the user taps the image
   /// while a Color Range mask is active.
   final void Function(double nx, double ny) onSampleColor;
+
+  /// Whether the White Balance eyedropper is armed — shows a tap target
+  /// over the whole image regardless of the active layer.
+  final bool wbEyedropperActive;
+  final void Function(double nx, double ny) onSampleWhiteBalance;
 
   /// Whether the active mask's shaded overlay/handles are drawn — a
   /// user-toggleable UI preference, same for every mask type.
@@ -3697,6 +3920,29 @@ class _ImageArea extends StatelessWidget {
   Widget _fittedImage(Uint8List bytes) {
     final mask = editingMask;
     final source = editingSource;
+    if (wbEyedropperActive && source != null) {
+      return SizedBox.expand(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true),
+                WhiteBalanceEyedropperOverlay(
+                  containerSize: Size(
+                    constraints.maxWidth,
+                    constraints.maxHeight,
+                  ),
+                  imageWidth: source.width,
+                  imageHeight: source.height,
+                  onSample: onSampleWhiteBalance,
+                ),
+              ],
+            );
+          },
+        ),
+      );
+    }
     if (cropOverlayActive && source != null) {
       // Displayed frame is straightened/keystoned but not yet cropped
       // (see _EditorScreenState._renderPreview) — its dimensions match
@@ -4771,11 +5017,17 @@ class _ControlsPanel extends StatefulWidget {
     required this.palettes,
     required this.onImportPalette,
     required this.onDeletePalette,
+    required this.onWhiteBalanceMode,
+    required this.wbEyedropperActive,
+    required this.onToggleWbEyedropper,
   });
 
   final Map<String, double> values;
   final Histogram? histogram;
   final RawMetadata? metadata;
+  final void Function(WbMode mode) onWhiteBalanceMode;
+  final bool wbEyedropperActive;
+  final VoidCallback onToggleWbEyedropper;
   final void Function(String name, double value) onChanged;
   final void Function(String name, double value) onChangeEnd;
   final VoidCallback onReset;
@@ -4855,6 +5107,68 @@ class _ControlsPanelState extends State<_ControlsPanel> {
   /// Section names the user has collapsed, Lightroom-style — every section
   /// starts expanded, matching the panel's previous (always-open) layout.
   final Set<String> _collapsed = {};
+
+  /// The camera as-shot White Balance for the current photo — the neutral
+  /// reference the Temperature/Tint sliders default to.
+  ({double kelvin, double tint}) get _asShot => (
+    kelvin: widget.metadata?.asShotKelvin ?? wbDefaultKelvin,
+    tint: widget.metadata?.asShotTint ?? wbDefaultTint,
+  );
+
+  /// Slider default/fallback for Temperature/Tint = the camera as-shot
+  /// value; null for any other slider.
+  double? _wbSliderFallback(String name) => switch (name) {
+    'Temperature' => _asShot.kelvin,
+    'Tint' => _asShot.tint,
+    _ => null,
+  };
+
+  String _wbModeLabel(AppLocalizations l10n, WbMode mode) => switch (mode) {
+    WbMode.asShot => l10n.wbModeAsShot,
+    WbMode.auto => l10n.wbModeAuto,
+    WbMode.daylight => l10n.wbModeDaylight,
+    WbMode.cloudy => l10n.wbModeCloudy,
+    WbMode.shade => l10n.wbModeShade,
+    WbMode.tungsten => l10n.wbModeTungsten,
+    WbMode.fluorescent => l10n.wbModeFluorescent,
+    WbMode.flash => l10n.wbModeFlash,
+    WbMode.custom => l10n.wbModeCustom,
+  };
+
+  Widget _buildWhiteBalanceModeRow(
+    AppLocalizations l10n,
+    Map<String, double> values,
+  ) {
+    final modeIndex = (values['WhiteBalanceMode'] ?? 0).toInt().clamp(0, 8);
+    return Row(
+      children: [
+        Expanded(
+          child: StyledDropdown<int>(
+            value: modeIndex,
+            items: [
+              for (final mode in WbMode.values)
+                StyledDropdownItem(
+                  value: mode.index,
+                  label: _wbModeLabel(l10n, mode),
+                ),
+            ],
+            onChanged: (i) => widget.onWhiteBalanceMode(WbMode.values[i]),
+          ),
+        ),
+        const SizedBox(width: 6),
+        SizedBox(
+          width: 34,
+          height: 34,
+          child: IconButton(
+            tooltip: l10n.wbEyedropperTooltip,
+            isSelected: widget.wbEyedropperActive,
+            onPressed: widget.onToggleWbEyedropper,
+            icon: const Icon(CupertinoIcons.eyedropper, size: 15),
+          ),
+        ),
+      ],
+    );
+  }
 
   /// Which Color Curve channel is currently shown in the editor — only one
   /// at a time, switched via the R/G/B tabs, matching Lightroom.
@@ -5140,6 +5454,11 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                           },
                         ),
                         if (!_collapsed.contains(entry.key)) ...[
+                          if (entry.key == 'WHITE BALANCE')
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: _buildWhiteBalanceModeRow(l10n, values),
+                            ),
                           for (final spec in entry.value)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 12),
@@ -5147,9 +5466,14 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 name: _sliderLabel(l10n, spec.name),
                                 min: spec.min,
                                 max: spec.max,
-                                value: values[spec.name] ?? spec.defaultValue,
+                                value:
+                                    values[spec.name] ??
+                                    _wbSliderFallback(spec.name) ??
+                                    spec.defaultValue,
                                 decimals: spec.decimals,
-                                defaultValue: spec.defaultValue,
+                                defaultValue:
+                                    _wbSliderFallback(spec.name) ??
+                                    spec.defaultValue,
                                 trackColors: spec.gradientColors,
                                 valueSuffix: spec.valueSuffix,
                                 onChanged: (v) => onChanged(spec.name, v),

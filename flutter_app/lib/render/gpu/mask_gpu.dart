@@ -67,6 +67,8 @@ Future<Uint8List> renderRgbWithMasksGpu(
     final layerParams = RenderParams.fromValues(
       mask.values,
       curves: mask.curves,
+      asShotKelvin: globalParams.asShotKelvin,
+      asShotTint: globalParams.asShotTint,
     );
     final layerImage = await renderImageGpu(
       current,

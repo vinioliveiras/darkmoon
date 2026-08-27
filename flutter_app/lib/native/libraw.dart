@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
+import '../render/white_balance.dart' show wbMultipliersToKelvinTint;
 import 'libraw_bindings.dart';
 
 /// LibRaw (this file) vs. RapidRAW's own decoder (Rawler, a pure-Rust RAW
@@ -113,6 +114,8 @@ class RawMetadata {
     required this.focalLengthMm,
     required this.width,
     required this.height,
+    this.asShotKelvin = 5500,
+    this.asShotTint = 0,
   });
 
   /// Manufacturer-normalized names (e.g. "Fujifilm" rather than a
@@ -146,6 +149,15 @@ class RawMetadata {
   /// resolution slider preview.
   final int width;
   final int height;
+
+  /// The camera's own as-shot white balance, approximated from LibRaw's
+  /// `cam_mul`/`cam_xyz` (see `wbMultipliersToKelvinTint`). Defaults to
+  /// 5500 K / 0 tint when the file carries no usable camera multipliers.
+  /// Used as the neutral reference for the White Balance sliders — at
+  /// these values the render leaves the (already camera-WB'd) decode
+  /// untouched.
+  final double asShotKelvin;
+  final double asShotTint;
 }
 
 /// Reads a null-terminated `Array<Char>` field as a Dart string, stopping
@@ -179,6 +191,18 @@ RawMetadata? extractRawMetadata(String path) {
     final other = lr.ref.other;
     final lens = lr.ref.lens;
     final sizes = lr.ref.sizes;
+    final color = lr.ref.color;
+    final camMul = <double>[
+      color.cam_mul[0],
+      color.cam_mul[1],
+      color.cam_mul[2],
+      color.cam_mul[3],
+    ];
+    final camXyz = <List<double>>[
+      for (var i = 0; i < 3; i++)
+        [color.cam_xyz[i][0], color.cam_xyz[i][1], color.cam_xyz[i][2]],
+    ];
+    final asShot = wbMultipliersToKelvinTint(camMul, camXyz);
     return RawMetadata(
       cameraMake: _charArrayToString(idata.normalized_make, 64),
       cameraModel: _charArrayToString(idata.normalized_model, 64),
@@ -189,6 +213,8 @@ RawMetadata? extractRawMetadata(String path) {
       focalLengthMm: other.focal_len,
       width: sizes.iwidth,
       height: sizes.iheight,
+      asShotKelvin: asShot.kelvin,
+      asShotTint: asShot.tint,
     );
   } finally {
     lib.libraw_close(lr);

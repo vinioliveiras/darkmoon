@@ -100,5 +100,39 @@ void main() {
         expect(lum, closeTo(150, 6));
       },
     );
+
+    test('per-photo as-shot reference: sliders parked at the camera value '
+        'are an identity, and 5500/0 now shifts', () {
+      final src = flatGray(4, 4, 150);
+      // A photo whose camera as-shot was 5200 K / +6.
+      final atAsShot = renderRgb(
+        4,
+        4,
+        src,
+        const RenderParams(
+          temperature: 5200,
+          tint: 6,
+          asShotKelvin: 5200,
+          asShotTint: 6,
+        ),
+      );
+      for (final v in atAsShot) {
+        expect(v, 150);
+      }
+      final at5500 = renderRgb(
+        4,
+        4,
+        src,
+        const RenderParams(
+          temperature: 5500,
+          tint: 0,
+          asShotKelvin: 5200,
+          asShotTint: 6,
+        ),
+      );
+      // 5500 > 5200 as-shot -> warms; tint 0 < 6 -> greens.
+      expect(at5500[0], greaterThan(at5500[2]));
+      expect(at5500[1], greaterThan(150));
+    });
   });
 }

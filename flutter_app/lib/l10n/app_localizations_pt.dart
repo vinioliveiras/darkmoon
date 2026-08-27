@@ -598,6 +598,37 @@ class AppLocalizationsPt extends AppLocalizations {
   String get whiteBalancePreserveBrightnessLabel => 'Preservar brilho';
 
   @override
+  String get wbModeAsShot => 'Como capturada';
+
+  @override
+  String get wbModeAuto => 'Automático';
+
+  @override
+  String get wbModeDaylight => 'Luz do dia';
+
+  @override
+  String get wbModeCloudy => 'Nublado';
+
+  @override
+  String get wbModeShade => 'Sombra';
+
+  @override
+  String get wbModeTungsten => 'Tungstênio';
+
+  @override
+  String get wbModeFluorescent => 'Fluorescente';
+
+  @override
+  String get wbModeFlash => 'Flash';
+
+  @override
+  String get wbModeCustom => 'Personalizado';
+
+  @override
+  String get wbEyedropperTooltip =>
+      'Clique num cinza neutro para definir o balanço de branco';
+
+  @override
   String get sliderExposure => 'Exposição';
 
   @override
