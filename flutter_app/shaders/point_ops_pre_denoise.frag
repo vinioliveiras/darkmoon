@@ -10,9 +10,9 @@
 uniform vec2 uSize;
 uniform float uRGain; // 1 + tempGain
 uniform float uBGain; // 1 - tempGain
-uniform float uGGain; // 1 - tintShift
-uniform float uRbGain; // 1 + tintShift * 0.5
-uniform float uExposureFactor; // 2^(exposure/100*3)
+uniform float uGGain; // 1 + temp*0.05, combined with tint in Dart
+uniform float uRbGain; // 1 + tint*0.25
+uniform float uExposureFactor; // 2^(exposure/20)
 uniform sampler2D uTexture;
 
 out vec4 fragColor;

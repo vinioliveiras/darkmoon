@@ -43,20 +43,10 @@ float hueOf(vec3 c) {
   return hue;
 }
 
-// How strongly [c] (0..1 components) reads as a skin tone (0..1) — mirrors
-// render.dart's _skinToneWeight, see its doc comment.
-float skinToneWeight(vec3 c) {
+float saturationOf(vec3 c) {
   float maxC = max(c.r, max(c.g, c.b));
   float minC = min(c.r, min(c.g, c.b));
-  float light = (maxC + minC) * 0.5;
-  float d = maxC - minC;
-  float sat = d < 1e-6 ? 0.0 : (light > 0.5 ? d / (2.0 - maxC - minC) : d / (maxC + minC));
-  float diff = abs(hueOf(c) - 30.0);
-  if (diff > 180.0) diff = 360.0 - diff;
-  const float halfWidth = 25.0;
-  float hueWeight = diff >= halfWidth ? 0.0 : 1.0 - diff / halfWidth;
-  float satWeight = clamp(sat * 2.5, 0.0, 1.0);
-  return hueWeight * satWeight;
+  return (maxC - minC) / max(maxC, 0.001);
 }
 
 void main() {
@@ -64,16 +54,24 @@ void main() {
   vec2 uv = fragCoord / uSize;
   vec3 c = texture(uSource, uv).rgb;
 
-  // Vibrance: saturation-aware gain (less effect on already-saturated
-  // pixels), damped further on skin tones — matches render.dart's
-  // _applyVibrance.
+  // RapidRAW Vibrance: saturation-aware gain with a soft skin-tone
+  // dampener. The positive and negative branches intentionally use
+  // different saturation masks, matching apply_creative_color in WGSL.
   float luminance = dot(c, kLumaWeights);
-  float maxC = max(c.r, max(c.g, c.b));
-  float minC = min(c.r, min(c.g, c.b));
-  float currentSaturation = maxC - minC;
-  float skinWeight = skinToneWeight(c);
-  float vibranceFactor =
-      1.0 + uVibranceAmount * (1.0 - currentSaturation) * (1.0 - skinWeight * 0.75);
+  float currentSaturation = saturationOf(c);
+  float hue = hueOf(c);
+  float hueDistance = min(abs(hue - 25.0), 360.0 - abs(hue - 25.0));
+  float isSkin = smoothstep(35.0, 10.0, hueDistance);
+  float skinDampener = mix(1.0, 0.6, isSkin);
+  float vibranceFactor;
+  if (uVibranceAmount >= 0.0) {
+    vibranceFactor = 1.0 + uVibranceAmount *
+        (1.0 - smoothstep(0.4, 0.9, currentSaturation)) *
+        skinDampener * 3.0;
+  } else {
+    vibranceFactor = 1.0 + uVibranceAmount *
+        (1.0 - smoothstep(0.2, 0.8, currentSaturation));
+  }
   c = luminance + (c - luminance) * vibranceFactor;
 
   // Saturation: flat gain, applied on top of Vibrance's already-updated

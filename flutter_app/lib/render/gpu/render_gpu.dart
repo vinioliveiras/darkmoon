@@ -8,6 +8,7 @@ import '../render_params.dart';
 import '../tone_curve.dart';
 import 'dehaze_gpu.dart';
 import 'denoise_gpu.dart';
+import 'gpu_pass.dart';
 import 'local_contrast_gpu.dart';
 import 'sharpen_gpu.dart';
 
@@ -50,10 +51,9 @@ Future<ui.Image> renderImageGpu(
   int height,
   RenderParams params,
 ) async {
-  // applyLocalAdjustmentSteps' order: pre-denoise point ops -> baseline
-  // chroma smoothing (always on) -> AI denoise -> post-denoise point ops
-  // -> Sharpen -> Texture -> Clarity.
-  final afterPreDenoise = await _runPreDenoise(source, width, height, params);
+  // RapidRAW order: baseline chroma smoothing -> AI denoise -> Sharpen ->
+  // Texture -> Clarity -> Exposure -> Dehaze -> White Balance -> Tone.
+  final afterPreDenoise = source;
   final afterChromaSmoothing = await runBaselineChromaSmoothingGpu(
     afterPreDenoise,
     width,
@@ -65,16 +65,25 @@ Future<ui.Image> renderImageGpu(
     height,
     params.aiDenoise,
   );
+  final tonalBlur = (params.shadows == 0 &&
+          params.blacks == 0 &&
+          params.whites == 0)
+      ? null
+      : await runGaussianBlurGpu(
+          await GpuPass.run(
+            'shaders/srgb_to_linear.frag',
+            floats: [width.toDouble(), height.toDouble()],
+            samplers: [afterAiDenoise],
+            outputWidth: width,
+            outputHeight: height,
+          ),
+          width,
+          height,
+          3.5,
+        );
   final lut = await _buildLutImage(params.curves);
-  final afterPostDenoise = await _runPostDenoise(
-    afterAiDenoise,
-    lut,
-    width,
-    height,
-    params,
-  );
   final afterSharpen = await runSharpenGpu(
-    afterPostDenoise,
+    afterAiDenoise,
     width,
     height,
     params.sharpen,
@@ -96,16 +105,36 @@ Future<ui.Image> renderImageGpu(
     protectMidtones: true,
   );
 
-  // applyGlobalAdjustmentSteps' order: Dehaze -> Vibrance -> Saturation ->
-  // Vignette, on the complete buffer (never per-band — see that function's
-  // doc comment; GPU has no band concept at all, so this is automatic here).
-  final afterDehaze = await runDehazeGpu(
+  final afterExposure = await _runPreDenoise(
     afterClarity,
+    width,
+    height,
+    params,
+    applyWhiteBalance: false,
+  );
+
+  final afterDehaze = await runDehazeGpu(
+    afterExposure,
     width,
     height,
     params.dehaze,
   );
-  return _runPostDehaze(afterDehaze, width, height, params);
+  final afterWhiteBalance = await _runPreDenoise(
+    afterDehaze,
+    width,
+    height,
+    params,
+    applyExposure: false,
+  );
+  final afterTone = await _runPostDenoise(
+    afterWhiteBalance,
+    lut,
+    tonalBlur,
+    width,
+    height,
+    params,
+  );
+  return _runPostDehaze(afterTone, width, height, params);
 }
 
 ui.FragmentProgram? _preDenoiseProgram;
@@ -131,6 +160,10 @@ Future<ui.Image> _runPreDenoise(
   int width,
   int height,
   RenderParams params,
+  {
+  bool applyWhiteBalance = true,
+  bool applyExposure = true,
+  }
 ) async {
   final program = await _loadProgram(
     'shaders/point_ops_pre_denoise.frag',
@@ -141,24 +174,32 @@ Future<ui.Image> _runPreDenoise(
 
   const neutralKelvin = 5500.0;
   const miredGainPerUnit = 0.0013;
-  final miredDelta = 1.0e6 / neutralKelvin - 1.0e6 / params.temperature;
+  final miredDelta = applyWhiteBalance
+      ? 1.0e6 / neutralKelvin - 1.0e6 / params.temperature
+      : 0.0;
   final tempGain = (miredDelta * miredGainPerUnit).clamp(-0.6, 0.6);
-  final rGain = 1.0 + tempGain;
-  final bGain = 1.0 - tempGain;
-  final tintShift = params.tint / 100.0 * 0.2;
-  final gGain = 1.0 - tintShift;
-  final rbGain = 1.0 + tintShift * 0.5;
-  final exposureFactor = math
-      .pow(2.0, params.exposure / 100.0 * 3.0)
-      .toDouble();
+  final rapidTemperature = tempGain / 0.2;
+  final rGain = 1.0 + rapidTemperature * 0.2;
+  final gTemperatureGain = 1.0 + rapidTemperature * 0.05;
+  final bGain = 1.0 - rapidTemperature * 0.2;
+  final rapidTint = applyWhiteBalance ? params.tint / 100.0 : 0.0;
+  final gTintGain = 1.0 - rapidTint * 0.25;
+  final rbTintGain = 1.0 + rapidTint * 0.25;
+  final tintNormalization = 1.0 / ((2.0 * rbTintGain + gTintGain) / 3.0);
+  final gGain = gTemperatureGain * gTintGain * tintNormalization;
+  final normalizedRGain = rGain * rbTintGain * tintNormalization;
+  final normalizedBGain = bGain * rbTintGain * tintNormalization;
+  final exposureFactor = applyExposure
+      ? math.pow(2.0, params.exposure / 20.0).toDouble()
+      : 1.0;
 
   var i = 0;
   shader.setFloat(i++, width.toDouble());
   shader.setFloat(i++, height.toDouble());
-  shader.setFloat(i++, rGain);
-  shader.setFloat(i++, bGain);
+  shader.setFloat(i++, normalizedRGain);
+  shader.setFloat(i++, normalizedBGain);
   shader.setFloat(i++, gGain);
-  shader.setFloat(i++, rbGain);
+  shader.setFloat(i++, 1.0);
   shader.setFloat(i++, exposureFactor);
   shader.setImageSampler(0, source);
 
@@ -168,6 +209,7 @@ Future<ui.Image> _runPreDenoise(
 Future<ui.Image> _runPostDenoise(
   ui.Image source,
   ui.Image lut,
+  ui.Image? tonalBlur,
   int width,
   int height,
   RenderParams params,
@@ -185,10 +227,10 @@ Future<ui.Image> _runPostDenoise(
   final contrastGamma = params.contrast == 0
       ? 1.0
       : math.pow(2.0, params.contrast / 100.0 * 1.25).toDouble();
-  final shadowsAdd = params.shadows / 100.0 * 80.0 / 255.0;
-  final highlightsAdd = params.highlights / 100.0 * 80.0 / 255.0;
-  final whitesAdd = params.whites / 100.0 * 100.0 / 255.0;
-  final blacksAdd = params.blacks / 100.0 * 100.0 / 255.0;
+  final shadowsAdd = params.shadows / 100.0;
+  final highlightsAdd = params.highlights / 100.0;
+  final whitesAdd = params.whites / 100.0;
+  final blacksAdd = params.blacks / 100.0;
 
   final mixerChannels = [
     params.colorMixer.red,
@@ -217,7 +259,7 @@ Future<ui.Image> _runPostDenoise(
   var i = 0;
   shader.setFloat(i++, width.toDouble());
   shader.setFloat(i++, height.toDouble());
-  shader.setFloat(i++, params.brightness);
+  shader.setFloat(i++, params.brightness / 20.0);
   shader.setFloat(i++, contrastGamma);
   shader.setFloat(i++, shadowsAdd);
   shader.setFloat(i++, highlightsAdd);
@@ -258,6 +300,7 @@ Future<ui.Image> _runPostDenoise(
   );
   shader.setImageSampler(0, source);
   shader.setImageSampler(1, lut);
+  shader.setImageSampler(2, tonalBlur ?? source);
 
   return _rasterize(shader, width, height);
 }

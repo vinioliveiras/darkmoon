@@ -3,10 +3,11 @@ import 'dart:typed_data';
 
 import 'ai_denoise.dart';
 import 'baseline_chroma.dart';
+import 'blur.dart';
 import 'color_grading.dart';
 import 'color_mixer.dart';
+import 'color_space.dart';
 import 'dehaze.dart';
-import 'hsl.dart';
 import 'local_contrast.dart';
 import 'luminance.dart';
 import 'mask.dart';
@@ -132,6 +133,7 @@ const int _aiDenoiseHaloPx =
     50; // strong level's chromaSigma 5.0 + a 6px noise window
 const int _textureHaloPx = 30; // fixed sigma 3 + a 6px noise window
 const int _clarityHaloPx = 110; // fixed sigma 25 — the single biggest reach
+const int _tonalBlurHaloPx = 18; // sigma 3.5 tonal blur, three box passes
 
 /// How many extra rows a horizontal band needs on each side (above and
 /// below the rows it's actually responsible for) before
@@ -159,6 +161,9 @@ int localAdjustmentHaloPx(RenderParams params) {
   }
   if (params.clarity != 0) {
     halo += _clarityHaloPx;
+  }
+  if (params.shadows != 0 || params.blacks != 0 || params.whites != 0) {
+    halo += _tonalBlurHaloPx;
   }
   return halo;
 }
@@ -203,13 +208,6 @@ void applyLocalAdjustmentSteps(
   RenderParams params, {
   int rowOffset = 0,
 }) {
-  // Split into applyPreDenoisePointOps/applyPostDenoisePointOps (rather
-  // than inlined here) so the GPU render path
-  // (`lib/render/gpu/render_gpu.dart`, `shaders/point_ops_pre_denoise.frag`
-  // + `shaders/point_ops_post_denoise.frag`) has an exact CPU reference for
-  // each of its two shader passes to test against — see
-  // project_gpu_render_plan.md's Phase 1.
-  applyPreDenoisePointOps(buffer, params);
   // Denoise runs early — right after white balance/exposure establish the
   // pixel values but before any tone shaping — so Highlights/Shadows/
   // Whites/Blacks and Clarity/Texture don't push local contrast into noise
@@ -221,7 +219,6 @@ void applyLocalAdjustmentSteps(
   // Basic panel tone adjustments.
   applyBaselineChromaSmoothing(buffer, width, height, rowOffset: rowOffset);
   applyAiDenoise(buffer, width, height, params.aiDenoise);
-  applyPostDenoisePointOps(buffer, width, height, params);
   applySharpen(buffer, width, height, params.sharpen);
   applyLocalContrast(
     buffer,
@@ -241,23 +238,11 @@ void applyLocalAdjustmentSteps(
   );
 }
 
-/// White balance + exposure — the two point-operation stages that must
-/// run *before* denoise (see [applyLocalAdjustmentSteps]'s ordering
-/// comment). Split out from [applyLocalAdjustmentSteps] as its own
-/// function so `shaders/point_ops_pre_denoise.frag`'s GPU port has an
-/// exact, directly-callable CPU reference to test against, independent of
-/// baseline chroma smoothing (which has no GPU implementation yet).
-void applyPreDenoisePointOps(Float32List buffer, RenderParams params) {
-  _applyWhiteBalance(buffer, params.temperature, params.tint);
-  _applyExposure(buffer, params.exposure);
-}
-
 /// Every point-operation stage that runs *after* denoise, up to (but not
 /// including) Sharpen/Texture/Clarity: brightness/contrast, highlights/
 /// shadows, whites/blacks, tone + color curves, color mixer, color
 /// grading. Split out from [applyLocalAdjustmentSteps] for the same
-/// reason as [applyPreDenoisePointOps] — `shaders/point_ops_post_denoise.frag`'s
-/// exact CPU reference.
+/// mirrored by `shaders/point_ops_post_denoise.frag` in the GPU path.
 void applyPostDenoisePointOps(
   Float32List buffer,
   int width,
@@ -265,14 +250,27 @@ void applyPostDenoisePointOps(
   RenderParams params,
 ) {
   final pixelCount = width * height;
-  _applyBrightnessContrast(buffer, params.brightness, params.contrast);
-  _applyHighlightsShadows(
+  final tonalBlur = (params.shadows == 0 &&
+          params.blacks == 0 &&
+          params.whites == 0)
+      ? null
+      : gaussianBlurChannel(
+          _luminanceChannel(buffer, pixelCount),
+          width,
+          height,
+          3.5,
+        );
+  _applyRapidBrightness(buffer, params.brightness);
+  _applyRapidWhites(buffer, pixelCount, params.whites);
+  _applyRapidHighlights(buffer, pixelCount, params.highlights);
+  _applyRapidShadowsBlacks(
     buffer,
     pixelCount,
-    params.highlights,
     params.shadows,
+    params.blacks,
+    tonalBlur,
   );
-  _applyWhitesBlacks(buffer, pixelCount, params.whites, params.blacks);
+  _applyRapidContrast(buffer, params.contrast);
   applyToneCurve(buffer, params.curves.tone);
   applyColorCurves(
     buffer,
@@ -301,7 +299,10 @@ void applyGlobalAdjustmentSteps(
   RenderParams params,
 ) {
   final pixelCount = width * height;
+  _applyExposure(buffer, params.exposure);
   applyDehaze(buffer, width, height, params.dehaze);
+  _applyWhiteBalance(buffer, params.temperature, params.tint);
+  applyPostDenoisePointOps(buffer, width, height, params);
   _applyVibrance(buffer, pixelCount, params.vibrance);
   _applySaturation(buffer, pixelCount, params.saturation);
   applyVignette(buffer, width, height, params.vignette);
@@ -352,8 +353,14 @@ void _applyWhiteBalance(
   final miredDelta =
       1.0e6 / _temperatureNeutralKelvin - 1.0e6 / temperatureKelvin;
   final tempGain = (miredDelta * _miredGainPerUnit).clamp(-0.6, 0.6);
-  final rGain = 1.0 + tempGain;
-  final bGain = 1.0 - tempGain;
+  // RapidRAW represents temperature as a normalized -1..1 control with
+  // multipliers (1 + temp*0.2, 1 + temp*0.05, 1 - temp*0.2). Keep
+  // Darkmoon's Kelvin UI, but derive that normalized value from the existing
+  // calibrated mired gain so both controls use the same color model.
+  final rapidTemperature = tempGain / 0.2;
+  final rTemperatureGain = 1.0 + rapidTemperature * 0.2;
+  final gTemperatureGain = 1.0 + rapidTemperature * 0.05;
+  final bTemperatureGain = 1.0 - rapidTemperature * 0.2;
 
   // Tint moves along the green/magenta axis: green shifts one way, red and
   // blue shift the other, so overall luminance stays roughly put instead
@@ -361,14 +368,16 @@ void _applyWhiteBalance(
   // matches Lightroom and this slider's own green->magenta gradient
   // (editor_screen.dart's 'Tint' _SliderSpec): positive = magenta (green
   // down, red/blue up), negative = green (green up, red/blue down).
-  final tintShift = tint / 100.0 * 0.2;
-  final gGain = 1.0 - tintShift;
-  final rbGain = 1.0 + tintShift * 0.5;
+  final rapidTint = tint / 100.0;
+  final gTintGain = 1.0 - rapidTint * 0.25;
+  final rbTintGain = 1.0 + rapidTint * 0.25;
+  final tintMean = (2.0 * rbTintGain + gTintGain) / 3.0;
+  final tintNormalization = 1.0 / tintMean;
 
   for (var i = 0; i < img.length; i += 3) {
-    img[i] *= rGain * rbGain;
-    img[i + 1] *= gGain;
-    img[i + 2] *= bGain * rbGain;
+    img[i] *= rTemperatureGain * rbTintGain * tintNormalization;
+    img[i + 1] *= gTemperatureGain * gTintGain * tintNormalization;
+    img[i + 2] *= bTemperatureGain * rbTintGain * tintNormalization;
   }
 }
 
@@ -376,7 +385,7 @@ void _applyExposure(Float32List img, double exposure) {
   if (exposure == 0) {
     return;
   }
-  final factor = math.pow(2.0, exposure / 100.0 * 3.0).toDouble();
+  final factor = math.pow(2.0, exposure / 20.0).toDouble();
   for (var i = 0; i < img.length; i++) {
     img[i] *= factor;
   }
@@ -395,123 +404,170 @@ void _applyExposure(Float32List img, double exposure) {
 /// (a sibling project) shader contrast: gamma > 1 steepens the curve
 /// (more contrast), gamma < 1 flattens it (less contrast) while the true
 /// black/white points never move.
-void _applyBrightnessContrast(
-  Float32List img,
-  double brightness,
-  double contrast,
-) {
-  if (brightness == 0 && contrast == 0) {
+void _applyRapidBrightness(Float32List img, double brightness) {
+  if (brightness == 0) {
     return;
   }
-  if (contrast == 0) {
-    for (var i = 0; i < img.length; i++) {
-      img[i] = img[i] + brightness;
+  final adjustment = brightness / 20.0;
+  const rationalCurveMix = 0.95;
+  const midtoneStrength = 1.2;
+  const topAnchor = 1.06;
+  for (var i = 0; i < img.length; i += 3) {
+    final r = srgbToLinear(img[i] / 255.0);
+    final g = srgbToLinear(img[i + 1] / 255.0);
+    final b = srgbToLinear(img[i + 2] / 255.0);
+    final originalLuma =
+      _linearLuminance(r, g, b);
+    if (originalLuma.abs() < 0.00001) {
+      continue;
     }
+    final directAdjustment = adjustment * (1 - rationalCurveMix);
+    final rationalAdjustment = adjustment * rationalCurveMix;
+    final scale = math.pow(2.0, directAdjustment).toDouble();
+    final k = math.pow(2.0, -rationalAdjustment * midtoneStrength).toDouble();
+    final lumaFloor = (originalLuma.abs() / topAnchor).floor() * topAnchor;
+    final lumaNorm = (originalLuma.abs() - lumaFloor) / topAnchor;
+    final shapedNorm = lumaNorm / (lumaNorm + (1 - lumaNorm) * k);
+    final shapedLuma = lumaFloor + shapedNorm * topAnchor;
+    final newLuma = shapedLuma * scale;
+    final totalLumaScale = newLuma / originalLuma;
+    final lumaWeight = (newLuma.clamp(0.0, 2.0)) * 0.5;
+    final dynamicExponent = 0.95 + (0.65 - 0.95) * lumaWeight;
+    final chromaScale = math.pow(totalLumaScale, dynamicExponent).toDouble() /
+        (1 + math.max(0.0, newLuma - 0.9) * 2.0);
+    img[i] = linearToSrgb(newLuma + (r - originalLuma) * chromaScale) * 255.0;
+    img[i + 1] =
+      linearToSrgb(newLuma + (g - originalLuma) * chromaScale) * 255.0;
+    img[i + 2] =
+      linearToSrgb(newLuma + (b - originalLuma) * chromaScale) * 255.0;
+  }
+}
+
+void _applyRapidContrast(Float32List img, double contrast) {
+  if (contrast == 0) {
     return;
   }
   final gamma = math.pow(2.0, contrast / 100.0 * 1.25).toDouble();
   for (var i = 0; i < img.length; i++) {
-    final t = (img[i] / 255.0).clamp(0.0, 1.0);
-    final curved = t < 0.5
-        ? 0.5 * math.pow(2.0 * t, gamma)
-        : 1.0 - 0.5 * math.pow(2.0 * (1.0 - t), gamma);
-    img[i] = curved.toDouble().clamp(0.0, 1.0) * 255.0 + brightness;
+    final linear = srgbToLinear(img[i] / 255.0);
+    final perceptual = math.pow(linear, 1.0 / 2.2).toDouble();
+    final curved = perceptual < 0.5
+        ? 0.5 * math.pow(2.0 * perceptual, gamma)
+        : 1.0 - 0.5 * math.pow(2.0 * (1.0 - perceptual), gamma);
+    img[i] = linearToSrgb(
+          math.pow(curved.clamp(0.0, 1.0), 2.2).toDouble(),
+        ) *
+        255.0;
   }
 }
 
-/// EXPERIMENTAL: lifts/pulls the luma of the pixel at [img] offset [i] by
-/// [add] (0..255 space) while preserving its R:G:B color ratio (chroma),
-/// by scaling all three channels by the same factor — NOT the same flat
-/// [add] added to each channel independently, which is mathematically the
-/// atmospheric-haze/veil model (adding a constant roughly equally across
-/// channels is literally how classic dehaze equations model airlight).
-/// [_applyHighlightsShadows] and [_applyWhitesBlacks] used to do exactly
-/// that flat add, which produced a visible white/gray veil over the whole
-/// affected tonal region on strong presets (e.g. Shadows=+100) instead of
-/// a natural-looking lift — this is what real photo editors' Highlights/
-/// Shadows/Whites/Blacks controls actually do.
-void _liftLumaPreservingChroma(
-  Float32List img,
-  int i,
-  double oldLuma255,
-  double add,
-) {
-  final newLuma = (oldLuma255 + add).clamp(0.0, 255.0);
-  // The ratio itself is clamped (not just the denominator floored) —
-  // dividing by a near-zero oldLuma255 (exactly the near-black pixels
-  // Shadows/Blacks are meant to lift) would otherwise blow the ratio up
-  // to 50x+ for a strong lift, turning a handful of the darkest pixels
-  // pure white instead of a natural-looking lift. Capped lower than a
-  // first pass at 6.0 (now 2.5): the whole pipeline works in 8-bit space
-  // (decodeRawImage's output is already a Uint8List, not 16-bit/float),
-  // so near-black/near-white regions only have a handful of distinct
-  // source values to begin with — a high ratio can't invent intermediate
-  // values that don't exist there, it just makes the resulting banding
-  // and whatever noise is already in those few values more visible
-  // instead of a smooth lift.
-  final ratio = (newLuma / math.max(oldLuma255, 0.5)).clamp(0.0, 2.5);
-  img[i] = (img[i] * ratio).clamp(0.0, 255.0);
-  img[i + 1] = (img[i + 1] * ratio).clamp(0.0, 255.0);
-  img[i + 2] = (img[i + 2] * ratio).clamp(0.0, 255.0);
-}
-
-void _applyHighlightsShadows(
-  Float32List img,
-  int pixelCount,
-  double highlights,
-  double shadows,
-) {
-  if (highlights == 0 && shadows == 0) {
-    return;
-  }
-  for (var p = 0; p < pixelCount; p++) {
-    final i = p * 3;
-    // Luminance is computed once from the input and reused for both
-    // weights below, matching the Python function (it doesn't recompute
-    // luminance after applying the shadows adjustment).
-    final luminance = luminanceRgb(img[i], img[i + 1], img[i + 2]) / 255.0;
-    if (shadows != 0) {
-      // Falls off by luminance 0.4 (not the old hard 0.5, which fully
-      // blanketed Whites/Blacks' own [0, 0.25] region and made Shadows act
-      // like a second, broader Brightness) and uses a smoothstep instead
-      // of a linear ramp for a softer taper — still widest at the true
-      // extreme, just narrower than before and leaving a real midtone gap.
-      final t = (1.0 - luminance / 0.4).clamp(0.0, 1.0);
-      final weight = t * t * (3.0 - 2.0 * t);
-      final add = weight * (shadows / 100.0) * 80.0;
-      _liftLumaPreservingChroma(img, i, luminance * 255.0, add);
-    }
-    if (highlights != 0) {
-      final t = ((luminance - 0.6) / 0.4).clamp(0.0, 1.0);
-      final weight = t * t * (3.0 - 2.0 * t);
-      final add = weight * (highlights / 100.0) * 80.0;
-      _liftLumaPreservingChroma(img, i, luminance * 255.0, add);
-    }
-  }
-}
-
-void _applyWhitesBlacks(
+void _applyRapidWhites(
   Float32List img,
   int pixelCount,
   double whites,
-  double blacks,
 ) {
-  if (whites == 0 && blacks == 0) {
-    return;
-  }
+  if (whites == 0) return;
+  final amount = whites / 100.0;
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
-    final luminance = luminanceRgb(img[i], img[i + 1], img[i + 2]) / 255.0;
-    if (whites != 0) {
-      final weight = ((luminance - 0.75) * 4.0).clamp(0.0, 1.0);
-      final add = weight * (whites / 100.0) * 100.0;
-      _liftLumaPreservingChroma(img, i, luminance * 255.0, add);
-    }
-    if (blacks != 0) {
-      final weight = (1.0 - luminance * 4.0).clamp(0.0, 1.0);
-      final add = weight * (blacks / 100.0) * 100.0;
-      _liftLumaPreservingChroma(img, i, luminance * 255.0, add);
-    }
+    final r = srgbToLinear(img[i] / 255.0);
+    final g = srgbToLinear(img[i + 1] / 255.0);
+    final b = srgbToLinear(img[i + 2] / 255.0);
+    final luma = _linearLuminance(r, g, b);
+    final x = math.max(luma, 0.0001) * 1.5;
+    final whiteMaskInput = (math.exp(2.0 * x) - 1.0) /
+      (math.exp(2.0 * x) + 1.0);
+    final whiteT = ((whiteMaskInput - 0.5) / (0.98 - 0.5)).clamp(0.0, 1.0);
+    final whiteMask = whiteT * whiteT * (3.0 - 2.0 * whiteT);
+    final multiplier = 1.0 / math.max(1.0 - amount * 0.25 * whiteMask, 0.01);
+    img[i] = linearToSrgb(r * multiplier) * 255.0;
+    img[i + 1] = linearToSrgb(g * multiplier) * 255.0;
+    img[i + 2] = linearToSrgb(b * multiplier) * 255.0;
+  }
+}
+
+void _applyRapidShadowsBlacks(
+  Float32List img,
+  int pixelCount,
+  double shadows,
+  double blacks,
+  Float32List? tonalBlur,
+) {
+  if (shadows == 0 && blacks == 0) return;
+  final shadowAmount = shadows / 100.0;
+  final blackAmount = blacks / 100.0;
+  for (var p = 0; p < pixelCount; p++) {
+    final i = p * 3;
+    final r = srgbToLinear(img[i] / 255.0);
+    final g = srgbToLinear(img[i + 1] / 255.0);
+    final b = srgbToLinear(img[i + 2] / 255.0);
+    final luma = _linearLuminance(r, g, b);
+    final t = math.pow(math.max(luma, 0.0001), 0.4545).toDouble();
+    final shadowLift = shadowAmount * t * math.pow(math.max(1.0 - t, 0.0), 4.5);
+    final blackLift = blackAmount * t * math.pow(math.max(1.0 - t, 0.0), 12.0);
+    final lift = math.max(shadowLift + blackLift, 0.0);
+    final curved = math.max(t + shadowLift + blackLift, 0.0);
+    final stretch = 1.0 + lift * 1.3;
+    final contrasted = 0.2 + (curved - 0.2) * stretch;
+    final finalT = math.max(curved * 0.15 + contrasted * 0.85, 0.0);
+    final newLuma = math.pow(finalT, 2.2).toDouble();
+    final ratio = newLuma / math.max(luma, 0.0001);
+    final blurredLuma = tonalBlur == null ? luma : tonalBlur[p];
+    final blurredT = math.pow(math.max(blurredLuma, 0.0001), 0.4545).toDouble();
+    final detailRatio = (t / math.max(blurredT, 0.0001)).clamp(0.8, 1.25);
+    final noiseProtection = (blurredT / 0.1).clamp(0.0, 1.0);
+    final detailExponent = 1.0 + lift * 1.2 * noiseProtection;
+    final detailCorrection =
+      math.pow(detailRatio, detailExponent).toDouble() / detailRatio;
+    final multiplier = ratio * math.pow(detailCorrection, 2.2).toDouble();
+    img[i] = linearToSrgb(r * multiplier) * 255.0;
+    img[i + 1] = linearToSrgb(g * multiplier) * 255.0;
+    img[i + 2] = linearToSrgb(b * multiplier) * 255.0;
+  }
+}
+
+Float32List _luminanceChannel(Float32List rgb, int pixelCount) {
+  final channel = Float32List(pixelCount);
+  for (var p = 0; p < pixelCount; p++) {
+    final i = p * 3;
+    channel[p] = _linearLuminance(
+      srgbToLinear(rgb[i] / 255.0),
+      srgbToLinear(rgb[i + 1] / 255.0),
+      srgbToLinear(rgb[i + 2] / 255.0),
+    );
+  }
+  return channel;
+}
+
+double _tanh(double value) {
+  final e = math.exp(2.0 * value);
+  return (e - 1.0) / (e + 1.0);
+}
+
+double _linearLuminance(double r, double g, double b) =>
+  0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+void _applyRapidHighlights(Float32List img, int pixelCount, double highlights) {
+  if (highlights == 0) return;
+  final amount = highlights / 100.0;
+  for (var p = 0; p < pixelCount; p++) {
+    final i = p * 3;
+    final r = srgbToLinear(img[i] / 255.0);
+    final g = srgbToLinear(img[i + 1] / 255.0);
+    final b = srgbToLinear(img[i + 2] / 255.0);
+    final luma = _linearLuminance(r, g, b);
+    final maskInput = _tanh(luma * 1.5);
+    final t = ((maskInput - 0.55) / (0.95 - 0.55)).clamp(0.0, 1.0);
+    final mask = t * t * (3.0 - 2.0 * t);
+    if (mask == 0) continue;
+    final newLuma = amount < 0
+        ? math.pow(luma, 1.0 - amount * 1.75).toDouble()
+        : luma * math.pow(2.0, amount * 1.75).toDouble();
+    final ratio = newLuma / math.max(luma, 0.0001);
+    final multiplier = 1.0 + (ratio - 1.0) * mask;
+    img[i] = linearToSrgb(r * multiplier) * 255.0;
+    img[i + 1] = linearToSrgb(g * multiplier) * 255.0;
+    img[i + 2] = linearToSrgb(b * multiplier) * 255.0;
   }
 }
 
@@ -525,17 +581,53 @@ void _applyVibrance(Float32List img, int pixelCount, double amount) {
     final luminance = luminanceRgb(r, g, b);
     final maxC = math.max(r, math.max(g, b));
     final minC = math.min(r, math.min(g, b));
-    final currentSaturation = (maxC - minC) / 255.0;
-    final skinWeight = _skinToneWeight(r / 255.0, g / 255.0, b / 255.0);
-    final factor =
-        1.0 +
-        (amount / 100.0) *
-            (1.0 - currentSaturation) *
-            (1.0 - skinWeight * 0.75);
+    if (maxC - minC < 0.02 * 255.0) {
+      continue;
+    }
+    final safeMax = math.max(maxC, 0.001);
+    final currentSaturation = (maxC - minC) / safeMax;
+    final hsv = _rgbToHsv(r / 255.0, g / 255.0, b / 255.0);
+    final hueDistance = math.min(
+      (hsv[0] - 25.0).abs(),
+      360.0 - (hsv[0] - 25.0).abs(),
+    );
+    final skin = _smoothstep(35.0, 10.0, hueDistance);
+    final skinDampener = 1.0 + (0.6 - 1.0) * skin;
+    final normalizedAmount = amount / 100.0;
+    final factor = normalizedAmount >= 0
+      ? 1.0 + normalizedAmount *
+        (1.0 - _smoothstep(0.4, 0.9, currentSaturation)) *
+        skinDampener *
+        3.0
+      : 1.0 + normalizedAmount *
+        (1.0 - _smoothstep(0.2, 0.8, currentSaturation));
     img[i] = luminance + (r - luminance) * factor;
     img[i + 1] = luminance + (g - luminance) * factor;
     img[i + 2] = luminance + (b - luminance) * factor;
   }
+}
+
+double _smoothstep(double edge0, double edge1, double value) {
+  final t = ((value - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
+  return t * t * (3.0 - 2.0 * t);
+}
+
+List<double> _rgbToHsv(double r, double g, double b) {
+  final maxC = math.max(r, math.max(g, b));
+  final minC = math.min(r, math.min(g, b));
+  final delta = maxC - minC;
+  var hue = 0.0;
+  if (delta > 0) {
+    if (maxC == r) {
+      hue = 60.0 * ((g - b) / delta % 6.0);
+    } else if (maxC == g) {
+      hue = 60.0 * ((b - r) / delta + 2.0);
+    } else {
+      hue = 60.0 * ((r - g) / delta + 4.0);
+    }
+    if (hue < 0) hue += 360.0;
+  }
+  return [hue, maxC == 0 ? 0.0 : delta / maxC, maxC];
 }
 
 /// How strongly a pixel ([r], [g], [b], each 0..1) reads as a skin tone
@@ -544,23 +636,6 @@ void _applyVibrance(Float32List img, int pixelCount, double amount) {
 /// on the Color Mixer's Orange band (30°, see `_channelCenterHues` in
 /// color_mixer.dart), with a narrower half-width since skin tones occupy a
 /// tighter hue range than a full Orange mixer band.
-double _skinToneWeight(double r, double g, double b) {
-  final hsl = rgbToHsl(r, g, b);
-  final hue = hsl[0];
-  final sat = hsl[1];
-  var diff = (hue - 30.0).abs();
-  if (diff > 180) {
-    diff = 360 - diff;
-  }
-  const halfWidth = 25.0;
-  final hueWeight = diff >= halfWidth ? 0.0 : 1.0 - diff / halfWidth;
-  // Skin tones are rarely fully desaturated or fully saturated; fade the
-  // protection out toward the extremes so near-neutral or already-vivid
-  // orange pixels aren't affected.
-  final satWeight = (sat * 2.5).clamp(0.0, 1.0);
-  return hueWeight * satWeight;
-}
-
 void _applySaturation(Float32List img, int pixelCount, double amount) {
   if (amount == 0) {
     return;

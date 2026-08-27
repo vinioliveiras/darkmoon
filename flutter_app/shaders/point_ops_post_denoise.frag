@@ -14,18 +14,18 @@ uniform vec2 uSize;
 // Brightness/contrast — render.dart's _applyBrightnessContrast. Contrast
 // is an endpoint-preserving S-curve (0->0, 255->255 always), not a plain
 // linear scale toward mid-gray — see that function's doc comment for why.
-uniform float uBrightness255; // brightness param, still 0..100-ish scale
+uniform float uBrightness255; // brightness param normalized from -100..100
 uniform float uContrastGamma; // pow(2, contrast/100*1.25), 1.0 = no-op
 
 // Highlights/shadows — _applyHighlightsShadows. Precomputed as
 // (param/100)*80/255 on the CPU side so the shader just multiplies by a
 // per-pixel weight.
-uniform float uShadowsAdd;
+uniform float uShadowsAdd; // shadows param normalized from -100..100
 uniform float uHighlightsAdd;
 
 // Whites/blacks — _applyWhitesBlacks. Precomputed as (param/100)*100/255.
-uniform float uWhitesAdd;
-uniform float uBlacksAdd;
+uniform float uWhitesAdd; // whites param normalized from -100..100
+uniform float uBlacksAdd; // blacks param normalized from -100..100
 
 // Color Mixer — color_mixer.dart's applyColorMixer. 8 bands x
 // [hueShift, satShift, lumShift], band order matches
@@ -51,8 +51,24 @@ uniform sampler2D uTexture;
 // each channel built by tone_curve.dart's buildToneCurveLut, 0..1 in and
 // out (matches this shader's working space directly).
 uniform sampler2D uLut;
+// Tonal blur (sigma 3.5) used by RapidRAW to preserve local detail while
+// lifting shadows/blacks. It is bound to the source when the controls are
+// neutral so the sampler is always valid without a branch in Dart.
+uniform sampler2D uTonalBlur;
 
 out vec4 fragColor;
+
+float srgbToLinear(float value) {
+  float c = clamp(value, 0.0, 1.0);
+  if (c <= 0.04045) return c / 12.92;
+  return pow((c + 0.055) / 1.055, 2.4);
+}
+
+float linearToSrgb(float value) {
+  float c = clamp(value, 0.0, 1.0);
+  if (c <= 0.0031308) return c * 12.92;
+  return 1.055 * pow(c, 1.0 / 2.4) - 0.055;
+}
 
 // Skia's runtime-effect SkSL compiler rejects `const T arr[n] = T[](...)`
 // (array initializers) — matches color_mixer.dart's _channelCenterHues via
@@ -131,19 +147,120 @@ float contrastCurve(float t, float gamma) {
   return 1.0 - 0.5 * pow(2.0 * (1.0 - x), gamma);
 }
 
+vec3 rapidBrightness(vec3 color, float amount) {
+  if (amount == 0.0) return color;
+  color = vec3(
+    srgbToLinear(color.r),
+    srgbToLinear(color.g),
+    srgbToLinear(color.b)
+  );
+  const float rationalMix = 0.95;
+  const float midtoneStrength = 1.2;
+  const float topAnchor = 1.06;
+  float originalLuma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+  if (abs(originalLuma) < 0.00001) return color;
+  float direct = amount * (1.0 - rationalMix);
+  float rational = amount * rationalMix;
+  float scale = pow(2.0, direct);
+  float k = pow(2.0, -rational * midtoneStrength);
+  float floorValue = floor(abs(originalLuma) / topAnchor) * topAnchor;
+  float normalized = (abs(originalLuma) - floorValue) / topAnchor;
+  float shaped = normalized / (normalized + (1.0 - normalized) * k);
+  float newLuma = (floorValue + shaped * topAnchor) * scale;
+  float lumaScale = newLuma / originalLuma;
+  float lumaWeight = clamp(newLuma, 0.0, 2.0) * 0.5;
+  float dynamicExponent = mix(0.95, 0.65, lumaWeight);
+  float chromaScale = pow(lumaScale, dynamicExponent) /
+      (1.0 + max(0.0, newLuma - 0.9) * 2.0);
+  vec3 result = vec3(newLuma) + (color - vec3(originalLuma)) * chromaScale;
+  return vec3(
+    linearToSrgb(result.r),
+    linearToSrgb(result.g),
+    linearToSrgb(result.b)
+  );
+}
+
+float rapidWhiteMask(float luma) {
+  float whiteInput = tanh(max(luma, 0.0001) * 1.5);
+  return smoothstep(0.5, 0.98, whiteInput);
+}
+
+vec3 rapidHighlights(vec3 color, float amount) {
+  if (amount == 0.0) return color;
+  vec3 linearColor = vec3(
+    srgbToLinear(color.r), srgbToLinear(color.g), srgbToLinear(color.b)
+  );
+  float luma = dot(linearColor, vec3(0.2126, 0.7152, 0.0722));
+  float mask = smoothstep(0.55, 0.95, tanh(max(luma, 0.0001) * 1.5));
+  if (mask <= 0.0) return color;
+  float newLuma = amount < 0.0
+      ? pow(luma, 1.0 - amount * 1.75)
+      : luma * pow(2.0, amount * 1.75);
+  linearColor *= 1.0 + (newLuma / max(luma, 0.0001) - 1.0) * mask;
+  return vec3(
+    linearToSrgb(linearColor.r), linearToSrgb(linearColor.g),
+    linearToSrgb(linearColor.b)
+  );
+}
+
+vec3 rapidWhites(vec3 color, float amount) {
+  if (amount == 0.0) return color;
+  vec3 linearColor = vec3(
+    srgbToLinear(color.r), srgbToLinear(color.g), srgbToLinear(color.b)
+  );
+  float luma = dot(max(linearColor, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722));
+  float mask = rapidWhiteMask(luma);
+  float level = 1.0 - amount * 0.25;
+  float multiplier = 1.0 / max(mix(1.0, level, mask), 0.01);
+  linearColor *= multiplier;
+  return vec3(
+    linearToSrgb(linearColor.r), linearToSrgb(linearColor.g),
+    linearToSrgb(linearColor.b)
+  );
+}
+
+vec3 rapidShadowsBlacks(
+  vec3 color,
+  float shadows,
+  float blacks,
+  float blurredLuma
+) {
+  if (shadows == 0.0 && blacks == 0.0) return color;
+  vec3 linearColor = vec3(
+    srgbToLinear(color.r), srgbToLinear(color.g), srgbToLinear(color.b)
+  );
+  float luma = dot(max(linearColor, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722));
+  float t = pow(max(luma, 0.0001), 0.4545);
+  float shadowLift = shadows * t * pow(max(1.0 - t, 0.0), 4.5);
+  float blackLift = blacks * t * pow(max(1.0 - t, 0.0), 12.0);
+  float lift = max(shadowLift + blackLift, 0.0);
+  float curved = max(t + shadowLift + blackLift, 0.0);
+  float contrasted = 0.2 + (curved - 0.2) * (1.0 + lift * 1.3);
+  float finalT = max(mix(curved, contrasted, 0.85), 0.0);
+  float newLuma = pow(finalT, 2.2);
+  float lumaRatio = newLuma / max(luma, 0.0001);
+  float detail = clamp(t / max(pow(max(blurredLuma, 0.0001), 0.4545), 0.0001), 0.8, 1.25);
+  float noiseProtection = smoothstep(0.0, 0.1, pow(max(blurredLuma, 0.0001), 0.4545));
+  float detailAmp = 1.0 + lift * 1.2 * noiseProtection;
+  float detailCorrection = pow(detail, detailAmp) / detail;
+  linearColor *= lumaRatio * pow(detailCorrection, 2.2);
+  return vec3(
+    linearToSrgb(linearColor.r), linearToSrgb(linearColor.g),
+    linearToSrgb(linearColor.b)
+  );
+}
+
 void main() {
   vec2 uv = FlutterFragCoord().xy / uSize;
   vec3 c = texture(uTexture, uv).rgb;
 
-  // Brightness/contrast.
-  c.r = contrastCurve(c.r, uContrastGamma);
-  c.g = contrastCurve(c.g, uContrastGamma);
-  c.b = contrastCurve(c.b, uContrastGamma);
-  c += uBrightness255 / 255.0;
+  // RapidRAW order: filmic brightness, whites, shadows/blacks, then contrast.
+  c = rapidBrightness(c, uBrightness255);
+  c = rapidWhites(c, uWhitesAdd);
 
-  // Highlights/shadows + whites/blacks share one Rec.709 luminance sample
-  // (matches render.dart computing it once per stage from the
-  // *pre*-stage value, not recomputed after each add).
+  c = rapidHighlights(c, uHighlightsAdd);
+
+  // Tonal blur supplies local detail for the shadows/blacks recovery.
   // Falls off by 0.4 from each extreme (not the old hard 0.5, which fully
   // blanketed Whites/Blacks' own [0, 0.25]/[0.75, 1.0] region) with a
   // smoothstep taper instead of a linear ramp — mirrors render.dart's
@@ -157,11 +274,6 @@ void main() {
   // equations model airlight), which produced a visible white/gray veil
   // on strong Shadows/Highlights/Whites/Blacks presets. Mirrors
   // render.dart's _liftLumaPreservingChroma exactly.
-  float lum = dot(c, vec3(0.2126, 0.7152, 0.0722));
-  float shadowT = clamp(1.0 - lum / 0.4, 0.0, 1.0);
-  float shadowW = shadowT * shadowT * (3.0 - 2.0 * shadowT);
-  float highlightT = clamp((lum - 0.6) / 0.4, 0.0, 1.0);
-  float highlightW = highlightT * highlightT * (3.0 - 2.0 * highlightT);
   // Ratio itself is clamped (not just the denominator floored) — dividing
   // by a near-zero lum (exactly the near-black pixels Shadows/Blacks are
   // meant to lift) would otherwise blow the ratio up to 50x+ for a strong
@@ -172,14 +284,15 @@ void main() {
   // a high ratio can't invent intermediate values that don't exist there,
   // it just makes banding/noise already in those few values more visible.
   // Mirrors render.dart's _liftLumaPreservingChroma.
-  float shLum = clamp(lum + shadowW * uShadowsAdd + highlightW * uHighlightsAdd, 0.0, 1.0);
-  c *= clamp(shLum / max(lum, 0.5 / 255.0), 0.0, 2.5);
+  float tonalBlurLuma = dot(
+    texture(uTonalBlur, uv).rgb,
+    vec3(0.2126, 0.7152, 0.0722)
+  );
+  c = rapidShadowsBlacks(c, uShadowsAdd, uBlacksAdd, tonalBlurLuma);
 
-  float lum2 = dot(c, vec3(0.2126, 0.7152, 0.0722));
-  float whitesW = clamp((lum2 - 0.75) * 4.0, 0.0, 1.0);
-  float blacksW = clamp(1.0 - lum2 * 4.0, 0.0, 1.0);
-  float wbLum = clamp(lum2 + whitesW * uWhitesAdd + blacksW * uBlacksAdd, 0.0, 1.0);
-  c *= clamp(wbLum / max(lum2, 0.5 / 255.0), 0.0, 2.5);
+  c.r = linearToSrgb(pow(contrastCurve(pow(srgbToLinear(c.r), 1.0 / 2.2), uContrastGamma), 2.2));
+  c.g = linearToSrgb(pow(contrastCurve(pow(srgbToLinear(c.g), 1.0 / 2.2), uContrastGamma), 2.2));
+  c.b = linearToSrgb(pow(contrastCurve(pow(srgbToLinear(c.b), 1.0 / 2.2), uContrastGamma), 2.2));
 
   // Tone curve (all 3 channels through the same LUT), then per-channel
   // color curves — matches applyToneCurve then applyColorCurves' order.

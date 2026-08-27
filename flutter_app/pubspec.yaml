@@ -104,6 +104,7 @@ flutter:
     - shaders/dehaze_apply.frag
     - shaders/post_dehaze.frag
     - shaders/mask_blend.frag
+    - shaders/srgb_to_linear.frag
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
