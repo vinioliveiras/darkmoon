@@ -7033,6 +7033,11 @@ class _Filmstrip extends StatefulWidget {
 class _FilmstripState extends State<_Filmstrip> {
   final _scrollController = ScrollController();
 
+  /// Key on the currently-selected thumbnail, so [Scrollable.ensureVisible]
+  /// can centre it exactly (handling the list padding / viewport math the
+  /// rough jump below only approximates).
+  final _selectedItemKey = GlobalKey();
+
   /// Thumbnail slot width (104) plus the 6px right padding between slots —
   /// the stride from one thumbnail's left edge to the next's.
   static const _slotStride = 110.0;
@@ -7059,10 +7064,11 @@ class _FilmstripState extends State<_Filmstrip> {
   }
 
   /// The strip and its scroll position aren't laid out yet on the frame a
-  /// folder first loads, so retry over the next few frames until the
-  /// controller has real content dimensions.
+  /// folder first loads (and on startup the restored folder can take a
+  /// while), so retry over the next second or so until the controller has
+  /// real content dimensions.
   void _recenterAfterLayout({required bool animated, int attempt = 0}) {
-    if (attempt > 8) {
+    if (attempt > 40) {
       return;
     }
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -7080,6 +7086,8 @@ class _FilmstripState extends State<_Filmstrip> {
 
   /// Scrolls so the selected thumbnail sits in the middle of the strip
   /// (clamped at the ends, so the first/last few photos don't leave a gap).
+  /// A rough jump gets the target item built, then [Scrollable.ensureVisible]
+  /// on its key nudges it to exact centre.
   void _centerOnSelected({required bool animated}) {
     final index = widget.selectedIndex;
     if (index == null || !_scrollController.hasClients) {
@@ -7087,19 +7095,35 @@ class _FilmstripState extends State<_Filmstrip> {
     }
     final position = _scrollController.position;
     final slotCenter = _listPadding + index * _slotStride + _slotWidth / 2;
-    final target = (slotCenter - position.viewportDimension / 2).clamp(
+    final rough = (slotCenter - position.viewportDimension / 2).clamp(
       position.minScrollExtent,
       position.maxScrollExtent,
     );
-    if (animated && (target - position.pixels).abs() > 1) {
+    if (animated && (rough - position.pixels).abs() > 1) {
       _scrollController.animateTo(
-        target,
-        duration: const Duration(milliseconds: 220),
+        rough,
+        duration: const Duration(milliseconds: 200),
         curve: Curves.easeOut,
       );
     } else {
-      _scrollController.jumpTo(target);
+      _scrollController.jumpTo(rough);
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      final ctx = _selectedItemKey.currentContext;
+      if (ctx != null) {
+        Scrollable.ensureVisible(
+          ctx,
+          alignment: 0.5,
+          duration: animated
+              ? const Duration(milliseconds: 160)
+              : Duration.zero,
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
   @override
@@ -7204,6 +7228,7 @@ class _FilmstripState extends State<_Filmstrip> {
                   onSecondaryTapUp: (details) =>
                       _showContextMenu(context, details.globalPosition, file),
                   child: Container(
+                    key: isSelected ? _selectedItemKey : null,
                     width: 104,
                     padding: const EdgeInsets.all(4),
                     decoration: BoxDecoration(
