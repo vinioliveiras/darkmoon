@@ -598,13 +598,10 @@ class _EditorScreenState extends State<EditorScreen> {
   String? _fullQualitySourcePath;
   bool _decodingFullQuality = false;
 
-  /// The native source downscaled to the current working resolution
-  /// (roughly what the screen shows at the current zoom, capped) — the
-  /// buffer settled renders actually run against once full-quality mode is
-  /// active. Regenerated only when the working resolution moves
-  /// meaningfully (a zoom change), not on every settle.
+  /// The native source downscaled once to [_fullQualityWorkingLong] — the
+  /// buffer settled renders run against while full-quality mode is active
+  /// for this photo. Cleared on photo switch / toggle-off.
   EditSource? _fullQualityScaled;
-  int _fullQualityScaledLong = 0;
 
   bool _fullQualityReadyFor(String path) =>
       _fullQualitySourcePath == path && _fullQualitySource != null;
@@ -1410,7 +1407,6 @@ class _EditorScreenState extends State<EditorScreen> {
               _fullQualitySource = null;
               _fullQualitySourcePath = null;
               _fullQualityScaled = null;
-              _fullQualityScaledLong = 0;
             }
           });
           unawaited(saveSettings(next));
@@ -2032,6 +2028,10 @@ class _EditorScreenState extends State<EditorScreen> {
     int generation,
   ) async {
     _resetZoom();
+    _dynamicPreviewTimer?.cancel();
+    _fullQualitySource = null;
+    _fullQualitySourcePath = null;
+    _fullQualityScaled = null;
     setState(() {
       _files = files;
       _selectedIndex = selectedIndex;
@@ -2183,7 +2183,6 @@ class _EditorScreenState extends State<EditorScreen> {
     _fullQualitySource = null;
     _fullQualitySourcePath = null;
     _fullQualityScaled = null;
-    _fullQualityScaledLong = 0;
     setState(() {
       _selectedIndex = index;
       _paramValues = _paramValuesFor(path);
@@ -2592,48 +2591,36 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   /// Working resolution (long edge, px) full-quality settled renders run
-  /// at: roughly one rendered pixel per on-screen device pixel at the
-  /// current zoom, floored well above [AppSettings.previewResolution] and
-  /// ceilinged so even a big zoom never triggers a full 24 MP render.
+  /// at — a fixed high value (capped at native), *not* zoom-dependent:
+  /// once full-quality mode kicks in you're editing the near-full RAW, and
+  /// re-rendering it every time the zoom changes was more jank than it was
+  /// worth. 3600 is ~3.5x the default preview and stays 1:1-sharp out to
+  /// roughly 250% zoom; a full 24 MP render on every settle would freeze
+  /// on the inline JPEG encode (see `render_job_gpu.dart`).
+  static const _fullQualityWorkingLong = 3600;
+
   int _fullQualityWorkingRes(EditSource native) {
     final nativeLong =
         native.width > native.height ? native.width : native.height;
-    final box = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
-    final dpr = MediaQuery.maybeOf(context)?.devicePixelRatio ?? 1.0;
-    final viewportLong = box == null
-        ? 1600.0
-        : (box.size.width > box.size.height
-              ? box.size.width
-              : box.size.height);
-    final zoom = _zoomScale < 1.0 ? 1.0 : _zoomScale;
-    var target = (viewportLong * zoom * dpr).round();
-    const floor = 1600;
-    const ceil = 3072;
-    if (target < floor) target = floor;
-    if (target > ceil) target = ceil;
-    if (target > nativeLong) target = nativeLong;
-    return target;
+    return nativeLong < _fullQualityWorkingLong
+        ? nativeLong
+        : _fullQualityWorkingLong;
   }
 
-  /// The native source downscaled to [_fullQualityWorkingRes], cached and
-  /// only regenerated when that resolution moves by more than ~15% (i.e.
-  /// on a real zoom change), so consecutive settled edits at the same zoom
-  /// don't re-scale a 24 MP buffer every time.
+  /// The native source downscaled to [_fullQualityWorkingRes] once, then
+  /// reused for every settled render of this photo (the working res is
+  /// constant now, so it never needs regenerating).
   Future<EditSource> _fullQualityRenderSource() async {
     final native = _fullQualitySource!;
-    final target = _fullQualityWorkingRes(native);
     final cached = _fullQualityScaled;
-    if (cached != null &&
-        (_fullQualityScaledLong - target).abs() <= (target * 0.15)) {
+    if (cached != null) {
       return cached;
     }
     final scaled = await compute(
       scaleEditSource,
-      (source: native, maxDim: target),
+      (source: native, maxDim: _fullQualityWorkingRes(native)),
     );
     _fullQualityScaled = scaled;
-    _fullQualityScaledLong =
-        scaled.width > scaled.height ? scaled.width : scaled.height;
     return scaled;
   }
 
@@ -2696,7 +2683,6 @@ class _EditorScreenState extends State<EditorScreen> {
       _fullQualitySource = native;
       _fullQualitySourcePath = path;
       _fullQualityScaled = null;
-      _fullQualityScaledLong = 0;
     } finally {
       _decodingFullQuality = false;
     }
@@ -2853,22 +2839,8 @@ class _EditorScreenState extends State<EditorScreen> {
       ..translateByDouble(-center.dx, -center.dy, 0, 1);
     _viewController.value = matrix;
     setState(() => _zoomScale = newScale);
-    // Zooming while an edit is settled and full-quality mode is active:
-    // only re-render if we've zoomed *in* far enough that the current
-    // downscaled source is now visibly soft — zooming out, or a small
-    // zoom-in, needs nothing (and shouldn't flash "Applying adjustments").
-    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
-    if (selected == null || !_settings.dynamicFullPreview) {
-      return;
-    }
-    final native = _fullQualitySource;
-    if (native != null && _fullQualitySourcePath == selected.path) {
-      if (_fullQualityWorkingRes(native) > _fullQualityScaledLong * 1.2) {
-        _scheduleRender(live: false);
-      }
-    } else {
-      _maybeArmFullQualityDecode(selected.path);
-    }
+    // Zoom no longer triggers any render — full-quality mode renders at a
+    // fixed working resolution (see [_fullQualityWorkingLong]).
   }
 
   void _zoomIn() => _zoomBy(_zoomStep);
