@@ -1416,6 +1416,11 @@ class _EditorScreenState extends State<EditorScreen> {
               _fullQualitySource = null;
               _fullQualitySourcePath = null;
               _fullQualityScaled = null;
+              // Drop every cached render — some are full-quality JPEGs, and
+              // they'd otherwise keep showing when you revisit those photos
+              // instead of the light preview render.
+              _renderedPreviews.clear();
+              _histograms.clear();
             } else if (fullQualityResChanged) {
               // Keep the decoded native source, just re-scale it next
               // render at the new percentage.
@@ -2495,6 +2500,27 @@ class _EditorScreenState extends State<EditorScreen> {
         setState(() => _isRenderingSlow = true);
       }
     });
+    try {
+      await _renderPreviewInner(path, sources, requestId, live, onStage);
+    } catch (e, st) {
+      debugPrint('render failed: $e\n$st');
+    } finally {
+      // Always clear the slow-render flag — a throw anywhere above used to
+      // leave "Applying adjustments" stuck on forever.
+      _slowRenderTimer?.cancel();
+      if (mounted && _isRenderingSlow && requestId == _renderRequestId) {
+        setState(() => _isRenderingSlow = false);
+      }
+    }
+  }
+
+  Future<void> _renderPreviewInner(
+    String path,
+    EditSourcePair sources,
+    int requestId,
+    bool live,
+    void Function(RenderStage stage)? onStage,
+  ) async {
     // While the Crop Overlay is open, render the full straightened/
     // keystoned frame (no rectangular crop) so the discarded edges are
     // still visible under the overlay's scrim, Lightroom-style, instead
@@ -2508,10 +2534,10 @@ class _EditorScreenState extends State<EditorScreen> {
           )
         : _cropTransform;
     final metadata = _metadata[path];
-    // Once full-quality editing is active for this photo, settled renders
-    // run against the native source (downscaled to what the screen needs
-    // at the current zoom) instead of the small preview buffer — a live
-    // drag still uses the tiny `live` buffer so dragging stays instant.
+    // Once full-quality editing is active for this photo, a *second*
+    // render pass against the native source (downscaled per
+    // AppSettings.fullQualityPercent) follows the quick preview one below —
+    // so applying a preset shows instantly at preview res, then sharpens.
     final fullQuality = !live &&
         onStage == null &&
         _settings.dynamicFullPreview &&
@@ -2519,16 +2545,9 @@ class _EditorScreenState extends State<EditorScreen> {
         !_cropOverlayActive &&
         !_beforeAfterMode &&
         _fullQualityReadyFor(path);
-    final EditSource renderSource;
-    if (live) {
-      renderSource = sources.live;
-    } else if (fullQuality) {
-      renderSource = await _fullQualityRenderSource();
-    } else {
-      renderSource = sources.preview;
-    }
-    final job = RenderJob(
-      source: renderSource,
+
+    RenderJob buildJob(EditSource src) => RenderJob(
+      source: src,
       params: RenderParams.fromValues(
         _effectiveParamValues(),
         curves: _effectiveCurves,
@@ -2542,65 +2561,84 @@ class _EditorScreenState extends State<EditorScreen> {
       focalLengthMm: metadata?.focalLengthMm ?? 0,
       apertureFNumber: metadata?.apertureFNumber ?? 0,
     );
-    // The AI Denoise apply action wants real stage progress (it's the
-    // slowest single-shot render); ordinary slider-drag renders stay on
-    // plain compute() so the 25ms live-preview debounce doesn't pay a
-    // fresh-isolate-spawn cost on every tick. GPU rendering (see
-    // AppSettings.useGpuRender) only applies to the settled (non-`live`)
-    // plain path: it can't run inside renderJobToJpegWithProgress's
-    // dedicated isolate at all (dart:ui's GPU-backed primitives need the
-    // main isolate), and deliberately stays off the `live` path even
-    // though it *could* run there — every live-drag tick would then run a
-    // full GPU render inline on the UI isolate instead of handing it to a
-    // background isolate the way compute() does, which is what caused the
-    // "Not Responding" freeze [_renderPreview]'s doc comment describes.
-    final RenderResult result;
-    if (onStage != null) {
-      result = await renderJobToJpegWithProgress(job, onStage);
-    } else if (!live &&
-        _settings.useGpuRender &&
-        await isGpuRenderAvailable()) {
-      // Full-quality settled renders take the GPU path too — it's a
-      // one-shot settled render (never the live-drag hot path), and the
-      // GPU handles a few-thousand-pixel image far faster than the CPU
-      // pipeline, which is what made full-quality mode feel sluggish.
-      result = await renderJobToJpegGpu(job);
-    } else {
-      result = await compute(renderJobToJpeg, job);
-    }
-    _slowRenderTimer?.cancel();
-    // A newer render (from further slider moves, or a different photo) has
-    // since been requested — this result is stale, drop it.
+
+    // Phase 1 — the quick render: the tiny `live` buffer while dragging,
+    // the preview buffer for a settled edit. Always cheap, always shown.
+    final firstResult = await _runRenderJob(
+      buildJob(live ? sources.live : sources.preview),
+      onStage: onStage,
+      allowGpu: !live,
+    );
     if (!mounted || requestId != _renderRequestId) {
       return;
     }
     setState(() {
       _isRenderingSlow = false;
-      _renderedPreviews[path] = result.jpegBytes;
-      _histograms[path] = result.histogram;
-      // Keeps the filmstrip thumbnail in sync with the current edit
-      // instead of staying frozen at the camera-original preview.
-      // Only update the in-memory strip on the settled render — live
-      // drag ticks would otherwise swap the thumbnail dozens of times
-      // per second, triggering pointless rebuilds and cache thrash.
+      _renderedPreviews[path] = firstResult.jpegBytes;
+      _histograms[path] = firstResult.histogram;
+      // Keeps the filmstrip thumbnail in sync with the current edit —
+      // only on the settled render (a live tick's thumbnail is superseded
+      // almost immediately).
       if (!live) {
-        _thumbnails[path] = result.thumbnailBytes;
+        _thumbnails[path] = firstResult.thumbnailBytes;
       }
     });
     if (!live) {
-      // Only the settled render's thumbnail is worth persisting to disk —
-      // a live-drag tick's thumbnail is superseded almost immediately, and
-      // there'd be one of these for every frame of the drag.
-      _scheduleThumbnailCacheStore(path, result.thumbnailBytes);
+      _scheduleThumbnailCacheStore(path, firstResult.thumbnailBytes);
     }
-    // A settled render just landed. If the user opted into full-quality
-    // editing, arm the native-source decode a beat later — once it's
-    // available, every subsequent settled render runs against it (see
-    // [_renderPreviewNow]'s source selection), so this only ever fires
-    // once per photo.
+
+    // Phase 2 — the full-quality render. Best-effort: if the downscale or
+    // the render fails (a huge image, GPU OOM, …) the phase-1 preview
+    // stays on screen instead of the app hanging.
+    if (fullQuality) {
+      EditSource? fqSource;
+      try {
+        fqSource = await _fullQualityRenderSource();
+      } catch (e) {
+        debugPrint('full-quality downscale failed: $e');
+      }
+      if (fqSource != null && mounted && requestId == _renderRequestId) {
+        try {
+          final fqResult = await _runRenderJob(
+            buildJob(fqSource),
+            allowGpu: true,
+          );
+          if (mounted && requestId == _renderRequestId) {
+            setState(() {
+              _renderedPreviews[path] = fqResult.jpegBytes;
+              _histograms[path] = fqResult.histogram;
+              _thumbnails[path] = fqResult.thumbnailBytes;
+            });
+          }
+        } catch (e) {
+          debugPrint('full-quality render failed: $e');
+        }
+      }
+    }
+
+    // A settled render just landed. Arm the native-source decode a beat
+    // later — once it's available, subsequent settled renders get the
+    // phase-2 pass. Fires once per photo.
     if (!live && onStage == null) {
       _maybeArmFullQualityDecode(path);
     }
+  }
+
+  /// GPU / CPU-parallel / progress-tracked dispatch for one render job —
+  /// the [onStage] path (AI Denoise) wants real stage progress; otherwise
+  /// GPU when [allowGpu] and available, else CPU-parallel via `compute()`.
+  Future<RenderResult> _runRenderJob(
+    RenderJob job, {
+    void Function(RenderStage stage)? onStage,
+    bool allowGpu = false,
+  }) async {
+    if (onStage != null) {
+      return renderJobToJpegWithProgress(job, onStage);
+    }
+    if (allowGpu && _settings.useGpuRender && await isGpuRenderAvailable()) {
+      return renderJobToJpegGpu(job);
+    }
+    return compute(renderJobToJpeg, job);
   }
 
   /// Working resolution (long edge, px) full-quality settled renders run
