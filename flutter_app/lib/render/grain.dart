@@ -95,10 +95,22 @@ double _smoothstep(double edge0, double edge1, double value) {
 /// Applies film grain in place to a packed RGB [Float32List] (3 values/
 /// pixel, 0..255, gamma-encoded — the pipeline's between-stage convention).
 /// A no-op when [GrainParams.amount] is 0.
-void applyGrain(Float32List img, int width, int height, GrainParams params) {
+///
+/// [rowOffset]/[fullHeight] let this run on one horizontal band — the
+/// noise field and its frequency are anchored to the whole frame, so
+/// bands stitch back seamlessly.
+void applyGrain(
+  Float32List img,
+  int width,
+  int height,
+  GrainParams params, {
+  int rowOffset = 0,
+  int? fullHeight,
+}) {
   if (params.isIdentity || width < 1 || height < 1) {
     return;
   }
+  final frameHeight = fullHeight ?? height;
   // RapidRAW: amount = grain_amount * 0.5 (its buffer is 0..1); ours is
   // 0..255, so the * 255 folds the space conversion in.
   final amount =
@@ -110,11 +122,12 @@ void applyGrain(Float32List img, int width, int height, GrainParams params) {
           (calGrainSizePxAt100 - calGrainSizePxAt0);
   // Keep the grain the same relative size regardless of render resolution
   // (shader.wgsl's REFERENCE_DIMENSION = 1080).
-  final refScale = math.max(0.1, math.min(width, height) / 1080.0);
+  final refScale = math.max(0.1, math.min(width, frameHeight) / 1080.0);
   final frequency = (1.0 / math.max(grainSizePx, 0.1)) / refScale;
   final roughFrequency = frequency * calGrainRoughCoordScale;
 
   for (var y = 0; y < height; y++) {
+    final ay = y + rowOffset;
     for (var x = 0; x < width; x++) {
       final i = (y * width + x) * 3;
       final luma =
@@ -128,10 +141,10 @@ void applyGrain(Float32List img, int width, int height, GrainParams params) {
       if (lumaMask <= 0.0) {
         continue;
       }
-      final noiseBase = _gradientNoise(x * frequency, y * frequency);
+      final noiseBase = _gradientNoise(x * frequency, ay * frequency);
       final noiseRough = _gradientNoise(
         x * roughFrequency + 5.2,
-        y * roughFrequency + 1.3,
+        ay * roughFrequency + 1.3,
       );
       final noiseVal = noiseBase + (noiseRough - noiseBase) * roughness;
       final delta = noiseVal * amount * lumaMask;

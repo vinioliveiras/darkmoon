@@ -298,25 +298,51 @@ void applyPostDenoisePointOps(
   applyColorGrading(buffer, params.colorGrading);
 }
 
-/// Everything [applyLocalAdjustmentSteps] leaves out — chiefly Dehaze,
-/// which estimates atmospheric light from the 0.1% of *the whole image's*
-/// pixels with the largest dark-channel value (`dehaze.dart`), a genuinely
-/// global statistic no per-band halo could make correct; Vibrance/
-/// Saturation/Vignette tag along here too since they're cheap enough
-/// (low-hundreds-of-ms even at full sensor resolution, see the profiling
-/// this pipeline split was built for) that splitting them out for
-/// parallelism wouldn't be worth the added complexity. Must run after
-/// [applyLocalAdjustmentSteps] on the *complete, already-stitched-back-
-/// together* buffer — never per-band.
+/// Everything [applyLocalAdjustmentSteps] leaves out. Split into two:
+///
+/// - [applyExposureAndDehaze] — Exposure (a plain scale) then Dehaze
+///   (`dehaze.dart`), whose wide "regional" blur means it can't be run on
+///   a naive per-band slice; kept whole-image.
+/// - [applyGlobalPointOps] — White Balance, the post-denoise point ops
+///   (brightness/contrast/highlights/shadows/whites/blacks, tone + colour
+///   curves, mixer, grading), Saturation, Vibrance, Vignette, Grain. All
+///   per-pixel with no blur, so `render_parallel.dart` runs this half in
+///   bands too — it's where most of the `pow()` cost of a full-resolution
+///   render lives.
 void applyGlobalAdjustmentSteps(
   Float32List buffer,
   int width,
   int height,
   RenderParams params,
 ) {
-  final pixelCount = width * height;
+  applyExposureAndDehaze(buffer, width, height, params);
+  applyGlobalPointOps(buffer, width, height, params);
+}
+
+void applyExposureAndDehaze(
+  Float32List buffer,
+  int width,
+  int height,
+  RenderParams params,
+) {
   _applyExposure(buffer, params.exposure);
   applyDehaze(buffer, width, height, params.dehaze);
+}
+
+/// [rowOffset]/[fullHeight]: when [buffer] is one horizontal band of a
+/// larger image, its row 0's absolute index and the full frame height —
+/// so Vignette (radial from the frame centre) and Grain (frame-anchored
+/// noise) stitch back seamlessly. Every other step here is a pure
+/// per-pixel op and ignores them.
+void applyGlobalPointOps(
+  Float32List buffer,
+  int width,
+  int height,
+  RenderParams params, {
+  int rowOffset = 0,
+  int? fullHeight,
+}) {
+  final pixelCount = width * height;
   _applyWhiteBalance(
     buffer,
     params.temperature,
@@ -330,11 +356,25 @@ void applyGlobalAdjustmentSteps(
   // Vibrance's saturation/hue masks read the already-saturated color.
   _applySaturation(buffer, pixelCount, params.saturation);
   _applyVibrance(buffer, pixelCount, params.vibrance);
-  applyVignette(buffer, width, height, params.vignette);
+  applyVignette(
+    buffer,
+    width,
+    height,
+    params.vignette,
+    rowOffset: rowOffset,
+    fullHeight: fullHeight,
+  );
   // Grain is the last thing RapidRAW's shader adds, after curves and
   // vignette — a texture layered on the finished image, not something the
   // later stages should react to.
-  applyGrain(buffer, width, height, params.grain);
+  applyGrain(
+    buffer,
+    width,
+    height,
+    params.grain,
+    rowOffset: rowOffset,
+    fullHeight: fullHeight,
+  );
 }
 
 Uint8List _toUint8(Float32List buffer) {

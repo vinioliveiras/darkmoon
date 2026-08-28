@@ -113,8 +113,75 @@ Future<Uint8List> renderAdjustmentsParallel(
     );
   }
 
-  applyGlobalAdjustmentSteps(buffer, width, height, params);
+  // Exposure + Dehaze whole-image (Dehaze's wide blur isn't band-safe on a
+  // naive slice), then the point-op half — the pow()-heavy majority of a
+  // full-res render — in bands too.
+  applyExposureAndDehaze(buffer, width, height, params);
+  await _applyGlobalPointOpsParallel(width, height, buffer, params, bandCount);
   return _toUint8(buffer);
+}
+
+/// Runs [applyGlobalPointOps] across [bandCount] isolates. The only blur
+/// in that half is the sigma-3.5 tonal blur behind Shadows/Whites/Blacks,
+/// so a band needs at most ~18 rows of halo — 0 when none of those are
+/// touched.
+Future<void> _applyGlobalPointOpsParallel(
+  int width,
+  int height,
+  Float32List buffer,
+  RenderParams params,
+  int bandCount,
+) async {
+  final halo =
+      (params.shadows != 0 || params.blacks != 0 || params.whites != 0)
+      ? 24
+      : 0;
+  if (bandCount <= 1) {
+    applyGlobalPointOps(buffer, width, height, params, fullHeight: height);
+    return;
+  }
+  final bandHeight = (height / bandCount).ceil();
+  final futures = <Future<({int y0, int y1, Float32List data})>>[];
+  for (var b = 0; b < bandCount; b++) {
+    final y0 = b * bandHeight;
+    final y1 = math.min(y0 + bandHeight, height);
+    if (y0 >= y1) {
+      break;
+    }
+    final paddedTop = math.max(y0 - halo, 0);
+    final paddedBottom = math.min(y1 + halo, height);
+    final trimTop = y0 - paddedTop;
+    final trimBottom = trimTop + (y1 - y0);
+    final paddedSlice = Float32List.sublistView(
+      buffer,
+      paddedTop * width * 3,
+      paddedBottom * width * 3,
+    );
+    futures.add(
+      Isolate.run(() {
+        applyGlobalPointOps(
+          paddedSlice,
+          width,
+          paddedBottom - paddedTop,
+          params,
+          rowOffset: paddedTop,
+          fullHeight: height,
+        );
+        return (
+          y0: y0,
+          y1: y1,
+          data: Float32List.sublistView(
+            paddedSlice,
+            trimTop * width * 3,
+            trimBottom * width * 3,
+          ),
+        );
+      }),
+    );
+  }
+  for (final r in await Future.wait(futures)) {
+    buffer.setRange(r.y0 * width * 3, r.y1 * width * 3, r.data);
+  }
 }
 
 int _pickBandCount(int height, int halo, int cores) {

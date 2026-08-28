@@ -52,24 +52,30 @@ class VignetteParams {
 ///
 /// Designed to run via `compute()`: pure function over simple, isolate-
 /// transferable data (same as the rest of render.dart).
+/// [rowOffset]/[fullHeight] let this run on one horizontal band of a
+/// larger image — the ellipse is still measured against the *whole*
+/// frame's centre and half-height, not the band's.
 void applyVignette(
   Float32List img,
   int width,
   int height,
-  VignetteParams params,
-) {
+  VignetteParams params, {
+  int rowOffset = 0,
+  int? fullHeight,
+}) {
   if (params.isIdentity) {
     return;
   }
+  final frameHeight = fullHeight ?? height;
   final cx = width / 2.0;
-  final cy = height / 2.0;
+  final cy = frameHeight / 2.0;
   final start = (params.midpoint / 100.0).clamp(0.0, 1.0);
   final featherWidth = (params.feather / 100.0).clamp(0.02, 1.0);
   final strength = params.amount / 100.0 * calVignetteStrength;
   const cornerRadius = 1.4142135623730951; // sqrt(2), a corner's distance.
 
   for (var y = 0; y < height; y++) {
-    final dy = (y - cy) / cy;
+    final dy = (y + rowOffset - cy) / cy;
     for (var x = 0; x < width; x++) {
       final dx = (x - cx) / cx;
       final radius = math.sqrt(dx * dx + dy * dy) / cornerRadius;
