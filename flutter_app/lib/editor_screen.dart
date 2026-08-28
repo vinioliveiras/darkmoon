@@ -499,8 +499,31 @@ class _EditorScreenState extends State<EditorScreen> {
   String? _currentSingleFile;
   final Map<String, Uint8List> _thumbnails = {};
   final Map<String, EditSourcePair> _editSources = {};
+
+  /// The light preview-resolution render per photo — kept fresh by every
+  /// settled render (phase 1). What the canvas shows when the dynamic
+  /// full-quality preview is off.
   final Map<String, Uint8List> _renderedPreviews = {};
+
+  /// The full-quality render per photo (phase 2), when the dynamic preview
+  /// is on. Invalidated the moment a new edit's phase-1 render lands, so a
+  /// present entry is always current. Kept separate from [_renderedPreviews]
+  /// so toggling the setting just switches which one the canvas reads —
+  /// nothing has to be re-rendered.
+  final Map<String, Uint8List> _fullQualityPreviews = {};
   final Map<String, Histogram> _histograms = {};
+
+  /// The render to show on the canvas for [path]: the full-quality one
+  /// when the dynamic preview is on and it exists, else the light preview.
+  Uint8List? _displayPreview(String path) {
+    if (_settings.dynamicFullPreview) {
+      final fq = _fullQualityPreviews[path];
+      if (fq != null) {
+        return fq;
+      }
+    }
+    return _renderedPreviews[path];
+  }
 
   /// Camera/lens/exposure info per photo (absolute path), shown below the
   /// histogram — loaded lazily on selection (cheap: no unpack/demosaic
@@ -1401,8 +1424,8 @@ class _EditorScreenState extends State<EditorScreen> {
           // the next photo switch.
           final previewResolutionChanged =
               next.previewResolution != _settings.previewResolution;
-          final dynamicFullPreviewOff =
-              _settings.dynamicFullPreview && !next.dynamicFullPreview;
+          final dynamicFullPreviewChanged =
+              _settings.dynamicFullPreview != next.dynamicFullPreview;
           final fullQualityResChanged =
               next.dynamicFullPreview &&
               next.fullQualityPercent != _settings.fullQualityPercent;
@@ -1411,24 +1434,26 @@ class _EditorScreenState extends State<EditorScreen> {
             if (previewResolutionChanged) {
               _editSources.clear();
             }
-            if (dynamicFullPreviewOff) {
+            if (dynamicFullPreviewChanged && !next.dynamicFullPreview) {
+              // Off: keep the caches — the canvas just switches to reading
+              // [_renderedPreviews] (the light render, always kept fresh) —
+              // but stop generating new full-quality renders.
               _dynamicPreviewTimer?.cancel();
               _fullQualitySource = null;
               _fullQualitySourcePath = null;
               _fullQualityScaled = null;
-              // Drop every cached render — some are full-quality JPEGs, and
-              // they'd otherwise keep showing when you revisit those photos
-              // instead of the light preview render.
-              _renderedPreviews.clear();
-              _histograms.clear();
             } else if (fullQualityResChanged) {
               // Keep the decoded native source, just re-scale it next
               // render at the new percentage.
               _fullQualityScaled = null;
+              _fullQualityPreviews.clear();
             }
           });
           unawaited(saveSettings(next));
-          if (dynamicFullPreviewOff || fullQualityResChanged) {
+          if (fullQualityResChanged ||
+              (dynamicFullPreviewChanged && next.dynamicFullPreview)) {
+            // Turned on (or changed the resolution) — kick a settled render
+            // so full-quality mode re-engages for the open photo.
             final selected = _selectedIndex == null
                 ? null
                 : _files[_selectedIndex!];
@@ -1711,6 +1736,7 @@ class _EditorScreenState extends State<EditorScreen> {
         _thumbnails.clear();
         _editSources.clear();
         _renderedPreviews.clear();
+        _fullQualityPreviews.clear();
         _histograms.clear();
         _metadata.clear();
         _neutralPreviews.clear();
@@ -1864,6 +1890,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _thumbnails.remove(path);
       _editSources.remove(path);
       _renderedPreviews.remove(path);
+      _fullQualityPreviews.remove(path);
       _histograms.remove(path);
       _metadata.remove(path);
       _neutralPreviews.remove(path);
@@ -1935,6 +1962,7 @@ class _EditorScreenState extends State<EditorScreen> {
         _thumbnails.clear();
         _editSources.clear();
         _renderedPreviews.clear();
+        _fullQualityPreviews.clear();
         _histograms.clear();
         _metadata.clear();
         _neutralPreviews.clear();
@@ -1993,6 +2021,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _thumbnails.clear();
       _editSources.clear();
       _renderedPreviews.clear();
+      _fullQualityPreviews.clear();
       _histograms.clear();
       _metadata.clear();
       _neutralPreviews.clear();
@@ -2575,6 +2604,10 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() {
       _isRenderingSlow = false;
       _renderedPreviews[path] = firstResult.jpegBytes;
+      // This phase-1 render is newer than any full-quality one on file for
+      // this photo — drop the stale full render so the canvas shows this
+      // one until phase 2 (if any) replaces it.
+      _fullQualityPreviews.remove(path);
       _histograms[path] = firstResult.histogram;
       // Keeps the filmstrip thumbnail in sync with the current edit —
       // only on the settled render (a live tick's thumbnail is superseded
@@ -2605,7 +2638,7 @@ class _EditorScreenState extends State<EditorScreen> {
           );
           if (mounted && requestId == _renderRequestId) {
             setState(() {
-              _renderedPreviews[path] = fqResult.jpegBytes;
+              _fullQualityPreviews[path] = fqResult.jpegBytes;
               _histograms[path] = fqResult.histogram;
               _thumbnails[path] = fqResult.thumbnailBytes;
             });
@@ -3436,7 +3469,7 @@ class _EditorScreenState extends State<EditorScreen> {
     if (mask == null || mask.type != MaskType.colorRange || selected == null) {
       return;
     }
-    final bytes = _renderedPreviews[selected.path];
+    final bytes = _displayPreview(selected.path);
     if (bytes == null) {
       return;
     }
@@ -3926,7 +3959,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                       : _thumbnails[selected.path],
                                   preview: selected == null
                                       ? null
-                                      : _renderedPreviews[selected.path],
+                                      : _displayPreview(selected.path),
                                   neutralPreview: selected == null
                                       ? null
                                       : _neutralPreviews[selected.path],
