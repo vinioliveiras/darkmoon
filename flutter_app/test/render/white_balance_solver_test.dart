@@ -94,23 +94,30 @@ void main() {
   });
 
   group('wbMultipliersToKelvinTint', () {
-    // The real Fujifilm X100VI numbers from tool/wb_dump.dart — the whole
-    // point of this feature is to land near what Lightroom shows for this
-    // file (5550 K / -42).
+    // Fujifilm X100VI cam_xyz (from tool/wb_dump.dart). The estimate must
+    // land near Lightroom's own "As Shot" readout — checked against four
+    // real files below (Kelvin within ~2%, Tint within ~4 units).
     const fujiCamXyz = [
       [1.1809, -0.5358, -0.1141],
       [-0.4248, 1.2164, 0.2343],
       [-0.0514, 0.1097, 0.5848],
     ];
 
-    test('X100VI as-shot lands near the Lightroom reading (5550 / -42)', () {
-      final res = wbMultipliersToKelvinTint(
-        [515.0, 302.0, 428.0, 0.0],
-        camXyz: fujiCamXyz,
-      );
-      expect(res.kelvin, closeTo(5550, 250));
-      expect(res.tint, closeTo(-42, 12));
-    });
+    // (camMul, LightroomKelvin, LightroomTint)
+    const fujiRefs = [
+      ([515.0, 302.0, 428.0, 0.0], 5550.0, -42.0), // _DSF1337 (van)
+      ([501.0, 302.0, 347.0, 0.0], 7300.0, -87.0), // _DSF1273 (hose)
+      ([608.0, 302.0, 488.0, 0.0], 5650.0, 4.0), //  _DSF1363 (near-neutral)
+      ([570.0, 302.0, 305.0, 0.0], 13500.0, -80.0), // _DSF1312 (blue hour)
+    ];
+
+    for (final (camMul, lrKelvin, lrTint) in fujiRefs) {
+      test('matches Lightroom for cam_mul $camMul ($lrKelvin K / $lrTint)', () {
+        final res = wbMultipliersToKelvinTint(camMul, camXyz: fujiCamXyz);
+        expect(res.kelvin, closeTo(lrKelvin, lrKelvin * 0.03));
+        expect(res.tint, closeTo(lrTint, 5));
+      });
+    }
 
     test('a bluer as-shot (cool scene) reads warmer Kelvin', () {
       final cool = wbMultipliersToKelvinTint(

@@ -225,6 +225,22 @@ RawMetadata? extractRawMetadata(String path) {
   }
 }
 
+/// Just the as-shot `cam_mul` for [path] (or null). Cheap — header-only
+/// open. Used by `tool/wb_scan.dart` to locate a file by its multipliers.
+List<double>? readCamMul(String path) {
+  final lib = _Lib.instance;
+  final lr = _openRaw(lib, path);
+  if (lr == null) {
+    return null;
+  }
+  try {
+    final c = lr.ref.color;
+    return [c.cam_mul[0], c.cam_mul[1], c.cam_mul[2], c.cam_mul[3]];
+  } finally {
+    lib.libraw_close(lr);
+  }
+}
+
 /// Diagnostic dump of everything LibRaw exposes about [path]'s white
 /// balance — `cam_mul`, `pre_mul`, the WBCT colour-temperature table, the
 /// named-illuminant `WB_Coeffs` presets and `cam_xyz` — plus what
