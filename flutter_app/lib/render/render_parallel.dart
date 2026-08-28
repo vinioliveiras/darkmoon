@@ -124,37 +124,89 @@ Future<Uint8List> renderAdjustmentsParallel(
   }
   mark('local ($bandCount bands)');
 
-  // Exposure + Dehaze whole-image (Dehaze's wide blur isn't band-safe on a
-  // naive slice), then the point-op half — the pow()-heavy majority of a
-  // full-res render — in bands too.
-  applyExposureAndDehaze(buffer, width, height, params);
-  mark('exposure+dehaze (serial)');
-  await _applyGlobalPointOpsParallel(width, height, buffer, params, bandCount);
-  mark('point-ops ($bandCount bands)');
-  final out = _toUint8(buffer);
-  mark('to uint8');
+  // Exposure + Dehaze: whole-image is just an O(n) multiply when Dehaze is
+  // off; band it (Dehaze's sigma-40 blur needs a halo) when it's on.
+  final dehazeHalo = exposureDehazeHaloPx(params);
+  if (dehazeHalo == 0 || bandCount <= 1) {
+    applyExposureAndDehaze(buffer, width, height, params);
+  } else {
+    await _bandPass(
+      width,
+      height,
+      buffer,
+      bandCount,
+      dehazeHalo,
+      (slice, w, h, top) =>
+          applyExposureAndDehaze(slice, w, h, params),
+    );
+  }
+  mark('exposure+dehaze');
+
+  // The point-op half — the pow()-heavy majority of a full-res render — in
+  // bands, converting each band straight to bytes so there's no separate
+  // full-image float->uint8 pass afterward.
+  final ppHalo = globalPointOpsHaloPx(params);
+  final Uint8List out;
+  if (bandCount <= 1) {
+    applyGlobalPointOps(buffer, width, height, params, fullHeight: height);
+    out = _toUint8(buffer);
+  } else {
+    out = Uint8List(width * height * 3);
+    final futures2 = <Future<({int y0, Uint8List data})>>[];
+    final bandHeight = (height / bandCount).ceil();
+    for (var b = 0; b < bandCount; b++) {
+      final y0 = b * bandHeight;
+      final y1 = math.min(y0 + bandHeight, height);
+      if (y0 >= y1) {
+        break;
+      }
+      final paddedTop = math.max(y0 - ppHalo, 0);
+      final paddedBottom = math.min(y1 + ppHalo, height);
+      final trimTop = y0 - paddedTop;
+      final trimRows = y1 - y0;
+      final paddedSlice = Float32List.sublistView(
+        buffer,
+        paddedTop * width * 3,
+        paddedBottom * width * 3,
+      );
+      futures2.add(
+        Isolate.run(() {
+          applyGlobalPointOps(
+            paddedSlice,
+            width,
+            paddedBottom - paddedTop,
+            params,
+            rowOffset: paddedTop,
+            fullHeight: height,
+          );
+          final start = trimTop * width * 3;
+          final bytes = Uint8List(trimRows * width * 3);
+          for (var i = 0; i < bytes.length; i++) {
+            bytes[i] = paddedSlice[start + i].clamp(0.0, 255.0).round();
+          }
+          return (y0: y0, data: bytes);
+        }),
+      );
+    }
+    for (final r in await Future.wait(futures2)) {
+      out.setRange(r.y0 * width * 3, r.y0 * width * 3 + r.data.length, r.data);
+    }
+  }
+  mark('point-ops + bytes ($bandCount bands)');
   return out;
 }
 
-/// Runs [applyGlobalPointOps] across [bandCount] isolates. The only blur
-/// in that half is the sigma-3.5 tonal blur behind Shadows/Whites/Blacks,
-/// so a band needs at most ~18 rows of halo — 0 when none of those are
-/// touched.
-Future<void> _applyGlobalPointOpsParallel(
+/// Runs [op] (which mutates its slice in place) on [buffer] split into
+/// [bandCount] horizontal bands, each padded with [halo] extra rows top
+/// and bottom, then writes the trimmed (non-overlap) result back.
+Future<void> _bandPass(
   int width,
   int height,
   Float32List buffer,
-  RenderParams params,
   int bandCount,
+  int halo,
+  void Function(Float32List slice, int w, int h, int rowOffset) op,
 ) async {
-  final halo =
-      (params.shadows != 0 || params.blacks != 0 || params.whites != 0)
-      ? 24
-      : 0;
-  if (bandCount <= 1) {
-    applyGlobalPointOps(buffer, width, height, params, fullHeight: height);
-    return;
-  }
   final bandHeight = (height / bandCount).ceil();
   final futures = <Future<({int y0, int y1, Float32List data})>>[];
   for (var b = 0; b < bandCount; b++) {
@@ -174,14 +226,7 @@ Future<void> _applyGlobalPointOpsParallel(
     );
     futures.add(
       Isolate.run(() {
-        applyGlobalPointOps(
-          paddedSlice,
-          width,
-          paddedBottom - paddedTop,
-          params,
-          rowOffset: paddedTop,
-          fullHeight: height,
-        );
+        op(paddedSlice, width, paddedBottom - paddedTop, paddedTop);
         return (
           y0: y0,
           y1: y1,

@@ -179,6 +179,20 @@ int localAdjustmentHaloPx(RenderParams params) {
   return halo;
 }
 
+/// Halo (px) [applyExposureAndDehaze] needs when run on a horizontal band
+/// — the reach of Dehaze's sigma-40 "structure" Gaussian (3-pass box,
+/// ~4.5·sigma), 0 when Dehaze is off (then it's just the O(n) exposure
+/// multiply).
+int exposureDehazeHaloPx(RenderParams params) =>
+    params.dehaze != 0 ? 180 : 0;
+
+/// Halo (px) [applyGlobalPointOps] needs on a band — just the sigma-3.5
+/// tonal blur behind Shadows/Whites/Blacks.
+int globalPointOpsHaloPx(RenderParams params) =>
+    (params.shadows != 0 || params.blacks != 0 || params.whites != 0)
+    ? 24
+    : 0;
+
 void _applyAdjustmentSteps(
   Float32List buffer,
   int width,
@@ -485,18 +499,25 @@ void _applyRapidContrast(Float32List img, double contrast) {
   if (contrast == 0) {
     return;
   }
+  // Contrast is a pure byte-in -> byte-out S-curve with a per-render gamma,
+  // so bake it into a 257-entry LUT once and interpolate — the pixel loop
+  // then costs a lookup instead of ~4 pow() per channel.
   final gamma =
       math.pow(2.0, contrast / 100.0 * calContrastStrength).toDouble();
-  for (var i = 0; i < img.length; i++) {
-    final linear = srgbToLinear(img[i] / 255.0);
-    final perceptual = perceptualEncode(linear);
+  final lut = Float32List(257);
+  for (var v = 0; v <= 256; v++) {
+    final perceptual = perceptualEncode(srgbToLinear(v / 256.0));
     final curved = perceptual < 0.5
-        ? 0.5 * math.pow(2.0 * perceptual, gamma)
-        : 1.0 - 0.5 * math.pow(2.0 * (1.0 - perceptual), gamma);
-    img[i] = linearToSrgb(
-          perceptualDecode(curved.clamp(0.0, 1.0)),
-        ) *
-        255.0;
+        ? 0.5 * math.pow(2.0 * perceptual, gamma).toDouble()
+        : 1.0 - 0.5 * math.pow(2.0 * (1.0 - perceptual), gamma).toDouble();
+    lut[v] = linearToSrgb(perceptualDecode(curved.clamp(0.0, 1.0))) * 255.0;
+  }
+  for (var i = 0; i < img.length; i++) {
+    final x = img[i];
+    final c = x <= 0.0 ? 0.0 : (x >= 255.0 ? 255.0 : x);
+    final p = c * (256.0 / 255.0);
+    final lo = p.toInt();
+    img[i] = lo >= 256 ? lut[256] : lut[lo] + (lut[lo + 1] - lut[lo]) * (p - lo);
   }
 }
 
@@ -545,10 +566,11 @@ void _applyRapidShadowsBlacks(
     final b = srgbToLinear(img[i + 2] / 255.0);
     final luma = _linearLuminance(r, g, b);
     final t = perceptualEncode(math.max(luma, 0.0001));
+    final oneMinusT = math.max(1.0 - t, 0.0);
     final shadowLift =
-        shadowAmount * t * math.pow(math.max(1.0 - t, 0.0), calShadowsFalloff);
+        shadowAmount * t * _powFalloff(oneMinusT, calShadowsFalloff);
     final blackLift =
-        blackAmount * t * math.pow(math.max(1.0 - t, 0.0), calBlacksFalloff);
+        blackAmount * t * _powFalloff(oneMinusT, calBlacksFalloff);
     final lift = math.max(shadowLift + blackLift, 0.0);
     final curved = math.max(t + shadowLift + blackLift, 0.0);
     final stretch = 1.0 + lift * calShadowBlacksStretch;
@@ -597,6 +619,22 @@ double _tanh(double value) {
 
 double _linearLuminance(double r, double g, double b) =>
   0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+/// `pow(x, exp)` for the two fixed Shadows/Blacks falloff exponents,
+/// computed by multiplication (× ~15 faster than `math.pow` with a
+/// fractional exponent, and exact). Falls back to `pow` for any other
+/// value (`calShadowsFalloff` / `calBlacksFalloff` retuned).
+double _powFalloff(double x, double exp) {
+  if (exp == 4.5) {
+    final x2 = x * x;
+    return x2 * x2 * math.sqrt(x);
+  }
+  if (exp == 9.0) {
+    final x3 = x * x * x;
+    return x3 * x3 * x3;
+  }
+  return math.pow(x, exp).toDouble();
+}
 
 void _applyRapidHighlights(Float32List img, int pixelCount, double highlights) {
   if (highlights == 0) return;
