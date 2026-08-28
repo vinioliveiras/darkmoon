@@ -34,15 +34,38 @@ Future<Uint8List?> decodeJpegThumbnailFast(Uint8List bytes) async {
   if (info == null || info.width <= 0 || info.height <= 0) {
     return null;
   }
-  final target = _scaleToFit(
-    info.width,
-    info.height,
-    _fastThumbnailMaxDimension,
-  );
+  // The engine's decoder (Skia) already applies the EXIF orientation while
+  // decoding, so the frame comes back visually upright with its width and
+  // height in *display* order. Compute the downscale target in that same
+  // display order — swapping the source dimensions for a 90/270 rotation —
+  // and constrain only the longer side, leaving the other axis null so the
+  // decoder preserves the aspect ratio instead of stretching to an exact
+  // box. Passing both targets (as this used to) forced a non-proportional
+  // resize whenever the pre/post-rotation aspect differed, which is what
+  // distorted portrait phone JPEGs during loading.
+  final orientation = readJpegExifOrientation(bytes);
+  final swapAxes = orientation >= 5 && orientation <= 8;
+  final displayWidth = swapAxes ? info.height : info.width;
+  final displayHeight = swapAxes ? info.width : info.height;
+  final longestSide = displayWidth > displayHeight
+      ? displayWidth
+      : displayHeight;
+
+  int? targetWidth;
+  int? targetHeight;
+  if (longestSide > _fastThumbnailMaxDimension) {
+    final scale = _fastThumbnailMaxDimension / longestSide;
+    if (displayWidth >= displayHeight) {
+      targetWidth = (displayWidth * scale).round();
+    } else {
+      targetHeight = (displayHeight * scale).round();
+    }
+  }
+
   final codec = await ui.instantiateImageCodec(
     bytes,
-    targetWidth: target.width,
-    targetHeight: target.height,
+    targetWidth: targetWidth,
+    targetHeight: targetHeight,
   );
   final frame = await codec.getNextFrame();
   final uiImage = frame.image;
@@ -60,25 +83,9 @@ Future<Uint8List?> decodeJpegThumbnailFast(Uint8List bytes) async {
     numChannels: 4,
     order: img.ChannelOrder.rgba,
   );
-  // Baking orientation on the already-downscaled image, not the source
-  // bytes — same reasoning as decodeRawThumbnail's embedded-preview path:
-  // a 90/180/270 rotation costs the same relative to whatever resolution
-  // it runs at, so doing it after the resize is the same visual result
-  // for a fraction of the pixels touched.
-  decoded.exif.imageIfd.orientation = readJpegExifOrientation(bytes);
-  final oriented = img.bakeOrientation(decoded);
   return Uint8List.fromList(
-    img.encodeJpg(oriented, quality: 85, chroma: img.JpegChroma.yuv420),
+    img.encodeJpg(decoded, quality: 85, chroma: img.JpegChroma.yuv420),
   );
-}
-
-({int width, int height}) _scaleToFit(int width, int height, int maxDim) {
-  final longestSide = width > height ? width : height;
-  if (longestSide <= maxDim) {
-    return (width: width, height: height);
-  }
-  final scale = maxDim / longestSide;
-  return (width: (width * scale).round(), height: (height * scale).round());
 }
 
 /// Reads just the EXIF orientation tag (0x0112) from a JPEG's APP1
