@@ -99,10 +99,27 @@ class StyledDropdown<T> extends StatefulWidget {
   State<StyledDropdown<T>> createState() => _StyledDropdownState<T>();
 }
 
-class _StyledDropdownState<T> extends State<StyledDropdown<T>> {
+class _StyledDropdownState<T> extends State<StyledDropdown<T>>
+    with SingleTickerProviderStateMixin {
   final GlobalKey _buttonKey = GlobalKey();
   OverlayEntry? _overlayEntry;
   bool _isOpen = false;
+
+  // Drives the popup's open/close animation: a quick fade + scale-from-the
+  // -top, the way an OS menu unfolds from its trigger. On close we run it
+  // in reverse and only pull the overlay once it's finished, so the menu
+  // eases out instead of vanishing.
+  late final AnimationController _animController;
+
+  @override
+  void initState() {
+    super.initState();
+    _animController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 140),
+      reverseDuration: const Duration(milliseconds: 110),
+    );
+  }
 
   void _toggleMenu() {
     if (_isOpen) {
@@ -113,14 +130,20 @@ class _StyledDropdownState<T> extends State<StyledDropdown<T>> {
   }
 
   void _openMenu() {
+    if (_overlayEntry != null) {
+      // A close animation is still running — reopen the same entry.
+      _animController.forward();
+      setState(() => _isOpen = true);
+      return;
+    }
     final RenderBox buttonBox =
         _buttonKey.currentContext!.findRenderObject()! as RenderBox;
-    final buttonRect =
-        buttonBox.localToGlobal(Offset.zero) & buttonBox.size;
+    final buttonRect = buttonBox.localToGlobal(Offset.zero) & buttonBox.size;
 
     _overlayEntry = OverlayEntry(
       builder: (context) => _StyledDropdownMenu<T>(
         buttonRect: buttonRect,
+        animation: _animController.view,
         menuWidth: widget.menuWidth,
         alignRight: widget.menuAlignRight,
         items: widget.items,
@@ -138,15 +161,24 @@ class _StyledDropdownState<T> extends State<StyledDropdown<T>> {
     );
 
     Overlay.of(context).insert(_overlayEntry!);
+    _animController.forward(from: 0);
     setState(() => _isOpen = true);
   }
 
   void _closeMenu() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
+    if (_overlayEntry == null) {
+      return;
+    }
     if (mounted) {
       setState(() => _isOpen = false);
     }
+    _animController.reverse().whenComplete(() {
+      // Skip the teardown if the menu was reopened mid-close.
+      if (_animController.status == AnimationStatus.dismissed) {
+        _overlayEntry?.remove();
+        _overlayEntry = null;
+      }
+    });
   }
 
   @override
@@ -158,6 +190,7 @@ class _StyledDropdownState<T> extends State<StyledDropdown<T>> {
     // widget either way.
     _overlayEntry?.remove();
     _overlayEntry = null;
+    _animController.dispose();
     super.dispose();
   }
 
@@ -173,7 +206,8 @@ class _StyledDropdownState<T> extends State<StyledDropdown<T>> {
       }
     }
 
-    final label = selectedItem?.label ??
+    final label =
+        selectedItem?.label ??
         widget.placeholder ??
         (widget.items.isNotEmpty ? widget.items.first.label : '');
     final icon = selectedItem?.icon ?? widget.leadingIcon;
@@ -188,10 +222,7 @@ class _StyledDropdownState<T> extends State<StyledDropdown<T>> {
       mainAxisSize: MainAxisSize.min,
       children: [
         if (widget.label != null) ...[
-          Text(
-            widget.label!,
-            style: Theme.of(context).textTheme.labelSmall,
-          ),
+          Text(widget.label!, style: Theme.of(context).textTheme.labelSmall),
           const SizedBox(height: 8),
         ],
         GestureDetector(
@@ -200,16 +231,12 @@ class _StyledDropdownState<T> extends State<StyledDropdown<T>> {
           child: Container(
             width: widget.width,
             height: 34,
-            padding: EdgeInsets.symmetric(
-              horizontal: iconOnly ? 0 : 10,
-            ),
+            padding: EdgeInsets.symmetric(horizontal: iconOnly ? 0 : 10),
             decoration: BoxDecoration(
               color: DarkmoonColors.surfaceRaised,
               borderRadius: BorderRadius.circular(7),
               border: Border.all(
-                color: _isOpen
-                    ? DarkmoonColors.accent
-                    : DarkmoonColors.border,
+                color: _isOpen ? DarkmoonColors.accent : DarkmoonColors.border,
               ),
             ),
             child: iconOnly
@@ -264,6 +291,7 @@ class _StyledDropdownState<T> extends State<StyledDropdown<T>> {
 class _StyledDropdownMenu<T> extends StatefulWidget {
   const _StyledDropdownMenu({
     required this.buttonRect,
+    required this.animation,
     required this.menuWidth,
     required this.alignRight,
     required this.items,
@@ -277,6 +305,7 @@ class _StyledDropdownMenu<T> extends StatefulWidget {
   });
 
   final Rect buttonRect;
+  final Animation<double> animation;
   final double? menuWidth;
   final bool alignRight;
   final List<StyledDropdownItem<T>> items;
@@ -289,8 +318,7 @@ class _StyledDropdownMenu<T> extends StatefulWidget {
   final String? noMatchesText;
 
   @override
-  State<_StyledDropdownMenu<T>> createState() =>
-      _StyledDropdownMenuState<T>();
+  State<_StyledDropdownMenu<T>> createState() => _StyledDropdownMenuState<T>();
 }
 
 class _StyledDropdownMenuState<T> extends State<_StyledDropdownMenu<T>> {
@@ -338,144 +366,186 @@ class _StyledDropdownMenuState<T> extends State<_StyledDropdownMenu<T>> {
           left: menuLeft,
           top: menuTop,
           width: width,
-          child: Material(
-            color: Colors.transparent,
-            child: Container(
-              decoration: BoxDecoration(
-                color: DarkmoonColors.surfaceRaised,
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: DarkmoonColors.border),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.3),
-                    blurRadius: 12,
-                    offset: const Offset(0, 4),
-                  ),
-                ],
-              ),
-              constraints: BoxConstraints(maxHeight: widget.maxHeight),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (widget.searchable)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
-                      child: TextField(
-                        controller: _searchController,
-                        autofocus: true,
-                        onChanged: (v) => setState(() => _query = v),
-                        style: const TextStyle(
-                          color: DarkmoonColors.textPrimary,
-                          fontSize: 12.5,
-                        ),
-                        decoration: InputDecoration(
-                          isDense: true,
-                          hintText: widget.searchHintText,
-                          hintStyle: const TextStyle(
-                            color: DarkmoonColors.textMuted,
+          child: _MenuReveal(
+            animation: widget.animation,
+            alignment: widget.alignRight
+                ? Alignment.topRight
+                : Alignment.topLeft,
+            child: Material(
+              color: Colors.transparent,
+              child: Container(
+                decoration: BoxDecoration(
+                  color: DarkmoonColors.surfaceRaised,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: DarkmoonColors.border),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.3),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                constraints: BoxConstraints(maxHeight: widget.maxHeight),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    if (widget.searchable)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(8, 8, 8, 4),
+                        child: TextField(
+                          controller: _searchController,
+                          autofocus: true,
+                          onChanged: (v) => setState(() => _query = v),
+                          style: const TextStyle(
+                            color: DarkmoonColors.textPrimary,
                             fontSize: 12.5,
                           ),
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 8,
-                          ),
-                          filled: true,
-                          fillColor: DarkmoonColors.panel,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(6),
-                            borderSide:
-                                const BorderSide(color: DarkmoonColors.border),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(6),
-                            borderSide:
-                                const BorderSide(color: DarkmoonColors.border),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(6),
-                            borderSide:
-                                const BorderSide(color: DarkmoonColors.accent),
+                          decoration: InputDecoration(
+                            isDense: true,
+                            hintText: widget.searchHintText,
+                            hintStyle: const TextStyle(
+                              color: DarkmoonColors.textMuted,
+                              fontSize: 12.5,
+                            ),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
+                            filled: true,
+                            fillColor: DarkmoonColors.panel,
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: const BorderSide(
+                                color: DarkmoonColors.border,
+                              ),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: const BorderSide(
+                                color: DarkmoonColors.border,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(6),
+                              borderSide: const BorderSide(
+                                color: DarkmoonColors.accent,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  Flexible(
-                    child: filtered.isEmpty
-                        ? Padding(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 16,
-                            ),
-                            child: Text(
-                              widget.noMatchesText ?? '',
-                              textAlign: TextAlign.center,
-                              style: const TextStyle(
-                                color: DarkmoonColors.textMuted,
-                                fontSize: 12.5,
+                    Flexible(
+                      child: filtered.isEmpty
+                          ? Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 16,
                               ),
-                            ),
-                          )
-                        : ListView.separated(
-                            shrinkWrap: true,
-                            padding: const EdgeInsets.symmetric(vertical: 4),
-                            itemCount: filtered.length,
-                            separatorBuilder: (_, __) => Divider(
-                              height: 1,
-                              color: DarkmoonColors.border,
-                              thickness: 0.5,
-                            ),
-                            itemBuilder: (context, index) {
-                              final item = filtered[index];
-                              final isSelected =
-                                  item.value == widget.selectedValue;
-                              return InkWell(
-                                onTap: () => widget.onSelected(item.value),
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 10,
-                                    vertical: 10,
-                                  ),
-                                  child: Row(
-                                    children: [
-                                      if (item.icon != null) ...[
-                                        Icon(
-                                          item.icon,
-                                          size: 15,
-                                          color: isSelected
-                                              ? DarkmoonColors.accent
-                                              : DarkmoonColors.textSecondary,
-                                        ),
-                                        const SizedBox(width: 8),
-                                      ],
-                                      Expanded(
-                                        child: Text(
-                                          item.label,
-                                          maxLines: 1,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: TextStyle(
+                              child: Text(
+                                widget.noMatchesText ?? '',
+                                textAlign: TextAlign.center,
+                                style: const TextStyle(
+                                  color: DarkmoonColors.textMuted,
+                                  fontSize: 12.5,
+                                ),
+                              ),
+                            )
+                          : ListView.separated(
+                              shrinkWrap: true,
+                              padding: const EdgeInsets.symmetric(vertical: 4),
+                              itemCount: filtered.length,
+                              separatorBuilder: (_, __) => Divider(
+                                height: 1,
+                                color: DarkmoonColors.border,
+                                thickness: 0.5,
+                              ),
+                              itemBuilder: (context, index) {
+                                final item = filtered[index];
+                                final isSelected =
+                                    item.value == widget.selectedValue;
+                                return InkWell(
+                                  onTap: () => widget.onSelected(item.value),
+                                  child: Padding(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 10,
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        if (item.icon != null) ...[
+                                          Icon(
+                                            item.icon,
+                                            size: 15,
                                             color: isSelected
                                                 ? DarkmoonColors.accent
-                                                : DarkmoonColors.textPrimary,
-                                            fontSize: 12.5,
-                                            fontWeight: isSelected
-                                                ? FontWeight.w600
-                                                : FontWeight.normal,
+                                                : DarkmoonColors.textSecondary,
+                                          ),
+                                          const SizedBox(width: 8),
+                                        ],
+                                        Expanded(
+                                          child: Text(
+                                            item.label,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: TextStyle(
+                                              color: isSelected
+                                                  ? DarkmoonColors.accent
+                                                  : DarkmoonColors.textPrimary,
+                                              fontSize: 12.5,
+                                              fontWeight: isSelected
+                                                  ? FontWeight.w600
+                                                  : FontWeight.normal,
+                                            ),
                                           ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
-                          ),
-                  ),
-                ],
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
         ),
       ],
+    );
+  }
+}
+
+/// The popup's entrance/exit: fades in while scaling up from [alignment]
+/// (the corner nearest the trigger button), so the menu appears to unfold
+/// out of the pill rather than blink into place. Reversing [animation]
+/// plays the same motion backwards on close.
+class _MenuReveal extends StatelessWidget {
+  const _MenuReveal({
+    required this.animation,
+    required this.alignment,
+    required this.child,
+  });
+
+  final Animation<double> animation;
+  final Alignment alignment;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final eased = CurvedAnimation(
+      parent: animation,
+      curve: Curves.easeOutCubic,
+      reverseCurve: Curves.easeInCubic,
+    );
+    return FadeTransition(
+      opacity: eased,
+      child: ScaleTransition(
+        scale: Tween<double>(begin: 0.94, end: 1).animate(eased),
+        alignment: alignment,
+        child: child,
+      ),
     );
   }
 }

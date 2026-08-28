@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../theme.dart';
+import 'animated_dialog.dart';
 
 /// A single-text-field "name this" dialog — used for naming a new preset
 /// and for renaming an existing one. Returns the trimmed text, or null if
@@ -13,7 +14,7 @@ Future<String?> showTextPromptDialog(
 }) async {
   final controller = TextEditingController(text: initialValue);
   final l10n = AppLocalizations.of(context)!;
-  final result = await showDialog<String>(
+  final result = await showAnimatedDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
       backgroundColor: DarkmoonColors.surfaceRaised,

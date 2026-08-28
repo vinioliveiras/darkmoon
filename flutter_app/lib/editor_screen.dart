@@ -46,6 +46,7 @@ import 'settings/app_settings.dart';
 import 'theme.dart';
 import 'widgets/about_dialog.dart';
 import 'widgets/ai_denoise_dialog.dart';
+import 'widgets/animated_dialog.dart';
 import 'widgets/brush_mask_overlay.dart';
 import 'widgets/color_range_overlay.dart';
 import 'widgets/crop_overlay.dart';
@@ -1126,7 +1127,7 @@ class _EditorScreenState extends State<EditorScreen> {
 
   Future<void> _deletePreset(Preset preset) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAnimatedDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: DarkmoonColors.surfaceRaised,
@@ -1164,7 +1165,7 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAnimatedDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: DarkmoonColors.surfaceRaised,
@@ -1325,7 +1326,7 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   void _openAbout() {
-    showDialog<void>(
+    showAnimatedDialog<void>(
       context: context,
       builder: (_) => const DarkmoonAboutDialog(),
     );
@@ -1335,7 +1336,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final selectedMeta = _selectedIndex == null
         ? null
         : _metadata[_files[_selectedIndex!].path];
-    showDialog<void>(
+    showAnimatedDialog<void>(
       context: context,
       builder: (_) => SettingsDialog(
         settings: _settings,
@@ -1680,7 +1681,7 @@ class _EditorScreenState extends State<EditorScreen> {
   /// whichever one happens to be selected right now.
   Future<void> _resetAllEditsFor(RawFile file) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAnimatedDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: DarkmoonColors.surfaceRaised,
@@ -1771,7 +1772,7 @@ class _EditorScreenState extends State<EditorScreen> {
   /// make sense at folder granularity.
   Future<void> _deleteFile(RawFile file) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAnimatedDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: DarkmoonColors.surfaceRaised,
@@ -2832,7 +2833,7 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     final currentLevel = AiDenoiseParams.fromValues(_paramValues).level;
-    final choice = await showDialog<AiDenoiseChoice>(
+    final choice = await showAnimatedDialog<AiDenoiseChoice>(
       context: context,
       builder: (_) => AiDenoiseDialog(initialLevel: currentLevel),
     );
@@ -3682,7 +3683,7 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     final l10n = AppLocalizations.of(context)!;
     final metadata = _metadata[selected.path];
-    final options = await showDialog<ExportOptions>(
+    final options = await showAnimatedDialog<ExportOptions>(
       context: context,
       builder: (_) => ExportOptionsDialog(
         nativeWidth: metadata?.width,

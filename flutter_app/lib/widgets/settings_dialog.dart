@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import '../l10n/app_localizations.dart';
 import '../settings/app_settings.dart';
 import '../theme.dart';
+import 'animated_dialog.dart';
 import 'styled_dropdown.dart';
 
 /// Mirrors the Python app's `SettingsDialog`: every change applies and
@@ -51,7 +52,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
   Future<void> _confirmAndRun(String message, VoidCallback action) async {
     final l10n = AppLocalizations.of(context)!;
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAnimatedDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: DarkmoonColors.surfaceRaised,
