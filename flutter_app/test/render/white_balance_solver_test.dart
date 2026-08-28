@@ -108,8 +108,8 @@ void main() {
         [515.0, 302.0, 428.0, 0.0],
         camXyz: fujiCamXyz,
       );
-      expect(res.kelvin, inInclusiveRange(5100, 6000));
-      expect(res.tint, inInclusiveRange(-55, -30));
+      expect(res.kelvin, closeTo(5550, 250));
+      expect(res.tint, closeTo(-42, 12));
     });
 
     test('a bluer as-shot (cool scene) reads warmer Kelvin', () {

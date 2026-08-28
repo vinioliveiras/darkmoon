@@ -269,11 +269,10 @@ List<List<double>> _matMul(List<List<double>> a, List<List<double>> b) => [
   );
 }
 
-/// Converts a signed distance off the reference-white locus in the CIE
-/// 1960 uv plane (Δuv) to this app's -150..150 Tint units. Calibrated
-/// against Lightroom's "As Shot" Tint across a set of real Fuji X100VI
-/// files — its full range is roughly Δuv ±0.06.
-const double _wbTintPerDuv = 2550.0;
+/// Converts a signed Δuv (nearest-point offset from the reference-white
+/// locus, CIE 1960 uv) to this app's -150..150 Tint units. Calibrated
+/// against Lightroom's "As Shot" Tint on real Fuji X100VI files.
+const double _wbTintPerDuv = 2100.0;
 
 /// Our McCamy CCT reads a few mired cool of Lightroom's "As Shot" Kelvin
 /// fairly consistently (calibrated on the same X100VI set, ~+3 mired);
@@ -397,9 +396,9 @@ const double _wbTintScale = 200.0;
 
 /// The primary estimate: `cam_xyz` (LibRaw's Adobe-sourced **XYZ ->
 /// camera** matrix) is inverted so the neutral surface's camera RGB —
-/// `1 / camMul` — maps to XYZ, then to a chromaticity. McCamy gives the
-/// CCT; the signed perpendicular distance from the daylight/Planckian
-/// reference-white locus in the CIE 1960 uv plane gives the tint. Returns
+/// `1 / camMul` — maps to XYZ, then to a chromaticity, which is projected
+/// onto the daylight/Planckian reference-white locus (Ohno's method). The
+/// nearest point gives both the CCT and the signed Δuv for tint. Returns
 /// null if `camXyz` is missing or singular (falls through to the table).
 ({double kelvin, double tint})? _kelvinTintColorimetric(
   List<double> camMul,
@@ -435,35 +434,49 @@ const double _wbTintScale = 200.0;
   final x = bigX / sum;
   final y = bigY / sum;
 
-  final n = (x - 0.3320) / (0.1858 - y);
-  final cct = (449.0 * n * n * n + 3525.0 * n * n + 6823.3 * n + 5520.33)
-      .clamp(2000.0, 50000.0);
-
-  // Tint = signed perpendicular offset from the *reference-white* locus
-  // (the CIE daylight locus Lightroom's Temperature slider tracks, not
-  // the Planckian one), in CIE 1960 uv.
+  // Ohno-style: project the chromaticity onto the reference-white locus
+  // (CIE daylight >= 4000 K, Planckian below) and read CCT *and* the
+  // signed offset from that one nearest point. Self-consistent, so a
+  // near-neutral as-shot no longer flips tint sign on a small CCT error.
   final denom = -2.0 * x + 12.0 * y + 3.0;
   final pu = 4.0 * x / denom;
   final pv = 6.0 * y / denom;
-  final a = _referenceWhiteUv(cct - 150);
-  final bloc = _referenceWhiteUv(cct + 150);
-  var tx = bloc.u - a.u;
-  var ty = bloc.v - a.v;
-  final tlen = math.sqrt(tx * tx + ty * ty);
-  double tint;
-  if (tlen < 1e-12) {
-    tint = 0;
-  } else {
-    tx /= tlen;
-    ty /= tlen;
-    final loc = _referenceWhiteUv(cct);
-    // Normal (ty, -tx): below the locus (lower v) -> green -> negative,
-    // matching Lightroom's convention.
-    final duv = (pu - loc.u) * ty + (pv - loc.v) * -tx;
-    tint = (duv * _wbTintPerDuv).clamp(-150.0, 150.0);
+
+  var bestD2 = double.infinity;
+  var bestMired = 1.0e6 / 5500.0;
+  var bestCross = 0.0;
+  ({double u, double v})? prev;
+  var prevMired = 0.0;
+  // Walk the locus warm-ward, uniformly in mired (~perceptually even).
+  for (var mired = 40.0; mired <= 500.0; mired += 0.5) {
+    final p = _referenceWhiteUv(1.0e6 / mired);
+    if (prev != null) {
+      final sx = p.u - prev.u;
+      final sy = p.v - prev.v;
+      final segLen2 = sx * sx + sy * sy;
+      final t = segLen2 < 1e-18
+          ? 0.0
+          : (((pu - prev.u) * sx + (pv - prev.v) * sy) / segLen2)
+                .clamp(0.0, 1.0);
+      final fu = prev.u + sx * t;
+      final fv = prev.v + sy * t;
+      final d2 = (pu - fu) * (pu - fu) + (pv - fv) * (pv - fv);
+      if (d2 < bestD2) {
+        bestD2 = d2;
+        bestMired = prevMired + (mired - prevMired) * t;
+        // z of (segment toward warmer) x (point - foot): > 0 = green side.
+        bestCross = sx * (pv - fv) - sy * (pu - fu);
+      }
+    }
+    prev = p;
+    prevMired = mired;
   }
-  final kelvin = (1.0e6 / (1.0e6 / cct - _wbCctMiredBias))
-      .clamp(2000.0, 50000.0);
+
+  // Green side -> negative Tint, matching Lightroom's convention.
+  final duv = (bestCross >= 0 ? 1.0 : -1.0) * math.sqrt(bestD2);
+  final tint = (duv * _wbTintPerDuv).clamp(-150.0, 150.0);
+  final kelvin =
+      (1.0e6 / (bestMired - _wbCctMiredBias)).clamp(2000.0, 50000.0);
   return (kelvin: kelvin, tint: tint);
 }
 
