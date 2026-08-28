@@ -393,9 +393,9 @@ const double _wbTintScale = 200.0;
 /// The primary estimate: `cam_xyz` (LibRaw's Adobe-sourced **XYZ ->
 /// camera** matrix) is inverted so the neutral surface's camera RGB —
 /// `1 / camMul` — maps to XYZ, then to a chromaticity. McCamy gives the
-/// CCT; the signed perpendicular distance from the Planckian locus in the
-/// CIE 1960 uv plane gives the tint. Returns null if `camXyz` is missing
-/// or singular (falls through to the multiplier table).
+/// CCT; the signed perpendicular distance from the daylight/Planckian
+/// reference-white locus in the CIE 1960 uv plane gives the tint. Returns
+/// null if `camXyz` is missing or singular (falls through to the table).
 ({double kelvin, double tint})? _kelvinTintColorimetric(
   List<double> camMul,
   List<List<double>> camXyz,
@@ -434,12 +434,14 @@ const double _wbTintScale = 200.0;
   final cct = (449.0 * n * n * n + 3525.0 * n * n + 6823.3 * n + 5520.33)
       .clamp(2000.0, 50000.0);
 
-  // Tint = signed perpendicular offset from the locus, in CIE 1960 uv.
+  // Tint = signed perpendicular offset from the *reference-white* locus
+  // (the CIE daylight locus Lightroom's Temperature slider tracks, not
+  // the Planckian one), in CIE 1960 uv.
   final denom = -2.0 * x + 12.0 * y + 3.0;
   final pu = 4.0 * x / denom;
   final pv = 6.0 * y / denom;
-  final a = _planckianUv(cct - 150);
-  final bloc = _planckianUv(cct + 150);
+  final a = _referenceWhiteUv(cct - 150);
+  final bloc = _referenceWhiteUv(cct + 150);
   var tx = bloc.u - a.u;
   var ty = bloc.v - a.v;
   final tlen = math.sqrt(tx * tx + ty * ty);
@@ -449,13 +451,24 @@ const double _wbTintScale = 200.0;
   } else {
     tx /= tlen;
     ty /= tlen;
-    final loc = _planckianUv(cct);
+    final loc = _referenceWhiteUv(cct);
     // Normal (ty, -tx): below the locus (lower v) -> green -> negative,
     // matching Lightroom's convention.
     final duv = (pu - loc.u) * ty + (pv - loc.v) * -tx;
     tint = (duv * _wbTintPerDuv).clamp(-150.0, 150.0);
   }
   return (kelvin: cct, tint: tint);
+}
+
+/// The reference white at [kelvin] (daylight locus / Planckian below
+/// 4000 K) as CIE 1960 uv.
+({double u, double v}) _referenceWhiteUv(double kelvin) {
+  final w = _referenceWhiteXyz(kelvin);
+  final sum = w.x + w.y + w.z;
+  final cx = w.x / sum;
+  final cy = w.y / sum;
+  final d = -2.0 * cx + 12.0 * cy + 3.0;
+  return (u: 4.0 * cx / d, v: 6.0 * cy / d);
 }
 
 List<List<double>>? _invert3x3(List<List<double>> m) {
