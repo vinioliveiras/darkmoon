@@ -86,6 +86,12 @@ const _dragPropagateThrottle = Duration(milliseconds: 16);
 /// sensitivity doesn't shift with panel width changes.
 const _referenceTrackWidth = 200.0;
 
+/// Even for a high-precision, small-range slider (Exposure: -5..5, 2
+/// decimals) a full-range drag must not take more than this many pixels,
+/// or it feels stuck. Without the cap Exposure worked out to 0.0005
+/// units/pixel — 20 000 px end to end.
+const _maxFullRangeDragPixels = 480.0;
+
 class _SliderRowState extends State<SliderRow> {
   bool _editing = false;
   final _controller = TextEditingController();
@@ -102,8 +108,10 @@ class _SliderRowState extends State<SliderRow> {
   // Slider-like feel. Exposure is the one control with decimals: 1, which
   // steps by 0.1/pixel instead.
   double get _unitsPerPixel {
-    return (widget.max - widget.min) /
-        (_referenceTrackWidth * math.pow(10, widget.decimals));
+    final range = widget.max - widget.min;
+    final precise = range / (_referenceTrackWidth * math.pow(10, widget.decimals));
+    // ...but never so fine that a full-range drag exceeds the cap.
+    return math.max(precise, range / _maxFullRangeDragPixels);
   }
 
   @override
