@@ -52,14 +52,14 @@ enum WbMode {
 /// [asShotKelvin]/[asShotTint] reference to [targetKelvin]/[targetTint],
 /// ready to multiply straight into the render buffer's gamma-encoded RGB.
 ///
-/// Von Kries: the target illuminant's reference white is mapped onto the
-/// (already-neutral) as-shot white, so a surface lit by the target
-/// illuminant comes out achromatic — and, unlike the old symmetric R/B
-/// model, the green channel moves along the daylight locus the way it
-/// physically should (which is what stopped skin neutralising and made
-/// cooled skies go cyan). Luminance-normalised so sliding
-/// Temperature/Tint doesn't drift overall brightness. At
-/// `target == asShot` the gains are exactly (1, 1, 1).
+/// Von Kries: the target illuminant's Y=1 reference white is divided into
+/// the (already-neutral) as-shot white per channel, so a surface lit by
+/// the target illuminant comes out achromatic. Because the whites are
+/// Y-normalised, green moves between illuminants the way it physically
+/// should — that green motion is what makes a cooled sky read cyan and
+/// lets skin actually neutralise, which the old symmetric R/B model
+/// couldn't. Luminance-normalised so the sliders don't drift overall
+/// brightness. At `target == asShot` the gains are exactly (1, 1, 1).
 ({double r, double g, double b}) whiteBalanceGains(
   double targetKelvin,
   double targetTint,
@@ -98,9 +98,11 @@ enum WbMode {
   );
 }
 
-/// Linear-sRGB tristimulus of the reference white at [kelvin], normalised
-/// so G = 1. CIE daylight locus at/above 4000 K (what Lightroom's
-/// Temperature slider tracks), Planckian blackbody below it.
+/// Linear-sRGB tristimulus of the reference white at [kelvin], at Y = 1
+/// (**not** G = 1 — leaving green free to move between illuminants is what
+/// makes a cooled sky read cyan rather than just blue). CIE daylight locus
+/// at/above 4000 K (what Lightroom's Temperature slider tracks), Planckian
+/// blackbody below it.
 ({double r, double g, double b}) _referenceWhiteLinearRgb(double kelvin) {
   final k = kelvin.clamp(1667.0, 25000.0);
   final double x;
@@ -118,12 +120,15 @@ enum WbMode {
   }
   final bigX = x / y;
   final bigZ = (1.0 - x - y) / y;
-  // XYZ (D65) -> linear sRGB, with Y = 1 folded into the constant terms.
+  // XYZ (Y = 1) -> linear sRGB, with Y folded into the constant terms.
   final r = 3.2406 * bigX - 1.5372 - 0.4986 * bigZ;
   final g = -0.9689 * bigX + 1.8758 + 0.0415 * bigZ;
   final b = 0.0557 * bigX - 0.2040 + 1.0570 * bigZ;
-  final gg = g <= 1e-6 ? 1e-6 : g;
-  return (r: r / gg, g: 1.0, b: b / gg);
+  return (
+    r: r <= 1e-4 ? 1e-4 : r,
+    g: g <= 1e-4 ? 1e-4 : g,
+    b: b <= 1e-4 ? 1e-4 : b,
+  );
 }
 
 /// The Temperature (Kelvin) and Tint that make the average colour
