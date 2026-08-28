@@ -48,29 +48,23 @@ void main() {
     expect(_toUint8(buffer), source);
   });
 
-  // Expected values below were computed from RapidRAW's apply_dehaze
-  // (shader.wgsl) via a reference Python port — fixed atmospheric light,
+  // The algorithm is RapidRAW's apply_dehaze (fixed atmospheric light,
   // per-pixel + sigma-40-regional dark channel with halo protection,
-  // shadow lift, saturation boost — independent of dehaze.dart's own
-  // implementation.
+  // shadow lift, saturation boost), but the transmission/saturation
+  // constants were recalibrated toward Lightroom's feel (item 7 — see
+  // dehaze.dart's `_dehaze*` constants), so exact reference values from
+  // the original model no longer apply. These lock direction instead.
 
-  test('haze removal (positive amount) darkens and adds contrast', () {
+  test('haze removal (positive amount) darkens the hazy shadows', () {
     final source = _syntheticHazyPhoto(6, 6);
     final buffer = _toBuffer(source);
     applyDehaze(buffer, 6, 6, 60);
     final result = _toUint8(buffer);
 
-    expect(result[0], closeTo(0, 1));
-    expect(result[1], closeTo(32, 1));
-    expect(result[2], closeTo(51, 1));
-
-    expect(result[21], closeTo(0, 1));
-    expect(result[22], closeTo(0, 1));
-    expect(result[23], closeTo(46, 1));
-
-    expect(result[105], closeTo(176, 1));
-    expect(result[106], closeTo(197, 1));
-    expect(result[107], closeTo(215, 1));
+    // Top-left is the haziest, darkest corner — dehaze pulls it down.
+    expect(result[0], lessThan(source[0]));
+    expect(result[1], lessThan(source[1]));
+    expect(result[2], lessThan(source[2]));
   });
 
   test('haze addition (negative amount) lightens toward atmospheric light', () {
@@ -79,12 +73,8 @@ void main() {
     applyDehaze(buffer, 6, 6, -50);
     final result = _toUint8(buffer);
 
-    expect(result[0], closeTo(140, 1));
-    expect(result[1], closeTo(144, 1));
-    expect(result[2], closeTo(149, 1));
-
-    expect(result[105], closeTo(220, 1));
-    expect(result[106], closeTo(228, 1));
-    expect(result[107], closeTo(236, 1));
+    expect(result[0], greaterThan(source[0]));
+    expect(result[1], greaterThan(source[1]));
+    expect(result[2], greaterThan(source[2]));
   });
 }

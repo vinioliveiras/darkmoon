@@ -61,14 +61,16 @@ void main() {
     float spatialDark = mix(regionalDark, pixelDark, haloProtection);
     float safeDark = max(spatialDark - 0.02, 0.0);
     float mappedHaze = safeDark / (safeDark + 0.2);
-    float t = max(1.0 - uStrength * mappedHaze * 0.85, 0.15);
+    // Lightroom-feel calibration (item 7) — mirrors dehaze.dart's
+    // _dehazeTransmissionCoeff / Floor / SatBoost / AddMix exactly.
+    float t = max(1.0 - uStrength * mappedHaze * 0.55, 0.22);
 
     vec3 recovered = (color - kAtmosphericLight) / t + kAtmosphericLight;
     float recLuma = dot(max(recovered, vec3(0.0)), kLumaWeights);
     float shadowLift = smoothstepCustom(0.1, 0.0, recLuma) * (1.0 - t) * 0.15;
     recovered += shadowLift;
 
-    float satBoost = (1.0 - t) * 0.5;
+    float satBoost = (1.0 - t) * 0.32;
     float finalLuma = dot(max(recovered, vec3(0.0)), kLumaWeights);
     recovered = mix(vec3(finalLuma), recovered, 1.0 + satBoost);
     result = max(recovered, vec3(0.0));
@@ -78,7 +80,7 @@ void main() {
     float mappedDepth = safeDark / (safeDark + 0.2);
     float depthFactor = mix(0.4, 1.0, mappedDepth);
     float hazeAmount = -uStrength;
-    result = mix(color, kAtmosphericLight, hazeAmount * 0.7 * depthFactor);
+    result = mix(color, kAtmosphericLight, hazeAmount * 0.55 * depthFactor);
   }
 
   fragColor = vec4(linearToSrgb3(result), 1.0);

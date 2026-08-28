@@ -187,9 +187,13 @@ vec3 rapidBrightness(vec3 color, float amount) {
   );
 }
 
+// Lightroom-feel calibration (item 7) — mirrors render.dart's
+// _wbWhitesMaskLow / _wbWhitesLevelCoeff / _wbBlacksAmountScale /
+// _wbBlacksFalloff exactly. RapidRAW's Whites/Blacks are gentler than
+// Lightroom's, so these deviate from a strict port on purpose.
 float rapidWhiteMask(float luma) {
   float whiteInput = tanh(max(luma, 0.0001) * 1.5);
-  return smoothstep(0.5, 0.98, whiteInput);
+  return smoothstep(0.32, 0.98, whiteInput);
 }
 
 vec3 rapidHighlights(vec3 color, float amount) {
@@ -217,7 +221,7 @@ vec3 rapidWhites(vec3 color, float amount) {
   );
   float luma = dot(max(linearColor, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722));
   float mask = rapidWhiteMask(luma);
-  float level = 1.0 - amount * 0.25;
+  float level = 1.0 - amount * 0.42;
   float multiplier = 1.0 / max(mix(1.0, level, mask), 0.01);
   linearColor *= multiplier;
   return vec3(
@@ -239,7 +243,7 @@ vec3 rapidShadowsBlacks(
   float luma = dot(max(linearColor, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722));
   float t = pow(max(luma, 0.0001), 0.4545);
   float shadowLift = shadows * t * pow(max(1.0 - t, 0.0), 4.5);
-  float blackLift = blacks * t * pow(max(1.0 - t, 0.0), 12.0);
+  float blackLift = blacks * 1.5 * t * pow(max(1.0 - t, 0.0), 9.0);
   float lift = max(shadowLift + blackLift, 0.0);
   float curved = max(t + shadowLift + blackLift, 0.0);
   float contrasted = 0.2 + (curved - 0.2) * (1.0 + lift * 1.3);

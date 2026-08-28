@@ -441,6 +441,21 @@ void _applyRapidContrast(Float32List img, double contrast) {
   }
 }
 
+/// Lightroom-feel calibration (item 7): RapidRAW's own Whites/Blacks are
+/// noticeably gentler than Lightroom's and its Dehaze noticeably stronger,
+/// so these three deviate from a strict RapidRAW port on purpose. The
+/// GPU shaders (`point_ops_post_denoise.frag`, `dehaze_apply.frag`) carry
+/// the exact same numbers.
+///  - Whites: mask reaches lower (0.32 vs 0.5) and the level coefficient
+///    is 0.42 (was 0.25) → roughly 1.35x the boost at +100.
+///  - Blacks: 1.5x the amount and a broader falloff (pow 9 vs 12).
+///  - Dehaze: transmission coefficient 0.55 (was 0.85), higher floor,
+///    softer saturation kick.
+const double _wbWhitesMaskLow = 0.32;
+const double _wbWhitesLevelCoeff = 0.42;
+const double _wbBlacksAmountScale = 1.5;
+const double _wbBlacksFalloff = 9.0;
+
 void _applyRapidWhites(
   Float32List img,
   int pixelCount,
@@ -457,9 +472,11 @@ void _applyRapidWhites(
     final x = math.max(luma, 0.0001) * 1.5;
     final whiteMaskInput = (math.exp(2.0 * x) - 1.0) /
       (math.exp(2.0 * x) + 1.0);
-    final whiteT = ((whiteMaskInput - 0.5) / (0.98 - 0.5)).clamp(0.0, 1.0);
+    final whiteT = ((whiteMaskInput - _wbWhitesMaskLow) / (0.98 - _wbWhitesMaskLow))
+        .clamp(0.0, 1.0);
     final whiteMask = whiteT * whiteT * (3.0 - 2.0 * whiteT);
-    final multiplier = 1.0 / math.max(1.0 - amount * 0.25 * whiteMask, 0.01);
+    final multiplier =
+        1.0 / math.max(1.0 - amount * _wbWhitesLevelCoeff * whiteMask, 0.01);
     img[i] = linearToSrgb(r * multiplier) * 255.0;
     img[i + 1] = linearToSrgb(g * multiplier) * 255.0;
     img[i + 2] = linearToSrgb(b * multiplier) * 255.0;
@@ -475,7 +492,7 @@ void _applyRapidShadowsBlacks(
 ) {
   if (shadows == 0 && blacks == 0) return;
   final shadowAmount = shadows / 100.0;
-  final blackAmount = blacks / 100.0;
+  final blackAmount = blacks / 100.0 * _wbBlacksAmountScale;
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
     final r = srgbToLinear(img[i] / 255.0);
@@ -484,7 +501,8 @@ void _applyRapidShadowsBlacks(
     final luma = _linearLuminance(r, g, b);
     final t = math.pow(math.max(luma, 0.0001), 0.4545).toDouble();
     final shadowLift = shadowAmount * t * math.pow(math.max(1.0 - t, 0.0), 4.5);
-    final blackLift = blackAmount * t * math.pow(math.max(1.0 - t, 0.0), 12.0);
+    final blackLift =
+        blackAmount * t * math.pow(math.max(1.0 - t, 0.0), _wbBlacksFalloff);
     final lift = math.max(shadowLift + blackLift, 0.0);
     final curved = math.max(t + shadowLift + blackLift, 0.0);
     final stretch = 1.0 + lift * 1.3;
