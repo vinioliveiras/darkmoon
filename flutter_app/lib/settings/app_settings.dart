@@ -39,7 +39,7 @@ class AppSettings {
     this.fastPreview = true,
     this.previewResolution = defaultPreviewMaxDimension,
     this.useGpuRender = true,
-    this.dynamicFullPreview = false,
+    this.dynamicFullPreview = true,
     this.fullQualityPercent = 60,
     this.thumbnailConcurrency = 4,
     this.rawOnly = false,
@@ -76,14 +76,14 @@ class AppSettings {
   /// this avoids).
   final bool useGpuRender;
 
-  /// When true, a few hundred ms after an edit settles the editor renders
-  /// the photo once more at the sensor's *native* resolution in the
-  /// background and swaps it onto the canvas — so a pixel-peeked (zoomed
-  /// in) view sharpens up instead of staying at [previewResolution]. Off
-  /// by default: it re-decodes the RAW at full quality and runs the whole
-  /// pixel pipeline over 10s of megapixels. The decoded native source is
-  /// cached to disk (`catalog/native_source_cache.dart`) so re-opening the
-  /// same photo skips the slow RAW demosaic.
+  /// When true (the default), a beat after an edit settles the editor
+  /// decodes the photo's *native*-resolution source once and, from then
+  /// on, runs every settled render for that photo against it (downscaled
+  /// to [fullQualityPercent] of native) instead of the small
+  /// [previewResolution] buffer — so the on-screen image is near-full
+  /// quality while editing. Live drags still use the tiny buffer. The
+  /// decoded source is cached to disk so re-opening the photo skips the
+  /// slow RAW demosaic.
   final bool dynamicFullPreview;
 
   /// Percent of the sensor's native resolution the full-quality editing
