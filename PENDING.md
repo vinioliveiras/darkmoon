@@ -53,13 +53,19 @@ Tone Curve + Color Curves (Process Version 2012).
 - **Grão**: `GrainAmount`, `GrainSize`, `GrainFrequency`.
 
 ### White Balance — paridade total (futuro)
-O seletor de modo (As Shot/Auto/Daylight/…) e o conta-gotas já existem, mas
-o "As Shot" é uma **aproximação** do `cam_mul`/`cam_xyz` do LibRaw (McCamy +
-matriz da câmera, sem dados espectrais) e o RAW ainda é decodificado com
-`use_camera_wb = 1`. Paridade real com o Lightroom exigiria: decodificar o
-RAW **sem** a WB da câmera, ler `AsShotNeutral`/`WB_Coeffs` e converter via o
-perfil de câmera do Adobe (que o LibRaw não tem). O modelo de neutro por-foto
-(`RenderParams.asShotKelvin/asShotTint`) já está pronto pra receber isso.
+Modo (As Shot/Auto/Daylight/…), conta-gotas e o modelo de aplicação
+Von Kries (`whiteBalanceGains`, curva de dia CIE + Planck) já existem. O
+que ainda difere do Lightroom:
+
+- O **"As Shot"** é uma aproximação de `cam_mul`/`cam_xyz` do LibRaw
+  (McCamy + matriz da câmera, sem dados espectrais) — ~150K de erro.
+- A adaptação Von Kries roda em **sRGB linear**, não no espaço nativo da
+  câmera com ForwardMatrix/HueSatMap como o ACR.
+- O RAW é decodificado com `use_camera_wb = 1` + perfil neutro do LibRaw,
+  não o "Adobe Color" (ForwardMatrix + HueSatMap + curva de tom).
+- `preserveTintBrightness` (checkbox + `RenderParams`) virou no-op — o
+  modelo já normaliza luminância. Remover a UI num futuro cleanup.
+Paridade real exigiria o perfil de câmera do Adobe, que o LibRaw não tem.
 
 ### Baixa prioridade / estrutural
 - **Point Color** (`PointColors`) — ajuste de cor por amostra.

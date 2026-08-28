@@ -1,24 +1,27 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
-/// White-balance model helpers shared by the render pipeline, the UI mode
-/// selector and the eyedropper. Pure Dart, no Flutter imports.
-///
-/// The gain model itself lives in `render.dart`'s `_applyWhiteBalance`
-/// (and is mirrored in `render_gpu.dart`). These constants MUST stay in
-/// sync with it — they're duplicated here so the eyedropper solves the
-/// exact same equations the renderer applies.
-const double wbMiredGainPerUnit = 0.0013;
-const double wbTempRGain = 0.2;
-const double wbTempGGain = 0.05;
-const double wbTempBGain = 0.2;
-const double wbTintGain = 0.25;
+/// White-balance model helpers shared by the render pipeline (`render.dart`
+/// and `render_gpu.dart` both call [whiteBalanceGains]), the mode selector
+/// and the eyedropper. Pure Dart, no Flutter imports.
 
 /// The neutral reference used when a photo carries no camera white
 /// balance (every non-RAW file, and RAW files LibRaw can't read `cam_mul`
 /// from).
 const double wbDefaultKelvin = 5500.0;
 const double wbDefaultTint = 0.0;
+
+/// How hard a full ±100 Tint pushes green against red/blue. Close to the
+/// previous model's 0.25, nudged up toward Lightroom's slightly stronger
+/// Tint; the luminance-normalise step below keeps it brightness-neutral.
+const double _wbTintStrength = 0.35;
+
+/// Working-space gamma the render buffers are encoded with (LibRaw is set
+/// to ~sRGB, `gamm = [1/2.4, 12.92]`). White-balance gains are derived in
+/// linear light but multiplied into these gamma-encoded values, so each is
+/// raised to `1/gamma` first — then `gammaValue * gain` equals
+/// `(linearValue * linearGain)` re-encoded.
+const double _wbWorkingGamma = 2.2;
 
 enum WbMode {
   asShot,
@@ -45,36 +48,88 @@ enum WbMode {
   _ => null,
 };
 
-/// Converts a UI Kelvin value to the model's normalized `rapidTemperature`
-/// (RapidRAW's -1..1 control), relative to [asShotKelvin] as the neutral.
-double rapidTemperatureFor(double kelvin, double asShotKelvin) {
-  final miredDelta = 1.0e6 / asShotKelvin - 1.0e6 / kelvin;
-  return (miredDelta * wbMiredGainPerUnit).clamp(-0.6, 0.6) / wbTempRGain;
-}
+/// Per-channel multipliers for a White Balance move from the photo's
+/// [asShotKelvin]/[asShotTint] reference to [targetKelvin]/[targetTint],
+/// ready to multiply straight into the render buffer's gamma-encoded RGB.
+///
+/// Von Kries: the target illuminant's reference white is mapped onto the
+/// (already-neutral) as-shot white, so a surface lit by the target
+/// illuminant comes out achromatic — and, unlike the old symmetric R/B
+/// model, the green channel moves along the daylight locus the way it
+/// physically should (which is what stopped skin neutralising and made
+/// cooled skies go cyan). Luminance-normalised so sliding
+/// Temperature/Tint doesn't drift overall brightness. At
+/// `target == asShot` the gains are exactly (1, 1, 1).
+({double r, double g, double b}) whiteBalanceGains(
+  double targetKelvin,
+  double targetTint,
+  double asShotKelvin,
+  double asShotTint,
+) {
+  final src = _referenceWhiteLinearRgb(asShotKelvin);
+  final dst = _referenceWhiteLinearRgb(targetKelvin);
+  var r = src.r / dst.r;
+  var g = src.g / dst.g;
+  var b = src.b / dst.b;
 
-/// Inverse of [rapidTemperatureFor] — the Kelvin that produces
-/// [rapidTemperature] given [asShotKelvin].
-double kelvinForRapidTemperature(double rapidTemperature, double asShotKelvin) {
-  final tempGain = (rapidTemperature * wbTempRGain).clamp(-0.6, 0.6);
-  final miredDelta = tempGain / wbMiredGainPerUnit;
-  final invKelvin = 1.0e6 / asShotKelvin - miredDelta;
-  if (invKelvin <= 0) {
-    return 50000.0;
+  // Green/magenta tint, relative to the as-shot tint. Positive = magenta
+  // (green down, red+blue up), matching Lightroom's slider.
+  final t = (targetTint - asShotTint) / 100.0;
+  g *= 1.0 - t * _wbTintStrength;
+  r *= 1.0 + t * _wbTintStrength * 0.5;
+  b *= 1.0 + t * _wbTintStrength * 0.5;
+  // (r/b get half the swing — Tint is mostly a green-vs-magenta shift, not
+  // a red+blue boost; the luminance-normalise below balances the rest.)
+
+  // Luminance-normalise (Rec. 709 weights) so brightness stays put.
+  final lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  if (lum > 1e-6) {
+    r /= lum;
+    g /= lum;
+    b /= lum;
   }
-  return (1.0e6 / invKelvin).clamp(2000.0, 50000.0);
+
+  // Linear gains -> gamma-space gains (see [_wbWorkingGamma]).
+  final e = 1.0 / _wbWorkingGamma;
+  return (
+    r: math.pow(r.clamp(1e-4, 100.0), e).toDouble(),
+    g: math.pow(g.clamp(1e-4, 100.0), e).toDouble(),
+    b: math.pow(b.clamp(1e-4, 100.0), e).toDouble(),
+  );
 }
 
-/// (sign note: a green cast — g above r/b — solves to a *positive* tint,
-/// since the model's `gTintGain = 1 - rapidTint*0.25` cuts green as tint
-/// rises.)
-///
-/// Given an average pixel colour [r],[g],[b] (0-255, gamma-encoded — the
-/// same space `_applyWhiteBalance` multiplies in), returns the Temperature
-/// (Kelvin) and Tint that make that colour neutral under the gain model.
-///
-/// Closed form: the red and blue gains share the tint factor, so the
-/// temperature term separates out of the R/B ratio first, then the tint
-/// falls out of the R/G ratio.
+/// Linear-sRGB tristimulus of the reference white at [kelvin], normalised
+/// so G = 1. CIE daylight locus at/above 4000 K (what Lightroom's
+/// Temperature slider tracks), Planckian blackbody below it.
+({double r, double g, double b}) _referenceWhiteLinearRgb(double kelvin) {
+  final k = kelvin.clamp(1667.0, 25000.0);
+  final double x;
+  final double y;
+  if (k >= 4000.0) {
+    x = k <= 7000.0
+        ? -4.6070e9 / (k * k * k) + 2.9678e6 / (k * k) + 99.11e0 / k + 0.244063
+        : -2.0064e9 / (k * k * k) + 1.9018e6 / (k * k) + 247.48e0 / k + 0.237040;
+    y = -3.0 * x * x + 2.870 * x - 0.275;
+  } else {
+    final uv = _planckianUv(k);
+    final d = 2.0 * uv.u - 8.0 * uv.v + 4.0;
+    x = 3.0 * uv.u / d;
+    y = 2.0 * uv.v / d;
+  }
+  final bigX = x / y;
+  final bigZ = (1.0 - x - y) / y;
+  // XYZ (D65) -> linear sRGB, with Y = 1 folded into the constant terms.
+  final r = 3.2406 * bigX - 1.5372 - 0.4986 * bigZ;
+  final g = -0.9689 * bigX + 1.8758 + 0.0415 * bigZ;
+  final b = 0.0557 * bigX - 0.2040 + 1.0570 * bigZ;
+  final gg = g <= 1e-6 ? 1e-6 : g;
+  return (r: r / gg, g: 1.0, b: b / gg);
+}
+
+/// The Temperature (Kelvin) and Tint that make the average colour
+/// [r],[g],[b] (gamma-encoded — the render buffer's space) neutral under
+/// [whiteBalanceGains]. Bisects Kelvin against the R:B balance, then Tint
+/// against the G balance — the model is monotone in both.
 ({double kelvin, double tint}) solveNeutralizingTempTint(
   double r,
   double g,
@@ -82,23 +137,38 @@ double kelvinForRapidTemperature(double rapidTemperature, double asShotKelvin) {
   required double asShotKelvin,
   required double asShotTint,
 }) {
-  final rr = r <= 0 ? 1e-4 : r;
-  final gg = g <= 0 ? 1e-4 : g;
-  final bb = b <= 0 ? 1e-4 : b;
+  final rr = r <= 1e-4 ? 1e-4 : r;
+  final gg = g <= 1e-4 ? 1e-4 : g;
+  final bb = b <= 1e-4 ? 1e-4 : b;
 
-  // r*(1 + tRGain*rt) = b*(1 - tBGain*rt)  ->  rt
-  final denom = wbTempRGain * rr + wbTempBGain * bb;
-  final rapidTemp = denom == 0 ? 0.0 : (bb - rr) / denom;
+  var lo = 2000.0;
+  var hi = 50000.0;
+  for (var i = 0; i < 40; i++) {
+    final mid = math.sqrt(lo * hi);
+    final gn = whiteBalanceGains(mid, asShotTint, asShotKelvin, asShotTint);
+    // Warmer target Kelvin -> more R gain, less B gain. If R still wins
+    // after the gains, the correction needs to be cooler (lower Kelvin).
+    if (rr * gn.r > bb * gn.b) {
+      hi = mid;
+    } else {
+      lo = mid;
+    }
+  }
+  final kelvin = math.sqrt(lo * hi).clamp(2000.0, 50000.0);
 
-  final a = rr * (1.0 + wbTempRGain * rapidTemp);
-  final bTerm = gg * (1.0 + wbTempGGain * rapidTemp);
-  final tintDenom = wbTintGain * (a + bTerm);
-  final rapidTint = tintDenom == 0 ? 0.0 : (bTerm - a) / tintDenom;
-
-  return (
-    kelvin: kelvinForRapidTemperature(rapidTemp, asShotKelvin),
-    tint: (rapidTint * 100.0 + asShotTint).clamp(-150.0, 150.0),
-  );
+  var tlo = -150.0;
+  var thi = 150.0;
+  for (var i = 0; i < 40; i++) {
+    final mid = (tlo + thi) / 2.0;
+    final gn = whiteBalanceGains(kelvin, mid, asShotKelvin, asShotTint);
+    // Higher Tint -> less G gain. If G still wins, push toward magenta.
+    if (gg * gn.g > rr * gn.r) {
+      tlo = mid;
+    } else {
+      thi = mid;
+    }
+  }
+  return (kelvin: kelvin, tint: ((tlo + thi) / 2.0).clamp(-150.0, 150.0));
 }
 
 /// Gray-world auto white balance: the trimmed mean of [rgbBytes] (packed

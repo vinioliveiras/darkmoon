@@ -68,38 +68,30 @@ void main() {
       expect(out[0], out[2]);
     });
 
-    test(
-      'tint follows RapidRAW\'s un-normalized formula exactly, no '
-      'brightness compensation',
-      () {
-        // RapidRAW's apply_white_balance (shader.wgsl) multiplies
-        // temp_kelvin_mult * tint_mult directly, with no renormalization
-        // step — so a strong Tint does shift overall brightness a little,
-        // by design; matching that (rather than adding a compensation
-        // step RapidRAW doesn't have) is the point of this port.
-        final src = flatGray(4, 4, 150);
-        final out = renderRgb(4, 4, src, const RenderParams(tint: 80));
-        // tint=80 -> rapidTint=0.8 -> r,b *= 1.2, g *= 0.8.
-        expect(out[0], closeTo(180, 1));
-        expect(out[1], closeTo(120, 1));
-        expect(out[2], closeTo(180, 1));
-      },
-    );
+    test('the Von Kries model is luminance-neutral — a Tint move barely '
+        'shifts overall brightness', () {
+      final src = flatGray(4, 4, 150);
+      for (final tint in [-60.0, -20.0, 40.0, 90.0]) {
+        final out = renderRgb(4, 4, src, RenderParams(tint: tint));
+        final lum = 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2];
+        expect(lum, closeTo(150, 8), reason: 'tint $tint');
+      }
+    });
 
-    test(
-      'preserveTintBrightness opts back into brightness-preserving tint',
-      () {
-        final src = flatGray(4, 4, 150);
-        final out = renderRgb(
-          4,
-          4,
-          src,
-          const RenderParams(tint: 80, preserveTintBrightness: true),
-        );
-        final lum = (out[0] + out[1] + out[2]) / 3.0;
-        expect(lum, closeTo(150, 6));
-      },
-    );
+    test('preserveTintBrightness is a harmless no-op now (model already '
+        'luminance-normalised)', () {
+      final src = flatGray(4, 4, 150);
+      final off = renderRgb(4, 4, src, const RenderParams(tint: 40));
+      final on = renderRgb(
+        4,
+        4,
+        src,
+        const RenderParams(tint: 40, preserveTintBrightness: true),
+      );
+      for (var i = 0; i < off.length; i++) {
+        expect(on[i], off[i]);
+      }
+    });
 
     test('per-photo as-shot reference: sliders parked at the camera value '
         'are an identity, and 5500/0 now shifts', () {
@@ -130,9 +122,10 @@ void main() {
           asShotTint: 6,
         ),
       );
-      // 5500 > 5200 as-shot -> warms; tint 0 < 6 -> greens.
+      // 5500 > the 5200 as-shot reference -> a warming correction: R
+      // ends up above B (and above where it sat at the as-shot no-op).
       expect(at5500[0], greaterThan(at5500[2]));
-      expect(at5500[1], greaterThan(150));
+      expect(at5500[0], greaterThan(150));
     });
   });
 }

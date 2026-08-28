@@ -15,6 +15,7 @@ import 'render_params.dart';
 import 'sharpen.dart';
 import 'tone_curve.dart';
 import 'vignette.dart';
+import 'white_balance.dart';
 
 
 /// Applies the tonal/color adjustment pipeline to packed 8-bit RGB pixel
@@ -327,49 +328,15 @@ Uint8List _toUint8(Float32List buffer) {
   return out;
 }
 
-/// How strongly a mired shift moves the red/blue gains — calibrated so the
-/// overall warm/cool strength at typical daylight deltas roughly matches
-/// the old Kelvin-linear model's feel around 5500K, while the mired scale
-/// (rather than raw Kelvin) makes larger deviations track Lightroom's
-/// actual Temp-slider curve instead of under- or over-correcting them.
+/// White balance: a Von Kries per-channel gain (see [whiteBalanceGains])
+/// mapping the target illuminant's reference white onto the photo's
+/// already-neutral as-shot white. At `temperature == asShotKelvin &&
+/// tint == asShotTint` it's a no-op — the LibRaw decode already applied
+/// the camera's white balance.
 ///
-/// Equivalence table — this file's Kelvin UI value vs. the RapidRAW
-/// "-100..100" raw slider value that produces the same `rapidTemperature`
-/// gain below (i.e. what a preset's Kelvin value would need to be entered
-/// as on RapidRAW's own Temperature slider for matching output). Useful
-/// for judging any future preset-migration mapping; not itself consumed by
-/// any code here.
-///
-///  Kelvin | RapidRAW-equivalent
-///  -------|--------------------
-///   2000K | -207  (beyond RapidRAW's own -100 floor)
-///   2500K | -142  (beyond RapidRAW's own -100 floor)
-///   2979K | -100  (RapidRAW's coldest reachable value)
-///   3200K |  -85
-///   4000K |  -44
-///   5000K |  -12
-///   5500K |    0  (neutral, both scales)
-///   6000K |   10
-///   7000K |   25
-///   8000K |   37
-///  10000K |   53
-///  15000K |   75
-///  20000K |   86
-///  35750K |  100  (RapidRAW's warmest reachable value)
-///  50000K |  105  (beyond RapidRAW's own +100 ceiling)
-///
-/// The asymmetry (RapidRAW's full range spans roughly 2979K-35750K here,
-/// not a symmetric window around 5500K) falls straight out of the mired
-/// scale's own warm/cool asymmetry (see the doc comment on
-/// [_applyWhiteBalance] below). Darkmoon's 2000K-50000K slider range
-/// slightly overshoots RapidRAW's reachable range at both ends, so a
-/// preset built at those extremes has no exact RapidRAW-side equivalent
-/// to match against — this file's own internal safety clamp
-/// (`tempGain.clamp(-0.6, 0.6)`) never actually engages anywhere in that
-/// 2000K-50000K UI range, though (it only kicks in below ~1554K or above
-/// 100000K), so it isn't what causes the overshoot.
-const double _miredGainPerUnit = 0.0013;
-
+/// [preserveTintBrightness] is retained for the (unchanged) call
+/// signature and the settings toggle, but the model is luminance-
+/// normalised by construction now, so it no longer changes anything.
 void _applyWhiteBalance(
   Float32List img,
   double temperatureKelvin,
@@ -381,62 +348,16 @@ void _applyWhiteBalance(
   if (temperatureKelvin == asShotKelvin && tint == asShotTint) {
     return;
   }
-  // Color temperature correction is approximately linear in "mired"
-  // (micro reciprocal degrees, 1e6/Kelvin) rather than in Kelvin itself —
-  // the same reason photographic warming/cooling filters are rated in
-  // mired shift, not Kelvin. A Kelvin-linear model (equal gain per Kelvin
-  // regardless of starting point) badly under- or overshoots for presets
-  // that set an absolute Temperature far from the 5500K reference, like a
-  // warm-toned preset dropping to ~4200K, because the same Kelvin delta is
-  // a much bigger perceptual/mired shift down in the warm end of the scale
-  // than up in the cool end.
-  //
-  // This slider follows Lightroom/Camera Raw's own (famously
-  // counter-intuitive) convention, also encoded in its blue->orange
-  // gradient (editor_screen.dart's 'Temperature' _SliderSpec): the value
-  // means "what Kelvin was the scene's actual light source", so *raising*
-  // it tells the app the light was bluer than assumed, and the app adds
-  // warmth to compensate — a *higher* Kelvin value renders *warmer*
-  // (orange), a lower one renders cooler (blue). (This was previously
-  // inverted here — verified against a real Canon 350D CR2 where raising
-  // Temperature visibly cooled the image instead of warming it.)
-  final miredDelta = 1.0e6 / asShotKelvin - 1.0e6 / temperatureKelvin;
-  final tempGain = (miredDelta * _miredGainPerUnit).clamp(-0.6, 0.6);
-  // RapidRAW represents temperature as a normalized -1..1 control with
-  // multipliers (1 + temp*0.2, 1 + temp*0.05, 1 - temp*0.2). Keep
-  // Darkmoon's Kelvin UI, but derive that normalized value from the existing
-  // calibrated mired gain so both controls use the same color model.
-  final rapidTemperature = tempGain / 0.2;
-  final rTemperatureGain = 1.0 + rapidTemperature * 0.2;
-  final gTemperatureGain = 1.0 + rapidTemperature * 0.05;
-  final bTemperatureGain = 1.0 - rapidTemperature * 0.2;
-
-  // Tint moves along the green/magenta axis: green shifts one way, red and
-  // blue shift the other. Sign matches Lightroom and this slider's own
-  // green->magenta gradient (editor_screen.dart's 'Tint' _SliderSpec):
-  // positive = magenta (green down, red/blue up), negative = green (green
-  // up, red/blue down).
-  final rapidTint = (tint - asShotTint) / 100.0;
-  final gTintGain = 1.0 - rapidTint * 0.25;
-  final rbTintGain = 1.0 + rapidTint * 0.25;
-
-  // No overall-brightness renormalization by default — RapidRAW's own
-  // apply_white_balance (shader.wgsl) doesn't renormalize either, it just
-  // multiplies temp_kelvin_mult * tint_mult directly, so a strong Tint
-  // does shift overall luminance slightly there too. [preserveTintBrightness]
-  // (the White Balance panel's "Preserve brightness" checkbox, off by
-  // default) opts back into Darkmoon's exact older behavior: dividing
-  // every channel by the mean of the three Tint gains alone (not
-  // Temperature's own — this is the original formula, unchanged) so a
-  // Tint shift leaves the image's average brightness unchanged, at the
-  // cost of no longer matching RapidRAW exactly.
-  final tintMean = (2.0 * rbTintGain + gTintGain) / 3.0;
-  final tintNormalization = preserveTintBrightness ? 1.0 / tintMean : 1.0;
-
+  final gains = whiteBalanceGains(
+    temperatureKelvin,
+    tint,
+    asShotKelvin,
+    asShotTint,
+  );
   for (var i = 0; i < img.length; i += 3) {
-    img[i] *= rTemperatureGain * rbTintGain * tintNormalization;
-    img[i + 1] *= gTemperatureGain * gTintGain * tintNormalization;
-    img[i + 2] *= bTemperatureGain * rbTintGain * tintNormalization;
+    img[i] *= gains.r;
+    img[i + 1] *= gains.g;
+    img[i + 2] *= gains.b;
   }
 }
 

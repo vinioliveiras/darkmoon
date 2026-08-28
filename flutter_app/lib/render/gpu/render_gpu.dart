@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import '../color_grading.dart';
 import '../render_params.dart';
 import '../tone_curve.dart';
+import '../white_balance.dart';
 import 'dehaze_gpu.dart';
 import 'denoise_gpu.dart';
 import 'gpu_pass.dart';
@@ -172,32 +173,20 @@ Future<ui.Image> _runPreDenoise(
   );
   final shader = program.fragmentShader();
 
-  const miredGainPerUnit = 0.0013;
-  final miredDelta = applyWhiteBalance
-      ? 1.0e6 / params.asShotKelvin - 1.0e6 / params.temperature
-      : 0.0;
-  final tempGain = (miredDelta * miredGainPerUnit).clamp(-0.6, 0.6);
-  final rapidTemperature = tempGain / 0.2;
-  final rGain = 1.0 + rapidTemperature * 0.2;
-  final gTemperatureGain = 1.0 + rapidTemperature * 0.05;
-  final bGain = 1.0 - rapidTemperature * 0.2;
-  final rapidTint = applyWhiteBalance
-      ? (params.tint - params.asShotTint) / 100.0
-      : 0.0;
-  final gTintGain = 1.0 - rapidTint * 0.25;
-  final rbTintGain = 1.0 + rapidTint * 0.25;
-  // No overall-brightness renormalization by default — matches
-  // render.dart's own _applyWhiteBalance (see its doc comment:
-  // RapidRAW's apply_white_balance doesn't renormalize either).
-  // params.preserveTintBrightness (off by default) opts back into
-  // Darkmoon's older behavior; same tintMean formula as there.
-  final tintMean = (2.0 * rbTintGain + gTintGain) / 3.0;
-  final tintNormalization = params.preserveTintBrightness
-      ? 1.0 / tintMean
-      : 1.0;
-  final gGain = gTemperatureGain * gTintGain * tintNormalization;
-  final normalizedRGain = rGain * rbTintGain * tintNormalization;
-  final normalizedBGain = bGain * rbTintGain * tintNormalization;
+  // Same Von Kries per-channel gain as render.dart's _applyWhiteBalance,
+  // computed on the Dart side and handed to the shader as flat multipliers
+  // (the shader is unchanged).
+  final wb = applyWhiteBalance
+      ? whiteBalanceGains(
+          params.temperature,
+          params.tint,
+          params.asShotKelvin,
+          params.asShotTint,
+        )
+      : (r: 1.0, g: 1.0, b: 1.0);
+  final normalizedRGain = wb.r;
+  final gGain = wb.g;
+  final normalizedBGain = wb.b;
   final exposureFactor = applyExposure
       ? math.pow(2.0, params.exposure / 20.0).toDouble()
       : 1.0;
