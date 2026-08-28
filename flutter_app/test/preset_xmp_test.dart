@@ -61,6 +61,48 @@ void main() {
     expect(decoded.curves.red.length, original.curves.red.length);
   });
 
+  test('export carries the structural attributes Lightroom expects', () {
+    const preset = Preset(id: 'preset_abc', name: 'Warm', values: {'Contrast': 10});
+    final xml = xmpFromPreset(preset);
+
+    // XMP packet wrapper (Adobe writes this around every exported .xmp).
+    expect(xml.trimLeft(), startsWith('<?xpacket begin='));
+    expect(xml.trimRight(), endsWith('<?xpacket end="w"?>'));
+
+    // Still valid XML and still round-trippable through our own reader.
+    final decoded = presetFromXmp(xml, fallbackName: 'x');
+    expect(decoded, isNotNull);
+    expect(decoded!.values['Contrast'], 10);
+
+    // Capability flags + identity so newer Lightroom treats it as a
+    // fully-supported develop preset rather than flagging it.
+    for (final attr in const [
+      'crs:PresetType="Normal"',
+      'crs:HasSettings="True"',
+      'crs:SupportsColor="True"',
+      'crs:SupportsMonochrome="True"',
+      'crs:SupportsHighDynamicRange="True"',
+      'crs:UUID=',
+      'crs:Version="16',
+    ]) {
+      expect(xml, contains(attr), reason: 'missing $attr');
+    }
+    expect(xml, contains('darkmoon')); // the crs:Group name
+  });
+
+  test('the exported UUID is stable across repeated exports of a preset', () {
+    const preset = Preset(id: 'preset_stable', name: 'S', values: {'Clarity': 5});
+    final first = RegExp(r'crs:UUID="([0-9A-F]+)"')
+        .firstMatch(xmpFromPreset(preset))
+        ?.group(1);
+    final second = RegExp(r'crs:UUID="([0-9A-F]+)"')
+        .firstMatch(xmpFromPreset(preset))
+        ?.group(1);
+    expect(first, isNotNull);
+    expect(first!.length, 32);
+    expect(first, second);
+  });
+
   test('identity curve is omitted from the XMP and re-read as identity', () {
     const preset = Preset(id: 'p', name: 'Neutral', values: {});
     final xml = xmpFromPreset(preset);

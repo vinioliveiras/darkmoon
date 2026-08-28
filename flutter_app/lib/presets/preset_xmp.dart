@@ -140,11 +140,45 @@ double _stopsToExposure(double stops) => stops / _exposureStopsAtMax * 100.0;
 String _presetIdFromName(String name) =>
     'preset_${DateTime.now().microsecondsSinceEpoch}_${name.hashCode}';
 
+/// The Camera Raw version string written into exported presets. Lightroom
+/// and Camera Raw treat a preset tagged with a plausibly-recent version as
+/// a first-class develop preset; an implausibly old one (the "1.0" this
+/// used to write) can make newer versions flag it as possibly-incompatible
+/// on import. Bump this to track a real ACR release now and then.
+const _crsVersion = '16.5';
+
+/// A `crs:UUID` derived deterministically from the preset's own id, so
+/// exporting the same preset twice yields the same UUID and Lightroom
+/// recognises the re-import as the *same* preset (updating it in place)
+/// rather than making a duplicate. FNV-1a over the seed, expanded to the
+/// 32 uppercase hex digits Lightroom writes.
+String _deterministicUuid(String seed) {
+  final bytes = <int>[];
+  var hash = 0x811c9dc5;
+  for (var round = 0; round < 16; round++) {
+    for (final unit in '$seed:$round'.codeUnits) {
+      hash = (hash ^ unit) & 0xffffffff;
+      hash = (hash * 0x01000193) & 0xffffffff;
+    }
+    bytes.add(hash & 0xff);
+    bytes.add((hash >> 8) & 0xff);
+  }
+  return bytes
+      .map((b) => b.toRadixString(16).padLeft(2, '0'))
+      .join()
+      .toUpperCase()
+      .substring(0, 32);
+}
+
 /// Builds a Lightroom-compatible `.xmp` Develop Preset document for
 /// [preset].
 String xmpFromPreset(Preset preset) {
+  final hasCurve =
+      !isIdentityToneCurve(preset.curves.tone) ||
+      !isIdentityToneCurve(preset.curves.red) ||
+      !isIdentityToneCurve(preset.curves.green) ||
+      !isIdentityToneCurve(preset.curves.blue);
   final builder = XmlBuilder();
-  builder.processing('xml', 'version="1.0" encoding="UTF-8"');
   builder.element(
     'x:xmpmeta',
     namespaces: {'adobe:ns:meta/': 'x'},
@@ -166,8 +200,27 @@ String xmpFromPreset(Preset preset) {
             attributes: {
               'rdf:about': '',
               'crs:PresetType': 'Normal',
-              'crs:Version': '1.0',
+              'crs:Cluster': '',
+              'crs:UUID': _deterministicUuid(preset.id),
+              // The "this preset supports ..." capability flags newer
+              // Lightroom / Camera Raw expect on a develop preset. Without
+              // them the preset still imports but can show a
+              // "may not be compatible" caution; with them it's treated
+              // as a normal, fully-supported preset. `SupportsAmount` is
+              // False — darkmoon has no preset-strength (Amount) slider.
+              'crs:SupportsAmount': 'False',
+              'crs:SupportsColor': 'True',
+              'crs:SupportsMonochrome': 'True',
+              'crs:SupportsHighDynamicRange': 'True',
+              'crs:SupportsNormalDynamicRange': 'True',
+              'crs:SupportsSceneReferred': 'True',
+              'crs:SupportsOutputReferred': 'True',
+              'crs:CameraModelRestriction': '',
+              'crs:Copyright': '',
+              'crs:ContactInfo': '',
+              'crs:Version': _crsVersion,
               'crs:ProcessVersion': '11.0',
+              if (hasCurve) 'crs:ToneCurveName2012': 'Custom',
               'crs:HasSettings': 'True',
               for (final (ourKey, crsAttr) in _directMappings)
                 if (preset.values[ourKey] case final v?)
@@ -193,21 +246,11 @@ String xmpFromPreset(Preset preset) {
             },
             namespaces: {_crsNamespace: 'crs'},
             nest: () {
-              builder.element(
-                'crs:Name',
-                nest: () {
-                  builder.element(
-                    'rdf:Alt',
-                    nest: () {
-                      builder.element(
-                        'rdf:li',
-                        attributes: {'xml:lang': 'x-default'},
-                        nest: preset.name,
-                      );
-                    },
-                  );
-                },
-              );
+              _writeLangAlt(builder, 'crs:Name', preset.name);
+              // Files every darkmoon preset under one named group in the
+              // Lightroom preset browser instead of scattering them loose
+              // in "User Presets".
+              _writeLangAlt(builder, 'crs:Group', 'darkmoon');
               _writeCurve(builder, 'crs:ToneCurvePV2012', preset.curves.tone);
               _writeCurve(builder, 'crs:ToneCurvePV2012Red', preset.curves.red);
               _writeCurve(
@@ -226,7 +269,36 @@ String xmpFromPreset(Preset preset) {
       );
     },
   );
-  return builder.buildDocument().toXmlString(pretty: true, indent: '  ');
+  final body = builder.buildDocument().toXmlString(pretty: true, indent: '  ');
+  // The XMP packet wrapper Adobe writes around every `.xmp` it exports.
+  // Lightroom reads presets with or without it, but Camera Raw and a
+  // number of third-party tools (Capture One, RawTherapee, ON1) expect a
+  // well-formed packet, so wrapping it is the safer default for "import
+  // anywhere".
+  return '<?xpacket begin="\u{feff}" id="W5M0MpCehiHzreSzNTczkc9d"?>\n'
+      '$body\n'
+      '<?xpacket end="w"?>';
+}
+
+/// Writes a `<tag><rdf:Alt><rdf:li xml:lang="x-default">value</rdf:li>` —
+/// the language-alternative structure Lightroom uses for a preset's Name
+/// and Group.
+void _writeLangAlt(XmlBuilder builder, String tag, String value) {
+  builder.element(
+    tag,
+    nest: () {
+      builder.element(
+        'rdf:Alt',
+        nest: () {
+          builder.element(
+            'rdf:li',
+            attributes: {'xml:lang': 'x-default'},
+            nest: value,
+          );
+        },
+      );
+    },
+  );
 }
 
 void _writeCurve(XmlBuilder builder, String tag, List<CurvePoint> points) {
