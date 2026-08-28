@@ -4975,8 +4975,10 @@ class _SectionHeader extends StatelessWidget {
     return Padding(
       // Spacing lives here, outside the InkWell, so hovering/clicking the
       // gap above and below the header box doesn't register as a tap on
-      // it — only the visible rectangle itself should react.
-      padding: const EdgeInsets.only(top: 10, bottom: 2),
+      // it — only the visible rectangle itself should react. The larger
+      // bottom gap keeps the first slider/editor from sitting flush
+      // against the header bar.
+      padding: const EdgeInsets.only(top: 10, bottom: 10),
       // The controls column insets its scrolling content by
       // [_controlsPanelInset] on each side; an OverflowBox lets this bar
       // grow back out to the full column width so it bleeds edge-to-edge
