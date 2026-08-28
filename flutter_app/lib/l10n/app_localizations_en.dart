@@ -288,6 +288,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cancelButton => 'Cancel';
 
   @override
+  String get copyButton => 'Copy';
+
+  @override
   String get hideButton => 'Hide';
 
   @override
@@ -451,23 +454,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get gradeRangeGlobal => 'Global';
-
-  @override
-  String get colorGradingPalettesLabel => 'Palettes';
-
-  @override
-  String get paletteImportTooltip =>
-      'Import Adobe Color swatches (.ase or .aco)';
-
-  @override
-  String get paletteImportDialogTitle => 'Import Adobe Color swatches';
-
-  @override
-  String get paletteEmptyHint =>
-      'Import an Adobe Color swatch file (.ase or .aco) to click its colors straight onto the active wheel.';
-
-  @override
-  String get paletteDeleteTooltip => 'Remove this palette';
 
   @override
   String get maskImageLayer => 'Full Image';

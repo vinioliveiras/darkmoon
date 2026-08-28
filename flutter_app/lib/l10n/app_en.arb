@@ -118,6 +118,7 @@
   "exportQualityLabel": "Quality",
   "exportDialogConfirm": "Export",
   "cancelButton": "Cancel",
+  "copyButton": "Copy",
   "hideButton": "Hide",
   "exportSuccessMessage": "Exported to {path}",
   "@exportSuccessMessage": {
@@ -186,11 +187,6 @@
   "sectionEffects": "EFFECTS",
   "gradeRangeMidtones": "Midtones",
   "gradeRangeGlobal": "Global",
-  "colorGradingPalettesLabel": "Palettes",
-  "paletteImportTooltip": "Import Adobe Color swatches (.ase or .aco)",
-  "paletteImportDialogTitle": "Import Adobe Color swatches",
-  "paletteEmptyHint": "Import an Adobe Color swatch file (.ase or .aco) to click its colors straight onto the active wheel.",
-  "paletteDeleteTooltip": "Remove this palette",
 
   "maskImageLayer": "Full Image",
   "maskLinearGradient": "Linear Gradient",

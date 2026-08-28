@@ -288,6 +288,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get cancelButton => 'Cancelar';
 
   @override
+  String get copyButton => 'Copiar';
+
+  @override
   String get hideButton => 'Ocultar';
 
   @override
@@ -455,23 +458,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get gradeRangeGlobal => 'Global';
-
-  @override
-  String get colorGradingPalettesLabel => 'Paletas';
-
-  @override
-  String get paletteImportTooltip =>
-      'Importar swatches do Adobe Color (.ase ou .aco)';
-
-  @override
-  String get paletteImportDialogTitle => 'Importar swatches do Adobe Color';
-
-  @override
-  String get paletteEmptyHint =>
-      'Importe um arquivo de swatches do Adobe Color (.ase ou .aco) para aplicar as cores direto na roda ativa.';
-
-  @override
-  String get paletteDeleteTooltip => 'Remover esta paleta';
 
   @override
   String get maskImageLayer => 'Imagem Completa';

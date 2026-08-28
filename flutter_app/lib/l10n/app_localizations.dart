@@ -620,6 +620,12 @@ abstract class AppLocalizations {
   /// **'Cancel'**
   String get cancelButton;
 
+  /// No description provided for @copyButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy'**
+  String get copyButton;
+
   /// No description provided for @hideButton.
   ///
   /// In en, this message translates to:
@@ -913,36 +919,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Global'**
   String get gradeRangeGlobal;
-
-  /// No description provided for @colorGradingPalettesLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Palettes'**
-  String get colorGradingPalettesLabel;
-
-  /// No description provided for @paletteImportTooltip.
-  ///
-  /// In en, this message translates to:
-  /// **'Import Adobe Color swatches (.ase or .aco)'**
-  String get paletteImportTooltip;
-
-  /// No description provided for @paletteImportDialogTitle.
-  ///
-  /// In en, this message translates to:
-  /// **'Import Adobe Color swatches'**
-  String get paletteImportDialogTitle;
-
-  /// No description provided for @paletteEmptyHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Import an Adobe Color swatch file (.ase or .aco) to click its colors straight onto the active wheel.'**
-  String get paletteEmptyHint;
-
-  /// No description provided for @paletteDeleteTooltip.
-  ///
-  /// In en, this message translates to:
-  /// **'Remove this palette'**
-  String get paletteDeleteTooltip;
 
   /// No description provided for @maskImageLayer.
   ///
