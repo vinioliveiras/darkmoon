@@ -3936,19 +3936,29 @@ class _ImageArea extends StatelessWidget {
   }
 
   Widget _zoomableImage(Uint8List bytes) {
+    // Double-click resets zoom/pan to Fit — but not while a mode with its
+    // own tap handling is active (mask editing, crop overlay, eyedropper),
+    // where the tap-delay double-tap introduces would make those laggy.
+    final doubleTapToFit =
+        editingMask == null && !cropOverlayActive && !wbEyedropperActive;
     return Listener(
       onPointerSignal: onPointerSignal,
-      child: InteractiveViewer(
-        transformationController: viewController,
-        minScale: _minZoom,
-        maxScale: _maxZoom,
-        // InteractiveViewer has its own built-in pinch/trackpad scale
-        // gesture handling that's entirely separate from the Listener
-        // above — without this it zoomed on trackpad pinch/two-finger
-        // scroll regardless of Ctrl, since that gesture never goes
-        // through onPointerSignal at all. Panning (drag) stays enabled.
-        scaleEnabled: false,
-        child: _fittedImage(bytes),
+      child: GestureDetector(
+        onDoubleTap: doubleTapToFit
+            ? () => viewController.value = Matrix4.identity()
+            : null,
+        child: InteractiveViewer(
+          transformationController: viewController,
+          minScale: _minZoom,
+          maxScale: _maxZoom,
+          // InteractiveViewer has its own built-in pinch/trackpad scale
+          // gesture handling that's entirely separate from the Listener
+          // above — without this it zoomed on trackpad pinch/two-finger
+          // scroll regardless of Ctrl, since that gesture never goes
+          // through onPointerSignal at all. Panning (drag) stays enabled.
+          scaleEnabled: false,
+          child: _fittedImage(bytes),
+        ),
       ),
     );
   }

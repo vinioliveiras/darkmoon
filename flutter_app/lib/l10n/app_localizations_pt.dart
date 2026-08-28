@@ -665,7 +665,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sliderSaturation => 'Saturação';
 
   @override
-  String get sliderSharpenAmount => 'Quantidade';
+  String get sliderSharpenAmount => 'Nitidez';
 
   @override
   String get sliderSharpenRadius => 'Raio';

@@ -1331,7 +1331,7 @@ abstract class AppLocalizations {
   /// No description provided for @sliderSharpenAmount.
   ///
   /// In en, this message translates to:
-  /// **'Amount'**
+  /// **'Sharpening'**
   String get sliderSharpenAmount;
 
   /// No description provided for @sliderSharpenRadius.

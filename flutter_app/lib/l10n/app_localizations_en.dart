@@ -660,7 +660,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sliderSaturation => 'Saturation';
 
   @override
-  String get sliderSharpenAmount => 'Amount';
+  String get sliderSharpenAmount => 'Sharpening';
 
   @override
   String get sliderSharpenRadius => 'Radius';
