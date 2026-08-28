@@ -65,12 +65,21 @@ class ExportRequest {
 /// caller as the original exception object, so failures are reported as a
 /// plain message instead.
 class ExportResult {
-  const ExportResult.success(String path) : destPath = path, error = null;
+  const ExportResult.success(String path, {this.timings})
+    : destPath = path,
+      error = null;
 
-  const ExportResult.failure(String message) : destPath = null, error = message;
+  const ExportResult.failure(String message)
+    : destPath = null,
+      error = message,
+      timings = null;
 
   final String? destPath;
   final String? error;
+
+  /// Per-stage timing, e.g. `decode 3200ms · render 900ms · encode 700ms` —
+  /// surfaced in the success snackbar while export perf is being profiled.
+  final String? timings;
 
   bool get success => error == null;
 }
@@ -101,8 +110,11 @@ Future<ExportResult> _exportPhotoInternal(
 ) async {
   try {
     final sw = Stopwatch()..start();
+    final timings = <String>[];
     void mark(String stage) {
-      debugPrint('export: $stage ${sw.elapsedMilliseconds}ms');
+      final line = '$stage ${sw.elapsedMilliseconds}ms';
+      debugPrint('export: $line');
+      timings.add(line);
       sw.reset();
     }
 
@@ -199,7 +211,10 @@ Future<ExportResult> _exportPhotoInternal(
     onStage?.call(ExportStage.writing);
     File(request.destPath).writeAsBytesSync(bytes);
     mark('write');
-    return ExportResult.success(request.destPath);
+    return ExportResult.success(
+      request.destPath,
+      timings: timings.join(' · '),
+    );
   } catch (e) {
     return ExportResult.failure(e.toString());
   }

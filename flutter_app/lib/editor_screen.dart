@@ -3780,6 +3780,7 @@ class _EditorScreenState extends State<EditorScreen> {
     // warms the cache for next time. This is the dominant export cost,
     // especially for X-Trans.
     EditSource? nativeForExport;
+    final srcSw = Stopwatch()..start();
     try {
       nativeForExport = await _loadNativeSource(
         selected.path,
@@ -3788,6 +3789,12 @@ class _EditorScreenState extends State<EditorScreen> {
     } catch (_) {
       nativeForExport = null; // fall back to decoding in the export isolate
     }
+    final srcMs = srcSw.elapsedMilliseconds;
+    final srcTiming = nativeForExport == null
+        ? null
+        : (_fullQualitySourcePath == selected.path
+              ? 'source (in memory) ${srcMs}ms'
+              : 'source (decode+cache) ${srcMs}ms');
     if (!mounted || _exportCancellation?.isCancelled == true) {
       setState(() {
         _exporting = false;
@@ -3832,12 +3839,17 @@ class _EditorScreenState extends State<EditorScreen> {
       _exportStage = null;
     });
     if (!wasCancelled) {
+      final timingLine = [
+        if (srcTiming != null) srcTiming,
+        if (result.timings != null) result.timings!,
+      ].join(' · ');
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          duration: const Duration(seconds: 3),
+          duration: const Duration(seconds: 6),
           content: Text(
             result.success
-                ? l10n.exportSuccessMessage(result.destPath!)
+                ? '${l10n.exportSuccessMessage(result.destPath!)}'
+                      '${timingLine.isEmpty ? '' : '\n$timingLine'}'
                 : l10n.exportFailureMessage(result.error!),
           ),
         ),
