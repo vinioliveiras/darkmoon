@@ -7,7 +7,7 @@ import '../theme.dart';
 /// (pubspec.yaml's own version is frozen at 1.0.0+1 and isn't the
 /// user-facing version; releases are tracked purely via git tags, see
 /// README/release notes).
-const String darkmoonAppVersion = 'v1.2.0';
+const String darkmoonAppVersion = 'v1.2.1';
 
 /// The "About" entry in the top menu bar — app name/version plus credits.
 /// Named [DarkmoonAboutDialog] to avoid colliding with Flutter's own
