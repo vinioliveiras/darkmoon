@@ -581,7 +581,7 @@ class _EditorScreenState extends State<EditorScreen> {
   /// canvas. Any new edit / photo switch cancels the timer and (via
   /// [_renderRequestId]) discards a result already in flight.
   Timer? _dynamicPreviewTimer;
-  static const _dynamicPreviewDelay = Duration(milliseconds: 800);
+  static const _dynamicPreviewDelay = Duration(milliseconds: 1400);
   NativeSourceCache? _nativeSourceCache;
 
   /// The selected photo's decoded native-resolution source, held only for
@@ -590,13 +590,18 @@ class _EditorScreenState extends State<EditorScreen> {
   /// otherwise a full RAW decode that then warms the cache.
   EditSource? _fullQualitySource;
   String? _fullQualitySourcePath;
-  bool _dynamicPreviewRunning = false;
+  bool _decodingFullQuality = false;
 
-  /// Long edge (px) of the render currently shown for each photo — the
-  /// preview resolution after a normal render, bumped by the dynamic
-  /// full-res pass. Lets that pass bail when the on-screen view is already
-  /// sharp enough for the current zoom.
-  final Map<String, int> _renderedNativeLong = {};
+  /// The native source downscaled to the current working resolution
+  /// (roughly what the screen shows at the current zoom, capped) — the
+  /// buffer settled renders actually run against once full-quality mode is
+  /// active. Regenerated only when the working resolution moves
+  /// meaningfully (a zoom change), not on every settle.
+  EditSource? _fullQualityScaled;
+  int _fullQualityScaledLong = 0;
+
+  bool _fullQualityReadyFor(String path) =>
+      _fullQualitySourcePath == path && _fullQualitySource != null;
 
   /// Which stage the in-progress AI Denoise render is on — see
   /// [RenderStage]. Only populated for that one render (see
@@ -1367,13 +1372,30 @@ class _EditorScreenState extends State<EditorScreen> {
           // the next photo switch.
           final previewResolutionChanged =
               next.previewResolution != _settings.previewResolution;
+          final dynamicFullPreviewOff =
+              _settings.dynamicFullPreview && !next.dynamicFullPreview;
           setState(() {
             _settings = next;
             if (previewResolutionChanged) {
               _editSources.clear();
             }
+            if (dynamicFullPreviewOff) {
+              _dynamicPreviewTimer?.cancel();
+              _fullQualitySource = null;
+              _fullQualitySourcePath = null;
+              _fullQualityScaled = null;
+              _fullQualityScaledLong = 0;
+            }
           });
           unawaited(saveSettings(next));
+          if (dynamicFullPreviewOff) {
+            final selected = _selectedIndex == null
+                ? null
+                : _files[_selectedIndex!];
+            if (selected != null) {
+              _scheduleRender(live: false);
+            }
+          }
           if (previewResolutionChanged) {
             unawaited(_loadPreviewCache());
             final selected = _selectedIndex == null
@@ -2134,6 +2156,8 @@ class _EditorScreenState extends State<EditorScreen> {
     _dynamicPreviewTimer?.cancel();
     _fullQualitySource = null;
     _fullQualitySourcePath = null;
+    _fullQualityScaled = null;
+    _fullQualityScaledLong = 0;
     setState(() {
       _selectedIndex = index;
       _paramValues = _paramValuesFor(path);
@@ -2446,8 +2470,27 @@ class _EditorScreenState extends State<EditorScreen> {
           )
         : _cropTransform;
     final metadata = _metadata[path];
+    // Once full-quality editing is active for this photo, settled renders
+    // run against the native source (downscaled to what the screen needs
+    // at the current zoom) instead of the small preview buffer — a live
+    // drag still uses the tiny `live` buffer so dragging stays instant.
+    final fullQuality = !live &&
+        onStage == null &&
+        _settings.dynamicFullPreview &&
+        _activeMaskId == imageMaskId &&
+        !_cropOverlayActive &&
+        !_beforeAfterMode &&
+        _fullQualityReadyFor(path);
+    final EditSource renderSource;
+    if (live) {
+      renderSource = sources.live;
+    } else if (fullQuality) {
+      renderSource = await _fullQualityRenderSource();
+    } else {
+      renderSource = sources.preview;
+    }
     final job = RenderJob(
-      source: live ? sources.live : sources.preview,
+      source: renderSource,
       params: RenderParams.fromValues(
         _effectiveParamValues(),
         curves: _effectiveCurves,
@@ -2477,10 +2520,14 @@ class _EditorScreenState extends State<EditorScreen> {
     if (onStage != null) {
       result = await renderJobToJpegWithProgress(job, onStage);
     } else if (!live &&
+        !fullQuality &&
         _settings.useGpuRender &&
         await isGpuRenderAvailable()) {
       result = await renderJobToJpegGpu(job);
     } else {
+      // Full-quality settled renders always take the CPU-parallel path —
+      // a multi-thousand-pixel GPU render runs inline on the UI isolate
+      // (see the note above) and would stutter the app.
       result = await compute(renderJobToJpeg, job);
     }
     _slowRenderTimer?.cancel();
@@ -2508,171 +2555,127 @@ class _EditorScreenState extends State<EditorScreen> {
       // there'd be one of these for every frame of the drag.
       _scheduleThumbnailCacheStore(path, result.thumbnailBytes);
     }
-    // A settled render just landed — it's the preview-resolution one, so
-    // reset what the canvas is showing back to that, and (if the user
-    // opted into the dynamic full-res preview and is zoomed in) schedule a
-    // sharper background render a beat later.
+    // A settled render just landed. If the user opted into full-quality
+    // editing, arm the native-source decode a beat later — once it's
+    // available, every subsequent settled render runs against it (see
+    // [_renderPreviewNow]'s source selection), so this only ever fires
+    // once per photo.
     if (!live && onStage == null) {
-      final previewSource = _editSources[path]?.preview;
-      _renderedNativeLong[path] = previewSource == null
-          ? _settings.previewResolution
-          : (previewSource.width > previewSource.height
-                ? previewSource.width
-                : previewSource.height);
-      _maybeScheduleDynamicPreview(path);
+      _maybeArmFullQualityDecode(path);
     }
   }
 
-  /// Arms [_runDynamicFullPreview] for [path] `_dynamicPreviewDelay` from
-  /// now — after a settled render, or after the zoom changes while an edit
-  /// is already settled. Cheap guards here; the real "is it worth it"
-  /// check is in [_runDynamicFullPreview] itself (it needs the source
-  /// dimensions).
-  void _maybeScheduleDynamicPreview(String path) {
+  /// Working resolution (long edge, px) full-quality settled renders run
+  /// at: roughly one rendered pixel per on-screen device pixel at the
+  /// current zoom, floored well above [AppSettings.previewResolution] and
+  /// ceilinged so even a big zoom never triggers a full 24 MP render.
+  int _fullQualityWorkingRes(EditSource native) {
+    final nativeLong =
+        native.width > native.height ? native.width : native.height;
+    final box = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    final dpr = MediaQuery.maybeOf(context)?.devicePixelRatio ?? 1.0;
+    final viewportLong = box == null
+        ? 1600.0
+        : (box.size.width > box.size.height
+              ? box.size.width
+              : box.size.height);
+    final zoom = _zoomScale < 1.0 ? 1.0 : _zoomScale;
+    var target = (viewportLong * zoom * dpr).round();
+    const floor = 2048;
+    const ceil = 4096;
+    if (target < floor) target = floor;
+    if (target > ceil) target = ceil;
+    if (target > nativeLong) target = nativeLong;
+    return target;
+  }
+
+  /// The native source downscaled to [_fullQualityWorkingRes], cached and
+  /// only regenerated when that resolution moves by more than ~15% (i.e.
+  /// on a real zoom change), so consecutive settled edits at the same zoom
+  /// don't re-scale a 24 MP buffer every time.
+  Future<EditSource> _fullQualityRenderSource() async {
+    final native = _fullQualitySource!;
+    final target = _fullQualityWorkingRes(native);
+    final cached = _fullQualityScaled;
+    if (cached != null &&
+        (_fullQualityScaledLong - target).abs() <= (target * 0.15)) {
+      return cached;
+    }
+    final scaled = await compute(
+      scaleEditSource,
+      (source: native, maxDim: target),
+    );
+    _fullQualityScaled = scaled;
+    _fullQualityScaledLong =
+        scaled.width > scaled.height ? scaled.width : scaled.height;
+    return scaled;
+  }
+
+  void _maybeArmFullQualityDecode(String path) {
     if (!_settings.dynamicFullPreview ||
         _activeMaskId != imageMaskId ||
         _cropOverlayActive ||
         _beforeAfterMode ||
-        _zoomScale <= 1.1) {
+        _decodingFullQuality ||
+        _fullQualityReadyFor(path)) {
       return;
     }
-    final requestId = _renderRequestId;
     _dynamicPreviewTimer?.cancel();
     _dynamicPreviewTimer = Timer(
       _dynamicPreviewDelay,
-      () => unawaited(_runDynamicFullPreview(path, requestId)),
+      () => unawaited(_ensureFullQualitySource(path)),
     );
   }
 
-  /// Re-renders [path] at a resolution matched to what's actually on
-  /// screen at the current zoom (≈ one rendered pixel per device pixel),
-  /// capped at the sensor's native resolution, and swaps it onto the
-  /// canvas — so pixel-peeping a zoomed-in view sharpens past
-  /// [AppSettings.previewResolution] without paying for a full-sensor
-  /// render at Fit zoom (where it wouldn't be visible anyway).
-  ///
-  /// [baseRequestId] is the [_renderRequestId] this was armed for — any
-  /// newer edit / photo switch supersedes it and this bails at every
-  /// checkpoint. The decoded native source is cached in memory (this photo
-  /// only) and on disk ([NativeSourceCache]).
-  Future<void> _runDynamicFullPreview(String path, int baseRequestId) async {
+  /// Decodes [path]'s native-resolution source (from the on-disk cache, or
+  /// a fresh low-priority RAW decode that then warms the cache) and, once
+  /// it's in hand, re-renders the settled view against it. From then on
+  /// [_fullQualityReadyFor] is true for this photo and settled renders
+  /// stay at full quality until the photo changes.
+  Future<void> _ensureFullQualitySource(String path) async {
     if (!mounted ||
-        baseRequestId != _renderRequestId ||
         !_settings.dynamicFullPreview ||
-        _dynamicPreviewRunning ||
-        _renderInFlight ||
-        _zoomScale <= 1.1) {
+        _decodingFullQuality ||
+        _fullQualityReadyFor(path)) {
       return;
     }
-    final metadata = _metadata[path];
-    final nativeLong =
-        (metadata == null || metadata.width <= 0 || metadata.height <= 0)
-        ? null
-        : (metadata.width > metadata.height
-              ? metadata.width
-              : metadata.height);
-
-    // Target long edge: one rendered pixel per on-screen device pixel at
-    // the current zoom, never below the preview resolution, never above
-    // native.
-    final viewportBox =
-        _viewportKey.currentContext?.findRenderObject() as RenderBox?;
-    final dpr = MediaQuery.maybeOf(context)?.devicePixelRatio ?? 1.0;
-    final viewportLong = viewportBox == null
-        ? _settings.previewResolution.toDouble()
-        : (viewportBox.size.width > viewportBox.size.height
-              ? viewportBox.size.width
-              : viewportBox.size.height);
-    var targetLong = (viewportLong * _zoomScale * dpr).round();
-    targetLong = targetLong < _settings.previewResolution
-        ? _settings.previewResolution
-        : targetLong;
-    if (nativeLong != null && targetLong > nativeLong) {
-      targetLong = nativeLong;
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected?.path != path) {
+      return;
     }
-    final shownLong =
-        _renderedNativeLong[path] ?? _settings.previewResolution;
-    if (targetLong <= (shownLong * 1.15).round()) {
-      return; // already sharp enough for this zoom
-    }
-
-    _dynamicPreviewRunning = true;
+    _decodingFullQuality = true;
     try {
-      // Native source: memory -> disk cache -> RAW decode (low priority).
-      EditSource? native =
-          _fullQualitySourcePath == path ? _fullQualitySource : null;
-      if (native == null) {
-        final cachedJpeg = await _nativeSourceCache?.lookup(path);
-        if (cachedJpeg != null) {
-          native = await compute(decodeNativeSourceFromCachedJpeg, cachedJpeg);
-        }
-        native ??= await compute(decodeFullQualitySourceLowPriority, path);
-        if (!mounted || native == null) {
-          return;
-        }
-        if (cachedJpeg == null) {
-          final toCache = native;
-          unawaited(
-            compute(encodeNativeSourceForCache, toCache).then(
-              (bytes) => _nativeSourceCache?.store(path, bytes),
-            ),
-          );
-        }
-        _fullQualitySource = native;
-        _fullQualitySourcePath = path;
+      EditSource? native;
+      final cachedJpeg = await _nativeSourceCache?.lookup(path);
+      if (cachedJpeg != null) {
+        native = await compute(decodeNativeSourceFromCachedJpeg, cachedJpeg);
       }
-      if (baseRequestId != _renderRequestId || !_settings.dynamicFullPreview) {
+      native ??= await compute(decodeFullQualitySourceLowPriority, path);
+      if (!mounted || native == null) {
         return;
       }
-
-      // Downscale the source to the target before rendering — the render
-      // cost is what hurts, and we only need target-resolution pixels.
-      final renderSource = await compute(
-        scaleEditSource,
-        (source: native, maxDim: targetLong),
-      );
-      if (baseRequestId != _renderRequestId || !_settings.dynamicFullPreview) {
+      if (cachedJpeg == null) {
+        final toCache = native;
+        unawaited(
+          compute(encodeNativeSourceForCache, toCache).then(
+            (bytes) => _nativeSourceCache?.store(path, bytes),
+          ),
+        );
+      }
+      final stillSelected =
+          _selectedIndex == null ? null : _files[_selectedIndex!];
+      if (stillSelected?.path != path || !_settings.dynamicFullPreview) {
         return;
       }
-
-      final job = RenderJob(
-        source: renderSource,
-        params: RenderParams.fromValues(
-          _effectiveParamValues(),
-          curves: _effectiveCurves,
-          asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
-          asShotTint: metadata?.asShotTint ?? wbDefaultTint,
-        ),
-        masks: _effectiveMasks,
-        cropTransform: _cropOverlayActive
-            ? _cropTransform.copyWith(
-                cropLeft: 0,
-                cropTop: 0,
-                cropRight: 1,
-                cropBottom: 1,
-              )
-            : _cropTransform,
-        lensCorrection: _lensCorrection,
-        lensProfile: _resolvedLensProfileFor(path),
-        focalLengthMm: metadata?.focalLengthMm ?? 0,
-        apertureFNumber: metadata?.apertureFNumber ?? 0,
-      );
-      final result = await compute(renderJobToJpeg, job);
-      if (!mounted ||
-          baseRequestId != _renderRequestId ||
-          !_settings.dynamicFullPreview) {
-        return;
-      }
-      setState(() {
-        _renderedPreviews[path] = result.jpegBytes;
-        _histograms[path] = result.histogram;
-        _renderedNativeLong[path] = renderSource.width > renderSource.height
-            ? renderSource.width
-            : renderSource.height;
-      });
+      _fullQualitySource = native;
+      _fullQualitySourcePath = path;
+      _fullQualityScaled = null;
+      _fullQualityScaledLong = 0;
     } finally {
-      _dynamicPreviewRunning = false;
+      _decodingFullQuality = false;
     }
+    // Re-render the settled view, now against the full source.
+    _scheduleRender(live: false);
   }
 
   /// Renders [path] with neutral (default) params, for the Before/After
@@ -2824,11 +2827,15 @@ class _EditorScreenState extends State<EditorScreen> {
       ..translateByDouble(-center.dx, -center.dy, 0, 1);
     _viewController.value = matrix;
     setState(() => _zoomScale = newScale);
-    // Zooming further in while an edit is already settled should still
-    // trigger a sharper dynamic render for the new zoom level.
+    // Zooming while an edit is settled: if full quality is already active,
+    // re-render at the new working resolution; otherwise arm the decode.
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
-    if (selected != null) {
-      _maybeScheduleDynamicPreview(selected.path);
+    if (selected != null && _settings.dynamicFullPreview) {
+      if (_fullQualityReadyFor(selected.path)) {
+        _scheduleRender(live: false);
+      } else {
+        _maybeArmFullQualityDecode(selected.path);
+      }
     }
   }
 
@@ -6943,9 +6950,7 @@ class _FilmstripState extends State<_Filmstrip> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _centerOnSelected(animated: false),
-    );
+    _recenterAfterLayout(animated: false);
   }
 
   @override
@@ -6955,13 +6960,30 @@ class _FilmstripState extends State<_Filmstrip> {
     // arrive (startup restores the last photo, but the strip would
     // otherwise sit at offset 0 with that photo scrolled off-screen).
     final selectionMoved = widget.selectedIndex != oldWidget.selectedIndex;
-    final filesChanged = !identical(widget.files, oldWidget.files) &&
-        widget.files.length != oldWidget.files.length;
+    final filesChanged = widget.files.length != oldWidget.files.length;
     if ((selectionMoved || filesChanged) && widget.selectedIndex != null) {
-      WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _centerOnSelected(animated: selectionMoved && !filesChanged),
-      );
+      _recenterAfterLayout(animated: selectionMoved && !filesChanged);
     }
+  }
+
+  /// The strip and its scroll position aren't laid out yet on the frame a
+  /// folder first loads, so retry over the next few frames until the
+  /// controller has real content dimensions.
+  void _recenterAfterLayout({required bool animated, int attempt = 0}) {
+    if (attempt > 8) {
+      return;
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      if (_scrollController.hasClients &&
+          _scrollController.position.hasContentDimensions) {
+        _centerOnSelected(animated: animated);
+      } else {
+        _recenterAfterLayout(animated: animated, attempt: attempt + 1);
+      }
+    });
   }
 
   /// Scrolls so the selected thumbnail sits in the middle of the strip
@@ -6971,13 +6993,13 @@ class _FilmstripState extends State<_Filmstrip> {
     if (index == null || !_scrollController.hasClients) {
       return;
     }
-    final viewport = _scrollController.position.viewportDimension;
+    final position = _scrollController.position;
     final slotCenter = _listPadding + index * _slotStride + _slotWidth / 2;
-    final target = (slotCenter - viewport / 2).clamp(
-      _scrollController.position.minScrollExtent,
-      _scrollController.position.maxScrollExtent,
+    final target = (slotCenter - position.viewportDimension / 2).clamp(
+      position.minScrollExtent,
+      position.maxScrollExtent,
     );
-    if (animated) {
+    if (animated && (target - position.pixels).abs() > 1) {
       _scrollController.animateTo(
         target,
         duration: const Duration(milliseconds: 220),
