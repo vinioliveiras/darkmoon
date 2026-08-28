@@ -269,11 +269,16 @@ List<List<double>> _matMul(List<List<double>> a, List<List<double>> b) => [
   );
 }
 
-/// Converts a signed distance off the Planckian locus in the CIE 1960 uv
-/// plane (Δuv) to this app's -150..150 Tint units. Calibrated against
-/// Lightroom's own "As Shot" Tint readout — its full range is roughly
-/// Δuv ±0.06.
-const double _wbTintPerDuv = 2400.0;
+/// Converts a signed distance off the reference-white locus in the CIE
+/// 1960 uv plane (Δuv) to this app's -150..150 Tint units. Calibrated
+/// against Lightroom's "As Shot" Tint across a set of real Fuji X100VI
+/// files — its full range is roughly Δuv ±0.06.
+const double _wbTintPerDuv = 2550.0;
+
+/// Our McCamy CCT reads a few mired cool of Lightroom's "As Shot" Kelvin
+/// fairly consistently (calibrated on the same X100VI set, ~+3 mired);
+/// subtracting it nudges the estimate into Adobe's reference frame.
+const double _wbCctMiredBias = 3.0;
 
 /// Tint magnitude per doubling of the R+B gain excess in the multiplier
 /// fallback path (no camera matrix). Rougher than the colorimetric path.
@@ -457,7 +462,9 @@ const double _wbTintScale = 200.0;
     final duv = (pu - loc.u) * ty + (pv - loc.v) * -tx;
     tint = (duv * _wbTintPerDuv).clamp(-150.0, 150.0);
   }
-  return (kelvin: cct, tint: tint);
+  final kelvin = (1.0e6 / (1.0e6 / cct - _wbCctMiredBias))
+      .clamp(2000.0, 50000.0);
+  return (kelvin: kelvin, tint: tint);
 }
 
 /// The reference white at [kelvin] (daylight locus / Planckian below
