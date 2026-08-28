@@ -114,6 +114,12 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderVignetteMidpoint;
     case 'VignetteFeather':
       return l10n.sliderVignetteFeather;
+    case 'GrainAmount':
+      return l10n.sliderGrainAmount;
+    case 'GrainSize':
+      return l10n.sliderGrainSize;
+    case 'GrainRoughness':
+      return l10n.sliderGrainRoughness;
     default:
       return key;
   }
@@ -251,6 +257,9 @@ Map<String, double> _withCategoriesApplied(
     for (final spec in _vignetteSliders) {
       overrides[spec.name] = spec.defaultValue;
     }
+    for (final spec in _grainSliders) {
+      overrides[spec.name] = spec.defaultValue;
+    }
   }
   if (disabled('COLOR MIXER')) {
     for (final channel in _mixerChannels) {
@@ -362,6 +371,15 @@ const _vignetteSliders = [
   _SliderSpec('VignetteFeather', 0, 100, 50),
 ];
 
+/// Film grain sliders (Lightroom's Effects panel) — like [_vignetteSliders],
+/// global-only, kept out of [_sections]. Ranges match Lightroom's
+/// `crs:GrainAmount` / `GrainSize` / `GrainFrequency`.
+const _grainSliders = [
+  _SliderSpec('GrainAmount', 0, 100, 0),
+  _SliderSpec('GrainSize', 0, 100, 25),
+  _SliderSpec('GrainRoughness', 0, 100, 50),
+];
+
 Map<String, double> _defaultParamValues() {
   return {
     for (final specs in _sections.values)
@@ -371,6 +389,7 @@ Map<String, double> _defaultParamValues() {
     // defaults map, or Reset / first-open / preset-merge would leave
     // those keys missing and the sliders would snap to 0.
     for (final spec in _vignetteSliders) spec.name: spec.defaultValue,
+    for (final spec in _grainSliders) spec.name: spec.defaultValue,
     // Lens Correction is also global-only (see RenderJob.lensCorrection's
     // doc comment) and lives outside [_sections] for the same reason as
     // Vignette above -- seeded from the params class's own defaults
@@ -5935,7 +5954,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                             },
                           ),
                           if (!_collapsed.contains('EFFECTS'))
-                            for (final spec in _vignetteSliders)
+                            for (final spec in [
+                              ..._vignetteSliders,
+                              ..._grainSliders,
+                            ])
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: SliderRow(

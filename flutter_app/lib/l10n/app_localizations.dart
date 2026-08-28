@@ -1370,6 +1370,24 @@ abstract class AppLocalizations {
   /// **'Vignette Feather'**
   String get sliderVignetteFeather;
 
+  /// No description provided for @sliderGrainAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Grain Amount'**
+  String get sliderGrainAmount;
+
+  /// No description provided for @sliderGrainSize.
+  ///
+  /// In en, this message translates to:
+  /// **'Grain Size'**
+  String get sliderGrainSize;
+
+  /// No description provided for @sliderGrainRoughness.
+  ///
+  /// In en, this message translates to:
+  /// **'Grain Roughness'**
+  String get sliderGrainRoughness;
+
   /// No description provided for @sectionLensCorrection.
   ///
   /// In en, this message translates to:

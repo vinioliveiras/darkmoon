@@ -681,6 +681,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sliderVignetteFeather => 'Vignette Feather';
 
   @override
+  String get sliderGrainAmount => 'Grain Amount';
+
+  @override
+  String get sliderGrainSize => 'Grain Size';
+
+  @override
+  String get sliderGrainRoughness => 'Grain Roughness';
+
+  @override
   String get sectionLensCorrection => 'LENS CORRECTION';
 
   @override

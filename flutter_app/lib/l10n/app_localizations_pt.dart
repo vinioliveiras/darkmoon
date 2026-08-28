@@ -686,6 +686,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sliderVignetteFeather => 'Suavização da Vinheta';
 
   @override
+  String get sliderGrainAmount => 'Quantidade do Grão';
+
+  @override
+  String get sliderGrainSize => 'Tamanho do Grão';
+
+  @override
+  String get sliderGrainRoughness => 'Aspereza do Grão';
+
+  @override
   String get sectionLensCorrection => 'CORREÇÃO DE LENTE';
 
   @override

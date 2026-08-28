@@ -7,8 +7,8 @@ import 'preset.dart';
 /// specifically the `crs:` (Camera Raw Settings) attributes that have a
 /// real equivalent in this app's own adjustment set. Attributes this app
 /// doesn't support (lens corrections, crop, camera profile, camera
-/// calibration, film grain, point color, masks, ...) are simply left out
-/// on export and ignored on import, rather than erroring.
+/// calibration, point color, masks, ...) are simply left out on export
+/// and ignored on import, rather than erroring.
 ///
 /// This is *file-format* compatibility, not *rendering* compatibility —
 /// Lightroom's actual Camera Raw pipeline is proprietary, so a preset
@@ -40,6 +40,9 @@ const _directMappings = [
   ('VignetteAmount', 'PostCropVignetteAmount'),
   ('VignetteMidpoint', 'PostCropVignetteMidpoint'),
   ('VignetteFeather', 'PostCropVignetteFeather'),
+  ('GrainAmount', 'GrainAmount'),
+  ('GrainSize', 'GrainSize'),
+  ('GrainRoughness', 'GrainFrequency'),
 ];
 
 const _mixerChannels = [

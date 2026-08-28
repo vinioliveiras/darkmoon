@@ -1,6 +1,7 @@
 import 'ai_denoise.dart';
 import 'color_grading.dart';
 import 'color_mixer.dart';
+import 'grain.dart';
 import 'sharpen.dart';
 import 'tone_curve.dart';
 import 'vignette.dart';
@@ -33,6 +34,7 @@ class RenderParams {
     this.aiDenoise = const AiDenoiseParams(),
     this.sharpen = const SharpenParams(),
     this.vignette = const VignetteParams(),
+    this.grain = const GrainParams(),
   });
 
   /// Builds params from the editor's flat `{sliderName: value}` map, using
@@ -73,6 +75,7 @@ class RenderParams {
       aiDenoise: AiDenoiseParams.fromValues(values),
       sharpen: SharpenParams.fromValues(values),
       vignette: VignetteParams.fromValues(values),
+      grain: GrainParams.fromValues(values),
     );
   }
 
@@ -114,4 +117,5 @@ class RenderParams {
   final AiDenoiseParams aiDenoise;
   final SharpenParams sharpen;
   final VignetteParams vignette;
+  final GrainParams grain;
 }

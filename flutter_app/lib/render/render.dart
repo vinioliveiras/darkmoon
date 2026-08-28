@@ -9,6 +9,7 @@ import 'color_grading.dart';
 import 'color_mixer.dart';
 import 'color_space.dart';
 import 'dehaze.dart';
+import 'grain.dart';
 import 'hsl.dart';
 import 'local_contrast.dart';
 import 'mask.dart';
@@ -325,6 +326,10 @@ void applyGlobalAdjustmentSteps(
   _applySaturation(buffer, pixelCount, params.saturation);
   _applyVibrance(buffer, pixelCount, params.vibrance);
   applyVignette(buffer, width, height, params.vignette);
+  // Grain is the last thing RapidRAW's shader adds, after curves and
+  // vignette — a texture layered on the finished image, not something the
+  // later stages should react to.
+  applyGrain(buffer, width, height, params.grain);
 }
 
 Uint8List _toUint8(Float32List buffer) {

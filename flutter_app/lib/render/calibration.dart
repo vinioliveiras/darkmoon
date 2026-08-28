@@ -256,6 +256,34 @@ const double calSharpenEdgeThreshold = 6.0;
 const double calVignetteStrength = 0.8;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  EFEITOS — Grão de filme (Grain)                                          ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+/// **Grão → Quantidade** — multiplicador de força em cima do slider.
+///   ↑ maior  = grão mais visível no mesmo valor
+///   ↓ menor  = grão mais sutil
+/// padrão: 1.0
+const double calGrainStrength = 1.0;
+
+/// **Grão → Tamanho** — o tamanho (em pixels, na referência de 1080px) de cada
+/// grão quando o slider Tamanho está em 0 e em 100. O grão é redimensionado
+/// junto com a resolução da imagem, então o tamanho relativo fica igual no
+/// preview e na exportação.
+///   ↑ maior  = grão mais grosso
+///   ↓ menor  = grão mais fino
+/// padrão: 0.8 (no 0)  e  4.8 (no 100)
+const double calGrainSizePxAt0 = 0.8;
+const double calGrainSizePxAt100 = 4.8;
+
+/// **Grão → Aspereza (Roughness)** — o slider mistura um ruído fino (0) com um
+/// ruído mais irregular/grosseiro (100). Este número NÃO muda o efeito do
+/// slider; ele é o quanto o ruído grosseiro é "esticado" em relação ao fino.
+///   ↑ maior  = no 100 o grão fica com manchas maiores
+///   ↓ menor  = no 100 o grão fica mais parecido com o fino
+/// padrão: 0.6
+const double calGrainRoughCoordScale = 0.6;
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  REDUÇÃO DE RUÍDO (IA Denoise — Leve / Médio / Forte)                     ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
