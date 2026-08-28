@@ -142,7 +142,9 @@ Future<ExportResult> _exportPhotoInternal(
       mark('decode');
     }
     final scalePercent = request.scalePercent;
-    if (scalePercent != null && scalePercent < 100) {
+    // A near-100% "rapid" scale costs a full-image resample for a
+    // negligible pixel reduction — skip it.
+    if (scalePercent != null && scalePercent < 97) {
       final scaled = scaleByPercent(
         img.Image.fromBytes(
           width: width,
