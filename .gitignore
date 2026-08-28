@@ -5,3 +5,7 @@ dist/
 .vscode/settings.json
 flutter_app/wb_dump_out.txt
 PENDING.md
+
+# wb_dump/wb_scan copy these here at runtime from windows/native/
+flutter_app/raw_r.dll
+flutter_app/vcomp140.dll
