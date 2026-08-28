@@ -582,11 +582,17 @@ class _EditorScreenState extends State<EditorScreen> {
   /// [_renderRequestId]) discards a result already in flight.
   Timer? _dynamicPreviewTimer;
   static const _dynamicPreviewDelay = Duration(milliseconds: 1400);
-  NativeSourceCache? _nativeSourceCache;
+
+  /// The decoded native-resolution source cache — same [ThumbnailCacheManager]
+  /// month-file format / sha1 key as the thumbnail and preview caches, in
+  /// its own `previews/native` namespace, trimmed by
+  /// [evictNativeSourceCache] since these blobs are big.
+  ThumbnailCacheManager? _nativeSourceCache;
+  String? _nativeSourceCacheDir;
 
   /// The selected photo's decoded native-resolution source, held only for
-  /// that one photo (cleared on switch). Populated lazily by the first
-  /// dynamic full-res pass — from the on-disk [NativeSourceCache] if warm,
+  /// that one photo (cleared on switch). Populated lazily the first time
+  /// full-quality mode kicks in — from [_nativeSourceCache] if warm,
   /// otherwise a full RAW decode that then warms the cache.
   EditSource? _fullQualitySource;
   String? _fullQualitySourcePath;
@@ -833,7 +839,27 @@ class _EditorScreenState extends State<EditorScreen> {
     if (!mounted) {
       return;
     }
-    setState(() => _nativeSourceCache = NativeSourceCache(dir));
+    setState(() {
+      _nativeSourceCacheDir = dir;
+      _nativeSourceCache = ThumbnailCacheManager(dir);
+    });
+  }
+
+  /// Persists [jpegBytes] as [path]'s native-source cache entry and trims
+  /// the cache if it's over budget. Native sources are written rarely
+  /// (once per photo, ever), so — unlike the thumbnail batch — this
+  /// flushes immediately rather than deferring.
+  Future<void> _storeNativeSource(String path, List<int> jpegBytes) async {
+    final cache = _nativeSourceCache;
+    final dir = _nativeSourceCacheDir;
+    if (cache == null) {
+      return;
+    }
+    await cache.store(path, Uint8List.fromList(jpegBytes));
+    await cache.flush();
+    if (dir != null) {
+      await evictNativeSourceCache(dir);
+    }
   }
 
   /// Loads the bundled lens correction database (a few MB JSON asset) --
@@ -2520,14 +2546,14 @@ class _EditorScreenState extends State<EditorScreen> {
     if (onStage != null) {
       result = await renderJobToJpegWithProgress(job, onStage);
     } else if (!live &&
-        !fullQuality &&
         _settings.useGpuRender &&
         await isGpuRenderAvailable()) {
+      // Full-quality settled renders take the GPU path too — it's a
+      // one-shot settled render (never the live-drag hot path), and the
+      // GPU handles a few-thousand-pixel image far faster than the CPU
+      // pipeline, which is what made full-quality mode feel sluggish.
       result = await renderJobToJpegGpu(job);
     } else {
-      // Full-quality settled renders always take the CPU-parallel path —
-      // a multi-thousand-pixel GPU render runs inline on the UI isolate
-      // (see the note above) and would stutter the app.
       result = await compute(renderJobToJpeg, job);
     }
     _slowRenderTimer?.cancel();
@@ -2581,8 +2607,8 @@ class _EditorScreenState extends State<EditorScreen> {
               : box.size.height);
     final zoom = _zoomScale < 1.0 ? 1.0 : _zoomScale;
     var target = (viewportLong * zoom * dpr).round();
-    const floor = 2048;
-    const ceil = 4096;
+    const floor = 1600;
+    const ceil = 3072;
     if (target < floor) target = floor;
     if (target > ceil) target = ceil;
     if (target > nativeLong) target = nativeLong;
@@ -2658,7 +2684,7 @@ class _EditorScreenState extends State<EditorScreen> {
         final toCache = native;
         unawaited(
           compute(encodeNativeSourceForCache, toCache).then(
-            (bytes) => _nativeSourceCache?.store(path, bytes),
+            (bytes) => _storeNativeSource(path, bytes),
           ),
         );
       }
@@ -2827,15 +2853,21 @@ class _EditorScreenState extends State<EditorScreen> {
       ..translateByDouble(-center.dx, -center.dy, 0, 1);
     _viewController.value = matrix;
     setState(() => _zoomScale = newScale);
-    // Zooming while an edit is settled: if full quality is already active,
-    // re-render at the new working resolution; otherwise arm the decode.
+    // Zooming while an edit is settled and full-quality mode is active:
+    // only re-render if we've zoomed *in* far enough that the current
+    // downscaled source is now visibly soft — zooming out, or a small
+    // zoom-in, needs nothing (and shouldn't flash "Applying adjustments").
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
-    if (selected != null && _settings.dynamicFullPreview) {
-      if (_fullQualityReadyFor(selected.path)) {
+    if (selected == null || !_settings.dynamicFullPreview) {
+      return;
+    }
+    final native = _fullQualitySource;
+    if (native != null && _fullQualitySourcePath == selected.path) {
+      if (_fullQualityWorkingRes(native) > _fullQualityScaledLong * 1.2) {
         _scheduleRender(live: false);
-      } else {
-        _maybeArmFullQualityDecode(selected.path);
       }
+    } else {
+      _maybeArmFullQualityDecode(selected.path);
     }
   }
 
