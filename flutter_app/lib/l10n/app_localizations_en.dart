@@ -351,6 +351,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'A moment after an edit settles, re-render at the sensor\'s native resolution so a zoomed-in view sharpens up. Decoded sources are cached to disk.';
 
   @override
+  String get settingsFullQualityScaleLabel => 'Preview resolution';
+
+  @override
   String get settingsThumbnailThreadsLabel => 'Thumbnail loading threads';
 
   @override

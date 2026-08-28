@@ -353,6 +353,9 @@ class AppLocalizationsPt extends AppLocalizations {
       'Um instante depois que a edição assenta, re-renderiza na resolução nativa do sensor pra imagem ampliada ficar nítida. As fontes decodificadas ficam em cache no disco.';
 
   @override
+  String get settingsFullQualityScaleLabel => 'Resolução do preview';
+
+  @override
   String get settingsThumbnailThreadsLabel =>
       'Threads de carregamento de miniaturas';
 

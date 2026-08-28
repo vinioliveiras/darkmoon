@@ -40,6 +40,7 @@ class AppSettings {
     this.previewResolution = defaultPreviewMaxDimension,
     this.useGpuRender = true,
     this.dynamicFullPreview = false,
+    this.fullQualityPercent = 60,
     this.thumbnailConcurrency = 4,
     this.rawOnly = false,
     this.libraryFolders = const [],
@@ -85,6 +86,12 @@ class AppSettings {
   /// same photo skips the slow RAW demosaic.
   final bool dynamicFullPreview;
 
+  /// Percent of the sensor's native resolution the full-quality editing
+  /// preview ([dynamicFullPreview]) renders at — 60 by default (≈ a 3.6K
+  /// long edge on a 24 MP file), 100 for a true full-resolution render on
+  /// every settle. Clamped to [25, 100].
+  final int fullQualityPercent;
+
   /// How many thumbnails to decode concurrently when a folder is opened.
   final int thumbnailConcurrency;
 
@@ -118,6 +125,7 @@ class AppSettings {
     int? previewResolution,
     bool? useGpuRender,
     bool? dynamicFullPreview,
+    int? fullQualityPercent,
     int? thumbnailConcurrency,
     bool? rawOnly,
     List<String>? libraryFolders,
@@ -130,6 +138,8 @@ class AppSettings {
     previewResolution: previewResolution ?? this.previewResolution,
     useGpuRender: useGpuRender ?? this.useGpuRender,
     dynamicFullPreview: dynamicFullPreview ?? this.dynamicFullPreview,
+    fullQualityPercent:
+        (fullQualityPercent ?? this.fullQualityPercent).clamp(25, 100),
     thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
     rawOnly: rawOnly ?? this.rawOnly,
     libraryFolders: libraryFolders ?? this.libraryFolders,
@@ -177,6 +187,10 @@ Future<AppSettings> loadSettings() async {
       useGpuRender: raw['useGpuRender'] as bool? ?? defaults.useGpuRender,
       dynamicFullPreview:
           raw['dynamicFullPreview'] as bool? ?? defaults.dynamicFullPreview,
+      fullQualityPercent:
+          ((raw['fullQualityPercent'] as num?)?.toInt() ??
+                  defaults.fullQualityPercent)
+              .clamp(25, 100),
       thumbnailConcurrency:
           (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
       rawOnly: raw['rawOnly'] as bool? ?? defaults.rawOnly,
@@ -205,6 +219,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'previewResolution': settings.previewResolution,
       'useGpuRender': settings.useGpuRender,
       'dynamicFullPreview': settings.dynamicFullPreview,
+      'fullQualityPercent': settings.fullQualityPercent,
       'thumbnailConcurrency': settings.thumbnailConcurrency,
       'rawOnly': settings.rawOnly,
       'libraryFolders': settings.libraryFolders,

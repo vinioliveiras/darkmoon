@@ -17,10 +17,18 @@ class SettingsDialog extends StatefulWidget {
     required this.onChanged,
     required this.onClearThumbnails,
     required this.onClearCatalog,
+    this.nativeWidth,
+    this.nativeHeight,
   });
 
   final AppSettings settings;
   final ValueChanged<AppSettings> onChanged;
+
+  /// The selected photo's sensor dimensions, if a photo is open — used to
+  /// show the full-quality preview slider's percentage as a real pixel
+  /// size, the same way the export dialog's resolution slider does.
+  final int? nativeWidth;
+  final int? nativeHeight;
 
   /// Thumbnail cache and catalog live outside [AppSettings] (in
   /// EditorScreen's own state), so clearing them needs dedicated
@@ -190,6 +198,61 @@ class _SettingsDialogState extends State<SettingsDialog> {
               onChanged: (v) =>
                   _update(_settings.copyWith(dynamicFullPreview: v)),
             ),
+
+            if (_settings.dynamicFullPreview) ...[
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.only(left: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        l10n.settingsFullQualityScaleLabel,
+                        style: labelStyle,
+                      ),
+                    ),
+                    Text(
+                      '${_settings.fullQualityPercent}%',
+                      style: hintStyle,
+                    ),
+                  ],
+                ),
+              ),
+              SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackShape: const RectangularSliderTrackShape(),
+                ),
+                child: Slider(
+                  min: 25,
+                  max: 100,
+                  divisions: 75,
+                  value: _settings.fullQualityPercent.toDouble(),
+                  onChanged: (v) => _update(
+                    _settings.copyWith(fullQualityPercent: v.round()),
+                  ),
+                ),
+              ),
+              if (widget.nativeWidth != null && widget.nativeHeight != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Padding(
+                    padding: const EdgeInsets.only(right: 4, bottom: 2),
+                    child: Text(
+                      l10n.exportRapidScaleResultLabel(
+                        (widget.nativeWidth! *
+                                _settings.fullQualityPercent /
+                                100)
+                            .round(),
+                        (widget.nativeHeight! *
+                                _settings.fullQualityPercent /
+                                100)
+                            .round(),
+                      ),
+                      style: hintStyle,
+                    ),
+                  ),
+                ),
+            ],
 
             const SizedBox(height: 16),
 

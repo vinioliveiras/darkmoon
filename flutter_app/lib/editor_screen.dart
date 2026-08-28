@@ -598,9 +598,10 @@ class _EditorScreenState extends State<EditorScreen> {
   String? _fullQualitySourcePath;
   bool _decodingFullQuality = false;
 
-  /// The native source downscaled once to [_fullQualityWorkingLong] — the
+  /// The native source downscaled once to [_fullQualityWorkingRes] — the
   /// buffer settled renders run against while full-quality mode is active
-  /// for this photo. Cleared on photo switch / toggle-off.
+  /// for this photo. Cleared on photo switch / toggle-off / a change to
+  /// the full-quality resolution setting.
   EditSource? _fullQualityScaled;
 
   bool _fullQualityReadyFor(String path) =>
@@ -1380,10 +1381,15 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   void _openSettings() {
+    final selectedMeta = _selectedIndex == null
+        ? null
+        : _metadata[_files[_selectedIndex!].path];
     showDialog<void>(
       context: context,
       builder: (_) => SettingsDialog(
         settings: _settings,
+        nativeWidth: selectedMeta?.width,
+        nativeHeight: selectedMeta?.height,
         onChanged: (next) {
           if (next.language != _settings.language) {
             widget.onLanguageChanged(next.language);
@@ -1397,6 +1403,9 @@ class _EditorScreenState extends State<EditorScreen> {
               next.previewResolution != _settings.previewResolution;
           final dynamicFullPreviewOff =
               _settings.dynamicFullPreview && !next.dynamicFullPreview;
+          final fullQualityResChanged =
+              next.dynamicFullPreview &&
+              next.fullQualityPercent != _settings.fullQualityPercent;
           setState(() {
             _settings = next;
             if (previewResolutionChanged) {
@@ -1407,10 +1416,14 @@ class _EditorScreenState extends State<EditorScreen> {
               _fullQualitySource = null;
               _fullQualitySourcePath = null;
               _fullQualityScaled = null;
+            } else if (fullQualityResChanged) {
+              // Keep the decoded native source, just re-scale it next
+              // render at the new percentage.
+              _fullQualityScaled = null;
             }
           });
           unawaited(saveSettings(next));
-          if (dynamicFullPreviewOff) {
+          if (dynamicFullPreviewOff || fullQualityResChanged) {
             final selected = _selectedIndex == null
                 ? null
                 : _files[_selectedIndex!];
@@ -2591,20 +2604,24 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   /// Working resolution (long edge, px) full-quality settled renders run
-  /// at — a fixed high value (capped at native), *not* zoom-dependent:
-  /// once full-quality mode kicks in you're editing the near-full RAW, and
-  /// re-rendering it every time the zoom changes was more jank than it was
-  /// worth. 3600 is ~3.5x the default preview and stays 1:1-sharp out to
-  /// roughly 250% zoom; a full 24 MP render on every settle would freeze
-  /// on the inline JPEG encode (see `render_job_gpu.dart`).
-  static const _fullQualityWorkingLong = 3600;
-
+  /// at — `AppSettings.fullQualityPercent` of the sensor's native long
+  /// edge (60% by default), never below [AppSettings.previewResolution]
+  /// (so it's never *worse* than the normal preview). Not zoom-dependent:
+  /// once full-quality mode kicks in you're editing the near-full RAW, so
+  /// re-rendering on every zoom change wasn't worth the jank. 100% renders
+  /// the full sensor on every settle — sharp everywhere, but each settle
+  /// pays a longer inline JPEG encode (see `render_job_gpu.dart`).
   int _fullQualityWorkingRes(EditSource native) {
     final nativeLong =
         native.width > native.height ? native.width : native.height;
-    return nativeLong < _fullQualityWorkingLong
-        ? nativeLong
-        : _fullQualityWorkingLong;
+    var target = (nativeLong * _settings.fullQualityPercent / 100).round();
+    if (target < _settings.previewResolution) {
+      target = _settings.previewResolution;
+    }
+    if (target > nativeLong) {
+      target = nativeLong;
+    }
+    return target;
   }
 
   /// The native source downscaled to [_fullQualityWorkingRes] once, then
@@ -2840,7 +2857,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _viewController.value = matrix;
     setState(() => _zoomScale = newScale);
     // Zoom no longer triggers any render — full-quality mode renders at a
-    // fixed working resolution (see [_fullQualityWorkingLong]).
+    // fixed working resolution (see [_fullQualityWorkingRes]).
   }
 
   void _zoomIn() => _zoomBy(_zoomStep);

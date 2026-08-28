@@ -144,6 +144,7 @@
   "settingsGpuRenderHint": "Renders on the graphics card instead of the CPU; falls back automatically if unsupported",
   "settingsDynamicFullPreviewLabel": "Dynamic full-resolution preview",
   "settingsDynamicFullPreviewHint": "A moment after an edit settles, re-render at the sensor's native resolution so a zoomed-in view sharpens up. Decoded sources are cached to disk.",
+  "settingsFullQualityScaleLabel": "Preview resolution",
   "settingsThumbnailThreadsLabel": "Thumbnail loading threads",
   "settingsUserDataSection": "USER DATA",
   "settingsClearThumbnailsButton": "Clear thumbnail cache",

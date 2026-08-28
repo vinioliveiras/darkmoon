@@ -728,6 +728,12 @@ abstract class AppLocalizations {
   /// **'A moment after an edit settles, re-render at the sensor\'s native resolution so a zoomed-in view sharpens up. Decoded sources are cached to disk.'**
   String get settingsDynamicFullPreviewHint;
 
+  /// No description provided for @settingsFullQualityScaleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview resolution'**
+  String get settingsFullQualityScaleLabel;
+
   /// No description provided for @settingsThumbnailThreadsLabel.
   ///
   /// In en, this message translates to:
