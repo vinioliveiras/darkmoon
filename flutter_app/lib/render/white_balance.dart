@@ -52,13 +52,13 @@ enum WbMode {
 /// [asShotKelvin]/[asShotTint] reference to [targetKelvin]/[targetTint],
 /// ready to multiply straight into the render buffer's gamma-encoded RGB.
 ///
-/// Von Kries: the target illuminant's Y=1 reference white is divided into
-/// the (already-neutral) as-shot white per channel, so a surface lit by
-/// the target illuminant comes out achromatic. Because the whites are
-/// Y-normalised, green moves between illuminants the way it physically
-/// should — that green motion is what makes a cooled sky read cyan and
-/// lets skin actually neutralise, which the old symmetric R/B model
-/// couldn't. Luminance-normalised so the sliders don't drift overall
+/// Bradford chromatic adaptation from the target illuminant's white to
+/// the photo's (already-neutral) as-shot white, collapsed to its effect
+/// on a neutral so it stays three per-channel scalars — no per-pixel
+/// matrix, the shader is untouched. Cone-space adaptation moves green the
+/// way it physically should (a cooled sky reads cyan, skin neutralises),
+/// which the old symmetric R/B model couldn't. Then a green/magenta Tint
+/// term, and a final luminance-normalise so the sliders don't drift
 /// brightness. At `target == asShot` the gains are exactly (1, 1, 1).
 ({double r, double g, double b}) whiteBalanceGains(
   double targetKelvin,
@@ -66,11 +66,18 @@ enum WbMode {
   double asShotKelvin,
   double asShotTint,
 ) {
-  final src = _referenceWhiteLinearRgb(asShotKelvin);
-  final dst = _referenceWhiteLinearRgb(targetKelvin);
-  var r = src.r / dst.r;
-  var g = src.g / dst.g;
-  var b = src.b / dst.b;
+  // Bradford chromatic adaptation from the target illuminant's white to
+  // the (already-neutral) as-shot white, reduced to its effect on a
+  // neutral so it stays three scalars (no per-pixel matrix / shader
+  // change). Cone space gives the stronger, greener blue<->yellow
+  // response Lightroom's Temperature slider has.
+  final adapted = _bradfordNeutralGains(
+    _referenceWhiteXyz(asShotKelvin),
+    _referenceWhiteXyz(targetKelvin),
+  );
+  var r = adapted.r;
+  var g = adapted.g;
+  var b = adapted.b;
 
   // Green/magenta tint, relative to the as-shot tint. Positive = magenta
   // (green down, red+blue up), matching Lightroom's slider.
@@ -98,38 +105,87 @@ enum WbMode {
   );
 }
 
-/// Linear-sRGB tristimulus of the reference white at [kelvin], at Y = 1
-/// (**not** G = 1 — leaving green free to move between illuminants is what
-/// makes a cooled sky read cyan rather than just blue). CIE daylight locus
+/// XYZ (Y = 1) of the reference white at [kelvin]. CIE daylight locus
 /// at/above 4000 K (what Lightroom's Temperature slider tracks), Planckian
 /// blackbody below it.
-({double r, double g, double b}) _referenceWhiteLinearRgb(double kelvin) {
+({double x, double y, double z}) _referenceWhiteXyz(double kelvin) {
   final k = kelvin.clamp(1667.0, 25000.0);
-  final double x;
-  final double y;
+  final double cx;
+  final double cy;
   if (k >= 4000.0) {
-    x = k <= 7000.0
+    cx = k <= 7000.0
         ? -4.6070e9 / (k * k * k) + 2.9678e6 / (k * k) + 99.11e0 / k + 0.244063
         : -2.0064e9 / (k * k * k) + 1.9018e6 / (k * k) + 247.48e0 / k + 0.237040;
-    y = -3.0 * x * x + 2.870 * x - 0.275;
+    cy = -3.0 * cx * cx + 2.870 * cx - 0.275;
   } else {
     final uv = _planckianUv(k);
     final d = 2.0 * uv.u - 8.0 * uv.v + 4.0;
-    x = 3.0 * uv.u / d;
-    y = 2.0 * uv.v / d;
+    cx = 3.0 * uv.u / d;
+    cy = 2.0 * uv.v / d;
   }
-  final bigX = x / y;
-  final bigZ = (1.0 - x - y) / y;
-  // XYZ (Y = 1) -> linear sRGB, with Y folded into the constant terms.
-  final r = 3.2406 * bigX - 1.5372 - 0.4986 * bigZ;
-  final g = -0.9689 * bigX + 1.8758 + 0.0415 * bigZ;
-  final b = 0.0557 * bigX - 0.2040 + 1.0570 * bigZ;
+  return (x: cx / cy, y: 1.0, z: (1.0 - cx - cy) / cy);
+}
+
+// Bradford XYZ<->cone matrices and the sRGB (D65) RGB<->XYZ pair.
+const _bradford = [
+  [0.8951, 0.2664, -0.1614],
+  [-0.7502, 1.7135, 0.0367],
+  [0.0389, -0.0685, 1.0296],
+];
+const _bradfordInv = [
+  [0.9869929, -0.1470543, 0.1599627],
+  [0.4323053, 0.5183603, 0.0492912],
+  [-0.0085287, 0.0400428, 0.9684867],
+];
+const _rgbToXyz = [
+  [0.4124564, 0.3575761, 0.1804375],
+  [0.2126729, 0.7151522, 0.0721750],
+  [0.0193339, 0.1191920, 0.9503041],
+];
+const _xyzToRgb = [
+  [3.2404542, -1.5371385, -0.4985314],
+  [-0.9692660, 1.8760108, 0.0415560],
+  [0.0556434, -0.2040259, 1.0572252],
+];
+
+/// The per-channel linear-sRGB effect, on a neutral, of adapting [dst]
+/// (the target illuminant white) to look like [src] (the as-shot white)
+/// via Bradford. Full matrix collapsed to `M · (1,1,1)`.
+({double r, double g, double b}) _bradfordNeutralGains(
+  ({double x, double y, double z}) src,
+  ({double x, double y, double z}) dst,
+) {
+  final sl = _mul3(_bradford, [src.x, src.y, src.z]);
+  final dl = _mul3(_bradford, [dst.x, dst.y, dst.z]);
+  final diag = [sl[0] / dl[0], sl[1] / dl[1], sl[2] / dl[2]];
+  // M_xyz = M_bfd⁻¹ · diag(scale) · M_bfd
+  final scaled = [
+    for (var i = 0; i < 3; i++)
+      [for (var j = 0; j < 3; j++) diag[i] * _bradford[i][j]],
+  ];
+  final mXyz = _matMul(_bradfordInv, scaled);
+  // M_rgb = (sRGB<-XYZ) · M_xyz · (XYZ<-sRGB)
+  final mRgb = _matMul(_xyzToRgb, _matMul(mXyz, _rgbToXyz));
+  final gray = _mul3(mRgb, const [1.0, 1.0, 1.0]);
   return (
-    r: r <= 1e-4 ? 1e-4 : r,
-    g: g <= 1e-4 ? 1e-4 : g,
-    b: b <= 1e-4 ? 1e-4 : b,
+    r: gray[0] <= 1e-4 ? 1e-4 : gray[0],
+    g: gray[1] <= 1e-4 ? 1e-4 : gray[1],
+    b: gray[2] <= 1e-4 ? 1e-4 : gray[2],
   );
 }
+
+List<double> _mul3(List<List<double>> m, List<double> v) => [
+  for (var i = 0; i < 3; i++)
+    m[i][0] * v[0] + m[i][1] * v[1] + m[i][2] * v[2],
+];
+
+List<List<double>> _matMul(List<List<double>> a, List<List<double>> b) => [
+  for (var i = 0; i < 3; i++)
+    [
+      for (var j = 0; j < 3; j++)
+        a[i][0] * b[0][j] + a[i][1] * b[1][j] + a[i][2] * b[2][j],
+    ],
+];
 
 /// The Temperature (Kelvin) and Tint that make the average colour
 /// [r],[g],[b] (gamma-encoded — the render buffer's space) neutral under
