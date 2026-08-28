@@ -719,6 +719,30 @@ class _EditorScreenState extends State<EditorScreen> {
   /// the user makes a manual edit or switches photos.
   String? _appliedPresetId;
 
+  /// The param values + curves as they were *before* the currently-applied
+  /// preset was blended in — the fixed base [_applyPreset] blends from, so
+  /// dragging the preset Amount slider re-blends live from a clean state
+  /// instead of stacking on top of the already-preset-ed values. Captured
+  /// the first time a preset is applied over an un-preset-ed photo, reused
+  /// while a preset stays applied (Amount changes, switching presets), and
+  /// harmlessly stale otherwise (only read when [_appliedPresetId] is set).
+  ({Map<String, double> values, PhotoCurves curves})? _presetBaseline;
+
+  /// The [Preset] object for [_appliedPresetId], or null if none is applied
+  /// (or it was since deleted from the library).
+  Preset? get _appliedPreset {
+    final id = _appliedPresetId;
+    if (id == null) {
+      return null;
+    }
+    for (final preset in _presets) {
+      if (preset.id == id) {
+        return preset;
+      }
+    }
+    return null;
+  }
+
   /// The user's imported Adobe Color palettes (.ase/.aco) — like
   /// [_presets], not per-photo. Shown in the Color Grading panel so a
   /// swatch can be clicked to tint the currently active range's wheel.
@@ -931,12 +955,27 @@ class _EditorScreenState extends State<EditorScreen> {
   /// don't carry local adjustments either. Blended in at [_presetAmount]
   /// (Lightroom-style, 0-150%, set via the fixed slider under the preset
   /// list) rather than always committing to the preset's full values.
-  void _applyPreset(Preset preset) {
+  /// [live] true is the preset Amount slider being *dragged* — re-blend and
+  /// fast-render, but skip the history push / catalog flush the settled
+  /// apply does (those happen once on drag end via [_applyPreset] with
+  /// [live] false).
+  void _applyPreset(Preset preset, {bool live = false}) {
     if (_selectedIndex == null) {
       return;
     }
     final fraction = _presetAmount / 100.0;
-    final baseValues = _paramValues;
+    // Blend from the state *before* any preset — captured now if this is
+    // the first preset over an un-preset-ed photo, otherwise the base we
+    // already stored (so Amount drags and A->B preset switches both blend
+    // from a clean slate rather than compounding).
+    if (_appliedPresetId == null || _presetBaseline == null) {
+      _presetBaseline = (
+        values: {..._paramValues},
+        curves: _currentCurves,
+      );
+    }
+    final baseValues = _presetBaseline!.values;
+    final baseCurves = _presetBaseline!.curves;
     // Only the continuous slider keys get blended by [_presetAmount].
     // Everything else in the flat map — the per-section enable toggles
     // (_categoryEnabled_*), the White Balance mode, preserve-brightness —
@@ -991,9 +1030,13 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     setState(() {
       _paramValues = blendedValues;
-      _currentCurves = lerpPhotoCurves(_currentCurves, preset.curves, fraction);
+      _currentCurves = lerpPhotoCurves(baseCurves, preset.curves, fraction);
       _appliedPresetId = preset.id;
     });
+    if (live) {
+      _scheduleRender(live: true);
+      return;
+    }
     _pushHistory();
     _scheduleRender(live: false);
     unawaited(_flushCurrentEdits());
@@ -3873,8 +3916,20 @@ class _EditorScreenState extends State<EditorScreen> {
                       exporting: _exporting,
                       onReset: _resetActive,
                       presetAmount: _presetAmount,
-                      onPresetAmountChanged: (v) =>
-                          setState(() => _presetAmount = v),
+                      onPresetAmountChanged: (v) {
+                        setState(() => _presetAmount = v);
+                        final preset = _appliedPreset;
+                        if (preset != null) {
+                          _applyPreset(preset, live: true);
+                        }
+                      },
+                      onPresetAmountChangeEnd: (v) {
+                        setState(() => _presetAmount = v);
+                        final preset = _appliedPreset;
+                        if (preset != null) {
+                          _applyPreset(preset);
+                        }
+                      },
                     ),
                     _Filmstrip(
                       files: _files,
@@ -4524,6 +4579,7 @@ class _ViewerToolbar extends StatelessWidget {
     required this.onReset,
     required this.presetAmount,
     required this.onPresetAmountChanged,
+    required this.onPresetAmountChangeEnd,
   });
 
   final String zoomLabel;
@@ -4558,6 +4614,7 @@ class _ViewerToolbar extends StatelessWidget {
   /// two reserved spacers already follow.
   final double presetAmount;
   final ValueChanged<double> onPresetAmountChanged;
+  final ValueChanged<double> onPresetAmountChangeEnd;
 
   @override
   Widget build(BuildContext context) {
@@ -4596,6 +4653,7 @@ class _ViewerToolbar extends StatelessWidget {
                     labelFontSize: 13,
                     valueFontSize: 13,
                     onChanged: onPresetAmountChanged,
+                    onChangeEnd: onPresetAmountChangeEnd,
                   ),
                 ),
               ),
