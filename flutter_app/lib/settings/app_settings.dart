@@ -39,6 +39,7 @@ class AppSettings {
     this.fastPreview = true,
     this.previewResolution = defaultPreviewMaxDimension,
     this.useGpuRender = true,
+    this.dynamicFullPreview = false,
     this.thumbnailConcurrency = 4,
     this.rawOnly = false,
     this.libraryFolders = const [],
@@ -74,6 +75,16 @@ class AppSettings {
   /// this avoids).
   final bool useGpuRender;
 
+  /// When true, a few hundred ms after an edit settles the editor renders
+  /// the photo once more at the sensor's *native* resolution in the
+  /// background and swaps it onto the canvas — so a pixel-peeked (zoomed
+  /// in) view sharpens up instead of staying at [previewResolution]. Off
+  /// by default: it re-decodes the RAW at full quality and runs the whole
+  /// pixel pipeline over 10s of megapixels. The decoded native source is
+  /// cached to disk (`catalog/native_source_cache.dart`) so re-opening the
+  /// same photo skips the slow RAW demosaic.
+  final bool dynamicFullPreview;
+
   /// How many thumbnails to decode concurrently when a folder is opened.
   final int thumbnailConcurrency;
 
@@ -106,6 +117,7 @@ class AppSettings {
     bool? fastPreview,
     int? previewResolution,
     bool? useGpuRender,
+    bool? dynamicFullPreview,
     int? thumbnailConcurrency,
     bool? rawOnly,
     List<String>? libraryFolders,
@@ -117,6 +129,7 @@ class AppSettings {
     fastPreview: fastPreview ?? this.fastPreview,
     previewResolution: previewResolution ?? this.previewResolution,
     useGpuRender: useGpuRender ?? this.useGpuRender,
+    dynamicFullPreview: dynamicFullPreview ?? this.dynamicFullPreview,
     thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
     rawOnly: rawOnly ?? this.rawOnly,
     libraryFolders: libraryFolders ?? this.libraryFolders,
@@ -162,6 +175,8 @@ Future<AppSettings> loadSettings() async {
           (raw['previewResolution'] as num?)?.toInt() ??
           defaults.previewResolution,
       useGpuRender: raw['useGpuRender'] as bool? ?? defaults.useGpuRender,
+      dynamicFullPreview:
+          raw['dynamicFullPreview'] as bool? ?? defaults.dynamicFullPreview,
       thumbnailConcurrency:
           (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
       rawOnly: raw['rawOnly'] as bool? ?? defaults.rawOnly,
@@ -189,6 +204,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'fastPreview': settings.fastPreview,
       'previewResolution': settings.previewResolution,
       'useGpuRender': settings.useGpuRender,
+      'dynamicFullPreview': settings.dynamicFullPreview,
       'thumbnailConcurrency': settings.thumbnailConcurrency,
       'rawOnly': settings.rawOnly,
       'libraryFolders': settings.libraryFolders,

@@ -172,6 +172,25 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   _update(_settings.copyWith(useGpuRender: v)),
             ),
 
+            const SizedBox(height: 8),
+
+            // Dynamic full-resolution preview
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              dense: true,
+              title: Text(
+                l10n.settingsDynamicFullPreviewLabel,
+                style: labelStyle,
+              ),
+              subtitle: Text(
+                l10n.settingsDynamicFullPreviewHint,
+                style: hintStyle,
+              ),
+              value: _settings.dynamicFullPreview,
+              onChanged: (v) =>
+                  _update(_settings.copyWith(dynamicFullPreview: v)),
+            ),
+
             const SizedBox(height: 16),
 
             // Thumbnail threads

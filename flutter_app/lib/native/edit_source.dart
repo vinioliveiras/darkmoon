@@ -256,3 +256,36 @@ EditSource? decodeFullQualitySource(String path) {
     rgbBytes: decoded.rgbBytes,
   );
 }
+
+/// Encodes a native-resolution [EditSource] as a high-quality JPEG for
+/// `catalog/native_source_cache.dart` — quality 96, no chroma subsampling
+/// (4:4:4), since this is a *source* that gets re-rendered: baking in
+/// half-resolution chroma here would show up amplified after tone/colour
+/// work. Designed to run via `compute()`.
+Uint8List encodeNativeSourceForCache(EditSource source) {
+  final image = img.Image.fromBytes(
+    width: source.width,
+    height: source.height,
+    bytes: source.rgbBytes.buffer,
+    numChannels: 3,
+    order: img.ChannelOrder.rgb,
+  );
+  return Uint8List.fromList(img.encodeJpg(image, quality: 96));
+}
+
+/// Reconstructs the native-resolution [EditSource] from a JPEG produced by
+/// [encodeNativeSourceForCache] — the fast path a native-source-cache hit
+/// takes, skipping the RAW demosaic entirely. Returns null on a corrupt
+/// blob (caller falls back to [decodeFullQualitySource]). Runs via
+/// `compute()`.
+EditSource? decodeNativeSourceFromCachedJpeg(Uint8List jpegBytes) {
+  final decoded = img.decodeJpg(jpegBytes);
+  if (decoded == null) {
+    return null;
+  }
+  return EditSource(
+    width: decoded.width,
+    height: decoded.height,
+    rgbBytes: _rgbBytes(decoded),
+  );
+}

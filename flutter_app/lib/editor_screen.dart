@@ -14,6 +14,7 @@ import 'package:path/path.dart' as p;
 import 'catalog/catalog_store.dart';
 import 'catalog/curve_store.dart';
 import 'catalog/mask_store.dart';
+import 'catalog/native_source_cache.dart';
 import 'catalog/preview_cache_dir.dart';
 import 'catalog/thumbnail_cache.dart';
 import 'catalog/thumbnail_cache_dir.dart';
@@ -572,6 +573,24 @@ class _EditorScreenState extends State<EditorScreen> {
   Timer? _slowRenderTimer;
   static const _slowRenderThreshold = Duration(seconds: 3);
 
+  /// Dynamic full-resolution preview (`AppSettings.dynamicFullPreview`):
+  /// after an edit settles, [_dynamicPreviewTimer] fires
+  /// [_runDynamicFullPreview] which re-renders the selected photo at the
+  /// sensor's native resolution in the background and swaps it onto the
+  /// canvas. Any new edit / photo switch cancels the timer and (via
+  /// [_renderRequestId]) discards a result already in flight.
+  Timer? _dynamicPreviewTimer;
+  static const _dynamicPreviewDelay = Duration(milliseconds: 800);
+  NativeSourceCache? _nativeSourceCache;
+
+  /// The selected photo's decoded native-resolution source, held only for
+  /// that one photo (cleared on switch). Populated lazily by the first
+  /// dynamic full-res pass — from the on-disk [NativeSourceCache] if warm,
+  /// otherwise a full RAW decode that then warms the cache.
+  EditSource? _fullQualitySource;
+  String? _fullQualitySourcePath;
+  bool _loadingFullQualitySource = false;
+
   /// Which stage the in-progress AI Denoise render is on — see
   /// [RenderStage]. Only populated for that one render (see
   /// [_renderPreview]'s `onStage`), not routine slider-drag renders.
@@ -764,6 +783,14 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     setState(() => _previewCache = ThumbnailCacheManager(dir));
+  }
+
+  Future<void> _loadNativeSourceCache() async {
+    final dir = await resolveNativeSourceCacheDir();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _nativeSourceCache = NativeSourceCache(dir));
   }
 
   /// Loads the bundled lens correction database (a few MB JSON asset) --
@@ -1192,6 +1219,7 @@ class _EditorScreenState extends State<EditorScreen> {
     // initState) so it's pointed at the right resolution-namespaced
     // directory from the start, rather than the default's briefly.
     unawaited(_loadPreviewCache());
+    unawaited(_loadNativeSourceCache());
     final lastFolder = settings.lastActiveFolder;
     if (lastFolder != null && await Directory(lastFolder).exists()) {
       unawaited(_loadFolder(lastFolder, selectPath: settings.lastActiveFile));
@@ -1323,6 +1351,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _renderDebounceTimer?.cancel();
     _catalogSaveTimer?.cancel();
     _slowRenderTimer?.cancel();
+    _dynamicPreviewTimer?.cancel();
     _thumbnailFlushTimer?.cancel();
     _thumbnailUiFlushTimer?.cancel();
     _completeVisibleThumbnailsReady();
@@ -1814,6 +1843,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _folderGeneration++;
     _renderRequestId++;
     _slowRenderTimer?.cancel();
+    _dynamicPreviewTimer?.cancel();
     _thumbnailUiFlushTimer?.cancel();
     _thumbnailUiFlushTimer = null;
     _completeVisibleThumbnailsReady();
@@ -1992,6 +2022,9 @@ class _EditorScreenState extends State<EditorScreen> {
     unawaited(_flushCurrentEdits());
     final path = _files[index].path;
     _resetZoom();
+    _dynamicPreviewTimer?.cancel();
+    _fullQualitySource = null;
+    _fullQualitySourcePath = null;
     setState(() {
       _selectedIndex = index;
       _paramValues = _paramValuesFor(path);
@@ -2363,6 +2396,108 @@ class _EditorScreenState extends State<EditorScreen> {
       // there'd be one of these for every frame of the drag.
       _scheduleThumbnailCacheStore(path, result.thumbnailBytes);
     }
+    // A settled render just landed — if the user opted into the dynamic
+    // full-res preview, upgrade the canvas to a native-resolution render a
+    // beat later (skipped for live drags, mask overlays, and the
+    // progress-tracked AI Denoise pass, which has its own flow).
+    if (!live &&
+        onStage == null &&
+        _settings.dynamicFullPreview &&
+        _activeMaskId == imageMaskId &&
+        !_cropOverlayActive) {
+      _dynamicPreviewTimer?.cancel();
+      _dynamicPreviewTimer = Timer(
+        _dynamicPreviewDelay,
+        () => unawaited(_runDynamicFullPreview(path, requestId)),
+      );
+    }
+  }
+
+  /// Re-renders [path] at the sensor's native resolution and swaps it onto
+  /// the canvas, so a zoomed-in view sharpens past [previewResolution].
+  /// [baseRequestId] is the [_renderRequestId] of the settled preview
+  /// render that armed this — if anything has superseded it (a new edit,
+  /// photo switch, …) this bails at every checkpoint. The decoded native
+  /// source is cached in memory (this photo only) and on disk
+  /// ([NativeSourceCache]).
+  Future<void> _runDynamicFullPreview(String path, int baseRequestId) async {
+    if (!mounted ||
+        baseRequestId != _renderRequestId ||
+        !_settings.dynamicFullPreview) {
+      return;
+    }
+    // Resolve the native-resolution source.
+    EditSource? source = _fullQualitySourcePath == path
+        ? _fullQualitySource
+        : null;
+    if (source == null) {
+      if (_loadingFullQualitySource) {
+        return;
+      }
+      _loadingFullQualitySource = true;
+      try {
+        final cachedJpeg = await _nativeSourceCache?.lookup(path);
+        if (cachedJpeg != null) {
+          source = await compute(
+            decodeNativeSourceFromCachedJpeg,
+            cachedJpeg,
+          );
+        }
+        source ??= await compute(decodeFullQualitySource, path);
+        if (source != null && cachedJpeg == null) {
+          // Warm the disk cache off the fresh decode (fire-and-forget).
+          final toCache = source;
+          unawaited(
+            compute(encodeNativeSourceForCache, toCache).then(
+              (bytes) => _nativeSourceCache?.store(path, bytes),
+            ),
+          );
+        }
+      } finally {
+        _loadingFullQualitySource = false;
+      }
+      if (!mounted || source == null) {
+        return;
+      }
+      _fullQualitySource = source;
+      _fullQualitySourcePath = path;
+    }
+    if (baseRequestId != _renderRequestId || !_settings.dynamicFullPreview) {
+      return;
+    }
+    final metadata = _metadata[path];
+    final job = RenderJob(
+      source: source,
+      params: RenderParams.fromValues(
+        _effectiveParamValues(),
+        curves: _effectiveCurves,
+        asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
+        asShotTint: metadata?.asShotTint ?? wbDefaultTint,
+      ),
+      masks: _effectiveMasks,
+      cropTransform: _cropOverlayActive
+          ? _cropTransform.copyWith(
+              cropLeft: 0,
+              cropTop: 0,
+              cropRight: 1,
+              cropBottom: 1,
+            )
+          : _cropTransform,
+      lensCorrection: _lensCorrection,
+      lensProfile: _resolvedLensProfileFor(path),
+      focalLengthMm: metadata?.focalLengthMm ?? 0,
+      apertureFNumber: metadata?.apertureFNumber ?? 0,
+    );
+    final result = await compute(renderJobToJpeg, job);
+    if (!mounted ||
+        baseRequestId != _renderRequestId ||
+        !_settings.dynamicFullPreview) {
+      return;
+    }
+    setState(() {
+      _renderedPreviews[path] = result.jpegBytes;
+      _histograms[path] = result.histogram;
+    });
   }
 
   /// Renders [path] with neutral (default) params, for the Before/After
@@ -2820,6 +2955,8 @@ class _EditorScreenState extends State<EditorScreen> {
       _currentCurves = identityPhotoCurves;
       _currentMasks = [];
       _activeMaskId = imageMaskId;
+      // Reset clears the edit — no preset is "applied" any more.
+      _appliedPresetId = null;
     });
     _pushHistory();
     _scheduleRender(live: false);
@@ -3289,6 +3426,8 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     _renderDebounceTimer?.cancel();
+    // A fresh edit invalidates any pending / in-flight full-res upgrade.
+    _dynamicPreviewTimer?.cancel();
     _renderDebounceTimer = Timer(_renderDebounce, () {
       unawaited(_renderPreview(selected.path, live: live));
     });

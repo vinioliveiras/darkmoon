@@ -112,6 +112,8 @@
   "settingsRawOnlyHint": "Oculta JPEG, PNG e outros formatos comuns de imagem da biblioteca",
   "settingsGpuRenderLabel": "Usar renderização por GPU (experimental)",
   "settingsGpuRenderHint": "Renderiza na placa de vídeo em vez da CPU; volta automaticamente para a CPU se não houver suporte",
+  "settingsDynamicFullPreviewLabel": "Preview dinâmico em resolução total",
+  "settingsDynamicFullPreviewHint": "Um instante depois que a edição assenta, re-renderiza na resolução nativa do sensor pra imagem ampliada ficar nítida. As fontes decodificadas ficam em cache no disco.",
   "settingsThumbnailThreadsLabel": "Threads de carregamento de miniaturas",
   "settingsUserDataSection": "DADOS DO USUÁRIO",
   "settingsClearThumbnailsButton": "Limpar cache de miniaturas",

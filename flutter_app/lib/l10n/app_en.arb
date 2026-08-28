@@ -142,6 +142,8 @@
   "settingsRawOnlyHint": "Hide JPEG, PNG and other common image formats from the library",
   "settingsGpuRenderLabel": "Use GPU rendering (experimental)",
   "settingsGpuRenderHint": "Renders on the graphics card instead of the CPU; falls back automatically if unsupported",
+  "settingsDynamicFullPreviewLabel": "Dynamic full-resolution preview",
+  "settingsDynamicFullPreviewHint": "A moment after an edit settles, re-render at the sensor's native resolution so a zoomed-in view sharpens up. Decoded sources are cached to disk.",
   "settingsThumbnailThreadsLabel": "Thumbnail loading threads",
   "settingsUserDataSection": "USER DATA",
   "settingsClearThumbnailsButton": "Clear thumbnail cache",
