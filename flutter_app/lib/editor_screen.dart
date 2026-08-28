@@ -2567,8 +2567,10 @@ class _EditorScreenState extends State<EditorScreen> {
     // render pass against the native source (downscaled per
     // AppSettings.fullQualityPercent) follows the quick preview one below —
     // so applying a preset shows instantly at preview res, then sharpens.
+    // `onStage != null` (the AI Denoise apply/remove) still gets a phase-2
+    // pass — the progress bar just tracks phase 1 — so the canvas doesn't
+    // stay at preview resolution after toggling denoise.
     final fullQuality = !live &&
-        onStage == null &&
         _settings.dynamicFullPreview &&
         _activeMaskId == imageMaskId &&
         !_cropOverlayActive &&
@@ -2651,8 +2653,9 @@ class _EditorScreenState extends State<EditorScreen> {
 
     // A settled render just landed. Arm the native-source decode a beat
     // later — once it's available, subsequent settled renders get the
-    // phase-2 pass. Fires once per photo.
-    if (!live && onStage == null) {
+    // phase-2 pass. Fires once per photo. (Also after an AI Denoise
+    // apply/remove, so that path engages full-quality mode too.)
+    if (!live) {
       _maybeArmFullQualityDecode(path);
     }
   }
@@ -2807,7 +2810,13 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _toggleCropOverlay() {
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
-    setState(() => _cropOverlayActive = !_cropOverlayActive);
+    final opening = !_cropOverlayActive;
+    setState(() => _cropOverlayActive = opening);
+    // Crop handles are placed against the fitted frame — a leftover
+    // zoom/pan would put them off-screen, so snap back to Fit on open.
+    if (opening) {
+      _resetZoom();
+    }
     if (selected != null) {
       unawaited(_renderPreview(selected.path));
     }

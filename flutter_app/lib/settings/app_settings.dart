@@ -39,8 +39,8 @@ class AppSettings {
     this.fastPreview = true,
     this.previewResolution = defaultPreviewMaxDimension,
     this.useGpuRender = true,
-    this.dynamicFullPreview = true,
-    this.fullQualityPercent = 60,
+    this.dynamicFullPreview = false,
+    this.fullQualityPercent = 30,
     this.thumbnailConcurrency = 4,
     this.rawOnly = false,
     this.libraryFolders = const [],
@@ -76,20 +76,20 @@ class AppSettings {
   /// this avoids).
   final bool useGpuRender;
 
-  /// When true (the default), a beat after an edit settles the editor
-  /// decodes the photo's *native*-resolution source once and, from then
-  /// on, runs every settled render for that photo against it (downscaled
-  /// to [fullQualityPercent] of native) instead of the small
+  /// When true, a beat after an edit settles the editor decodes the
+  /// photo's *native*-resolution source once and, from then on, runs
+  /// every settled render for that photo against it (downscaled to
+  /// [fullQualityPercent] of native) instead of the small
   /// [previewResolution] buffer — so the on-screen image is near-full
   /// quality while editing. Live drags still use the tiny buffer. The
   /// decoded source is cached to disk so re-opening the photo skips the
-  /// slow RAW demosaic.
+  /// slow RAW demosaic. Off by default (it's meaningful extra work per
+  /// settle).
   final bool dynamicFullPreview;
 
   /// Percent of the sensor's native resolution the full-quality editing
-  /// preview ([dynamicFullPreview]) renders at — 60 by default (≈ a 3.6K
-  /// long edge on a 24 MP file), 100 for a true full-resolution render on
-  /// every settle. Clamped to [25, 100].
+  /// preview ([dynamicFullPreview]) renders at — 30 by default, 100 for a
+  /// true full-resolution render on every settle. Clamped to [25, 100].
   final int fullQualityPercent;
 
   /// How many thumbnails to decode concurrently when a folder is opened.
