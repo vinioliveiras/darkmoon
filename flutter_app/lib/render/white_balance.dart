@@ -269,14 +269,17 @@ List<List<double>> _matMul(List<List<double>> a, List<List<double>> b) => [
   );
 }
 
-/// Converts a signed Δuv (nearest-point offset from the reference-white
-/// locus, CIE 1960 uv) to this app's -150..150 Tint units. Calibrated
-/// against Lightroom's "As Shot" Tint on real Fuji X100VI files.
-const double _wbTintPerDuv = 2100.0;
+/// Signed Δuv -> Tint units, and a fixed Δuv offset. Our reference-white
+/// locus sits ~0.0065 uv too green relative to Lightroom's (systematic
+/// error in `cam_xyz` + the daylight-locus formula), so a bias is added
+/// before scaling. Least-squares fit over four real Fuji X100VI files
+/// against Lightroom's "As Shot" Tint (all within ~3.5 units).
+const double _wbTintPerDuv = 3220.0;
+const double _wbDuvBias = 0.00655;
 
-/// Our McCamy CCT reads a few mired cool of Lightroom's "As Shot" Kelvin
-/// fairly consistently (calibrated on the same X100VI set, ~+3 mired);
-/// subtracting it nudges the estimate into Adobe's reference frame.
+/// Our CCT reads a couple of mired cool of Lightroom's "As Shot" Kelvin
+/// on the same X100VI set; subtracting it nudges the estimate into
+/// Adobe's reference frame.
 const double _wbCctMiredBias = 3.0;
 
 /// Tint magnitude per doubling of the R+B gain excess in the multiplier
@@ -474,7 +477,7 @@ const double _wbTintScale = 200.0;
 
   // Green side -> negative Tint, matching Lightroom's convention.
   final duv = (bestCross >= 0 ? 1.0 : -1.0) * math.sqrt(bestD2);
-  final tint = (duv * _wbTintPerDuv).clamp(-150.0, 150.0);
+  final tint = ((duv + _wbDuvBias) * _wbTintPerDuv).clamp(-150.0, 150.0);
   final kelvin =
       (1.0e6 / (bestMired - _wbCctMiredBias)).clamp(2000.0, 50000.0);
   return (kelvin: kelvin, tint: tint);
