@@ -271,22 +271,13 @@ List<List<double>> _matMul(List<List<double>> a, List<List<double>> b) => [
   );
 }
 
-/// Signed Δuv -> Tint units, and a fixed Δuv offset. Our reference-white
-/// locus sits ~0.0065 uv too green relative to Lightroom's (systematic
-/// error in `cam_xyz` + the daylight-locus formula), so a bias is added
-/// before scaling. Least-squares fit over four real Fuji X100VI files
-/// against Lightroom's "As Shot" Tint (all within ~3.5 units).
-const double _wbTintPerDuv = 3220.0;
-const double _wbDuvBias = 0.00655;
-
-/// Our CCT reads a couple of mired cool of Lightroom's "As Shot" Kelvin
-/// on the same X100VI set; subtracting it nudges the estimate into
-/// Adobe's reference frame.
-const double _wbCctMiredBias = 3.0;
-
-/// Tint magnitude per doubling of the R+B gain excess in the multiplier
-/// fallback path (no camera matrix). Rougher than the colorimetric path.
-const double _wbTintScale = 200.0;
+/// As-shot estimator calibration — all four live in `calibration.dart`
+/// under "WHITE BALANCE — estimador do As Shot", fitted against Lightroom
+/// on real X100VI files. See that file to re-tune for another camera.
+const double _wbTintPerDuv = calWbAsShotTintPerDuv;
+const double _wbDuvBias = calWbAsShotDuvBias;
+const double _wbCctMiredBias = calWbAsShotCctMiredBias;
+const double _wbTintScale = calWbAsShotTintScaleFallback;
 
 /// Approximate camera as-shot white balance (Kelvin + Tint on this app's
 /// -150..150 scale) from LibRaw's camera colour data.

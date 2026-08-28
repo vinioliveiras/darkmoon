@@ -48,6 +48,47 @@ const double calWbTintStrength = 0.35;
 const double calWbWorkingGamma = 2.2;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  WHITE BALANCE — estimador do "As Shot" (colorimetria)                    ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+//
+// NÃO temos o perfil de câmera do Adobe ("Adobe Color" = ForwardMatrix +
+// HueSatMap + tone curve — dados fechados). O que temos é: o decode usa a
+// matriz de cor embutida na própria câmera (`use_camera_matrix`), e o "As
+// Shot" (Kelvin/Tint que aparece com 0 de edição) é ESTIMADO por
+// colorimetria (adaptação de Bradford + projeção de Ohno na locus).
+//
+// Estes 3 valores foram ajustados por mínimos quadrados contra o Lightroom
+// em 4 arquivos reais de X100VI (batem ~2% Kelvin / ~3.5 tint). Se você
+// usa outra câmera e o "As Shot" está puxando verde/magenta ou frio/quente
+// vs o Lightroom, re-ajuste aqui (anote fotos de referência).
+
+/// Δuv (verde/magenta) fixo somado antes de virar Tint — a nossa locus de
+/// branco de referência fica ~0.0065 uv verde demais vs a do Lightroom.
+///   ↑ maior  = "As Shot" puxa mais pro magenta (Tint mais positivo)
+///   ↓ menor  = puxa mais pro verde
+/// padrão: 0.00655
+const double calWbAsShotDuvBias = 0.00655;
+
+/// Escala de Δuv → unidades de Tint (-150..150).
+///   ↑ maior  = mesma cor da câmera vira um Tint maior no "As Shot"
+///   ↓ menor  = Tint estimado menor
+/// padrão: 3220.0
+const double calWbAsShotTintPerDuv = 3220.0;
+
+/// Mireds subtraídos da temperatura estimada (a nossa CCT lê alguns mired
+/// mais fria que o Lightroom no X100VI).
+///   ↑ maior  = "As Shot" mais QUENTE (Kelvin maior)
+///   ↓ menor  = mais frio
+/// padrão: 3.0
+const double calWbAsShotCctMiredBias = 3.0;
+
+/// Caminho de fallback (câmera sem matriz de cor utilizável): Tint por
+/// dobra do excesso de ganho R+B. Bem mais grosseiro que o colorimétrico.
+///   ↑ maior  = Tint estimado mais forte no fallback
+/// padrão: 200.0
+const double calWbAsShotTintScaleFallback = 200.0;
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  BÁSICO — Exposição / Brilho / Contraste                                  ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
