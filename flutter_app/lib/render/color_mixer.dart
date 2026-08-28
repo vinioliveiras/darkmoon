@@ -116,6 +116,18 @@ double _rawHslInfluence(double hue, double center, double width) {
   return math.exp(-sharpness * falloff * falloff);
 }
 
+/// Per-band influence sampled at every integer hue (0..360) — the
+/// Gaussian is smooth enough that nearest-degree lookup replaces 8
+/// `exp()` calls per pixel with 8 array reads (the `exp` was a big chunk
+/// of a full-resolution render's Color Mixer cost). Built once, lazily.
+final List<Float64List> _influenceByHue = [
+  for (final range in _hslRanges)
+    Float64List.fromList([
+      for (var h = 0; h <= 360; h++)
+        _rawHslInfluence(h.toDouble(), range.center, range.width),
+    ]),
+];
+
 double _smoothstep(double edge0, double edge1, double value) {
   final t = ((value - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
   return t * t * (3.0 - 2.0 * t);
@@ -152,6 +164,18 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
     return;
   }
   final channels = mixer._channels;
+  final n = channels.length;
+  // Per-channel adjustment amounts, hoisted out of the pixel loop.
+  final hueAmt = Float64List(n);
+  final satAmt = Float64List(n);
+  final lumAmt = Float64List(n);
+  for (var c = 0; c < n; c++) {
+    hueAmt[c] = channels[c].hue * 0.3 * 2.0;
+    satAmt[c] = channels[c].saturation / 100.0;
+    lumAmt[c] = channels[c].luminance / 100.0;
+  }
+  final rawInfluences = Float64List(n);
+
   for (var i = 0; i < img.length; i += 3) {
     final r = srgbToLinear(img[i] / 255.0);
     final g = srgbToLinear(img[i + 1] / 255.0);
@@ -172,14 +196,10 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
       continue;
     }
 
-    final rawInfluences = List<double>.filled(channels.length, 0.0);
+    final hueIdx = originalHue.round() % 360;
     var totalRawInfluence = 0.0;
-    for (var c = 0; c < channels.length; c++) {
-      final influence = _rawHslInfluence(
-        originalHue,
-        _hslRanges[c].center,
-        _hslRanges[c].width,
-      );
+    for (var c = 0; c < n; c++) {
+      final influence = _influenceByHue[c][hueIdx];
       rawInfluences[c] = influence;
       totalRawInfluence += influence;
     }
@@ -187,17 +207,16 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
     var totalHueShift = 0.0;
     var totalSatMultiplier = 0.0;
     var totalLumAdjust = 0.0;
-    for (var c = 0; c < channels.length; c++) {
+    for (var c = 0; c < n; c++) {
       final normalizedInfluence = rawInfluences[c] / totalRawInfluence;
       final hueSatInfluence = normalizedInfluence * saturationMask;
       final lumaInfluence = normalizedInfluence * luminanceWeight;
-      // The 0.3-per-unit hue scale and /100 saturation/luminance scales
-      // match RapidRAW's SCALES.hsl_hue_multiplier/hsl_saturation/
-      // hsl_luminance; the extra *2.0 on hue matches the shader's own
-      // `hsl_adjustments[i].hue * 2.0`.
-      totalHueShift += channels[c].hue * 0.3 * 2.0 * hueSatInfluence;
-      totalSatMultiplier += (channels[c].saturation / 100.0) * hueSatInfluence;
-      totalLumAdjust += (channels[c].luminance / 100.0) * lumaInfluence;
+      // hueAmt/satAmt/lumAmt fold in RapidRAW's SCALES
+      // (hsl_hue_multiplier 0.3 × the shader's own ×2.0; /100 for
+      // sat/lum), precomputed per channel above.
+      totalHueShift += hueAmt[c] * hueSatInfluence;
+      totalSatMultiplier += satAmt[c] * hueSatInfluence;
+      totalLumAdjust += lumAmt[c] * lumaInfluence;
     }
 
     if (originalSat * (1.0 + totalSatMultiplier) < 0.0001) {
@@ -223,16 +242,19 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
     final newLuma = _linearLuma(shifted[0], shifted[1], shifted[2]);
     final targetLuma = originalLuma * (1.0 + totalLumAdjust);
 
-    List<double> finalColor;
+    final double fr;
+    final double fg;
+    final double fb;
     if (newLuma < 0.0001) {
-      final v = math.max(0.0, targetLuma);
-      finalColor = [v, v, v];
+      fr = fg = fb = math.max(0.0, targetLuma);
     } else {
       final scale = targetLuma / newLuma;
-      finalColor = [shifted[0] * scale, shifted[1] * scale, shifted[2] * scale];
+      fr = shifted[0] * scale;
+      fg = shifted[1] * scale;
+      fb = shifted[2] * scale;
     }
-    img[i] = linearToSrgb(finalColor[0]) * 255.0;
-    img[i + 1] = linearToSrgb(finalColor[1]) * 255.0;
-    img[i + 2] = linearToSrgb(finalColor[2]) * 255.0;
+    img[i] = linearToSrgb(fr) * 255.0;
+    img[i + 1] = linearToSrgb(fg) * 255.0;
+    img[i + 2] = linearToSrgb(fb) * 255.0;
   }
 }
