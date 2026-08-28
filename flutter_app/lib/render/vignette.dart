@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'calibration.dart';
+
 /// Mirrors Lightroom's Effects panel Post-Crop Vignette — [amount] and the
 /// falloff shape (via [midpoint]/[feather]). Style (Highlight/Color
 /// Priority/Paint Overlay) and Highlight Contrast aren't modeled — they
@@ -63,7 +65,7 @@ void applyVignette(
   final cy = height / 2.0;
   final start = (params.midpoint / 100.0).clamp(0.0, 1.0);
   final featherWidth = (params.feather / 100.0).clamp(0.02, 1.0);
-  final strength = params.amount / 100.0 * 0.8;
+  final strength = params.amount / 100.0 * calVignetteStrength;
   const cornerRadius = 1.4142135623730951; // sqrt(2), a corner's distance.
 
   for (var y = 0; y < height; y++) {

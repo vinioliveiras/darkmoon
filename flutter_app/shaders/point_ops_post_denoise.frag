@@ -187,10 +187,11 @@ vec3 rapidBrightness(vec3 color, float amount) {
   );
 }
 
-// Lightroom-feel calibration (item 7) — mirrors render.dart's
-// _wbWhitesMaskLow / _wbWhitesLevelCoeff / _wbBlacksAmountScale /
-// _wbBlacksFalloff exactly. RapidRAW's Whites/Blacks are gentler than
-// Lightroom's, so these deviate from a strict port on purpose.
+// Lightroom-feel calibration (item 7) — these literals must match
+// lib/render/calibration.dart's calWhitesMaskLow / calWhitesLevelCoeff /
+// calBlacksAmountScale / calBlacksFalloff. The CPU path reads them from
+// that file; this shader (GPU render, opt-in) has them inline, so if you
+// tune calibration.dart and use the GPU path, change them here too.
 float rapidWhiteMask(float luma) {
   float whiteInput = tanh(max(luma, 0.0001) * 1.5);
   return smoothstep(0.32, 0.98, whiteInput);

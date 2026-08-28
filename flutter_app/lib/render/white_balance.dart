@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'calibration.dart';
+
 /// White-balance model helpers shared by the render pipeline (`render.dart`
 /// and `render_gpu.dart` both call [whiteBalanceGains]), the mode selector
 /// and the eyedropper. Pure Dart, no Flutter imports.
@@ -11,17 +13,17 @@ import 'dart:typed_data';
 const double wbDefaultKelvin = 5500.0;
 const double wbDefaultTint = 0.0;
 
-/// How hard a full ±100 Tint pushes green against red/blue. Close to the
-/// previous model's 0.25, nudged up toward Lightroom's slightly stronger
-/// Tint; the luminance-normalise step below keeps it brightness-neutral.
-const double _wbTintStrength = 0.35;
+/// How hard a full ±100 Tint pushes green against red/blue —
+/// `calibration.dart` → calWbTintStrength.
+const double _wbTintStrength = calWbTintStrength;
 
 /// Working-space gamma the render buffers are encoded with (LibRaw is set
 /// to ~sRGB, `gamm = [1/2.4, 12.92]`). White-balance gains are derived in
 /// linear light but multiplied into these gamma-encoded values, so each is
 /// raised to `1/gamma` first — then `gammaValue * gain` equals
-/// `(linearValue * linearGain)` re-encoded.
-const double _wbWorkingGamma = 2.2;
+/// `(linearValue * linearGain)` re-encoded. `calibration.dart` →
+/// calWbWorkingGamma.
+const double _wbWorkingGamma = calWbWorkingGamma;
 
 enum WbMode {
   asShot,

@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'blur.dart';
+import 'calibration.dart';
 import 'color_space.dart';
 
 /// Dark-channel-prior atmospheric light RapidRAW assumes for every photo
@@ -17,16 +18,6 @@ const double _atmB = 1.0;
 /// `local_contrast.dart`'s Texture/Clarity for the two it does) and,
 /// separately, as Dehaze's "regional" dark-channel source below.
 const double _structureBlurSigma = 40.0;
-
-/// Lightroom-feel calibration (item 7): RapidRAW's Dehaze pulls much harder
-/// than Lightroom's at the same slider value. Softer transmission
-/// coefficient (was 0.85), a higher transmission floor (was 0.15), a
-/// gentler saturation kick (was 0.5) and a lighter haze-*add* mix (was
-/// 0.7). `dehaze_apply.frag` mirrors these exactly.
-const double _dehazeTransmissionCoeff = 0.55;
-const double _dehazeTransmissionFloor = 0.22;
-const double _dehazeSatBoost = 0.32;
-const double _dehazeAddMix = 0.55;
 
 double _linearLuma(double r, double g, double b) =>
     0.2126 * r + 0.7152 * g + 0.0722 * b;
@@ -134,8 +125,8 @@ void applyDehaze(Float32List img, int width, int height, double amount) {
       final safeDark = math.max(spatialDark - 0.02, 0.0);
       final mappedHaze = safeDark / (safeDark + 0.2);
       final t = math.max(
-        1.0 - strength * mappedHaze * _dehazeTransmissionCoeff,
-        _dehazeTransmissionFloor,
+        1.0 - strength * mappedHaze * calDehazeTransmissionCoeff,
+        calDehazeTransmissionFloor,
       );
 
       var recR = (r - _atmR) / t + _atmR;
@@ -152,7 +143,7 @@ void applyDehaze(Float32List img, int width, int height, double amount) {
       recG += shadowLift;
       recB += shadowLift;
 
-      final satBoost = (1.0 - t) * _dehazeSatBoost;
+      final satBoost = (1.0 - t) * calDehazeSatBoost;
       final finalLuma = _linearLuma(
         math.max(recR, 0.0),
         math.max(recG, 0.0),
@@ -168,7 +159,7 @@ void applyDehaze(Float32List img, int width, int height, double amount) {
       final mappedDepth = safeDark / (safeDark + 0.2);
       final depthFactor = 0.4 + 0.6 * mappedDepth;
       final hazeAmount = -strength;
-      final mixAmount = hazeAmount * _dehazeAddMix * depthFactor;
+      final mixAmount = hazeAmount * calDehazeAddMix * depthFactor;
       outR = r + (_atmR - r) * mixAmount;
       outG = g + (_atmG - g) * mixAmount;
       outB = b + (_atmB - b) * mixAmount;

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'blur.dart';
+import 'calibration.dart';
 import 'luminance.dart';
 
 /// Mirrors Lightroom Classic's Detail panel Sharpening section — same four
@@ -70,7 +71,7 @@ void applySharpen(
   extractLuminance(img, luminance);
 
   final sigma = params.radius.clamp(0.5, 3.0);
-  final strength = params.amount / 100.0;
+  final strength = params.amount / 100.0 * calSharpenStrength;
   final maskAmount = params.masking / 100.0;
 
   final blurred = gaussianBlurChannel(luminance, width, height, sigma);
@@ -105,15 +106,17 @@ void applySharpen(
     localNoiseVar = localVarianceFromResidualSq(residualSq, width, height, 6);
   }
 
-  const edgeThreshold =
-      6.0; // 0-255 scale: edge magnitude above which we treat as real
+  // 0-255 scale: edge magnitude above which we treat detail as a real edge
+  // rather than noise (calibration.dart → calSharpenEdgeThreshold).
+  const edgeThreshold = calSharpenEdgeThreshold;
   const edgeThresholdVar = edgeThreshold * edgeThreshold;
   for (var p = 0; p < pixelCount; p++) {
     var residual = highFreq[p];
     if (fineBlurred != null) {
       final fineResidual = luminance[p] - fineBlurred[p];
       final detailMix = params.detail / 100.0;
-      residual = residual * (1 - detailMix * 0.6) + fineResidual * detailMix;
+      residual = residual * (1 - detailMix * calSharpenDetailMix) +
+          fineResidual * detailMix;
     }
     var factor = strength;
     if (edgeStrength != null && localNoiseVar != null) {

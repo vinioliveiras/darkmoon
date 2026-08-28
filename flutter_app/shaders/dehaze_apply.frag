@@ -61,8 +61,10 @@ void main() {
     float spatialDark = mix(regionalDark, pixelDark, haloProtection);
     float safeDark = max(spatialDark - 0.02, 0.0);
     float mappedHaze = safeDark / (safeDark + 0.2);
-    // Lightroom-feel calibration (item 7) — mirrors dehaze.dart's
-    // _dehazeTransmissionCoeff / Floor / SatBoost / AddMix exactly.
+    // Lightroom-feel calibration (item 7) — these literals must match
+    // lib/render/calibration.dart's calDehazeTransmissionCoeff / Floor /
+    // SatBoost / AddMix. CPU reads that file; this GPU shader has them
+    // inline — tune both if you use the GPU path.
     float t = max(1.0 - uStrength * mappedHaze * 0.55, 0.22);
 
     vec3 recovered = (color - kAtmosphericLight) / t + kAtmosphericLight;
