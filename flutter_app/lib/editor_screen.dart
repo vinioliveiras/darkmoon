@@ -2829,7 +2829,14 @@ class _EditorScreenState extends State<EditorScreen> {
   void _toggleCropOverlay() {
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
     final opening = !_cropOverlayActive;
-    setState(() => _cropOverlayActive = opening);
+    setState(() {
+      _cropOverlayActive = opening;
+      // Before/After and the crop overlay can't both be up — the split
+      // view has nowhere to put the crop handles.
+      if (opening && _beforeAfterMode) {
+        _beforeAfterMode = false;
+      }
+    });
     // Crop handles are placed against the fitted frame — a leftover
     // zoom/pan would put them off-screen, so snap back to Fit on open.
     if (opening) {
@@ -6132,51 +6139,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 onChangeEnd: (v) => onChangeEnd(spec.name, v),
                               ),
                             ),
-                          // Off by default: RapidRAW's apply_white_balance
-                          // (shader.wgsl) doesn't renormalize brightness
-                          // after Temperature/Tint either, so matching it
-                          // exactly means Tint can shift brightness a
-                          // little — see _applyWhiteBalance's doc comment
-                          // in render.dart for the full story. This
-                          // checkbox opts back into Darkmoon's older,
-                          // brightness-preserving behavior.
-                          if (entry.key == 'WHITE BALANCE')
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Row(
-                                children: [
-                                  Expanded(
-                                    child: Text(
-                                      l10n.whiteBalancePreserveBrightnessLabel,
-                                      style: TextStyle(
-                                        color: DarkmoonColors.textMuted,
-                                        fontSize: 12,
-                                      ),
-                                    ),
-                                  ),
-                                  SizedBox(
-                                    width: 26,
-                                    height: 16,
-                                    child: FittedBox(
-                                      child: Switch(
-                                        value:
-                                            (values['WhiteBalancePreserveTintBrightness'] ??
-                                                0) !=
-                                            0,
-                                        onChanged: (v) {
-                                          const key =
-                                              'WhiteBalancePreserveTintBrightness';
-                                          onChanged(key, v ? 1 : 0);
-                                          onChangeEnd(key, v ? 1 : 0);
-                                        },
-                                        materialTapTargetSize:
-                                            MaterialTapTargetSize.shrinkWrap,
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                          // (The old "preserve brightness on Tint" toggle
+                          // was removed — the current WB model is
+                          // luminance-normalised by construction, so it
+                          // was a no-op. The param still exists, inert.)
                         ],
                         // Tone Curve/Color Curve/Color Mixer/Color Grading/
                         // Effects are available for masks too — `curves`/

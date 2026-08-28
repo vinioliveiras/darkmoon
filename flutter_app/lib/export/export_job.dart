@@ -173,12 +173,14 @@ Future<ExportResult> _exportPhotoInternal(
     // (render_job.dart). Masked exports stay on the serial renderRgbWithMasks
     // (composing several mask layers' band-parallel results correctly is
     // out of scope for now, see render_parallel.dart's own doc comment).
+    final renderTimings = <String>[];
     final rendered = request.masks.isEmpty
         ? await renderAdjustmentsParallel(
             geometry.width,
             geometry.height,
             geometry.rgbBytes,
             request.params,
+            timings: renderTimings,
           )
         : renderRgbWithMasks(
             geometry.width,
@@ -188,6 +190,9 @@ Future<ExportResult> _exportPhotoInternal(
             request.masks,
           );
     mark('render ${geometry.width}x${geometry.height}');
+    for (final t in renderTimings) {
+      timings.add('  · $t');
+    }
     final image = img.Image.fromBytes(
       width: geometry.width,
       height: geometry.height,

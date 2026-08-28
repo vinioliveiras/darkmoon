@@ -39,8 +39,15 @@ Future<Uint8List> renderAdjustmentsParallel(
   int width,
   int height,
   Uint8List sourceRgb,
-  RenderParams params,
-) async {
+  RenderParams params, {
+  List<String>? timings,
+}) async {
+  final sw = Stopwatch()..start();
+  void mark(String stage) {
+    timings?.add('$stage ${sw.elapsedMilliseconds}ms');
+    sw.reset();
+  }
+
   final buffer = Float32List(sourceRgb.length);
   for (var i = 0; i < sourceRgb.length; i++) {
     buffer[i] = sourceRgb[i].toDouble();
@@ -51,10 +58,13 @@ Future<Uint8List> renderAdjustmentsParallel(
   final bandCount = pixelCount < _parallelPixelThreshold
       ? 1
       : _pickBandCount(height, halo, Platform.numberOfProcessors);
+  mark('setup (${Platform.numberOfProcessors} cpu, $bandCount bands)');
 
   if (bandCount <= 1) {
     applyLocalAdjustmentSteps(buffer, width, height, params);
+    mark('local (serial)');
     applyGlobalAdjustmentSteps(buffer, width, height, params);
+    mark('global (serial)');
     return _toUint8(buffer);
   }
 
@@ -112,13 +122,18 @@ Future<Uint8List> renderAdjustmentsParallel(
       results[b],
     );
   }
+  mark('local ($bandCount bands)');
 
   // Exposure + Dehaze whole-image (Dehaze's wide blur isn't band-safe on a
   // naive slice), then the point-op half — the pow()-heavy majority of a
   // full-res render — in bands too.
   applyExposureAndDehaze(buffer, width, height, params);
+  mark('exposure+dehaze (serial)');
   await _applyGlobalPointOpsParallel(width, height, buffer, params, bandCount);
-  return _toUint8(buffer);
+  mark('point-ops ($bandCount bands)');
+  final out = _toUint8(buffer);
+  mark('to uint8');
+  return out;
 }
 
 /// Runs [applyGlobalPointOps] across [bandCount] isolates. The only blur

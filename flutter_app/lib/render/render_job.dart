@@ -109,6 +109,7 @@ class RenderResult {
 Future<RenderResult> renderJobToJpeg(
   RenderJob job, {
   void Function(RenderStage stage)? onStage,
+  List<String>? renderTimings,
 }) async {
   final undistorted = applyResolvedLensDistortion(job);
   final dechromatized = applyResolvedLensChromaticAberration(
@@ -136,6 +137,7 @@ Future<RenderResult> renderJobToJpeg(
       geometry.height,
       correctedRgb,
       job.params,
+      timings: renderTimings,
     );
   } else {
     rendered = job.masks.isEmpty

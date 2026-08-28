@@ -65,8 +65,9 @@ class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
   /// Rapid export forces JPEG at [rapidExportQuality] regardless of
   /// [_format]/[_quality] above (still shown, just disabled, rather than
   /// hidden — so switching it off leaves the format/quality exactly as the
-  /// user last set them instead of resetting).
-  bool _rapid = false;
+  /// user last set them instead of resetting). On by default — the common
+  /// case is a shareable file, not an archival master.
+  bool _rapid = true;
 
   int _rapidScalePercent = defaultRapidExportScalePercent;
 
