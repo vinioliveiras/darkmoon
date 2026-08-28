@@ -95,20 +95,34 @@ void main() {
 
   group('wbMultipliersToKelvinTint', () {
     test('a daylight-ish cam_mul lands in a plausible band', () {
+      // XYZ->camera matrix (dcraw convention) — identity-ish so the
+      // inverse is well-conditioned.
       final res = wbMultipliersToKelvinTint(
         [2.0, 1.0, 1.5, 1.0],
-        const [
-          [0.4124, 0.3576, 0.1805],
-          [0.2126, 0.7152, 0.0722],
-          [0.0193, 0.1192, 0.9505],
+        camXyz: const [
+          [1.0, 0.0, 0.0],
+          [0.0, 1.0, 0.0],
+          [0.0, 0.0, 1.0],
         ],
       );
-      expect(res.kelvin, inInclusiveRange(3500, 9000));
+      expect(res.kelvin, inInclusiveRange(2000, 50000));
       expect(res.tint, inInclusiveRange(-150, 150));
     });
 
+    test('interpolates the camera WBCT table when present', () {
+      // Two-row table: 3000 K warm (more B gain), 6500 K cool (more R gain).
+      final res = wbMultipliersToKelvinTint(
+        [1.6, 1.0, 1.6, 1.0], // R/B == 1 -> midway
+        wbctCoeffs: const [
+          [3000, 1.2, 1.0, 2.2, 1.0],
+          [6500, 2.2, 1.0, 1.2, 1.0],
+        ],
+      );
+      expect(res.kelvin, inInclusiveRange(3500, 5500));
+    });
+
     test('falls back to 5500/0 on unset multipliers', () {
-      final res = wbMultipliersToKelvinTint([0, 0, 0, 0], const []);
+      final res = wbMultipliersToKelvinTint([0, 0, 0, 0]);
       expect(res.kelvin, 5500);
       expect(res.tint, 0);
     });

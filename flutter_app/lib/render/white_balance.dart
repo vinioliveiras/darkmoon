@@ -143,27 +143,120 @@ double kelvinForRapidTemperature(double rapidTemperature, double asShotKelvin) {
 /// camera-RGB->XYZ matrix. Not spectrally exact — good to a few hundred K,
 /// which is fine since it's both the displayed "As Shot" value and the
 /// no-op reference (self-consistent).
+/// Tint magnitude, in this app's -150..150 units, for a doubling of the
+/// camera's combined R+B gain excess over the Planckian locus. Calibrated
+/// by eye against Lightroom's own "As Shot" Tint readout.
+const double _wbTintScale = 200.0;
+
 ({double kelvin, double tint}) wbMultipliersToKelvinTint(
-  List<double> camMul,
-  List<List<double>> camXyz,
-) {
+  List<double> camMul, {
+  List<List<double>> camXyz = const [],
+  List<List<double>> wbctCoeffs = const [],
+}) {
   if (camMul.length < 3 ||
       camMul[0] <= 0 ||
       camMul[1] <= 0 ||
       camMul[2] <= 0) {
     return (kelvin: wbDefaultKelvin, tint: wbDefaultTint);
   }
-  // Camera RGB of a surface the camera considers neutral = 1 / multiplier.
-  final camR = 1.0 / camMul[0];
-  final camG = 1.0 / camMul[1];
-  final camB = 1.0 / camMul[2];
+  // Normalize the as-shot multipliers to green.
+  final cr = camMul[0] / camMul[1];
+  final cb = camMul[2] / camMul[1];
 
-  // cam_xyz maps camera RGB -> XYZ. Fall back to a sRGB-ish matrix if it
-  // looks unpopulated.
-  final m = _cameraXyzOrFallback(camXyz);
-  var x = m[0][0] * camR + m[0][1] * camG + m[0][2] * camB;
-  var y = m[1][0] * camR + m[1][1] * camG + m[1][2] * camB;
-  var z = m[2][0] * camR + m[2][1] * camG + m[2][2] * camB;
+  final fromTable = _kelvinTintFromWbct(cr, cb, wbctCoeffs);
+  if (fromTable != null) {
+    return fromTable;
+  }
+  return _kelvinTintFromMatrix(camMul, camXyz);
+}
+
+/// Interpolates the camera's own colour-temperature table
+/// (`libraw_colordata_t.WBCT_Coeffs`, rows `[kelvin, m0, m1, m2, m3]`) —
+/// camera-accurate, no colour matrix needed. Returns null if the table
+/// isn't usable (too few valid rows, or the ratio falls outside it).
+({double kelvin, double tint})? _kelvinTintFromWbct(
+  double cr,
+  double cb,
+  List<List<double>> wbctCoeffs,
+) {
+  // Valid rows -> (kelvin, rRatio = R/G, bRatio = B/G), sorted by kelvin.
+  final rows = <({double k, double r, double b})>[];
+  for (final row in wbctCoeffs) {
+    if (row.length < 4 || row[0] <= 0 || row[1] <= 0 || row[2] <= 0 ||
+        row[3] <= 0) {
+      continue;
+    }
+    rows.add((k: row[0], r: row[1] / row[2], b: row[3] / row[2]));
+  }
+  if (rows.length < 2) {
+    return null;
+  }
+  rows.sort((a, b) => a.k.compareTo(b.k));
+
+  // log(R/B) is monotonic in kelvin and roughly linear in *mired*
+  // (1e6/K) — the scale colour-temperature correction is actually linear
+  // on. Interpolate the bracketing rows in mired, not in kelvin, or the
+  // warm side reads a few hundred K too high.
+  double rowKey(({double k, double r, double b}) row) =>
+      math.log(row.r / row.b);
+  final key = math.log(cr / cb);
+  ({double k, double r, double b}) lo = rows.first;
+  ({double k, double r, double b}) hi = rows.last;
+  var bracketed = false;
+  for (var i = 0; i < rows.length - 1; i++) {
+    final ka = rowKey(rows[i]), kc = rowKey(rows[i + 1]);
+    if ((key >= ka && key <= kc) || (key <= ka && key >= kc)) {
+      lo = rows[i];
+      hi = rows[i + 1];
+      bracketed = true;
+      break;
+    }
+  }
+  final loKey = rowKey(lo);
+  final hiKey = rowKey(hi);
+  final span = hiKey - loKey;
+  final t = span.abs() < 1e-9 ? 0.0 : ((key - loKey) / span).clamp(-1.0, 2.0);
+  final loMired = 1.0e6 / lo.k;
+  final hiMired = 1.0e6 / hi.k;
+  final mired = loMired + (hiMired - loMired) * t;
+  final kelvin = (1.0e6 / mired).clamp(2000.0, 50000.0);
+  if (!bracketed && (t < -0.5 || t > 1.5)) {
+    // As-shot ratio is well outside the table — don't trust it.
+    return null;
+  }
+
+  // Tint: how much extra R+B gain the camera applied versus the on-locus
+  // multipliers at this kelvin (same R/B ratio, different magnitude).
+  final locusR = lo.r + (hi.r - lo.r) * t;
+  final locusB = lo.b + (hi.b - lo.b) * t;
+  final camMag = math.sqrt(cr * cb);
+  final locusMag = math.sqrt(locusR * locusB);
+  final excess = locusMag <= 0 ? 0.0 : math.log(camMag / locusMag) / math.ln2;
+  final tint = (excess * _wbTintScale).clamp(-150.0, 150.0);
+
+  return (kelvin: kelvin, tint: tint);
+}
+
+/// Fallback when the camera has no usable WBCT table: the colorimetric
+/// path. `cam_xyz` is the **XYZ -> camera** matrix (dcraw/Adobe DNG
+/// convention), so it must be inverted to map the neutral's camera RGB
+/// back to XYZ.
+({double kelvin, double tint}) _kelvinTintFromMatrix(
+  List<double> camMul,
+  List<List<double>> camXyz,
+) {
+  final xyzToCam = _usable3x3(camXyz) ?? _srgbToXyz; // (already cam<-XYZ)
+  final camToXyz = _invert3x3(xyzToCam);
+  if (camToXyz == null) {
+    return (kelvin: wbDefaultKelvin, tint: wbDefaultTint);
+  }
+  // Camera RGB of a surface the camera considers neutral = 1 / multiplier.
+  final cR = 1.0 / camMul[0];
+  final cG = 1.0 / camMul[1];
+  final cB = 1.0 / camMul[2];
+  var x = camToXyz[0][0] * cR + camToXyz[0][1] * cG + camToXyz[0][2] * cB;
+  var y = camToXyz[1][0] * cR + camToXyz[1][1] * cG + camToXyz[1][2] * cB;
+  var z = camToXyz[2][0] * cR + camToXyz[2][1] * cG + camToXyz[2][2] * cB;
   final sum = x + y + z;
   if (sum <= 0 || y <= 0) {
     return (kelvin: wbDefaultKelvin, tint: wbDefaultTint);
@@ -171,42 +264,52 @@ double kelvinForRapidTemperature(double rapidTemperature, double asShotKelvin) {
   x /= sum;
   y /= sum;
 
-  // McCamy's CCT approximation.
   final n = (x - 0.3320) / (0.1858 - y);
-  var cct = 449.0 * n * n * n + 3525.0 * n * n + 6823.3 * n + 5520.33;
-  cct = cct.clamp(2000.0, 50000.0);
+  final cct = (449.0 * n * n * n + 3525.0 * n * n + 6823.3 * n + 5520.33)
+      .clamp(2000.0, 50000.0);
 
-  // Tint = signed distance off the Planckian locus in the CIE 1960 uv
-  // plane, scaled to roughly track the -150..150 slider.
   final denom = -2.0 * x + 12.0 * y + 3.0;
   final u = 4.0 * x / denom;
   final v = 6.0 * y / denom;
   final locus = _planckianUv(cct);
-  final duv = (v - locus.v) - (u - locus.u); // rough green/magenta projection
-  final tint = (-duv * 3000.0).clamp(-150.0, 150.0);
+  final duv = (v - locus.v) - (u - locus.u);
+  final tint = (duv * 6000.0).clamp(-150.0, 150.0);
 
   return (kelvin: cct, tint: tint);
 }
 
-List<List<double>> _cameraXyzOrFallback(List<List<double>> camXyz) {
-  if (camXyz.length >= 3 && camXyz[0].length >= 3) {
-    var nonZero = false;
-    for (var i = 0; i < 3; i++) {
-      for (var j = 0; j < 3; j++) {
-        if (camXyz[i][j] != 0) {
-          nonZero = true;
-        }
-      }
-    }
-    if (nonZero) {
-      return camXyz;
+const _srgbToXyz = [
+  [0.4124, 0.3576, 0.1805],
+  [0.2126, 0.7152, 0.0722],
+  [0.0193, 0.1192, 0.9505],
+];
+
+List<List<double>>? _usable3x3(List<List<double>> m) {
+  if (m.length < 3 || m[0].length < 3) {
+    return null;
+  }
+  var nonZero = false;
+  for (var i = 0; i < 3; i++) {
+    for (var j = 0; j < 3; j++) {
+      if (m[i][j] != 0) nonZero = true;
     }
   }
-  // sRGB (linear) -> XYZ D65.
-  return const [
-    [0.4124, 0.3576, 0.1805],
-    [0.2126, 0.7152, 0.0722],
-    [0.0193, 0.1192, 0.9505],
+  return nonZero ? m : null;
+}
+
+List<List<double>>? _invert3x3(List<List<double>> m) {
+  final a = m[0][0], b = m[0][1], c = m[0][2];
+  final d = m[1][0], e = m[1][1], f = m[1][2];
+  final g = m[2][0], h = m[2][1], i = m[2][2];
+  final det = a * (e * i - f * h) - b * (d * i - f * g) + c * (d * h - e * g);
+  if (det.abs() < 1e-12) {
+    return null;
+  }
+  final inv = 1.0 / det;
+  return [
+    [(e * i - f * h) * inv, (c * h - b * i) * inv, (b * f - c * e) * inv],
+    [(f * g - d * i) * inv, (a * i - c * g) * inv, (c * d - a * f) * inv],
+    [(d * h - e * g) * inv, (b * g - a * h) * inv, (a * e - b * d) * inv],
   ];
 }
 

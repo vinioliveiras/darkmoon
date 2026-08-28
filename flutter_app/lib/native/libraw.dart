@@ -202,7 +202,27 @@ RawMetadata? extractRawMetadata(String path) {
       for (var i = 0; i < 3; i++)
         [color.cam_xyz[i][0], color.cam_xyz[i][1], color.cam_xyz[i][2]],
     ];
-    final asShot = wbMultipliersToKelvinTint(camMul, camXyz);
+    // The camera's own colour-temperature table: rows [kelvin, m0..m3],
+    // terminated by a zero-kelvin row. Up to 64 rows.
+    final wbctCoeffs = <List<double>>[];
+    for (var i = 0; i < 64; i++) {
+      final k = color.WBCT_Coeffs[i][0];
+      if (k <= 0) {
+        break;
+      }
+      wbctCoeffs.add([
+        k,
+        color.WBCT_Coeffs[i][1],
+        color.WBCT_Coeffs[i][2],
+        color.WBCT_Coeffs[i][3],
+        color.WBCT_Coeffs[i][4],
+      ]);
+    }
+    final asShot = wbMultipliersToKelvinTint(
+      camMul,
+      camXyz: camXyz,
+      wbctCoeffs: wbctCoeffs,
+    );
     return RawMetadata(
       cameraMake: _charArrayToString(idata.normalized_make, 64),
       cameraModel: _charArrayToString(idata.normalized_model, 64),
@@ -216,6 +236,81 @@ RawMetadata? extractRawMetadata(String path) {
       asShotKelvin: asShot.kelvin,
       asShotTint: asShot.tint,
     );
+  } finally {
+    lib.libraw_close(lr);
+  }
+}
+
+/// Diagnostic dump of everything LibRaw exposes about [path]'s white
+/// balance — `cam_mul`, `pre_mul`, the WBCT colour-temperature table, the
+/// named-illuminant `WB_Coeffs` presets and `cam_xyz` — plus what
+/// [wbMultipliersToKelvinTint] makes of it. Used by `tool/wb_dump.dart` to
+/// calibrate the as-shot Kelvin/Tint estimate against Lightroom.
+String dumpRawWhiteBalanceInfo(String path) {
+  final lib = _Lib.instance;
+  final lr = _openRaw(lib, path);
+  if (lr == null) {
+    return 'LibRaw failed to open $path';
+  }
+  try {
+    final color = lr.ref.color;
+    final idata = lr.ref.idata;
+    final camMul = [for (var i = 0; i < 4; i++) color.cam_mul[i].toDouble()];
+    final camXyz = [
+      for (var i = 0; i < 3; i++)
+        [for (var j = 0; j < 3; j++) color.cam_xyz[i][j].toDouble()],
+    ];
+    final wbct = <List<double>>[];
+    for (var i = 0; i < 64; i++) {
+      final k = color.WBCT_Coeffs[i][0];
+      if (k <= 0) break;
+      wbct.add([for (var j = 0; j < 5; j++) color.WBCT_Coeffs[i][j].toDouble()]);
+    }
+    final est = wbMultipliersToKelvinTint(
+      camMul,
+      camXyz: camXyz,
+      wbctCoeffs: wbct,
+    );
+    final b = StringBuffer();
+    // Essentials first — terminals truncate long output.
+    b.writeln('${_charArrayToString(idata.normalized_make, 64)} '
+        '${_charArrayToString(idata.normalized_model, 64)}');
+    b.writeln('cam_mul  : ${[for (var i = 0; i < 4; i++) color.cam_mul[i]]}');
+    b.writeln('pre_mul  : ${[for (var i = 0; i < 4; i++) color.pre_mul[i]]}');
+    b.writeln('as_shot_wb_applied: ${color.as_shot_wb_applied}');
+    b.writeln('=> estimated as-shot: ${est.kelvin.round()} K / '
+        'tint ${est.tint.toStringAsFixed(1)}');
+    b.writeln('WB_Coeffs presets (index: m0..m3):');
+    const names = {
+      1: 'Daylight',
+      2: 'Fluorescent',
+      3: 'Tungsten',
+      4: 'Flash',
+      9: 'FineWeather',
+      10: 'Cloudy',
+      11: 'Shade',
+      17: 'IllA(Tungsten2856K)',
+      20: 'D55',
+      21: 'D65',
+      23: 'D50',
+    };
+    names.forEach((idx, name) {
+      final row = [for (var j = 0; j < 4; j++) color.WB_Coeffs[idx][j]];
+      if (row.any((v) => v != 0)) {
+        b.writeln('  $name ($idx): $row');
+      }
+    });
+    b.writeln('cam_xyz  :');
+    for (var i = 0; i < 4; i++) {
+      b.writeln('  ${[for (var j = 0; j < 3; j++) color.cam_xyz[i][j]]}');
+    }
+    b.writeln('WBCT_Coeffs (kelvin, m0..m3):');
+    for (var i = 0; i < 64; i++) {
+      final k = color.WBCT_Coeffs[i][0];
+      if (k <= 0) break;
+      b.writeln('  ${[for (var j = 0; j < 5; j++) color.WBCT_Coeffs[i][j]]}');
+    }
+    return b.toString();
   } finally {
     lib.libraw_close(lr);
   }
