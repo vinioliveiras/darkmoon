@@ -31,6 +31,9 @@ void main(List<String> args) {
       exit(1);
     }
   }
+  final out = dumpRawWhiteBalanceInfo(args[0]);
+  File('wb_dump_out.txt').writeAsStringSync(out);
   // ignore: avoid_print
-  print(dumpRawWhiteBalanceInfo(args[0]));
+  print(out);
+  stderr.writeln('\n(also written to wb_dump_out.txt)');
 }

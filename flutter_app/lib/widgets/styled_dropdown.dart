@@ -45,6 +45,7 @@ class StyledDropdown<T> extends StatefulWidget {
     this.searchable = false,
     this.searchHintText,
     this.noMatchesText,
+    this.maxMenuHeight = 320,
   });
 
   final T? value;
@@ -89,6 +90,11 @@ class StyledDropdown<T> extends StatefulWidget {
   /// unless [searchable].
   final String? noMatchesText;
 
+  /// Cap on the popup's height. The default (320) forces a scroll for
+  /// long lists (the lens-profile picker); raise it for a short fixed
+  /// list that should show every option at once.
+  final double maxMenuHeight;
+
   @override
   State<StyledDropdown<T>> createState() => _StyledDropdownState<T>();
 }
@@ -122,6 +128,7 @@ class _StyledDropdownState<T> extends State<StyledDropdown<T>> {
         searchable: widget.searchable,
         searchHintText: widget.searchHintText,
         noMatchesText: widget.noMatchesText,
+        maxHeight: widget.maxMenuHeight,
         onSelected: (value) {
           widget.onChanged(value);
           _closeMenu();
@@ -263,6 +270,7 @@ class _StyledDropdownMenu<T> extends StatefulWidget {
     required this.selectedValue,
     required this.onSelected,
     required this.onDismissed,
+    required this.maxHeight,
     this.searchable = false,
     this.searchHintText,
     this.noMatchesText,
@@ -275,6 +283,7 @@ class _StyledDropdownMenu<T> extends StatefulWidget {
   final T? selectedValue;
   final ValueChanged<T> onSelected;
   final VoidCallback onDismissed;
+  final double maxHeight;
   final bool searchable;
   final String? searchHintText;
   final String? noMatchesText;
@@ -344,7 +353,7 @@ class _StyledDropdownMenuState<T> extends State<_StyledDropdownMenu<T>> {
                   ),
                 ],
               ),
-              constraints: const BoxConstraints(maxHeight: 320),
+              constraints: BoxConstraints(maxHeight: widget.maxHeight),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [

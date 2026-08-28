@@ -3,3 +3,4 @@ dist/
 *.zip
 .claude/*
 .vscode/settings.json
+flutter_app/wb_dump_out.txt

@@ -202,26 +202,10 @@ RawMetadata? extractRawMetadata(String path) {
       for (var i = 0; i < 3; i++)
         [color.cam_xyz[i][0], color.cam_xyz[i][1], color.cam_xyz[i][2]],
     ];
-    // The camera's own colour-temperature table: rows [kelvin, m0..m3],
-    // terminated by a zero-kelvin row. Up to 64 rows.
-    final wbctCoeffs = <List<double>>[];
-    for (var i = 0; i < 64; i++) {
-      final k = color.WBCT_Coeffs[i][0];
-      if (k <= 0) {
-        break;
-      }
-      wbctCoeffs.add([
-        k,
-        color.WBCT_Coeffs[i][1],
-        color.WBCT_Coeffs[i][2],
-        color.WBCT_Coeffs[i][3],
-        color.WBCT_Coeffs[i][4],
-      ]);
-    }
     final asShot = wbMultipliersToKelvinTint(
       camMul,
       camXyz: camXyz,
-      wbctCoeffs: wbctCoeffs,
+      wbctCoeffs: _wbctRows(lr),
     );
     return RawMetadata(
       cameraMake: _charArrayToString(idata.normalized_make, 64),
@@ -260,12 +244,7 @@ String dumpRawWhiteBalanceInfo(String path) {
       for (var i = 0; i < 3; i++)
         [for (var j = 0; j < 3; j++) color.cam_xyz[i][j].toDouble()],
     ];
-    final wbct = <List<double>>[];
-    for (var i = 0; i < 64; i++) {
-      final k = color.WBCT_Coeffs[i][0];
-      if (k <= 0) break;
-      wbct.add([for (var j = 0; j < 5; j++) color.WBCT_Coeffs[i][j].toDouble()]);
-    }
+    final wbct = _wbctRows(lr);
     final est = wbMultipliersToKelvinTint(
       camMul,
       camXyz: camXyz,
@@ -314,6 +293,21 @@ String dumpRawWhiteBalanceInfo(String path) {
   } finally {
     lib.libraw_close(lr);
   }
+}
+
+/// The camera's own colour-temperature table (`color.WBCT_Coeffs`) as
+/// `[kelvin, m0..m3]` rows, up to the terminating zero-kelvin row.
+List<List<double>> _wbctRows(Pointer<libraw_data_t> lr) {
+  final t = lr.ref.color.WBCT_Coeffs;
+  final rows = <List<double>>[];
+  for (var i = 0; i < 64; i++) {
+    final k = t[i][0];
+    if (k <= 0) {
+      break;
+    }
+    rows.add([k, t[i][1], t[i][2], t[i][3], t[i][4]]);
+  }
+  return rows;
 }
 
 /// Opens [path], returning an initialized `libraw_data_t*`, or null (after

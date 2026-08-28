@@ -94,25 +94,39 @@ void main() {
   });
 
   group('wbMultipliersToKelvinTint', () {
-    test('a daylight-ish cam_mul lands in a plausible band', () {
-      // XYZ->camera matrix (dcraw convention) — identity-ish so the
-      // inverse is well-conditioned.
+    // The real Fujifilm X100VI numbers from tool/wb_dump.dart — the whole
+    // point of this feature is to land near what Lightroom shows for this
+    // file (5550 K / -42).
+    const fujiCamXyz = [
+      [1.1809, -0.5358, -0.1141],
+      [-0.4248, 1.2164, 0.2343],
+      [-0.0514, 0.1097, 0.5848],
+    ];
+
+    test('X100VI as-shot lands near the Lightroom reading (5550 / -42)', () {
       final res = wbMultipliersToKelvinTint(
-        [2.0, 1.0, 1.5, 1.0],
-        camXyz: const [
-          [1.0, 0.0, 0.0],
-          [0.0, 1.0, 0.0],
-          [0.0, 0.0, 1.0],
-        ],
+        [515.0, 302.0, 428.0, 0.0],
+        camXyz: fujiCamXyz,
       );
-      expect(res.kelvin, inInclusiveRange(2000, 50000));
-      expect(res.tint, inInclusiveRange(-150, 150));
+      expect(res.kelvin, inInclusiveRange(5100, 6000));
+      expect(res.tint, inInclusiveRange(-55, -30));
     });
 
-    test('interpolates the camera WBCT table when present', () {
-      // Two-row table: 3000 K warm (more B gain), 6500 K cool (more R gain).
+    test('a bluer as-shot (cool scene) reads warmer Kelvin', () {
+      final cool = wbMultipliersToKelvinTint(
+        [640.0, 302.0, 360.0, 0.0],
+        camXyz: fujiCamXyz,
+      );
+      final warm = wbMultipliersToKelvinTint(
+        [360.0, 302.0, 640.0, 0.0],
+        camXyz: fujiCamXyz,
+      );
+      expect(cool.kelvin, greaterThan(warm.kelvin));
+    });
+
+    test('falls back to the WBCT table when there is no camera matrix', () {
       final res = wbMultipliersToKelvinTint(
-        [1.6, 1.0, 1.6, 1.0], // R/B == 1 -> midway
+        [1.6, 1.0, 1.6, 1.0],
         wbctCoeffs: const [
           [3000, 1.2, 1.0, 2.2, 1.0],
           [6500, 2.2, 1.0, 1.2, 1.0],
@@ -121,7 +135,7 @@ void main() {
       expect(res.kelvin, inInclusiveRange(3500, 5500));
     });
 
-    test('falls back to 5500/0 on unset multipliers', () {
+    test('falls back to 5500/0 with no data at all', () {
       final res = wbMultipliersToKelvinTint([0, 0, 0, 0]);
       expect(res.kelvin, 5500);
       expect(res.tint, 0);

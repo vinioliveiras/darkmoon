@@ -5223,6 +5223,8 @@ class _ControlsPanelState extends State<_ControlsPanel> {
         Expanded(
           child: StyledDropdown<int>(
             value: modeIndex,
+            // Short fixed list — show every mode without a scroll.
+            maxMenuHeight: 460,
             items: [
               for (final mode in WbMode.values)
                 StyledDropdownItem(
