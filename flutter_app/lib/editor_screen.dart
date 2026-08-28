@@ -120,6 +120,20 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderGrainSize;
     case 'GrainRoughness':
       return l10n.sliderGrainRoughness;
+    case 'ParamCurveShadows':
+      return l10n.sliderParamCurveShadows;
+    case 'ParamCurveDarks':
+      return l10n.sliderParamCurveDarks;
+    case 'ParamCurveLights':
+      return l10n.sliderParamCurveLights;
+    case 'ParamCurveHighlights':
+      return l10n.sliderParamCurveHighlights;
+    case 'ParamCurveShadowSplit':
+      return l10n.sliderParamCurveShadowSplit;
+    case 'ParamCurveMidtoneSplit':
+      return l10n.sliderParamCurveMidtoneSplit;
+    case 'ParamCurveHighlightSplit':
+      return l10n.sliderParamCurveHighlightSplit;
     default:
       return key;
   }
@@ -275,6 +289,14 @@ Map<String, double> _withCategoriesApplied(
       }
     }
   }
+  if (disabled('TONE CURVE')) {
+    // The point Tone Curve is reset in _withCurveCategoriesApplied (it
+    // lives in PhotoCurves); the parametric region sliders are flat map
+    // entries, so they're reset here.
+    for (final spec in _parametricCurveSliders) {
+      overrides[spec.name] = spec.defaultValue;
+    }
+  }
   return overrides.isEmpty ? values : {...values, ...overrides};
 }
 
@@ -380,6 +402,20 @@ const _grainSliders = [
   _SliderSpec('GrainRoughness', 0, 100, 50),
 ];
 
+/// Lightroom's parametric Tone Curve — four region sliders plus the three
+/// split points that set where each region ends. Lives under the Tone
+/// Curve editor; toggled off with the TONE CURVE section switch. Split
+/// defaults 25/50/75 match Lightroom (and RapidRAW's Curves.tsx).
+const _parametricCurveSliders = [
+  _SliderSpec('ParamCurveShadows', -100, 100, 0),
+  _SliderSpec('ParamCurveDarks', -100, 100, 0),
+  _SliderSpec('ParamCurveLights', -100, 100, 0),
+  _SliderSpec('ParamCurveHighlights', -100, 100, 0),
+  _SliderSpec('ParamCurveShadowSplit', 5, 90, 25),
+  _SliderSpec('ParamCurveMidtoneSplit', 10, 94, 50),
+  _SliderSpec('ParamCurveHighlightSplit', 20, 98, 75),
+];
+
 Map<String, double> _defaultParamValues() {
   return {
     for (final specs in _sections.values)
@@ -390,6 +426,7 @@ Map<String, double> _defaultParamValues() {
     // those keys missing and the sliders would snap to 0.
     for (final spec in _vignetteSliders) spec.name: spec.defaultValue,
     for (final spec in _grainSliders) spec.name: spec.defaultValue,
+    for (final spec in _parametricCurveSliders) spec.name: spec.defaultValue,
     // Lens Correction is also global-only (see RenderJob.lensCorrection's
     // doc comment) and lives outside [_sections] for the same reason as
     // Vignette above -- seeded from the params class's own defaults
@@ -5661,7 +5698,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChangeEnd(key, v ? 1 : 0);
                             },
                           ),
-                          if (!_collapsed.contains('TONE CURVE'))
+                          if (!_collapsed.contains('TONE CURVE')) ...[
                             Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: ToneCurveEditor(
@@ -5670,6 +5707,31 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 onChangeEnd: onToneCurveChangeEnd,
                               ),
                             ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Text(
+                                l10n.toneCurveParametricLabel,
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(color: DarkmoonColors.textMuted),
+                              ),
+                            ),
+                            for (final spec in _parametricCurveSliders)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: SliderRow(
+                                  name: _sliderLabel(l10n, spec.name),
+                                  min: spec.min,
+                                  max: spec.max,
+                                  value:
+                                      values[spec.name] ?? spec.defaultValue,
+                                  decimals: spec.decimals,
+                                  defaultValue: spec.defaultValue,
+                                  onChanged: (v) => onChanged(spec.name, v),
+                                  onChangeEnd: (v) =>
+                                      onChangeEnd(spec.name, v),
+                                ),
+                              ),
+                          ],
                           _SectionHeader(
                             label: l10n.sectionColorCurve,
                             collapsed: _collapsed.contains('COLOR CURVE'),

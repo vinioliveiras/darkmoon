@@ -1388,6 +1388,54 @@ abstract class AppLocalizations {
   /// **'Grain Roughness'**
   String get sliderGrainRoughness;
 
+  /// No description provided for @sliderParamCurveShadows.
+  ///
+  /// In en, this message translates to:
+  /// **'Shadows'**
+  String get sliderParamCurveShadows;
+
+  /// No description provided for @sliderParamCurveDarks.
+  ///
+  /// In en, this message translates to:
+  /// **'Darks'**
+  String get sliderParamCurveDarks;
+
+  /// No description provided for @sliderParamCurveLights.
+  ///
+  /// In en, this message translates to:
+  /// **'Lights'**
+  String get sliderParamCurveLights;
+
+  /// No description provided for @sliderParamCurveHighlights.
+  ///
+  /// In en, this message translates to:
+  /// **'Highlights'**
+  String get sliderParamCurveHighlights;
+
+  /// No description provided for @sliderParamCurveShadowSplit.
+  ///
+  /// In en, this message translates to:
+  /// **'Shadow Split'**
+  String get sliderParamCurveShadowSplit;
+
+  /// No description provided for @sliderParamCurveMidtoneSplit.
+  ///
+  /// In en, this message translates to:
+  /// **'Midtone Split'**
+  String get sliderParamCurveMidtoneSplit;
+
+  /// No description provided for @sliderParamCurveHighlightSplit.
+  ///
+  /// In en, this message translates to:
+  /// **'Highlight Split'**
+  String get sliderParamCurveHighlightSplit;
+
+  /// No description provided for @toneCurveParametricLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Parametric'**
+  String get toneCurveParametricLabel;
+
   /// No description provided for @sectionLensCorrection.
   ///
   /// In en, this message translates to:

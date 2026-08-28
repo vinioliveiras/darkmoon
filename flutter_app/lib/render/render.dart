@@ -282,6 +282,11 @@ void applyPostDenoisePointOps(
     tonalBlur,
   );
   _applyRapidContrast(buffer, params.contrast);
+  // Lightroom's parametric Tone Curve runs into the same result as the
+  // point curve; apply it first, then the point curve on top.
+  if (!params.parametricCurve.isIdentity) {
+    applyToneCurve(buffer, parametricCurvePoints(params.parametricCurve));
+  }
   applyToneCurve(buffer, params.curves.tone);
   applyColorCurves(
     buffer,

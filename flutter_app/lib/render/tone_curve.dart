@@ -173,6 +173,105 @@ void _applyCurveToChannel(
   }
 }
 
+double _tanh(double v) {
+  final e = math.exp(2.0 * v);
+  return (e - 1.0) / (e + 1.0);
+}
+
+/// Lightroom's *parametric* Tone Curve — four region sliders (Shadows /
+/// Darks / Lights / Highlights, each -100..100) whose extents are set by
+/// three split points (defaults 25 / 50 / 75). Unlike the point curve, the
+/// user never places points directly; the region sliders bend a fixed
+/// 7-node curve. Applied on top of (before) the point Tone Curve, matching
+/// Lightroom, where both sub-panels feed the same result.
+///
+/// The node layout and the `tanh`-based response are ported from RapidRAW's
+/// `buildParametricPoints` (Curves.tsx) — same spline family as
+/// [buildToneCurveLut] evaluates.
+class ParametricCurve {
+  const ParametricCurve({
+    this.shadows = 0,
+    this.darks = 0,
+    this.lights = 0,
+    this.highlights = 0,
+    this.shadowSplit = 25,
+    this.midtoneSplit = 50,
+    this.highlightSplit = 75,
+  });
+
+  /// From the editor's flat `{sliderName: value}` map — keys
+  /// `ParamCurve<Shadows|Darks|Lights|Highlights>` and
+  /// `ParamCurve<Shadow|Midtone|Highlight>Split`.
+  factory ParametricCurve.fromValues(Map<String, double> values) {
+    const d = ParametricCurve();
+    return ParametricCurve(
+      shadows: values['ParamCurveShadows'] ?? d.shadows,
+      darks: values['ParamCurveDarks'] ?? d.darks,
+      lights: values['ParamCurveLights'] ?? d.lights,
+      highlights: values['ParamCurveHighlights'] ?? d.highlights,
+      shadowSplit: values['ParamCurveShadowSplit'] ?? d.shadowSplit,
+      midtoneSplit: values['ParamCurveMidtoneSplit'] ?? d.midtoneSplit,
+      highlightSplit: values['ParamCurveHighlightSplit'] ?? d.highlightSplit,
+    );
+  }
+
+  final double shadows;
+  final double darks;
+  final double lights;
+  final double highlights;
+  final double shadowSplit;
+  final double midtoneSplit;
+  final double highlightSplit;
+
+  bool get isIdentity =>
+      shadows == 0 && darks == 0 && lights == 0 && highlights == 0;
+}
+
+const identityParametricCurve = ParametricCurve();
+
+/// The 7 control points the four region sliders bend into shape — feed
+/// straight to [buildToneCurveLut] / [applyToneCurve]. Returns
+/// [identityToneCurve] when nothing is dialed in.
+List<CurvePoint> parametricCurvePoints(ParametricCurve p) {
+  if (p.isIdentity) {
+    return identityToneCurve;
+  }
+  final vS = p.shadows / 100.0;
+  final vD = p.darks / 100.0;
+  final vL = p.lights / 100.0;
+  final vH = p.highlights / 100.0;
+
+  final s1 = (p.shadowSplit / 100.0).clamp(0.05, 0.90);
+  final s2 = (p.midtoneSplit / 100.0).clamp(s1 + 0.02, 0.94);
+  final s3 = (p.highlightSplit / 100.0).clamp(s2 + 0.02, 0.98);
+
+  final xS = s1 / 2.0;
+  final xH = (s3 + 1.0) / 2.0;
+  final xs = [0.0, xS, s1, s2, s3, xH, 1.0];
+
+  const sliderGain = 1.2;
+  const maxDisplacement = 0.35;
+  double response(double v, double x) {
+    final headroom = (v >= 0 ? 1.0 - x : x).clamp(0.0, 1.0);
+    return _tanh(v * sliderGain) * maxDisplacement * math.sqrt(headroom);
+  }
+
+  final ys = [
+    0.0,
+    xS + response(vS, xS),
+    s1 + (response(vS, s1) + response(vD, s1)) / 2.0,
+    s2 + (response(vD, s2) + response(vL, s2)) / 2.0,
+    s3 + (response(vL, s3) + response(vH, s3)) / 2.0,
+    xH + response(vH, xH),
+    1.0,
+  ];
+
+  return [
+    for (var i = 0; i < 7; i++)
+      CurvePoint(xs[i], ys[i].clamp(0.0, 1.0)),
+  ];
+}
+
 /// Every curve for one photo, bundled together for [RenderParams] and
 /// persistence — the master Tone Curve plus the three Color Curve
 /// channels.

@@ -29,6 +29,7 @@ class RenderParams {
     this.vibrance = 0,
     this.saturation = 0,
     this.curves = identityPhotoCurves,
+    this.parametricCurve = identityParametricCurve,
     this.colorMixer = const ColorMixerValues(),
     this.colorGrading = const ColorGradingValues(),
     this.aiDenoise = const AiDenoiseParams(),
@@ -70,6 +71,7 @@ class RenderParams {
       vibrance: values['Vibrance'] ?? defaults.vibrance,
       saturation: values['Saturation'] ?? defaults.saturation,
       curves: curves ?? defaults.curves,
+      parametricCurve: ParametricCurve.fromValues(values),
       colorMixer: ColorMixerValues.fromValues(values),
       colorGrading: ColorGradingValues.fromValues(values),
       aiDenoise: AiDenoiseParams.fromValues(values),
@@ -112,6 +114,10 @@ class RenderParams {
   final double vibrance;
   final double saturation;
   final PhotoCurves curves;
+
+  /// Lightroom's parametric Tone Curve (region sliders). Applied just
+  /// before [curves]'s point Tone Curve — see `applyPostDenoisePointOps`.
+  final ParametricCurve parametricCurve;
   final ColorMixerValues colorMixer;
   final ColorGradingValues colorGrading;
   final AiDenoiseParams aiDenoise;

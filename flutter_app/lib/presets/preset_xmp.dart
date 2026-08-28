@@ -43,6 +43,13 @@ const _directMappings = [
   ('GrainAmount', 'GrainAmount'),
   ('GrainSize', 'GrainSize'),
   ('GrainRoughness', 'GrainFrequency'),
+  ('ParamCurveShadows', 'ParametricShadows'),
+  ('ParamCurveDarks', 'ParametricDarks'),
+  ('ParamCurveLights', 'ParametricLights'),
+  ('ParamCurveHighlights', 'ParametricHighlights'),
+  ('ParamCurveShadowSplit', 'ParametricShadowSplit'),
+  ('ParamCurveMidtoneSplit', 'ParametricMidtoneSplit'),
+  ('ParamCurveHighlightSplit', 'ParametricHighlightSplit'),
 ];
 
 const _mixerChannels = [

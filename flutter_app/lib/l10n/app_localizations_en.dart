@@ -690,6 +690,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sliderGrainRoughness => 'Grain Roughness';
 
   @override
+  String get sliderParamCurveShadows => 'Shadows';
+
+  @override
+  String get sliderParamCurveDarks => 'Darks';
+
+  @override
+  String get sliderParamCurveLights => 'Lights';
+
+  @override
+  String get sliderParamCurveHighlights => 'Highlights';
+
+  @override
+  String get sliderParamCurveShadowSplit => 'Shadow Split';
+
+  @override
+  String get sliderParamCurveMidtoneSplit => 'Midtone Split';
+
+  @override
+  String get sliderParamCurveHighlightSplit => 'Highlight Split';
+
+  @override
+  String get toneCurveParametricLabel => 'Parametric';
+
+  @override
   String get sectionLensCorrection => 'LENS CORRECTION';
 
   @override

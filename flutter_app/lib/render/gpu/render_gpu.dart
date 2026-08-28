@@ -82,7 +82,7 @@ Future<ui.Image> renderImageGpu(
           height,
           3.5,
         );
-  final lut = await _buildLutImage(params.curves);
+  final lut = await _buildLutImage(params.curves, params.parametricCurve);
   final afterSharpen = await runSharpenGpu(
     afterAiDenoise,
     width,
@@ -383,8 +383,22 @@ Uint8List _lutFor(List<CurvePoint> points) =>
 /// `point_ops_post_denoise.frag`'s `uLut` — r = tone curve, g/b/a =
 /// red/green/blue color curves, each from [_lutFor] (which defers to
 /// `tone_curve.dart`'s own `buildToneCurveLut` for a real curve).
-Future<ui.Image> _buildLutImage(PhotoCurves curves) async {
-  final tone = _lutFor(curves.tone);
+Future<ui.Image> _buildLutImage(
+  PhotoCurves curves,
+  ParametricCurve parametric,
+) async {
+  var tone = _lutFor(curves.tone);
+  if (!parametric.isIdentity) {
+    // Compose parametric-then-point into the single `uLut.r` channel the
+    // shader reads, so no shader change is needed: combined[i] =
+    // pointCurve(parametricCurve(i)).
+    final paramLut = buildToneCurveLut(parametricCurvePoints(parametric));
+    final composed = Uint8List(256);
+    for (var i = 0; i < 256; i++) {
+      composed[i] = tone[paramLut[i]];
+    }
+    tone = composed;
+  }
   final red = _lutFor(curves.red);
   final green = _lutFor(curves.green);
   final blue = _lutFor(curves.blue);
