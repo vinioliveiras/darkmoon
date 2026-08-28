@@ -590,7 +590,13 @@ class _EditorScreenState extends State<EditorScreen> {
   /// otherwise a full RAW decode that then warms the cache.
   EditSource? _fullQualitySource;
   String? _fullQualitySourcePath;
-  bool _loadingFullQualitySource = false;
+  bool _dynamicPreviewRunning = false;
+
+  /// Long edge (px) of the render currently shown for each photo — the
+  /// preview resolution after a normal render, bumped by the dynamic
+  /// full-res pass. Lets that pass bail when the on-screen view is already
+  /// sharp enough for the current zoom.
+  final Map<String, int> _renderedNativeLong = {};
 
   /// Which stage the in-progress AI Denoise render is on — see
   /// [RenderStage]. Only populated for that one render (see
@@ -2502,108 +2508,171 @@ class _EditorScreenState extends State<EditorScreen> {
       // there'd be one of these for every frame of the drag.
       _scheduleThumbnailCacheStore(path, result.thumbnailBytes);
     }
-    // A settled render just landed — if the user opted into the dynamic
-    // full-res preview, upgrade the canvas to a native-resolution render a
-    // beat later (skipped for live drags, mask overlays, and the
-    // progress-tracked AI Denoise pass, which has its own flow).
-    if (!live &&
-        onStage == null &&
-        _settings.dynamicFullPreview &&
-        _activeMaskId == imageMaskId &&
-        !_cropOverlayActive) {
-      _dynamicPreviewTimer?.cancel();
-      _dynamicPreviewTimer = Timer(
-        _dynamicPreviewDelay,
-        () => unawaited(_runDynamicFullPreview(path, requestId)),
-      );
+    // A settled render just landed — it's the preview-resolution one, so
+    // reset what the canvas is showing back to that, and (if the user
+    // opted into the dynamic full-res preview and is zoomed in) schedule a
+    // sharper background render a beat later.
+    if (!live && onStage == null) {
+      final previewSource = _editSources[path]?.preview;
+      _renderedNativeLong[path] = previewSource == null
+          ? _settings.previewResolution
+          : (previewSource.width > previewSource.height
+                ? previewSource.width
+                : previewSource.height);
+      _maybeScheduleDynamicPreview(path);
     }
   }
 
-  /// Re-renders [path] at the sensor's native resolution and swaps it onto
-  /// the canvas, so a zoomed-in view sharpens past [previewResolution].
-  /// [baseRequestId] is the [_renderRequestId] of the settled preview
-  /// render that armed this — if anything has superseded it (a new edit,
-  /// photo switch, …) this bails at every checkpoint. The decoded native
-  /// source is cached in memory (this photo only) and on disk
-  /// ([NativeSourceCache]).
+  /// Arms [_runDynamicFullPreview] for [path] `_dynamicPreviewDelay` from
+  /// now — after a settled render, or after the zoom changes while an edit
+  /// is already settled. Cheap guards here; the real "is it worth it"
+  /// check is in [_runDynamicFullPreview] itself (it needs the source
+  /// dimensions).
+  void _maybeScheduleDynamicPreview(String path) {
+    if (!_settings.dynamicFullPreview ||
+        _activeMaskId != imageMaskId ||
+        _cropOverlayActive ||
+        _beforeAfterMode ||
+        _zoomScale <= 1.1) {
+      return;
+    }
+    final requestId = _renderRequestId;
+    _dynamicPreviewTimer?.cancel();
+    _dynamicPreviewTimer = Timer(
+      _dynamicPreviewDelay,
+      () => unawaited(_runDynamicFullPreview(path, requestId)),
+    );
+  }
+
+  /// Re-renders [path] at a resolution matched to what's actually on
+  /// screen at the current zoom (≈ one rendered pixel per device pixel),
+  /// capped at the sensor's native resolution, and swaps it onto the
+  /// canvas — so pixel-peeping a zoomed-in view sharpens past
+  /// [AppSettings.previewResolution] without paying for a full-sensor
+  /// render at Fit zoom (where it wouldn't be visible anyway).
+  ///
+  /// [baseRequestId] is the [_renderRequestId] this was armed for — any
+  /// newer edit / photo switch supersedes it and this bails at every
+  /// checkpoint. The decoded native source is cached in memory (this photo
+  /// only) and on disk ([NativeSourceCache]).
   Future<void> _runDynamicFullPreview(String path, int baseRequestId) async {
     if (!mounted ||
         baseRequestId != _renderRequestId ||
-        !_settings.dynamicFullPreview) {
+        !_settings.dynamicFullPreview ||
+        _dynamicPreviewRunning ||
+        _renderInFlight ||
+        _zoomScale <= 1.1) {
       return;
     }
-    // Resolve the native-resolution source.
-    EditSource? source = _fullQualitySourcePath == path
-        ? _fullQualitySource
-        : null;
-    if (source == null) {
-      if (_loadingFullQualitySource) {
-        return;
-      }
-      _loadingFullQualitySource = true;
-      try {
+    final metadata = _metadata[path];
+    final nativeLong =
+        (metadata == null || metadata.width <= 0 || metadata.height <= 0)
+        ? null
+        : (metadata.width > metadata.height
+              ? metadata.width
+              : metadata.height);
+
+    // Target long edge: one rendered pixel per on-screen device pixel at
+    // the current zoom, never below the preview resolution, never above
+    // native.
+    final viewportBox =
+        _viewportKey.currentContext?.findRenderObject() as RenderBox?;
+    final dpr = MediaQuery.maybeOf(context)?.devicePixelRatio ?? 1.0;
+    final viewportLong = viewportBox == null
+        ? _settings.previewResolution.toDouble()
+        : (viewportBox.size.width > viewportBox.size.height
+              ? viewportBox.size.width
+              : viewportBox.size.height);
+    var targetLong = (viewportLong * _zoomScale * dpr).round();
+    targetLong = targetLong < _settings.previewResolution
+        ? _settings.previewResolution
+        : targetLong;
+    if (nativeLong != null && targetLong > nativeLong) {
+      targetLong = nativeLong;
+    }
+    final shownLong =
+        _renderedNativeLong[path] ?? _settings.previewResolution;
+    if (targetLong <= (shownLong * 1.15).round()) {
+      return; // already sharp enough for this zoom
+    }
+
+    _dynamicPreviewRunning = true;
+    try {
+      // Native source: memory -> disk cache -> RAW decode (low priority).
+      EditSource? native =
+          _fullQualitySourcePath == path ? _fullQualitySource : null;
+      if (native == null) {
         final cachedJpeg = await _nativeSourceCache?.lookup(path);
         if (cachedJpeg != null) {
-          source = await compute(
-            decodeNativeSourceFromCachedJpeg,
-            cachedJpeg,
-          );
+          native = await compute(decodeNativeSourceFromCachedJpeg, cachedJpeg);
         }
-        source ??= await compute(decodeFullQualitySource, path);
-        if (source != null && cachedJpeg == null) {
-          // Warm the disk cache off the fresh decode (fire-and-forget).
-          final toCache = source;
+        native ??= await compute(decodeFullQualitySourceLowPriority, path);
+        if (!mounted || native == null) {
+          return;
+        }
+        if (cachedJpeg == null) {
+          final toCache = native;
           unawaited(
             compute(encodeNativeSourceForCache, toCache).then(
               (bytes) => _nativeSourceCache?.store(path, bytes),
             ),
           );
         }
-      } finally {
-        _loadingFullQualitySource = false;
+        _fullQualitySource = native;
+        _fullQualitySourcePath = path;
       }
-      if (!mounted || source == null) {
+      if (baseRequestId != _renderRequestId || !_settings.dynamicFullPreview) {
         return;
       }
-      _fullQualitySource = source;
-      _fullQualitySourcePath = path;
+
+      // Downscale the source to the target before rendering — the render
+      // cost is what hurts, and we only need target-resolution pixels.
+      final renderSource = await compute(
+        scaleEditSource,
+        (source: native, maxDim: targetLong),
+      );
+      if (baseRequestId != _renderRequestId || !_settings.dynamicFullPreview) {
+        return;
+      }
+
+      final job = RenderJob(
+        source: renderSource,
+        params: RenderParams.fromValues(
+          _effectiveParamValues(),
+          curves: _effectiveCurves,
+          asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
+          asShotTint: metadata?.asShotTint ?? wbDefaultTint,
+        ),
+        masks: _effectiveMasks,
+        cropTransform: _cropOverlayActive
+            ? _cropTransform.copyWith(
+                cropLeft: 0,
+                cropTop: 0,
+                cropRight: 1,
+                cropBottom: 1,
+              )
+            : _cropTransform,
+        lensCorrection: _lensCorrection,
+        lensProfile: _resolvedLensProfileFor(path),
+        focalLengthMm: metadata?.focalLengthMm ?? 0,
+        apertureFNumber: metadata?.apertureFNumber ?? 0,
+      );
+      final result = await compute(renderJobToJpeg, job);
+      if (!mounted ||
+          baseRequestId != _renderRequestId ||
+          !_settings.dynamicFullPreview) {
+        return;
+      }
+      setState(() {
+        _renderedPreviews[path] = result.jpegBytes;
+        _histograms[path] = result.histogram;
+        _renderedNativeLong[path] = renderSource.width > renderSource.height
+            ? renderSource.width
+            : renderSource.height;
+      });
+    } finally {
+      _dynamicPreviewRunning = false;
     }
-    if (baseRequestId != _renderRequestId || !_settings.dynamicFullPreview) {
-      return;
-    }
-    final metadata = _metadata[path];
-    final job = RenderJob(
-      source: source,
-      params: RenderParams.fromValues(
-        _effectiveParamValues(),
-        curves: _effectiveCurves,
-        asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
-        asShotTint: metadata?.asShotTint ?? wbDefaultTint,
-      ),
-      masks: _effectiveMasks,
-      cropTransform: _cropOverlayActive
-          ? _cropTransform.copyWith(
-              cropLeft: 0,
-              cropTop: 0,
-              cropRight: 1,
-              cropBottom: 1,
-            )
-          : _cropTransform,
-      lensCorrection: _lensCorrection,
-      lensProfile: _resolvedLensProfileFor(path),
-      focalLengthMm: metadata?.focalLengthMm ?? 0,
-      apertureFNumber: metadata?.apertureFNumber ?? 0,
-    );
-    final result = await compute(renderJobToJpeg, job);
-    if (!mounted ||
-        baseRequestId != _renderRequestId ||
-        !_settings.dynamicFullPreview) {
-      return;
-    }
-    setState(() {
-      _renderedPreviews[path] = result.jpegBytes;
-      _histograms[path] = result.histogram;
-    });
   }
 
   /// Renders [path] with neutral (default) params, for the Before/After
@@ -2755,6 +2824,12 @@ class _EditorScreenState extends State<EditorScreen> {
       ..translateByDouble(-center.dx, -center.dy, 0, 1);
     _viewController.value = matrix;
     setState(() => _zoomScale = newScale);
+    // Zooming further in while an edit is already settled should still
+    // trigger a sharper dynamic render for the new zoom level.
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected != null) {
+      _maybeScheduleDynamicPreview(selected.path);
+    }
   }
 
   void _zoomIn() => _zoomBy(_zoomStep);
@@ -3793,6 +3868,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                   viewController: _viewController,
                                   viewportKey: _viewportKey,
                                   onPointerSignal: _handlePointerSignal,
+                                  onResetZoom: _resetZoom,
                                   editingMask:
                                       (_beforeAfterMode || selected == null)
                                       ? null
@@ -4118,6 +4194,7 @@ class _ImageArea extends StatelessWidget {
     required this.viewController,
     required this.viewportKey,
     required this.onPointerSignal,
+    required this.onResetZoom,
     required this.editingMask,
     required this.editingSource,
     required this.onMaskGeometryChanged,
@@ -4145,6 +4222,11 @@ class _ImageArea extends StatelessWidget {
   final TransformationController viewController;
   final GlobalKey viewportKey;
   final void Function(PointerSignalEvent) onPointerSignal;
+
+  /// Double-click / "Fit" button — resets pan+zoom *and* the parent's
+  /// `_zoomScale` (so the % readout and the +/- buttons stay in sync,
+  /// which a bare `viewController.value = identity` doesn't do).
+  final VoidCallback onResetZoom;
 
   /// The mask currently being edited (Linear/Radial Gradient), if any —
   /// draws its draggable handles over the image. Null outside of
@@ -4257,9 +4339,7 @@ class _ImageArea extends StatelessWidget {
     return Listener(
       onPointerSignal: onPointerSignal,
       child: GestureDetector(
-        onDoubleTap: doubleTapToFit
-            ? () => viewController.value = Matrix4.identity()
-            : null,
+        onDoubleTap: doubleTapToFit ? onResetZoom : null,
         child: InteractiveViewer(
           transformationController: viewController,
           minScale: _minZoom,

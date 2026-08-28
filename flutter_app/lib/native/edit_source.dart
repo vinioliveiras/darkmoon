@@ -289,3 +289,38 @@ EditSource? decodeNativeSourceFromCachedJpeg(Uint8List jpegBytes) {
     rgbBytes: _rgbBytes(decoded),
   );
 }
+
+/// [decodeFullQualitySource] at below-normal OS-thread priority — the
+/// dynamic full-resolution preview (`AppSettings.dynamicFullPreview`) is a
+/// background nicety, never something the user is blocked on, so its RAW
+/// decode must yield to the UI isolate. Runs via `compute()`.
+EditSource? decodeFullQualitySourceLowPriority(String path) {
+  lowerBackgroundThreadPriority();
+  return decodeFullQualitySource(path);
+}
+
+/// Downscales an [EditSource] so its long edge is at most `maxDim` — a
+/// no-op when it's already smaller. Used to render the dynamic full-res
+/// preview at "one pixel per on-screen pixel at the current zoom" instead
+/// of the full sensor resolution (the render cost is where the pain is).
+/// Runs via `compute()` (record arg, since `compute` takes one value).
+EditSource scaleEditSource(({EditSource source, int maxDim}) args) {
+  final s = args.source;
+  final longEdge = s.width > s.height ? s.width : s.height;
+  if (longEdge <= args.maxDim) {
+    return s;
+  }
+  final image = img.Image.fromBytes(
+    width: s.width,
+    height: s.height,
+    bytes: s.rgbBytes.buffer,
+    numChannels: 3,
+    order: img.ChannelOrder.rgb,
+  );
+  final scaled = fitToMaxDimension(image, args.maxDim);
+  return EditSource(
+    width: scaled.width,
+    height: scaled.height,
+    rgbBytes: _rgbBytes(scaled),
+  );
+}
