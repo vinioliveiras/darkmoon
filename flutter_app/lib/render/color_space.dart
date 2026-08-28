@@ -1,22 +1,55 @@
 import 'dart:math' as math;
+import 'dart:typed_data';
+
+/// The sRGB transfer functions are evaluated tens of times per pixel
+/// across the tone/colour point ops — at 36–40 MP that's a billion-plus
+/// `pow()` calls per full-resolution render, which was the dominant cost
+/// of an export. They're replaced here with 4096-entry lookup tables plus
+/// linear interpolation: the curves are smooth and monotone, so the
+/// interpolation error is well under 1/255 (invisible), and a lookup +
+/// lerp is ~15× cheaper than `pow`.
+const int _lutSize = 4096;
+
+double _srgbToLinearExact(double c) => c <= 0.04045
+    ? c / 12.92
+    : math.pow((c + 0.055) / 1.055, 2.4).toDouble();
+
+double _linearToSrgbExact(double c) => c <= 0.0031308
+    ? c * 12.92
+    : 1.055 * math.pow(c, 1.0 / 2.4).toDouble() - 0.055;
+
+Float64List _buildLut(double Function(double) f) {
+  final lut = Float64List(_lutSize + 1);
+  for (var i = 0; i <= _lutSize; i++) {
+    lut[i] = f(i / _lutSize);
+  }
+  // Pin the endpoints exactly (0 -> 0, 1 -> 1) — the exact formulas can
+  // land a rounding ULP off at c == 1, and callers rely on a clamped
+  // value coming back as precisely 1.0.
+  lut[0] = 0.0;
+  lut[_lutSize] = 1.0;
+  return lut;
+}
+
+final Float64List _srgbToLinearLut = _buildLut(_srgbToLinearExact);
+final Float64List _linearToSrgbLut = _buildLut(_linearToSrgbExact);
+
+double _lookup(Float64List lut, double value) {
+  final c = value < 0.0 ? 0.0 : (value > 1.0 ? 1.0 : value);
+  final p = c * _lutSize;
+  final i = p.toInt();
+  if (i >= _lutSize) {
+    return lut[_lutSize];
+  }
+  final f = p - i;
+  return lut[i] + (lut[i + 1] - lut[i]) * f;
+}
 
 /// Converts one normalized sRGB component to scene-linear light.
-double srgbToLinear(double value) {
-  final c = value.clamp(0.0, 1.0);
-  if (c == 0.0 || c == 1.0) return c;
-  return c <= 0.04045
-      ? c / 12.92
-      : math.pow((c + 0.055) / 1.055, 2.4).toDouble();
-}
+double srgbToLinear(double value) => _lookup(_srgbToLinearLut, value);
 
 /// Converts one scene-linear component to normalized sRGB.
-double linearToSrgb(double value) {
-  final c = value.clamp(0.0, 1.0);
-  if (c == 0.0 || c == 1.0) return c;
-  return c <= 0.0031308
-      ? c * 12.92
-      : 1.055 * math.pow(c, 1.0 / 2.4).toDouble() - 0.055;
-}
+double linearToSrgb(double value) => _lookup(_linearToSrgbLut, value);
 
 /// Converts packed RGB bytes to normalized scene-linear RGB values.
 List<double> rgbBytesToLinear(List<int> bytes) => [

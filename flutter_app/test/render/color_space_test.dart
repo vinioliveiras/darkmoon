@@ -4,8 +4,11 @@ import 'package:darkmoon/render/color_space.dart';
 
 void main() {
   test('sRGB transfer functions round-trip representative values', () {
+    // srgbToLinear/linearToSrgb are 4096-entry LUTs with linear
+    // interpolation now (see color_space.dart) — round-trip error is a
+    // few 1e-7, far below a 1/255 step, but no longer exact.
     for (final value in [0.0, 0.001, 0.018, 0.18, 0.5, 1.0]) {
-      expect(linearToSrgb(srgbToLinear(value)), closeTo(value, 1e-9));
+      expect(linearToSrgb(srgbToLinear(value)), closeTo(value, 1e-4));
     }
   });
 
