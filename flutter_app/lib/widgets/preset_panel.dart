@@ -9,8 +9,8 @@ import '../theme.dart';
 /// left sidebar. Save the current photo's edits as a new preset, click a
 /// saved preset to apply it, and rename/export/delete via each row's
 /// menu. Import brings in `.xmp` files from disk (Lightroom presets or
-/// ones exported from here). A long-press (or the header's select icon)
-/// enters multi-select mode for bulk deletion.
+/// ones exported from here). The header's select icon enters multi-select
+/// mode for bulk delete / export.
 class PresetPanel extends StatefulWidget {
   const PresetPanel({
     super.key,
@@ -202,7 +202,6 @@ class _PresetPanelState extends State<PresetPanel> {
                           selectionMode: _selectionMode,
                           selected: _selectedIds.contains(preset.id),
                           onApply: () => widget.onApply(preset),
-                          onLongPress: () => _enterSelectionMode(preset.id),
                           onToggleSelected: () => _toggleSelected(preset.id),
                           onRename: () => widget.onRename(preset),
                           onExport: () => widget.onExport(preset),
@@ -251,7 +250,6 @@ class _PresetRow extends StatelessWidget {
     required this.selectionMode,
     required this.selected,
     required this.onApply,
-    required this.onLongPress,
     required this.onToggleSelected,
     required this.onRename,
     required this.onExport,
@@ -264,7 +262,6 @@ class _PresetRow extends StatelessWidget {
   final bool selectionMode;
   final bool selected;
   final VoidCallback onApply;
-  final VoidCallback onLongPress;
   final VoidCallback onToggleSelected;
   final VoidCallback onRename;
   final VoidCallback onExport;
@@ -277,7 +274,6 @@ class _PresetRow extends StatelessWidget {
       color: selected ? DarkmoonColors.panel : Colors.transparent,
       child: InkWell(
         onTap: selectionMode ? onToggleSelected : (enabled ? onApply : null),
-        onLongPress: selectionMode ? null : onLongPress,
         child: Padding(
           padding: const EdgeInsets.only(left: 12, right: 4, top: 5, bottom: 5),
           child: Row(
