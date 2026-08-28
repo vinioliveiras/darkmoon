@@ -15,6 +15,7 @@ import 'catalog/catalog_store.dart';
 import 'catalog/curve_store.dart';
 import 'catalog/mask_store.dart';
 import 'catalog/native_source_cache.dart';
+import 'catalog/photo_preset_store.dart';
 import 'catalog/preview_cache_dir.dart';
 import 'catalog/thumbnail_cache.dart';
 import 'catalog/thumbnail_cache_dir.dart';
@@ -642,6 +643,12 @@ class _EditorScreenState extends State<EditorScreen> {
   /// separately since a mask is structured data, not a single double.
   Map<String, List<MaskLayer>> _photoMasks = {};
 
+  /// Which preset id was last applied to each photo — persisted (its own
+  /// tiny file) so the Presets panel still marks a preset as applied after
+  /// an app restart, not only within a session. Purely a UI hint; the
+  /// actual edit lives in [_edits]/[_photoCurves].
+  Map<String, String> _photoPresets = {};
+
   /// The mask stack for whichever photo is selected. Mirrors
   /// [_paramValues]/[_currentCurves]'s "live copy of the saved value"
   /// pattern.
@@ -783,6 +790,7 @@ class _EditorScreenState extends State<EditorScreen> {
     unawaited(_loadEdits());
     unawaited(_loadPhotoCurves());
     unawaited(_loadPhotoMasks());
+    unawaited(_loadPhotoPresets());
     unawaited(_loadPresetsState());
     unawaited(_loadPalettesState());
     unawaited(_loadSettings());
@@ -877,6 +885,23 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   List<MaskLayer> _masksFor(String path) => _photoMasks[path] ?? const [];
+
+  Future<void> _loadPhotoPresets() async {
+    final photoPresets = await loadPhotoPresets();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _photoPresets = photoPresets;
+      // If the restored photo already has a preset marker, adopt it now
+      // (its edit values were restored from the catalog on selection).
+      final selected =
+          _selectedIndex == null ? null : _files[_selectedIndex!];
+      if (selected != null && _appliedPresetId == null) {
+        _appliedPresetId = _photoPresets[selected.path];
+      }
+    });
+  }
 
   Future<void> _loadPalettesState() async {
     final palettes = await loadPalettes();
@@ -1067,7 +1092,7 @@ class _EditorScreenState extends State<EditorScreen> {
     if (name == null || !mounted) {
       return;
     }
-    final preset = Preset(
+    final draft = Preset(
       id: 'preset_${DateTime.now().microsecondsSinceEpoch}',
       name: name,
       // _catalogParams() drops Temperature/Tint while on "As Shot", so a
@@ -1076,9 +1101,15 @@ class _EditorScreenState extends State<EditorScreen> {
       values: _catalogParams(),
       curves: _currentCurves,
     );
-    setState(() => _presets = [..._presets, preset]);
-    unawaited(savePresets(_presets));
+    final saved = await savePresetToFile(draft);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _presets = _sortPresets([..._presets, saved]));
   }
+
+  List<Preset> _sortPresets(List<Preset> presets) => presets
+    ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
   Future<void> _renamePreset(Preset preset) async {
     final l10n = AppLocalizations.of(context)!;
@@ -1090,13 +1121,21 @@ class _EditorScreenState extends State<EditorScreen> {
     if (name == null || !mounted) {
       return;
     }
+    final renamed = await renamePresetFile(preset, name);
+    if (!mounted) {
+      return;
+    }
     setState(() {
-      _presets = [
+      _presets = _sortPresets([
         for (final p in _presets)
-          if (p.id == preset.id) p.copyWith(name: name) else p,
-      ];
+          if (p.id == preset.id) renamed else p,
+      ]);
+      // The marker keys off the preset id (its file path), which the
+      // rename changed — carry it over so the mark doesn't drop.
+      if (_appliedPresetId == preset.id) {
+        _appliedPresetId = renamed.id;
+      }
     });
-    unawaited(savePresets(_presets));
   }
 
   Future<void> _deletePreset(Preset preset) async {
@@ -1122,13 +1161,16 @@ class _EditorScreenState extends State<EditorScreen> {
     if (confirmed != true || !mounted) {
       return;
     }
+    await deletePresetFile(preset);
+    if (!mounted) {
+      return;
+    }
     setState(() {
       _presets = [
         for (final p in _presets)
           if (p.id != preset.id) p,
       ];
     });
-    unawaited(savePresets(_presets));
   }
 
   Future<void> _deletePresets(List<Preset> presets) async {
@@ -1157,6 +1199,12 @@ class _EditorScreenState extends State<EditorScreen> {
     if (confirmed != true || !mounted) {
       return;
     }
+    for (final preset in presets) {
+      await deletePresetFile(preset);
+    }
+    if (!mounted) {
+      return;
+    }
     final ids = {for (final preset in presets) preset.id};
     setState(() {
       _presets = [
@@ -1164,7 +1212,6 @@ class _EditorScreenState extends State<EditorScreen> {
           if (!ids.contains(p.id)) p,
       ];
     });
-    unawaited(savePresets(_presets));
   }
 
   Future<void> _exportPreset(Preset preset) async {
@@ -1223,27 +1270,18 @@ class _EditorScreenState extends State<EditorScreen> {
         continue;
       }
       if (path.toLowerCase().endsWith('.zip')) {
-        imported.addAll(await presetsFromZip(path));
+        imported.addAll(await importPresetsFromZipFile(path));
         continue;
       }
-      try {
-        final xmlSource = await File(path).readAsString();
-        final preset = presetFromXmp(
-          xmlSource,
-          fallbackName: p.basenameWithoutExtension(path),
-        );
-        if (preset != null) {
-          imported.add(preset);
-        }
-      } catch (_) {
-        // Skip files that aren't readable/valid XMP — best effort import.
+      final preset = await importPresetFromFile(path);
+      if (preset != null) {
+        imported.add(preset);
       }
     }
     if (imported.isEmpty || !mounted) {
       return;
     }
-    setState(() => _presets = [..._presets, ...imported]);
-    unawaited(savePresets(_presets));
+    setState(() => _presets = _sortPresets([..._presets, ...imported]));
   }
 
   Future<void> _loadSettings() async {
@@ -1441,6 +1479,7 @@ class _EditorScreenState extends State<EditorScreen> {
     await saveCatalog(_edits);
     await savePhotoCurves(_photoCurves);
     await savePhotoMasks(_photoMasks);
+    _persistPhotoPreset(selected.path);
   }
 
   /// [_paramValues] as persisted to the catalog: Temperature/Tint/mode are
@@ -1471,7 +1510,25 @@ class _EditorScreenState extends State<EditorScreen> {
       unawaited(saveCatalog(_edits));
       unawaited(savePhotoCurves(_photoCurves));
       unawaited(savePhotoMasks(_photoMasks));
+      _persistPhotoPreset(selected.path);
     });
+  }
+
+  /// Syncs [_photoPresets] for [path] to the current [_appliedPresetId]
+  /// (set it, or drop it when no preset is applied) and persists the file.
+  void _persistPhotoPreset(String path) {
+    final id = _appliedPresetId;
+    if (id == null) {
+      if (_photoPresets.remove(path) == null) {
+        return;
+      }
+    } else {
+      if (_photoPresets[path] == id) {
+        return;
+      }
+      _photoPresets[path] = id;
+    }
+    unawaited(savePhotoPresets(_photoPresets));
   }
 
   /// Persists [thumbnailBytes] (the filmstrip thumbnail [_renderPreviewNow]
@@ -1935,7 +1992,10 @@ class _EditorScreenState extends State<EditorScreen> {
           ? []
           : _masksFor(files[selectedIndex].path);
       _activeMaskId = imageMaskId;
-      _appliedPresetId = null;
+      _appliedPresetId = selectedIndex == null
+          ? null
+          : _photoPresets[files[selectedIndex].path];
+      _presetBaseline = null;
     });
     _resetHistory();
     if (selectedIndex != null) {
@@ -2074,7 +2134,10 @@ class _EditorScreenState extends State<EditorScreen> {
       _currentCurves = _curvesFor(path);
       _currentMasks = _masksFor(path);
       _activeMaskId = imageMaskId;
-      _appliedPresetId = null;
+      // Restore the "applied preset" marker for this photo (persisted), and
+      // its blend baseline is unknown until the user drags Amount.
+      _appliedPresetId = _photoPresets[path];
+      _presetBaseline = null;
     });
     _resetHistory();
     unawaited(_saveLastActiveFile(path));
@@ -6790,6 +6853,60 @@ class _Filmstrip extends StatefulWidget {
 
 class _FilmstripState extends State<_Filmstrip> {
   final _scrollController = ScrollController();
+
+  /// Thumbnail slot width (104) plus the 6px right padding between slots —
+  /// the stride from one thumbnail's left edge to the next's.
+  static const _slotStride = 110.0;
+  static const _slotWidth = 104.0;
+  static const _listPadding = 8.0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _centerOnSelected(animated: false),
+    );
+  }
+
+  @override
+  void didUpdateWidget(_Filmstrip oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Re-center when the selection moves, or when a new folder's files
+    // arrive (startup restores the last photo, but the strip would
+    // otherwise sit at offset 0 with that photo scrolled off-screen).
+    final selectionMoved = widget.selectedIndex != oldWidget.selectedIndex;
+    final filesChanged = !identical(widget.files, oldWidget.files) &&
+        widget.files.length != oldWidget.files.length;
+    if ((selectionMoved || filesChanged) && widget.selectedIndex != null) {
+      WidgetsBinding.instance.addPostFrameCallback(
+        (_) => _centerOnSelected(animated: selectionMoved && !filesChanged),
+      );
+    }
+  }
+
+  /// Scrolls so the selected thumbnail sits in the middle of the strip
+  /// (clamped at the ends, so the first/last few photos don't leave a gap).
+  void _centerOnSelected({required bool animated}) {
+    final index = widget.selectedIndex;
+    if (index == null || !_scrollController.hasClients) {
+      return;
+    }
+    final viewport = _scrollController.position.viewportDimension;
+    final slotCenter = _listPadding + index * _slotStride + _slotWidth / 2;
+    final target = (slotCenter - viewport / 2).clamp(
+      _scrollController.position.minScrollExtent,
+      _scrollController.position.maxScrollExtent,
+    );
+    if (animated) {
+      _scrollController.animateTo(
+        target,
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    } else {
+      _scrollController.jumpTo(target);
+    }
+  }
 
   @override
   void dispose() {

@@ -313,41 +313,50 @@ class _PresetRow extends StatelessWidget {
                   ),
                 ),
               ),
-              if (!selectionMode)
-                PopupMenuButton<VoidCallback>(
-                  // Uses `child` rather than `icon` — `icon` wraps in an
-                  // IconButton, which inherits the app's global
-                  // IconButtonTheme (a bordered, filled rounded-square
-                  // background meant for standalone toolbar buttons).
-                  // That reads as a distracting box around a menu trigger
-                  // that's supposed to sit quietly at the end of a list
-                  // row, so this stays a bare icon with no persistent
-                  // background.
-                  padding: EdgeInsets.zero,
-                  onSelected: (action) => action(),
-                  itemBuilder: (context) => [
-                    PopupMenuItem(
-                      value: onRename,
-                      child: Text(l10n.presetRenameLabel),
-                    ),
-                    PopupMenuItem(
-                      value: onExport,
-                      child: Text(l10n.presetExportLabel),
-                    ),
-                    PopupMenuItem(
-                      value: onDelete,
-                      child: Text(l10n.presetDeleteLabel),
-                    ),
-                  ],
-                  child: const Padding(
-                    padding: EdgeInsets.all(6),
-                    child: Icon(
-                      CupertinoIcons.ellipsis,
-                      size: 14,
-                      color: DarkmoonColors.textMuted,
-                    ),
-                  ),
-                ),
+              // Fixed-width trailing slot in *both* modes — an empty box
+              // in selection mode instead of just dropping the menu
+              // button, so switching modes doesn't reflow the name column
+              // and make the list look like it jumped.
+              SizedBox(
+                width: 26,
+                height: 26,
+                child: selectionMode
+                    ? null
+                    : PopupMenuButton<VoidCallback>(
+                        // Uses `child` rather than `icon` — `icon` wraps in
+                        // an IconButton, which inherits the app's global
+                        // IconButtonTheme (a bordered, filled rounded-square
+                        // background meant for standalone toolbar buttons).
+                        // That reads as a distracting box around a menu
+                        // trigger that's supposed to sit quietly at the end
+                        // of a list row, so this stays a bare icon with no
+                        // persistent background.
+                        padding: EdgeInsets.zero,
+                        onSelected: (action) => action(),
+                        itemBuilder: (context) => [
+                          PopupMenuItem(
+                            value: onRename,
+                            child: Text(l10n.presetRenameLabel),
+                          ),
+                          PopupMenuItem(
+                            value: onExport,
+                            child: Text(l10n.presetExportLabel),
+                          ),
+                          PopupMenuItem(
+                            value: onDelete,
+                            child: Text(l10n.presetDeleteLabel),
+                          ),
+                        ],
+                        child: const Padding(
+                          padding: EdgeInsets.all(6),
+                          child: Icon(
+                            CupertinoIcons.ellipsis,
+                            size: 14,
+                            color: DarkmoonColors.textMuted,
+                          ),
+                        ),
+                      ),
+              ),
             ],
           ),
         ),
