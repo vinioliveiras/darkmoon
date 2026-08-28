@@ -449,6 +449,11 @@ void _applyRapidBrightness(Float32List img, double brightness) {
   const rationalCurveMix = 0.95;
   const midtoneStrength = calBrightnessMidtoneStrength;
   const topAnchor = 1.06;
+  // Loop-invariant — these depend only on `brightness`, not the pixel.
+  final directAdjustment = adjustment * (1 - rationalCurveMix);
+  final rationalAdjustment = adjustment * rationalCurveMix;
+  final scale = math.pow(2.0, directAdjustment).toDouble();
+  final k = math.pow(2.0, -rationalAdjustment * midtoneStrength).toDouble();
   for (var i = 0; i < img.length; i += 3) {
     final r = srgbToLinear(img[i] / 255.0);
     final g = srgbToLinear(img[i + 1] / 255.0);
@@ -458,10 +463,6 @@ void _applyRapidBrightness(Float32List img, double brightness) {
     if (originalLuma.abs() < 0.00001) {
       continue;
     }
-    final directAdjustment = adjustment * (1 - rationalCurveMix);
-    final rationalAdjustment = adjustment * rationalCurveMix;
-    final scale = math.pow(2.0, directAdjustment).toDouble();
-    final k = math.pow(2.0, -rationalAdjustment * midtoneStrength).toDouble();
     final lumaFloor = (originalLuma.abs() / topAnchor).floor() * topAnchor;
     final lumaNorm = (originalLuma.abs() - lumaFloor) / topAnchor;
     final shapedNorm = lumaNorm / (lumaNorm + (1 - lumaNorm) * k);
@@ -488,12 +489,12 @@ void _applyRapidContrast(Float32List img, double contrast) {
       math.pow(2.0, contrast / 100.0 * calContrastStrength).toDouble();
   for (var i = 0; i < img.length; i++) {
     final linear = srgbToLinear(img[i] / 255.0);
-    final perceptual = math.pow(linear, 1.0 / 2.2).toDouble();
+    final perceptual = perceptualEncode(linear);
     final curved = perceptual < 0.5
         ? 0.5 * math.pow(2.0 * perceptual, gamma)
         : 1.0 - 0.5 * math.pow(2.0 * (1.0 - perceptual), gamma);
     img[i] = linearToSrgb(
-          math.pow(curved.clamp(0.0, 1.0), 2.2).toDouble(),
+          perceptualDecode(curved.clamp(0.0, 1.0)),
         ) *
         255.0;
   }
@@ -543,7 +544,7 @@ void _applyRapidShadowsBlacks(
     final g = srgbToLinear(img[i + 1] / 255.0);
     final b = srgbToLinear(img[i + 2] / 255.0);
     final luma = _linearLuminance(r, g, b);
-    final t = math.pow(math.max(luma, 0.0001), 0.4545).toDouble();
+    final t = perceptualEncode(math.max(luma, 0.0001));
     final shadowLift =
         shadowAmount * t * math.pow(math.max(1.0 - t, 0.0), calShadowsFalloff);
     final blackLift =
@@ -557,10 +558,13 @@ void _applyRapidShadowsBlacks(
           contrasted * calShadowBlacksContrastMix,
       0.0,
     );
+    // finalT / detailCorrection can legitimately exceed 1 (overshoot on
+    // lifted pixels) so they keep the real pow — clamping to the LUT's
+    // [0, 1] would cap a genuine boost.
     final newLuma = math.pow(finalT, 2.2).toDouble();
     final ratio = newLuma / math.max(luma, 0.0001);
     final blurredLuma = tonalBlur == null ? luma : tonalBlur[p];
-    final blurredT = math.pow(math.max(blurredLuma, 0.0001), 0.4545).toDouble();
+    final blurredT = perceptualEncode(math.max(blurredLuma, 0.0001));
     final detailRatio = (t / math.max(blurredT, 0.0001)).clamp(0.8, 1.25);
     final noiseProtection = (blurredT / 0.1).clamp(0.0, 1.0);
     final detailExponent = 1.0 + lift * 1.2 * noiseProtection;
@@ -597,6 +601,9 @@ double _linearLuminance(double r, double g, double b) =>
 void _applyRapidHighlights(Float32List img, int pixelCount, double highlights) {
   if (highlights == 0) return;
   final amount = highlights / 100.0;
+  // Loop-invariant for the positive branch.
+  final gainPos = math.pow(2.0, amount * calHighlightsStrength).toDouble();
+  final expNeg = 1.0 - amount * calHighlightsStrength;
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
     final r = srgbToLinear(img[i] / 255.0);
@@ -608,8 +615,8 @@ void _applyRapidHighlights(Float32List img, int pixelCount, double highlights) {
     final mask = t * t * (3.0 - 2.0 * t);
     if (mask == 0) continue;
     final newLuma = amount < 0
-        ? math.pow(luma, 1.0 - amount * calHighlightsStrength).toDouble()
-        : luma * math.pow(2.0, amount * calHighlightsStrength).toDouble();
+        ? math.pow(luma, expNeg).toDouble()
+        : luma * gainPos;
     final ratio = newLuma / math.max(luma, 0.0001);
     final multiplier = 1.0 + (ratio - 1.0) * mask;
     img[i] = linearToSrgb(r * multiplier) * 255.0;

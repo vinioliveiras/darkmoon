@@ -18,6 +18,12 @@ double _linearToSrgbExact(double c) => c <= 0.0031308
     ? c * 12.92
     : 1.055 * math.pow(c, 1.0 / 2.4).toDouble() - 0.055;
 
+/// Plain power-2.2 "perceptual" gamma (distinct from the piecewise sRGB
+/// curves above) — RapidRAW's tone ops (Contrast, Shadows/Whites/Blacks)
+/// bounce through it per pixel. Also LUT'd; inputs are clamped to [0, 1].
+double _perceptualEncodeExact(double c) => math.pow(c, 1.0 / 2.2).toDouble();
+double _perceptualDecodeExact(double c) => math.pow(c, 2.2).toDouble();
+
 Float64List _buildLut(double Function(double) f) {
   final lut = Float64List(_lutSize + 1);
   for (var i = 0; i <= _lutSize; i++) {
@@ -33,6 +39,8 @@ Float64List _buildLut(double Function(double) f) {
 
 final Float64List _srgbToLinearLut = _buildLut(_srgbToLinearExact);
 final Float64List _linearToSrgbLut = _buildLut(_linearToSrgbExact);
+final Float64List _perceptualEncodeLut = _buildLut(_perceptualEncodeExact);
+final Float64List _perceptualDecodeLut = _buildLut(_perceptualDecodeExact);
 
 double _lookup(Float64List lut, double value) {
   final c = value < 0.0 ? 0.0 : (value > 1.0 ? 1.0 : value);
@@ -50,6 +58,14 @@ double srgbToLinear(double value) => _lookup(_srgbToLinearLut, value);
 
 /// Converts one scene-linear component to normalized sRGB.
 double linearToSrgb(double value) => _lookup(_linearToSrgbLut, value);
+
+/// `pow(value, 1/2.2)` — clamped to [0, 1].
+double perceptualEncode(double value) =>
+    _lookup(_perceptualEncodeLut, value);
+
+/// `pow(value, 2.2)` — clamped to [0, 1].
+double perceptualDecode(double value) =>
+    _lookup(_perceptualDecodeLut, value);
 
 /// Converts packed RGB bytes to normalized scene-linear RGB values.
 List<double> rgbBytesToLinear(List<int> bytes) => [

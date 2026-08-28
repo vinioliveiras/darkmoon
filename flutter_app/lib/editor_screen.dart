@@ -6342,10 +6342,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                         0,
                                     decimals: 0,
                                     defaultValue: 0,
-                                    trackColors: [
-                                      DarkmoonColors.textMuted,
-                                      _mixerChannelColor(_activeMixerChannel),
-                                    ],
+                                    trackColors: _mixerTrackColors(
+                                      _activeMixerChannel,
+                                      suffix,
+                                    ),
                                     onChanged: (v) => onChanged(
                                       'Mixer$_activeMixerChannel$suffix',
                                       v,
@@ -6399,10 +6399,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                                 0,
                                             decimals: 0,
                                             defaultValue: 0,
-                                            trackColors: [
-                                              DarkmoonColors.textMuted,
-                                              _mixerChannelColor(channel),
-                                            ],
+                                            trackColors: _mixerTrackColors(
+                                              channel,
+                                              suffix,
+                                            ),
                                             onChanged: (v) => onChanged(
                                               'Mixer$channel$suffix',
                                               v,
@@ -6611,6 +6611,45 @@ const _mixerChannels = [
   'Purple',
   'Magenta',
 ];
+
+/// The hue angle (degrees) each Color Mixer channel is centred on —
+/// matches `color_mixer.dart` / the shader's `HSL_RANGES` centres.
+double _mixerChannelHue(String channel) => switch (channel) {
+  'Red' => 358.0,
+  'Orange' => 25.0,
+  'Yellow' => 60.0,
+  'Green' => 115.0,
+  'Aqua' => 180.0,
+  'Blue' => 225.0,
+  'Purple' => 280.0,
+  'Magenta' => 330.0,
+  _ => 0.0,
+};
+
+/// Track gradient for a Color Mixer slider — the Hue slider runs through
+/// the channel's actual neighbouring hues (Lightroom-style), Saturation
+/// grey→colour, Luminance dark→light of the colour.
+List<Color> _mixerTrackColors(String channel, String suffix) {
+  final hue = _mixerChannelHue(channel);
+  Color at(double h, double s, double v) =>
+      HSVColor.fromAHSV(1, h % 360, s, v).toColor();
+  switch (suffix) {
+    case 'Hue':
+      return [
+        at(hue - 42, 0.85, 0.95),
+        at(hue, 0.85, 0.95),
+        at(hue + 42, 0.85, 0.95),
+      ];
+    case 'Luminance':
+      return [
+        at(hue, 0.7, 0.22),
+        at(hue, 0.85, 0.92),
+        at(hue, 0.2, 1.0),
+      ];
+    default: // Saturation
+      return [const Color(0xFF6C6C72), at(hue, 0.9, 0.95)];
+  }
+}
 
 Color _mixerChannelColor(String channel) {
   switch (channel) {
