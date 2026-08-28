@@ -197,6 +197,27 @@ class _SliderRowState extends State<SliderRow> {
     widget.onChangeEnd?.call(reset);
   }
 
+  /// Click anywhere on the track -> jump to the value at that x. The
+  /// Material [Slider] insets its track by roughly the thumb radius each
+  /// side; approximate that so the ends still reach min/max.
+  static const _trackInset = 12.0;
+
+  void _onTrackTap(double localX, double boxWidth) {
+    final usable = boxWidth - 2 * _trackInset;
+    if (usable <= 0) {
+      return;
+    }
+    final t = ((localX - _trackInset) / usable).clamp(0.0, 1.0);
+    final raw = widget.min + t * (widget.max - widget.min);
+    final f = math.pow(10, widget.decimals).toDouble();
+    final v = ((raw * f).roundToDouble() / f).clamp(widget.min, widget.max);
+    _propagateTimer?.cancel();
+    _propagateTimer = null;
+    setState(() => _dragValue = null);
+    widget.onChanged(v);
+    widget.onChangeEnd?.call(v);
+  }
+
   @override
   Widget build(BuildContext context) {
     final displayValue = (_dragValue ?? widget.value).clamp(
@@ -225,24 +246,29 @@ class _SliderRowState extends State<SliderRow> {
             ),
           ],
         ),
-        GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onHorizontalDragUpdate: (details) => _onDragUpdate(details.delta.dx),
-          onHorizontalDragEnd: (_) => _onDragEnd(),
-          onHorizontalDragCancel: _onDragEnd,
-          onDoubleTap: _onDoubleTap,
-          child: IgnorePointer(
-            child: SliderTheme(
-              data: SliderTheme.of(context).copyWith(
-                trackShape: widget.trackColors == null
-                    ? const RectangularSliderTrackShape()
-                    : _GradientSliderTrackShape(widget.trackColors!),
-              ),
-              child: Slider(
-                min: widget.min,
-                max: widget.max,
-                value: displayValue,
-                onChanged: (_) {},
+        LayoutBuilder(
+          builder: (context, constraints) => GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onHorizontalDragUpdate: (details) =>
+                _onDragUpdate(details.delta.dx),
+            onHorizontalDragEnd: (_) => _onDragEnd(),
+            onHorizontalDragCancel: _onDragEnd,
+            onDoubleTap: _onDoubleTap,
+            onTapUp: (details) =>
+                _onTrackTap(details.localPosition.dx, constraints.maxWidth),
+            child: IgnorePointer(
+              child: SliderTheme(
+                data: SliderTheme.of(context).copyWith(
+                  trackShape: widget.trackColors == null
+                      ? const RectangularSliderTrackShape()
+                      : _GradientSliderTrackShape(widget.trackColors!),
+                ),
+                child: Slider(
+                  min: widget.min,
+                  max: widget.max,
+                  value: displayValue,
+                  onChanged: (_) {},
+                ),
               ),
             ),
           ),
