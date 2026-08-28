@@ -1,7 +1,9 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:isolate';
+import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show debugPrint;
 import 'package:image/image.dart' as img;
 
 import '../native/common_image.dart';
@@ -25,6 +27,9 @@ class ExportRequest {
     this.masks = const [],
     this.cropTransform = const CropTransformParams(),
     this.scalePercent,
+    this.preDecodedRgb,
+    this.preDecodedWidth,
+    this.preDecodedHeight,
   });
 
   final String sourcePath;
@@ -36,6 +41,15 @@ class ExportRequest {
 
   /// JPEG quality (1-100). Ignored for other formats.
   final int quality;
+
+  /// The photo's already-decoded native-resolution RGB (packed, 3 bytes/
+  /// pixel) — from the editor's full-quality-preview source or the shared
+  /// `previews/native` cache. When set, the export skips the RAW demosaic
+  /// entirely (the slowest step, especially for X-Trans). Null = decode
+  /// from [sourcePath] as before.
+  final Uint8List? preDecodedRgb;
+  final int? preDecodedWidth;
+  final int? preDecodedHeight;
 
   /// Scales the exported image to this percent (1-100) of the sensor's
   /// native resolution — applied right after decode, before crop/render/
@@ -86,16 +100,35 @@ Future<ExportResult> _exportPhotoInternal(
   void Function(ExportStage stage)? onStage,
 ) async {
   try {
-    onStage?.call(ExportStage.decoding);
-    final decoded = isRawFile(request.sourcePath)
-        ? decodeRawImage(request.sourcePath, fastPreview: false)
-        : decodeCommonImage(request.sourcePath);
-    if (decoded == null) {
-      return ExportResult.failure('Could not decode ${request.sourcePath}');
+    final sw = Stopwatch()..start();
+    void mark(String stage) {
+      debugPrint('export: $stage ${sw.elapsedMilliseconds}ms');
+      sw.reset();
     }
-    var width = decoded.width;
-    var height = decoded.height;
-    var rgbBytes = decoded.rgbBytes;
+
+    onStage?.call(ExportStage.decoding);
+    int width;
+    int height;
+    Uint8List rgbBytes;
+    if (request.preDecodedRgb != null &&
+        request.preDecodedWidth != null &&
+        request.preDecodedHeight != null) {
+      width = request.preDecodedWidth!;
+      height = request.preDecodedHeight!;
+      rgbBytes = request.preDecodedRgb!;
+      mark('reuse decoded source');
+    } else {
+      final decoded = isRawFile(request.sourcePath)
+          ? decodeRawImage(request.sourcePath, fastPreview: false)
+          : decodeCommonImage(request.sourcePath);
+      if (decoded == null) {
+        return ExportResult.failure('Could not decode ${request.sourcePath}');
+      }
+      width = decoded.width;
+      height = decoded.height;
+      rgbBytes = decoded.rgbBytes;
+      mark('decode');
+    }
     final scalePercent = request.scalePercent;
     if (scalePercent != null && scalePercent < 100) {
       final scaled = scaleByPercent(
@@ -111,6 +144,7 @@ Future<ExportResult> _exportPhotoInternal(
       width = scaled.width;
       height = scaled.height;
       rgbBytes = scaled.getBytes(order: img.ChannelOrder.rgb);
+      mark('scale to $scalePercent%');
     }
     onStage?.call(ExportStage.rendering);
     final geometry = applyCropTransform(
@@ -138,6 +172,7 @@ Future<ExportResult> _exportPhotoInternal(
             request.params,
             request.masks,
           );
+    mark('render ${geometry.width}x${geometry.height}');
     final image = img.Image.fromBytes(
       width: geometry.width,
       height: geometry.height,
@@ -160,8 +195,10 @@ Future<ExportResult> _exportPhotoInternal(
         chroma: img.JpegChroma.yuv420,
       ),
     };
+    mark('encode ${request.format.name}');
     onStage?.call(ExportStage.writing);
     File(request.destPath).writeAsBytesSync(bytes);
+    mark('write');
     return ExportResult.success(request.destPath);
   } catch (e) {
     return ExportResult.failure(e.toString());

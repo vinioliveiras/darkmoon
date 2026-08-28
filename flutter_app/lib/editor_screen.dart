@@ -2731,11 +2731,41 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  /// Decodes [path]'s native-resolution source (from the on-disk cache, or
-  /// a fresh low-priority RAW decode that then warms the cache) and, once
-  /// it's in hand, re-renders the settled view against it. From then on
-  /// [_fullQualityReadyFor] is true for this photo and settled renders
-  /// stay at full quality until the photo changes.
+  /// The photo's decoded native-resolution [EditSource] — from the
+  /// in-memory full-quality source if it's this photo's, then the shared
+  /// `previews/native` disk cache, then a fresh RAW decode that also warms
+  /// the cache. Used by both the full-quality preview and export, so the
+  /// slow RAW demosaic (especially X-Trans) is paid at most once per photo.
+  Future<EditSource?> _loadNativeSource(
+    String path, {
+    required bool lowPriority,
+  }) async {
+    if (_fullQualitySourcePath == path && _fullQualitySource != null) {
+      return _fullQualitySource;
+    }
+    final cachedJpeg = await _nativeSourceCache?.lookup(path);
+    EditSource? native;
+    if (cachedJpeg != null) {
+      native = await compute(decodeNativeSourceFromCachedJpeg, cachedJpeg);
+    }
+    native ??= await compute(
+      lowPriority ? decodeFullQualitySourceLowPriority : decodeFullQualitySource,
+      path,
+    );
+    if (native != null && cachedJpeg == null) {
+      final toCache = native;
+      unawaited(
+        compute(encodeNativeSourceForCache, toCache).then(
+          (bytes) => _storeNativeSource(path, bytes),
+        ),
+      );
+    }
+    return native;
+  }
+
+  /// Decodes [path]'s native source and re-renders the settled view
+  /// against it — from then on [_fullQualityReadyFor] is true for this
+  /// photo and settled renders stay at full quality until it changes.
   Future<void> _ensureFullQualitySource(String path) async {
     if (!mounted ||
         !_settings.dynamicFullPreview ||
@@ -2748,35 +2778,23 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     _decodingFullQuality = true;
+    EditSource? native;
     try {
-      EditSource? native;
-      final cachedJpeg = await _nativeSourceCache?.lookup(path);
-      if (cachedJpeg != null) {
-        native = await compute(decodeNativeSourceFromCachedJpeg, cachedJpeg);
-      }
-      native ??= await compute(decodeFullQualitySourceLowPriority, path);
-      if (!mounted || native == null) {
-        return;
-      }
-      if (cachedJpeg == null) {
-        final toCache = native;
-        unawaited(
-          compute(encodeNativeSourceForCache, toCache).then(
-            (bytes) => _storeNativeSource(path, bytes),
-          ),
-        );
-      }
-      final stillSelected =
-          _selectedIndex == null ? null : _files[_selectedIndex!];
-      if (stillSelected?.path != path || !_settings.dynamicFullPreview) {
-        return;
-      }
-      _fullQualitySource = native;
-      _fullQualitySourcePath = path;
-      _fullQualityScaled = null;
+      native = await _loadNativeSource(path, lowPriority: true);
     } finally {
       _decodingFullQuality = false;
     }
+    final stillSelected =
+        _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (!mounted ||
+        native == null ||
+        stillSelected?.path != path ||
+        !_settings.dynamicFullPreview) {
+      return;
+    }
+    _fullQualitySource = native;
+    _fullQualitySourcePath = path;
+    _fullQualityScaled = null;
     // Re-render the settled view, now against the full source.
     _scheduleRender(live: false);
   }
@@ -3753,8 +3771,31 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() {
       _exporting = true;
       _exportCancellation = ExportCancellationToken();
-      _exportStage = null;
+      _exportStage = ExportStage.decoding;
     });
+
+    // Skip the RAW demosaic in the export isolate if we already have (or
+    // can cheaply get) the photo's decoded native source — the editor's
+    // full-quality source, the shared cache, or one fresh decode that then
+    // warms the cache for next time. This is the dominant export cost,
+    // especially for X-Trans.
+    EditSource? nativeForExport;
+    try {
+      nativeForExport = await _loadNativeSource(
+        selected.path,
+        lowPriority: false,
+      );
+    } catch (_) {
+      nativeForExport = null; // fall back to decoding in the export isolate
+    }
+    if (!mounted || _exportCancellation?.isCancelled == true) {
+      setState(() {
+        _exporting = false;
+        _exportStage = null;
+      });
+      return;
+    }
+
     final result = await exportPhotoWithProgress(
       ExportRequest(
         sourcePath: selected.path,
@@ -3770,6 +3811,9 @@ class _EditorScreenState extends State<EditorScreen> {
         quality: options.quality,
         cropTransform: _cropTransform,
         scalePercent: options.scalePercent,
+        preDecodedRgb: nativeForExport?.rgbBytes,
+        preDecodedWidth: nativeForExport?.width,
+        preDecodedHeight: nativeForExport?.height,
       ),
       (stage) {
         if (mounted) {
