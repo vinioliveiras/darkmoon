@@ -1902,6 +1902,53 @@ class _EditorScreenState extends State<EditorScreen> {
     _scheduleCatalogSave();
   }
 
+  bool get _hasCopiedEdits => _copiedEdits != null;
+
+  /// [file]-scoped counterparts to [_copyEdits]/[_pasteEdits] for the
+  /// filmstrip's context menu, which can target a photo other than the one
+  /// currently open. The open photo still goes through the live in-memory
+  /// state (history, live re-render, debounced save); any other photo's
+  /// stored edits are read/written directly in the catalog maps and
+  /// persisted right away — there's no "burst of edits" to debounce for a
+  /// single background paste.
+  bool _isSelected(RawFile file) =>
+      _selectedIndex != null && _files[_selectedIndex!].path == file.path;
+
+  void _copyEditsFor(RawFile file) {
+    if (_isSelected(file)) {
+      _copyEdits();
+      return;
+    }
+    setState(() {
+      _copiedEdits = (
+        values: {...(_edits[file.path] ?? _freshParamValues(file.path))},
+        curves: _photoCurves[file.path] ?? identityPhotoCurves,
+        masks: [...(_photoMasks[file.path] ?? const [])],
+      );
+    });
+  }
+
+  void _pasteEditsFor(RawFile file) {
+    final copied = _copiedEdits;
+    if (copied == null) {
+      return;
+    }
+    if (_isSelected(file)) {
+      _pasteEdits();
+      return;
+    }
+    setState(() {
+      _edits[file.path] = {...copied.values};
+      _photoCurves[file.path] = copied.curves;
+      _photoMasks[file.path] = [...copied.masks];
+      _photoPresets.remove(file.path);
+    });
+    unawaited(saveCatalog(_edits));
+    unawaited(savePhotoCurves(_photoCurves));
+    unawaited(savePhotoMasks(_photoMasks));
+    unawaited(savePhotoPresets(_photoPresets));
+  }
+
   /// Opens [file]'s containing folder in Windows Explorer with the file
   /// itself pre-selected — `explorer.exe /select,` is the standard way to
   /// do this; Explorer's own exit code is unreliable (it can return
@@ -4408,6 +4455,9 @@ class _EditorScreenState extends State<EditorScreen> {
                       onShowOnDisk: (file) =>
                           unawaited(_revealInExplorer(file)),
                       onDelete: (file) => unawaited(_deleteFile(file)),
+                      onCopyEdits: _copyEditsFor,
+                      onPasteEdits: _pasteEditsFor,
+                      hasCopiedEdits: _hasCopiedEdits,
                     ),
                   ],
                 ),
@@ -7149,6 +7199,9 @@ class _Filmstrip extends StatefulWidget {
     required this.onResetEdits,
     required this.onShowOnDisk,
     required this.onDelete,
+    required this.onCopyEdits,
+    required this.onPasteEdits,
+    required this.hasCopiedEdits,
   });
 
   final List<RawFile> files;
@@ -7167,6 +7220,12 @@ class _Filmstrip extends StatefulWidget {
   final ValueChanged<RawFile> onResetEdits;
   final ValueChanged<RawFile> onShowOnDisk;
   final ValueChanged<RawFile> onDelete;
+  final ValueChanged<RawFile> onCopyEdits;
+  final ValueChanged<RawFile> onPasteEdits;
+
+  /// Whether there's anything to paste right now — disables "Paste Edits"
+  /// in the context menu otherwise, same as the main canvas's own menu.
+  final bool hasCopiedEdits;
 
   @override
   State<_Filmstrip> createState() => _FilmstripState();
@@ -7309,6 +7368,16 @@ class _FilmstripState extends State<_Filmstrip> {
         Offset.zero & overlay.size,
       ),
       items: [
+        PopupMenuItem(
+          value: () => widget.onCopyEdits(file),
+          child: Text(l10n.imageContextCopyEditsAction),
+        ),
+        PopupMenuItem(
+          value: widget.hasCopiedEdits ? () => widget.onPasteEdits(file) : null,
+          enabled: widget.hasCopiedEdits,
+          child: Text(l10n.imageContextPasteEditsAction),
+        ),
+        const PopupMenuDivider(),
         PopupMenuItem(
           value: () => widget.onResetEdits(file),
           child: Text(l10n.filmstripResetEditsAction),
