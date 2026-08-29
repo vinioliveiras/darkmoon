@@ -442,6 +442,11 @@ RawImage? decodeRawImage(
       return null;
     }
 
+    // Every param set below that affects the resulting pixels (not just
+    // speed/quality) is covered by raw_decode_format_version.dart's
+    // rawDecodeFormatVersion — bump that constant when changing one, so
+    // the on-disk preview/native-source caches start fresh instead of
+    // silently serving pixels decoded under the old params.
     final params = lr.ref.params;
     params.use_camera_wb = 1;
     // Use the camera's own embedded color calibration matrix (written into

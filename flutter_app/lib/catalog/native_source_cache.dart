@@ -3,12 +3,16 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../native/raw_decode_format_version.dart';
+
 /// The decoded native-resolution source for a photo (a high-quality JPEG)
 /// is cached the *same way* as the thumbnail and preview caches — via
 /// [ThumbnailCacheManager], the shared per-capture-month binary format,
 /// keyed by `sha1(path|mtime|size)` — just in its own namespaced
-/// directory: `Documents/darkmoon/previews/native`, next to the
-/// resolution-namespaced preview dirs.
+/// directory: `Documents/darkmoon/previews/v{rawDecodeFormatVersion}/
+/// native`, next to the resolution-namespaced preview dirs. Namespaced by
+/// [rawDecodeFormatVersion] for the same reason those are — see its own
+/// doc comment.
 ///
 /// The one thing it adds is a size cap: these blobs are ~5–15 MB each
 /// (vs. a few hundred KB for a preview), so [evictNativeSourceCache]
@@ -17,7 +21,13 @@ import 'package:path_provider/path_provider.dart';
 Future<String> resolveNativeSourceCacheDir() async {
   final documents = await getApplicationDocumentsDirectory();
   final dir = Directory(
-    p.join(documents.path, 'darkmoon', 'previews', 'native'),
+    p.join(
+      documents.path,
+      'darkmoon',
+      'previews',
+      'v$rawDecodeFormatVersion',
+      'native',
+    ),
   );
   if (!await dir.exists()) {
     await dir.create(recursive: true);
