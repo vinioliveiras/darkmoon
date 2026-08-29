@@ -54,6 +54,56 @@ double _lerpTable(List<double> t, double x) {
   return t[a] + (t[b] - t[a]) * (f - a);
 }
 
+/// Weighted Pool-Adjacent-Violators — the correct way to fit a
+/// non-decreasing curve to noisy per-bin data. A naive "clamp to the
+/// previous bin's value" monotonic pass (what this tool used to do) lets
+/// one well-supported, aggressively-lifted bin permanently floor every
+/// later bin, even sparsely-sampled ones with their own (lower, and
+/// legitimate) target — that's what blew out real highlights in the first
+/// fit. PAVA instead *pools* a violating run into a single weighted
+/// average, so a low-weight bin barely moves its neighbours and a
+/// high-weight one dominates only the bins it actually has evidence for.
+List<double> _isotonicRegression(List<double> y, List<double> w) {
+  final vals = <double>[];
+  final wts = <double>[];
+  final sizes = <int>[];
+  for (var i = 0; i < y.length; i++) {
+    var v = y[i];
+    var wt = math.max(w[i], 1e-6);
+    var sz = 1;
+    while (vals.isNotEmpty && vals.last > v) {
+      final pv = vals.removeLast();
+      final pw = wts.removeLast();
+      sz += sizes.removeLast();
+      final nw = pw + wt;
+      v = (pv * pw + v * wt) / nw;
+      wt = nw;
+    }
+    vals.add(v);
+    wts.add(wt);
+    sizes.add(sz);
+  }
+  final out = List<double>.filled(y.length, 0);
+  var idx = 0;
+  for (var k = 0; k < vals.length; k++) {
+    for (var j = 0; j < sizes[k]; j++) {
+      out[idx++] = vals[k];
+    }
+  }
+  return out;
+}
+
+/// Hard safety ceiling/floor on how far the tone curve may move a value
+/// away from identity, as a function of the input — generous in deep
+/// shadows (where a big lift is real and can't "blow out" — there's
+/// nowhere whiter than white to overshoot into that matters visually),
+/// tapering toward near-zero by the upper midtones so a badly-supported
+/// bin can never again push highlights toward blown/washed. Independent
+/// of the fit itself — a backstop, not a replacement for isotonic
+/// regression fixing the root cause.
+double _maxLift(double x) => 0.30 * math.pow(1.0 - x, 2.2);
+double _maxDrop(double x) => 0.12 * math.pow(x, 1.6);
+
 void main(List<String> args) {
   if (args.isEmpty) {
     stderr.writeln(
@@ -107,6 +157,10 @@ void main(List<String> args) {
 
   img.Image? firstDm;
   img.Image? firstRef;
+
+  // Kept for the validation pass below (avoids re-decoding every RAW a
+  // second time just to measure the fit).
+  final pairsData = <({String name, Uint8List dm, Uint8List ref})>[];
 
   for (final pair in pairs) {
     stdout.write('  ${p.basename(pair.raw)} ... ');
@@ -188,29 +242,35 @@ void main(List<String> args) {
       order: img.ChannelOrder.rgb,
     );
     firstRef ??= ref;
+    pairsData.add((name: p.basename(pair.raw), dm: dm, ref: refBytes));
   }
 
   const damp = 0.9;
 
   // ---- Tone curve ----
-  // Per tone-bin mean lr perceptual-luma; empty bins fall back to identity.
+  // Per tone-bin mean lr perceptual-luma (identity where unsupported) and
+  // its sample-count weight — sparse bins get a weak identity prior
+  // instead of pretending to be real data.
   final toneRaw = <double>[
     for (var t = 0; t < toneBins; t++)
-      toneN[t] > 50 ? toneLr[t] / toneN[t] : t / (toneBins - 1),
+      toneN[t] > 0 ? toneLr[t] / toneN[t] : t / (toneBins - 1),
   ];
-  // Smooth, then force monotonic (a tone curve must never invert).
+  // Light smoothing to cut per-bin noise, THEN a weighted isotonic
+  // regression (not a naive floor-clamp — see its own doc comment) to
+  // guarantee monotonic without letting one aggressive well-supported bin
+  // permanently drag every later, possibly-sparse bin up with it.
   var toneS = List<double>.from(toneRaw);
-  for (var pass = 0; pass < 3; pass++) {
+  for (var pass = 0; pass < 2; pass++) {
     final next = List<double>.from(toneS);
     for (var t = 1; t < toneBins - 1; t++) {
       next[t] = (toneS[t - 1] + 2 * toneS[t] + toneS[t + 1]) / 4.0;
     }
     toneS = next;
   }
-  for (var t = 1; t < toneBins; t++) {
-    if (toneS[t] < toneS[t - 1]) toneS[t] = toneS[t - 1];
-  }
-  // Resample to the profile's point count, damped toward identity.
+  toneS = _isotonicRegression(toneS, toneN);
+  // Resample to the profile's point count, damped toward identity, then
+  // hard-capped so no bin — however it got there — can blow or crush past
+  // a sane distance from identity.
   final tone = <double>[
     for (var k = 0; k < colorProfileTonePoints; k++)
       () {
@@ -219,7 +279,8 @@ void main(List<String> args) {
         final a = f.floor();
         final bIdx = math.min(a + 1, toneBins - 1);
         final v = toneS[a] + (toneS[bIdx] - toneS[a]) * (f - a);
-        return (x + (v - x) * damp).clamp(0.0, 1.0);
+        final damped = x + (v - x) * damp;
+        return damped.clamp(x - _maxDrop(x), x + _maxLift(x)).clamp(0.0, 1.0);
       }(),
   ];
 
@@ -264,8 +325,14 @@ void main(List<String> args) {
   final satMul = [
     for (final v in smoothHue(rawSat, 1)) dead(1.0 + (v - 1.0) * damp, 1, 0.04),
   ];
+  // Same kind of hard safety ceiling as the tone curve: the per-bin
+  // residual is measured from BIN MEANS (a coarser, noisier estimate than
+  // the tone curve's own per-pixel fit), so it can swing further from
+  // noise alone — cap it so a residual can never multiply brightness past
+  // a sane range regardless of how it got there.
   final lumMul = [
-    for (final v in smoothHue(rawLum, 1)) dead(1.0 + (v - 1.0) * damp, 1, 0.03),
+    for (final v in smoothHue(rawLum, 1))
+      dead(1.0 + (v - 1.0) * damp, 1, 0.03).clamp(0.7, 1.4),
   ];
 
   final profile = ColorProfile(
@@ -294,6 +361,62 @@ void main(List<String> args) {
     );
   }
   stdout.writeln('\nwrote $outPath');
+
+  // ---- Validation against every pair, not just the first ----
+  // Catches exactly last time's failure mode: a pair that gets WORSE after
+  // correction (regression), or a jump in "went-to-white" pixels
+  // (blowout) even if the mean error looks fine.
+  stdout.writeln(
+    '\nvalidation (mean abs error 0-255, all 3 channels; '
+    '"went white" = pixels that crossed 250 that weren\'t there before):',
+  );
+  stdout.writeln(
+    '  ${'pair'.padRight(20)} ${'before'.padLeft(7)} ${'after'.padLeft(7)}  '
+    '${'Δ'.padLeft(6)}  went-white',
+  );
+  var worstRegression = 0.0;
+  String? worstRegressionName;
+  for (final d in pairsData) {
+    final buf = Float32List(d.dm.length);
+    for (var i = 0; i < d.dm.length; i++) {
+      buf[i] = d.dm[i].toDouble();
+    }
+    applyColorProfile(buf, profile, 1.0);
+
+    double beforeErr = 0, afterErr = 0;
+    var wentWhite = 0;
+    final n = math.min(d.dm.length, d.ref.length);
+    for (var i = 0; i < n; i++) {
+      final before = d.dm[i].toDouble();
+      final after = buf[i].clamp(0.0, 255.0);
+      final ref = d.ref[i].toDouble();
+      beforeErr += (before - ref).abs();
+      afterErr += (after - ref).abs();
+      if (after >= 250 && before < 250 && ref < 250) wentWhite++;
+    }
+    beforeErr /= n;
+    afterErr /= n;
+    final delta = afterErr - beforeErr;
+    if (delta > worstRegression) {
+      worstRegression = delta;
+      worstRegressionName = d.name;
+    }
+    stdout.writeln(
+      '  ${d.name.padRight(20)} ${beforeErr.toStringAsFixed(1).padLeft(7)} '
+      '${afterErr.toStringAsFixed(1).padLeft(7)}  '
+      '${(delta >= 0 ? '+' : '')}${delta.toStringAsFixed(1).padLeft(5)}  '
+      '$wentWhite px',
+    );
+  }
+  if (worstRegressionName != null && worstRegression > 2.0) {
+    stdout.writeln(
+      '\n⚠ WORST REGRESSION: $worstRegressionName got '
+      '${worstRegression.toStringAsFixed(1)}/255 WORSE after correction — '
+      'do not ship this profile as-is.',
+    );
+  } else {
+    stdout.writeln('\nNo pair regressed by more than 2/255 — looks safe.');
+  }
 
   // Eyeball aids for the first pair — written to the CWD (not next to the
   // profile, which may live in assets/ where they'd get bundled).

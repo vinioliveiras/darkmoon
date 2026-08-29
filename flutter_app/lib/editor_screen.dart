@@ -166,14 +166,15 @@ String _sectionLabel(AppLocalizations l10n, String key) {
 /// `timings` plumbing) once export is settled. See PENDING "Débitos".
 const bool _showExportTimings = false;
 
-/// Off since 2026-08-29: the fitted "darkmoon Color" profile (tone curve +
-/// per-hue table) overcorrected bright outdoor scenes (blown/washed
-/// highlights) — caught by real-photo testing right after the
-/// no_auto_bright change it depends on. Both are reverted together (see
-/// libraw.dart's own note). Flip back on once the profile fit protects
-/// highlights properly — the loader, RenderParams plumbing and GPU guard
-/// are all still in place. See project_darkmoon_color_profile.md.
-const bool _colorProfileEnabled = false;
+/// Re-enabled 2026-08-29 after redoing the fit: weighted isotonic
+/// regression (not a naive floor-clamp) for the tone curve plus a hard
+/// lift/drop ceiling on both the tone curve and the per-hue luminance
+/// table — see tool/build_color_profile.dart. Validated against every one
+/// of the 15 calibration pairs (all improved, ~0 newly-clipped pixels),
+/// including a bright outdoor scene (sky, direct sun) — the exact category
+/// that blew out under the first attempt. See
+/// project_darkmoon_color_profile.md for the full story.
+const bool _colorProfileEnabled = true;
 
 /// Zoom bounds and step, matching the Python app's MIN_ZOOM/MAX_ZOOM/ZOOM_STEP.
 const double _minZoom = 0.1;

@@ -487,15 +487,21 @@ RawImage? decodeRawImage(
     // clipped instead, closer to how RapidRAW/Vitrine and Lightroom-style
     // tools handle overexposed regions by default.
     params.highlight = 2;
-    // REVERTED 2026-08-29 (see project_darkmoon_color_profile.md): tried
-    // no_auto_bright = 1 (metered-exposure baseline, like Lightroom/C1/
-    // RawTherapee) paired with a fitted "darkmoon Color" tone curve to
-    // compensate. The curve, fit from only 15 pairs, overcorrected bright
-    // outdoor scenes badly (blown/washed highlights) — real-photo testing
-    // caught it immediately. Back to LibRaw's own auto-bright (scales each
-    // frame so a top percentile hits near-white) until the profile fit is
-    // redone with real highlight protection. params.no_auto_bright left
-    // unset (defaults to 0 = auto-bright on).
+    // Do NOT auto-normalise each frame's brightness. LibRaw's default
+    // (no_auto_bright = 0) scales every image so a small top percentile
+    // hits near-white — a "helpful" per-frame exposure the user never
+    // asked for, and one Lightroom / Capture One / RawTherapee never
+    // apply. It's required for the "darkmoon Color" tone curve
+    // (color_profile.dart) to mean anything — a per-frame-adaptive
+    // baseline can't be mapped onto Lightroom's fixed one by any single
+    // curve. First attempt (2026-08-29) paired this with an under-
+    // validated curve fit that blew out bright scenes; the curve fitting
+    // now uses weighted isotonic regression + a hard lift/drop ceiling and
+    // is validated against every calibration pair before shipping — see
+    // tool/build_color_profile.dart and project_darkmoon_color_profile.md.
+    // If _colorProfileEnabled (editor_screen.dart) is ever false while
+    // this stays on, every RAW renders dark — keep the two in lockstep.
+    params.no_auto_bright = 1;
     params.user_flip = -1;
 
     onStage?.call(RawDecodeStage.processing);
