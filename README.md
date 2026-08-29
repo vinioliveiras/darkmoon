@@ -74,3 +74,15 @@ The built app lands in `flutter_app\build\windows\x64\runner\Release\`.
 - **LibRaw** via Dart FFI for RAW decoding and metadata
 - **`package:image`** for common image format decoding and encoding
 - Custom Dart render pipeline for every color/tone adjustment, geometric transform, and mask
+
+## Website
+
+[`docs/index.html`](docs/index.html) is the project's landing page (a single
+static file, no build step — open it directly or serve `docs/` with GitHub
+Pages). It's marketing content, not part of the app, and isn't covered by
+the license below.
+
+## License
+
+The app (everything outside `docs/`) is licensed under
+[AGPL-3.0](LICENSE).
