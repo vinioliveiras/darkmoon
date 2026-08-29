@@ -269,12 +269,24 @@ void applyLocalAdjustmentSteps(
 /// shadows, whites/blacks, tone + color curves, color mixer, color
 /// grading. Split out from [applyLocalAdjustmentSteps] for the same
 /// mirrored by `shaders/point_ops_post_denoise.frag` in the GPU path.
+/// [subTimings], when non-null, gets one `'label Nms'` entry appended per
+/// stage below — a temporary diagnostic hook (see `_showExportTimings` in
+/// `editor_screen.dart`) for narrowing down where "point-ops + bytes"
+/// actually spends its time; not meant to be threaded through in normal use.
 void applyPostDenoisePointOps(
   Float32List buffer,
   int width,
   int height,
-  RenderParams params,
-) {
+  RenderParams params, {
+  List<String>? subTimings,
+}) {
+  final sw = subTimings == null ? null : (Stopwatch()..start());
+  void mark(String stage) {
+    if (sw == null) return;
+    subTimings!.add('$stage ${sw.elapsedMilliseconds}ms');
+    sw.reset();
+  }
+
   final pixelCount = width * height;
   final tonalBlur =
       (params.shadows == 0 && params.blacks == 0 && params.whites == 0)
@@ -285,10 +297,12 @@ void applyPostDenoisePointOps(
           height,
           3.5,
         );
+  mark('tonalBlur');
   // The "profile" contrast the Adobe Color base curve gives Lightroom for
   // free — applied first, so every tone slider and curve below works on
   // top of it, matching Lightroom's order (profile curve -> Basic panel).
   _applyBaseContrast(buffer, params.baseContrast);
+  mark('baseContrast');
   // ...then the per-hue "darkmoon Color" correction — the other half of
   // what an Adobe profile bakes in (its HueSatMap). Still before any user
   // adjustment, matching Lightroom's profile-then-Basic order.
@@ -296,9 +310,13 @@ void applyPostDenoisePointOps(
   if (profile != null) {
     applyColorProfile(buffer, profile, params.colorProfileStrength);
   }
+  mark('colorProfile');
   _applyRapidBrightness(buffer, params.brightness);
+  mark('brightness');
   _applyRapidWhites(buffer, pixelCount, params.whites);
+  mark('whites');
   _applyRapidHighlights(buffer, pixelCount, params.highlights);
+  mark('highlights');
   _applyRapidShadowsBlacks(
     buffer,
     pixelCount,
@@ -306,21 +324,27 @@ void applyPostDenoisePointOps(
     params.blacks,
     tonalBlur,
   );
+  mark('shadowsBlacks');
   _applyRapidContrast(buffer, params.contrast);
+  mark('contrast');
   // Lightroom's parametric Tone Curve runs into the same result as the
   // point curve; apply it first, then the point curve on top.
   if (!params.parametricCurve.isIdentity) {
     applyToneCurve(buffer, parametricCurvePoints(params.parametricCurve));
   }
   applyToneCurve(buffer, params.curves.tone);
+  mark('toneCurves');
   applyColorCurves(
     buffer,
     params.curves.red,
     params.curves.green,
     params.curves.blue,
   );
+  mark('colorCurves');
   applyColorMixer(buffer, params.colorMixer);
+  mark('colorMixer');
   applyColorGrading(buffer, params.colorGrading);
+  mark('colorGrading');
 }
 
 /// Everything [applyLocalAdjustmentSteps] leaves out. Split into two:
@@ -366,7 +390,15 @@ void applyGlobalPointOps(
   RenderParams params, {
   int rowOffset = 0,
   int? fullHeight,
+  List<String>? subTimings,
 }) {
+  final sw = subTimings == null ? null : (Stopwatch()..start());
+  void mark(String stage) {
+    if (sw == null) return;
+    subTimings!.add('$stage ${sw.elapsedMilliseconds}ms');
+    sw.reset();
+  }
+
   final pixelCount = width * height;
   _applyWhiteBalance(
     buffer,
@@ -376,11 +408,20 @@ void applyGlobalPointOps(
     params.asShotTint,
     params.preserveTintBrightness,
   );
-  applyPostDenoisePointOps(buffer, width, height, params);
+  mark('whiteBalance');
+  applyPostDenoisePointOps(
+    buffer,
+    width,
+    height,
+    params,
+    subTimings: subTimings,
+  );
   // Saturation before Vibrance, matching RapidRAW's apply_creative_color:
   // Vibrance's saturation/hue masks read the already-saturated color.
   _applySaturation(buffer, pixelCount, params.saturation);
+  mark('saturation');
   _applyVibrance(buffer, pixelCount, params.vibrance);
+  mark('vibrance');
   applyVignette(
     buffer,
     width,
@@ -389,6 +430,7 @@ void applyGlobalPointOps(
     rowOffset: rowOffset,
     fullHeight: fullHeight,
   );
+  mark('vignette');
   // Grain is the last thing RapidRAW's shader adds, after curves and
   // vignette — a texture layered on the finished image, not something the
   // later stages should react to.
@@ -400,6 +442,7 @@ void applyGlobalPointOps(
     rowOffset: rowOffset,
     fullHeight: fullHeight,
   );
+  mark('grain');
 }
 
 Uint8List _toUint8(Float32List buffer) {
@@ -678,10 +721,16 @@ void _applyRapidHighlights(Float32List img, int pixelCount, double highlights) {
   // per-render constant. Bake luma -> multiplier into a 512-entry LUT once
   // instead of paying a tanh() + pow() per pixel; the exact math still
   // runs, just 513 times instead of once per pixel.
+  //
+  // luma is NOT clamped to [0, 1] here: earlier stages (Exposure,
+  // Brightness, Whites) can legitimately push it above 1.0 on blown
+  // highlights — exactly the pixels this slider exists to recover. The LUT
+  // covers an extended domain (up to lutMax) and pixels rarer than that
+  // (deep overshoot) fall back to the exact formula instead of being
+  // clamped into the wrong bucket.
   const lutSize = 512;
-  final lut = Float32List(lutSize + 1);
-  for (var i = 0; i <= lutSize; i++) {
-    final luma = i / lutSize;
+  const lutMax = 2.0;
+  double multiplierFor(double luma) {
     final maskInput = _tanh(luma * 1.5);
     final t = ((maskInput - 0.55) / (0.95 - 0.55)).clamp(0.0, 1.0);
     final mask = t * t * (3.0 - 2.0 * t);
@@ -689,7 +738,12 @@ void _applyRapidHighlights(Float32List img, int pixelCount, double highlights) {
         ? math.pow(luma, expNeg).toDouble()
         : luma * gainPos;
     final ratio = newLuma / math.max(luma, 0.0001);
-    lut[i] = 1.0 + (ratio - 1.0) * mask;
+    return 1.0 + (ratio - 1.0) * mask;
+  }
+
+  final lut = Float32List(lutSize + 1);
+  for (var i = 0; i <= lutSize; i++) {
+    lut[i] = multiplierFor(i / lutSize * lutMax);
   }
 
   for (var p = 0; p < pixelCount; p++) {
@@ -697,12 +751,17 @@ void _applyRapidHighlights(Float32List img, int pixelCount, double highlights) {
     final r = srgbToLinear(img[i] / 255.0);
     final g = srgbToLinear(img[i + 1] / 255.0);
     final b = srgbToLinear(img[i + 2] / 255.0);
-    final luma = _linearLuminance(r, g, b).clamp(0.0, 1.0);
-    final f = luma * lutSize;
-    final lo = f.floor();
-    final multiplier = lo >= lutSize
-        ? lut[lutSize]
-        : lut[lo] + (lut[lo + 1] - lut[lo]) * (f - lo);
+    final luma = _linearLuminance(r, g, b);
+    double multiplier;
+    if (luma >= lutMax) {
+      multiplier = multiplierFor(luma);
+    } else {
+      final f = luma / lutMax * lutSize;
+      final lo = f.floor();
+      multiplier = lo >= lutSize
+          ? lut[lutSize]
+          : lut[lo] + (lut[lo + 1] - lut[lo]) * (f - lo);
+    }
     img[i] = linearToSrgb(r * multiplier) * 255.0;
     img[i + 1] = linearToSrgb(g * multiplier) * 255.0;
     img[i + 2] = linearToSrgb(b * multiplier) * 255.0;

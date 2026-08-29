@@ -152,7 +152,7 @@ Future<Uint8List> renderAdjustmentsParallel(
     out = _toUint8(buffer);
   } else {
     out = Uint8List(width * height * 3);
-    final futures2 = <Future<({int y0, Uint8List data})>>[];
+    final futures2 = <Future<({int y0, Uint8List data, List<String>? sub})>>[];
     final bandHeight = (height / bandCount).ceil();
     for (var b = 0; b < bandCount; b++) {
       final y0 = b * bandHeight;
@@ -169,8 +169,14 @@ Future<Uint8List> renderAdjustmentsParallel(
         paddedTop * width * 3,
         paddedBottom * width * 3,
       );
+      // Temporary diagnostic: only band 0 collects a per-stage breakdown
+      // (representative sample — bands are near-equal in size) so the
+      // "point-ops + bytes" total above can be narrowed down further; see
+      // `_showExportTimings` in editor_screen.dart.
+      final wantSubTimings = timings != null && b == 0;
       futures2.add(
         Isolate.run(() {
+          final sub = wantSubTimings ? <String>[] : null;
           applyGlobalPointOps(
             paddedSlice,
             width,
@@ -178,18 +184,26 @@ Future<Uint8List> renderAdjustmentsParallel(
             params,
             rowOffset: paddedTop,
             fullHeight: height,
+            subTimings: sub,
           );
+          final byteSw = sub == null ? null : (Stopwatch()..start());
           final start = trimTop * width * 3;
           final bytes = Uint8List(trimRows * width * 3);
           for (var i = 0; i < bytes.length; i++) {
             bytes[i] = paddedSlice[start + i].clamp(0.0, 255.0).round();
           }
-          return (y0: y0, data: bytes);
+          if (byteSw != null) {
+            sub!.add('bytes ${byteSw.elapsedMilliseconds}ms');
+          }
+          return (y0: y0, data: bytes, sub: sub);
         }),
       );
     }
     for (final r in await Future.wait(futures2)) {
       out.setRange(r.y0 * width * 3, r.y0 * width * 3 + r.data.length, r.data);
+      if (r.sub != null) {
+        timings!.add('  band0 breakdown: ${r.sub!.join(' · ')}');
+      }
     }
   }
   mark('point-ops + bytes ($bandCount bands)');
