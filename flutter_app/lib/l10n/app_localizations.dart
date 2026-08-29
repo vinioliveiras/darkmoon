@@ -542,6 +542,42 @@ abstract class AppLocalizations {
   /// **'Applying AI Denoise...'**
   String get aiDenoiseApplyingMessage;
 
+  /// No description provided for @aiDenoiseTabClassic.
+  ///
+  /// In en, this message translates to:
+  /// **'Classic'**
+  String get aiDenoiseTabClassic;
+
+  /// No description provided for @aiDenoiseTabEnhance.
+  ///
+  /// In en, this message translates to:
+  /// **'Enhance'**
+  String get aiDenoiseTabEnhance;
+
+  /// No description provided for @aiDenoiseEnhanceMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Denoise, remove film grain, and double the resolution using a neural network — closer to what the shot\'s real detail looked like before noise and compression. Runs noticeably slower than Classic, especially without a compatible GPU.'**
+  String get aiDenoiseEnhanceMessage;
+
+  /// No description provided for @aiDenoiseEnhanceOffLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get aiDenoiseEnhanceOffLabel;
+
+  /// No description provided for @aiDenoiseEnhanceOnLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Denoise + Upscale'**
+  String get aiDenoiseEnhanceOnLabel;
+
+  /// No description provided for @aiDenoiseEnhanceFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'AI Enhance couldn\'t run on this photo. It\'s been turned back off.'**
+  String get aiDenoiseEnhanceFailedMessage;
+
   /// No description provided for @exportPanelButton.
   ///
   /// In en, this message translates to:

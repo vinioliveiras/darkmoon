@@ -17,12 +17,14 @@ import 'catalog/mask_store.dart';
 import 'catalog/native_source_cache.dart';
 import 'catalog/photo_preset_store.dart';
 import 'catalog/preview_cache_dir.dart';
+import 'catalog/ai_enhance_cache_dir.dart';
 import 'catalog/thumbnail_cache.dart';
 import 'catalog/thumbnail_cache_dir.dart';
 import 'export/export_job.dart';
 import 'l10n/app_localizations.dart';
 import 'native/common_image_thumbnail.dart';
 import 'native/edit_source.dart';
+import 'native/edit_source_ai_enhance.dart';
 import 'native/libraw.dart' show RawMetadata, extractRawMetadata;
 import 'native/thumbnail_loader.dart';
 import 'presets/preset.dart';
@@ -3096,37 +3098,149 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  /// Opens the AI Denoise level dialog and, if the user confirms, bakes the
-  /// chosen level into the current photo's params and re-renders — a
-  /// deliberate one-shot action (with its own loading message) rather than
-  /// a slider the user drags, matching the Lightroom/Photomator "pick a
-  /// strength, apply" pattern.
+  /// Per-photo marker for item 13's neural Enhance pipeline (denoise + 2x
+  /// super-resolution) — parallel to how `'AiDenoiseLevel'` already
+  /// persists the classical level, just not a slider value so it gets its
+  /// own key. `> 0` means active. Lives in `_paramValues` for the same
+  /// free per-photo persistence (catalog save/restore, undo/redo history)
+  /// every other param value already gets — see `_onParamChanged`'s doc
+  /// comment on why `_paramValues` is replaced wholesale, not mutated, for
+  /// history to track it correctly.
+  static const _neuralEnhanceKey = 'AiNeuralEnhance';
+
+  /// Opens the AI Denoise dialog (Classic level picker / Enhance neural
+  /// toggle — see `AiDenoiseDialog`) and, if the user confirms a choice,
+  /// applies it — a deliberate one-shot action (with its own loading
+  /// message) rather than a slider the user drags, matching the
+  /// Lightroom/Photomator "pick a strength, apply" pattern.
   Future<void> _openAiDenoiseDialog() async {
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
     if (selected == null) {
       return;
     }
     final currentLevel = AiDenoiseParams.fromValues(_paramValues).level;
+    final neuralActive = (_paramValues[_neuralEnhanceKey] ?? 0.0) > 0;
     final choice = await showAnimatedDialog<AiDenoiseChoice>(
       context: context,
-      builder: (_) => AiDenoiseDialog(initialLevel: currentLevel),
+      builder: (_) => AiDenoiseDialog(
+        initialLevel: currentLevel,
+        neuralEnhanceActive: neuralActive,
+      ),
     );
     if (choice == null || !mounted) {
       return;
     }
-    final level = choice.level;
+
+    switch (choice) {
+      case ClassicDenoiseChoice(level: final level):
+        setState(() {
+          _paramValues = {
+            ..._paramValues,
+            'AiDenoiseLevel': level == null
+                ? 0.0
+                : (AiDenoiseLevel.values.indexOf(level) + 1).toDouble(),
+            _neuralEnhanceKey: 0.0,
+          };
+        });
+        // Switching away from a previously-enhanced source: _editSources
+        // currently holds the upscaled buffer, which the classical
+        // per-render stage was never meant to run against.
+        if (neuralActive) {
+          await _revertToNormalEditSource(selected.path);
+          if (!mounted) return;
+        }
+        await _applyAiDenoiseChoiceAndRender(selected.path);
+      case NeuralEnhanceChoice(active: true):
+        setState(() {
+          _paramValues = {
+            ..._paramValues,
+            _neuralEnhanceKey: 1.0,
+            'AiDenoiseLevel': 0.0,
+          };
+        });
+        final ok = await _runNeuralEnhance(selected.path);
+        if (!mounted || !ok) {
+          return;
+        }
+        await _applyAiDenoiseChoiceAndRender(selected.path);
+      case NeuralEnhanceChoice(active: false):
+        setState(() {
+          _paramValues = {..._paramValues, _neuralEnhanceKey: 0.0};
+        });
+        await _revertToNormalEditSource(selected.path);
+        if (!mounted) return;
+        await _applyAiDenoiseChoiceAndRender(selected.path);
+    }
+  }
+
+  /// Re-decodes [path] the normal way (no neural enhance) and swaps it
+  /// into `_editSources` — used when the user turns Enhance back off, or
+  /// switches to a Classic level while Enhance was active, since
+  /// `_editSources[path]` holds the enhanced (upscaled) buffer until
+  /// something replaces it.
+  Future<void> _revertToNormalEditSource(String path) async {
+    final normalSources = await decodeEditSourcesWithProgress(
+      path,
+      (_) {},
+      previewMaxDimension: _settings.previewResolution,
+    );
+    if (mounted && normalSources != null) {
+      setState(() => _editSources[path] = normalSources);
+    }
+  }
+
+  /// Runs item 13's neural Enhance pipeline (NAFNet-SIDD denoise +
+  /// Real-ESRGAN 2x upscale, disk-cached — see
+  /// `native/edit_source_ai_enhance.dart`) for [path] and swaps the
+  /// result into `_editSources`, so every later render/mask/export builds
+  /// on the enhanced buffer instead of the plain decode. Returns false
+  /// (having already reverted the `_neuralEnhanceKey` marker and shown a
+  /// message) on failure, so the caller can skip rendering/history for a
+  /// change that didn't actually happen.
+  Future<bool> _runNeuralEnhance(String path) async {
+    final cacheDir = await resolveAiEnhanceCacheDir();
+    if (!mounted) return false;
+    final sources = await decodeEditSourcesWithAiEnhance(
+      path,
+      cacheDir,
+      (stage) {
+        // Per-tile progress (AiEnhanceProgress) is available here but not
+        // surfaced yet — _isApplyingAiDenoise's existing indeterminate
+        // message covers correctness; a tile-count readout is future
+        // polish once the end-to-end flow itself is confirmed working.
+      },
+      previewMaxDimension: _settings.previewResolution,
+    );
+    if (!mounted) {
+      return false;
+    }
+    if (sources == null) {
+      setState(
+        () => _paramValues = {..._paramValues, _neuralEnhanceKey: 0.0},
+      );
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            AppLocalizations.of(context)!.aiDenoiseEnhanceFailedMessage,
+          ),
+        ),
+      );
+      return false;
+    }
+    setState(() => _editSources[path] = sources);
+    return true;
+  }
+
+  /// The loading-overlay/render/history/save sequence shared by every
+  /// `_openAiDenoiseDialog` outcome, once `_paramValues`/`_editSources`
+  /// already reflect the user's choice.
+  Future<void> _applyAiDenoiseChoiceAndRender(String path) async {
     setState(() {
-      _paramValues = {
-        ..._paramValues,
-        'AiDenoiseLevel': level == null
-            ? 0.0
-            : (AiDenoiseLevel.values.indexOf(level) + 1).toDouble(),
-      };
       _isApplyingAiDenoise = true;
       _aiDenoiseRenderStage = null;
     });
     await _renderPreview(
-      selected.path,
+      path,
       onStage: (stage) {
         if (mounted) {
           setState(() => _aiDenoiseRenderStage = stage);

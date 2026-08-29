@@ -250,6 +250,26 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiDenoiseApplyingMessage => 'Applying AI Denoise...';
 
   @override
+  String get aiDenoiseTabClassic => 'Classic';
+
+  @override
+  String get aiDenoiseTabEnhance => 'Enhance';
+
+  @override
+  String get aiDenoiseEnhanceMessage =>
+      'Denoise, remove film grain, and double the resolution using a neural network — closer to what the shot\'s real detail looked like before noise and compression. Runs noticeably slower than Classic, especially without a compatible GPU.';
+
+  @override
+  String get aiDenoiseEnhanceOffLabel => 'Off';
+
+  @override
+  String get aiDenoiseEnhanceOnLabel => 'Denoise + Upscale';
+
+  @override
+  String get aiDenoiseEnhanceFailedMessage =>
+      'AI Enhance couldn\'t run on this photo. It\'s been turned back off.';
+
+  @override
   String get exportPanelButton => 'Export';
 
   @override

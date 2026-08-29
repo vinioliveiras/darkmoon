@@ -250,6 +250,26 @@ class AppLocalizationsPt extends AppLocalizations {
   String get aiDenoiseApplyingMessage => 'Aplicando redução de ruído com IA...';
 
   @override
+  String get aiDenoiseTabClassic => 'Clássico';
+
+  @override
+  String get aiDenoiseTabEnhance => 'Enhance';
+
+  @override
+  String get aiDenoiseEnhanceMessage =>
+      'Remove ruído, elimina grão de filme e dobra a resolução usando uma rede neural — mais perto de como o detalhe real da foto era antes do ruído e da compressão. Roda bem mais devagar que o Clássico, principalmente sem uma GPU compatível.';
+
+  @override
+  String get aiDenoiseEnhanceOffLabel => 'Desligado';
+
+  @override
+  String get aiDenoiseEnhanceOnLabel => 'Denoise + Upscale';
+
+  @override
+  String get aiDenoiseEnhanceFailedMessage =>
+      'O AI Enhance não conseguiu rodar nessa foto. Foi desligado de novo.';
+
+  @override
   String get exportPanelButton => 'Exportar';
 
   @override

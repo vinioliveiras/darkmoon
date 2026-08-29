@@ -80,6 +80,12 @@
   "aiDenoiseLevelStrong": "Forte",
   "aiDenoiseApplyButton": "Aplicar",
   "aiDenoiseApplyingMessage": "Aplicando redução de ruído com IA...",
+  "aiDenoiseTabClassic": "Clássico",
+  "aiDenoiseTabEnhance": "Enhance",
+  "aiDenoiseEnhanceMessage": "Remove ruído, elimina grão de filme e dobra a resolução usando uma rede neural — mais perto de como o detalhe real da foto era antes do ruído e da compressão. Roda bem mais devagar que o Clássico, principalmente sem uma GPU compatível.",
+  "aiDenoiseEnhanceOffLabel": "Desligado",
+  "aiDenoiseEnhanceOnLabel": "Denoise + Upscale",
+  "aiDenoiseEnhanceFailedMessage": "O AI Enhance não conseguiu rodar nessa foto. Foi desligado de novo.",
 
   "exportPanelButton": "Exportar",
   "exportingButton": "Exportando...",
