@@ -1353,10 +1353,25 @@ class _EditorScreenState extends State<EditorScreen> {
           final fullQualityResChanged =
               next.dynamicFullPreview &&
               next.fullQualityPercent != _settings.fullQualityPercent;
+          // The base "profile" contrast feeds every render — a change makes
+          // every cached render stale, so drop them and re-render the open
+          // photo now instead of only on the next photo switch.
+          final baseContrastChanged =
+              next.baseContrast != _settings.baseContrast;
+          final currentPath = _selectedIndex == null
+              ? null
+              : _files[_selectedIndex!].path;
           setState(() {
             _settings = next;
             if (previewResolutionChanged) {
               _editSources.clear();
+            }
+            if (baseContrastChanged) {
+              // Keep the open photo's current frame on screen until its
+              // own re-render lands (below); the rest re-render on visit.
+              _renderedPreviews.removeWhere((k, _) => k != currentPath);
+              _fullQualityPreviews.removeWhere((k, _) => k != currentPath);
+              _neutralPreviews.clear();
             }
             if (dynamicFullPreviewChanged && !next.dynamicFullPreview) {
               // Off: keep the caches — the canvas just switches to reading
@@ -1394,6 +1409,12 @@ class _EditorScreenState extends State<EditorScreen> {
               unawaited(
                 _loadEditSourceAndRender(selected.path, _folderGeneration),
               );
+            }
+          }
+          if (baseContrastChanged && currentPath != null) {
+            _scheduleRender(live: false);
+            if (_beforeAfterMode) {
+              unawaited(_loadNeutralPreview(currentPath));
             }
           }
         },
