@@ -268,13 +268,17 @@ String dumpRawWhiteBalanceInfo(String path) {
     );
     final b = StringBuffer();
     // Essentials first — terminals truncate long output.
-    b.writeln('${_charArrayToString(idata.normalized_make, 64)} '
-        '${_charArrayToString(idata.normalized_model, 64)}');
+    b.writeln(
+      '${_charArrayToString(idata.normalized_make, 64)} '
+      '${_charArrayToString(idata.normalized_model, 64)}',
+    );
     b.writeln('cam_mul  : ${[for (var i = 0; i < 4; i++) color.cam_mul[i]]}');
     b.writeln('pre_mul  : ${[for (var i = 0; i < 4; i++) color.pre_mul[i]]}');
     b.writeln('as_shot_wb_applied: ${color.as_shot_wb_applied}');
-    b.writeln('=> estimated as-shot: ${est.kelvin.round()} K / '
-        'tint ${est.tint.toStringAsFixed(1)}');
+    b.writeln(
+      '=> estimated as-shot: ${est.kelvin.round()} K / '
+      'tint ${est.tint.toStringAsFixed(1)}',
+    );
     b.writeln('WB_Coeffs presets (index: m0..m3):');
     const names = {
       1: 'Daylight',
@@ -483,6 +487,16 @@ RawImage? decodeRawImage(
     // clipped instead, closer to how RapidRAW/Vitrine and Lightroom-style
     // tools handle overexposed regions by default.
     params.highlight = 2;
+    // Do NOT auto-normalise each frame's brightness. LibRaw's default
+    // (no_auto_bright = 0) scales every image so a small top percentile
+    // hits near-white — a "helpful" per-frame exposure the user never
+    // asked for, and one Lightroom / Capture One / RawTherapee never
+    // apply (they all show the RAW at its metered exposure and let you
+    // adjust). Leaving it on made darkmoon's neutral rendering
+    // scene-dependent, so no single "darkmoon Color" tone curve could map
+    // it onto Lightroom's (see tool/build_color_profile.dart). Off = the
+    // baseline exposure every other RAW editor shows.
+    params.no_auto_bright = 1;
     params.user_flip = -1;
 
     onStage?.call(RawDecodeStage.processing);

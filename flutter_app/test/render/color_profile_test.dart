@@ -6,6 +6,11 @@ import 'package:flutter_test/flutter_test.dart';
 Float32List _rgb(List<int> px) =>
     Float32List.fromList([for (final v in px) v.toDouble()]);
 
+List<double> _identityTone() => [
+  for (var i = 0; i < colorProfileTonePoints; i++)
+    i / (colorProfileTonePoints - 1),
+];
+
 void main() {
   test('identity profile is a no-op', () {
     final buf = _rgb([200, 40, 40, 40, 180, 60, 30, 60, 200]);
@@ -18,6 +23,7 @@ void main() {
 
   test('strength 0 is a no-op even with a real profile', () {
     final profile = ColorProfile(
+      tone: _identityTone(),
       hueShift: List<double>.filled(colorProfileBins, 20),
       satMul: List<double>.filled(colorProfileBins, 1.5),
       lumMul: List<double>.filled(colorProfileBins, 1.2),
@@ -34,6 +40,7 @@ void main() {
     // A pure-ish red (hue ~0) with +30° across the board -> toward orange:
     // green channel should rise.
     final profile = ColorProfile(
+      tone: _identityTone(),
       hueShift: List<double>.filled(colorProfileBins, 30),
       satMul: List<double>.filled(colorProfileBins, 1),
       lumMul: List<double>.filled(colorProfileBins, 1),
@@ -45,6 +52,7 @@ void main() {
 
   test('a near-grey pixel is left alone (hue is noise there)', () {
     final profile = ColorProfile(
+      tone: _identityTone(),
       hueShift: List<double>.filled(colorProfileBins, 40),
       satMul: List<double>.filled(colorProfileBins, 2),
       lumMul: List<double>.filled(colorProfileBins, 1),
@@ -57,8 +65,26 @@ void main() {
     }
   });
 
+  test('the tone curve lifts a mid-grey when it says to', () {
+    final tone = _identityTone();
+    // Push the middle of the curve up.
+    for (var i = 10; i < 23; i++) {
+      tone[i] = (tone[i] + 0.15).clamp(0.0, 1.0);
+    }
+    final profile = ColorProfile(
+      tone: tone,
+      hueShift: List<double>.filled(colorProfileBins, 0),
+      satMul: List<double>.filled(colorProfileBins, 1),
+      lumMul: List<double>.filled(colorProfileBins, 1),
+    );
+    final buf = _rgb([128, 128, 128]);
+    applyColorProfile(buf, profile, 1.0);
+    expect(buf[0], greaterThan(140));
+  });
+
   test('JSON round-trips', () {
     final profile = ColorProfile(
+      tone: _identityTone(),
       hueShift: [for (var i = 0; i < colorProfileBins; i++) i.toDouble()],
       satMul: List<double>.filled(colorProfileBins, 1.1),
       lumMul: List<double>.filled(colorProfileBins, 0.95),
@@ -66,6 +92,7 @@ void main() {
     );
     final decoded = ColorProfile.decode(profile.encode());
     expect(decoded.name, 'test');
+    expect(decoded.tone, profile.tone);
     expect(decoded.hueShift, profile.hueShift);
     expect(decoded.satMul, profile.satMul);
     expect(decoded.lumMul, profile.lumMul);

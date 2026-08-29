@@ -544,9 +544,17 @@ class _EditorScreenState extends State<EditorScreen> {
   /// whatever's rendered before it finishes loading.
   List<LensProfile> _lensProfiles = const [];
 
-  /// The fitted "darkmoon Color" per-hue correction, if bundled (see
+  /// The fitted "darkmoon Color" profile, if bundled (see
   /// [_loadColorProfile]). Null = no correction.
   ColorProfile? _colorProfile;
+
+  /// The base contrast to actually render with: the profile's fitted tone
+  /// curve *replaces* the hand-tuned [calBaseContrast] S when it's present,
+  /// so they don't stack.
+  double get _effectiveBaseContrast =>
+      (_colorProfile != null && !_colorProfile!.toneIsIdentity)
+      ? 0.0
+      : _settings.baseContrast;
 
   /// Unedited render of whichever photos have had Before/After turned on,
   /// computed lazily (only when first needed) since most photos are never
@@ -2569,7 +2577,7 @@ class _EditorScreenState extends State<EditorScreen> {
         curves: _effectiveCurves,
         asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
         asShotTint: metadata?.asShotTint ?? wbDefaultTint,
-        baseContrast: _settings.baseContrast,
+        baseContrast: _effectiveBaseContrast,
         colorProfile: _colorProfile,
       ),
       masks: _effectiveMasks,
@@ -2806,7 +2814,7 @@ class _EditorScreenState extends State<EditorScreen> {
         // correction) — it's part of the baseline rendering, like Lightroom
         // keeping the camera profile, not a develop edit.
         params: RenderParams(
-          baseContrast: _settings.baseContrast,
+          baseContrast: _effectiveBaseContrast,
           colorProfile: _colorProfile,
         ),
       ),
@@ -3819,7 +3827,7 @@ class _EditorScreenState extends State<EditorScreen> {
           curves: _effectiveCurves,
           asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
           asShotTint: metadata?.asShotTint ?? wbDefaultTint,
-          baseContrast: _settings.baseContrast,
+          baseContrast: _effectiveBaseContrast,
           colorProfile: _colorProfile,
         ),
         masks: _effectiveMasks,

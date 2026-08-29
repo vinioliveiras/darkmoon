@@ -1,25 +1,23 @@
 // Fits a "darkmoon Color" profile (lib/render/color_profile.dart) from
-// pairs of the same RAW rendered neutrally in darkmoon and in Lightroom
-// with the Adobe Color profile.
+// pairs of the same RAW rendered neutrally in darkmoon and exported from
+// Lightroom with the Adobe Color profile.
 //
 // For each pair the tool renders the RAW through darkmoon's neutral
-// pipeline (all sliders 0, WB As Shot, base contrast on — exactly the
-// state `applyColorProfile` sees), lines it up with the Lightroom export,
-// and per hue bin measures how far the hue/saturation/luminance drifted.
-// The averaged drift becomes the correction table.
+// pipeline (all sliders 0, WB As Shot, no colour profile), lines it up
+// with the Lightroom export, and measures the drift: a global tone curve
+// (dm perceptual-luma -> Lightroom's) plus per-hue hue/sat/lum residuals.
 //
-// Prep in Lightroom: select varied shots (skin, sky, foliage, vivid
-// colour, shadow, high contrast), set Profile = Adobe Color, reset every
-// slider, WB = As Shot, linear tone curve, then export sRGB JPEG named the
-// same as the RAW.
+// Prep in Lightroom: varied shots (skin, sky, foliage, vivid colour,
+// shadow, high contrast), Profile = Adobe Color, every slider reset,
+// WB = As Shot, tone curve Linear, export **16-bit TIFF or PNG** (JPEG
+// adds a noise floor), sRGB, same filename as the RAW.
 //
 // Usage:
 //   dart run tool/build_color_profile.dart <pairs-dir> [out.json] [name]
 //
-// <pairs-dir> holds <stem>.RAF (or .raf/.dng/...) next to <stem>.jpg
-// (or .jpeg/.png/.tif). Writes the profile JSON and, for the first pair,
-// `<out>_before.jpg` / `<out>_after.jpg` next to a copy of the reference
-// so the fit can be eyeballed.
+// Writes the profile JSON and, for the first pair,
+// `<out>_before/after/reference.jpg` so the fit can be eyeballed —
+// `_after` should look like `_reference`.
 
 import 'dart:io';
 import 'dart:math' as math;
@@ -47,6 +45,14 @@ double _shortestAngle(double deg) {
 
 double _luma(double r, double g, double b) =>
     0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+double _lerpTable(List<double> t, double x) {
+  final n = t.length;
+  final f = x.clamp(0.0, 1.0) * (n - 1);
+  final a = f.floor().clamp(0, n - 1);
+  final b = math.min(a + 1, n - 1);
+  return t[a] + (t[b] - t[a]) * (f - a);
+}
 
 void main(List<String> args) {
   if (args.isEmpty) {
@@ -86,11 +92,18 @@ void main(List<String> args) {
   }
   stdout.writeln('${pairs.length} pair(s) found.');
 
-  // Per-bin accumulators.
+  // Tone curve: dm perceptual-luma -> mean lr perceptual-luma, over EVERY
+  // lit pixel (grey included — the curve is the brightness/contrast match).
+  const toneBins = 48;
+  final toneLr = List<double>.filled(toneBins, 0);
+  final toneN = List<double>.filled(toneBins, 0);
+
+  // Per-hue-bin accumulators (saturated pixels only).
   final wSum = List<double>.filled(colorProfileBins, 0);
   final hueSum = List<double>.filled(colorProfileBins, 0);
   final satSum = List<double>.filled(colorProfileBins, 0);
-  final lumSum = List<double>.filled(colorProfileBins, 0);
+  final binDmP = List<double>.filled(colorProfileBins, 0);
+  final binLrP = List<double>.filled(colorProfileBins, 0);
 
   img.Image? firstDm;
   img.Image? firstRef;
@@ -111,10 +124,16 @@ void main(List<String> args) {
       const RenderParams(),
     );
 
-    final refRaw = img.decodeImage(File(pair.ref).readAsBytesSync());
+    var refRaw = img.decodeImage(File(pair.ref).readAsBytesSync());
     if (refRaw == null) {
       stdout.writeln('reference unreadable, skipped');
       continue;
+    }
+    // Lightroom's 16-bit TIFF/PNG exports come back as a 16-bit Image;
+    // getBytes() would then hand back 2 bytes/channel and the `i += 3`
+    // loop below reads pure garbage. Flatten to 8-bit sRGB-encoded here.
+    if (refRaw.format != img.Format.uint8 || refRaw.numChannels != 3) {
+      refRaw = refRaw.convert(format: img.Format.uint8, numChannels: 3);
     }
     final ref = img.copyResize(
       refRaw,
@@ -133,28 +152,31 @@ void main(List<String> args) {
       final lg = srgbToLinear(refBytes[i + 1] / 255.0);
       final lb = srgbToLinear(refBytes[i + 2] / 255.0);
 
+      final dP = perceptualEncode(math.max(_luma(dr, dg, db), 1e-6));
+      final lP = perceptualEncode(math.max(_luma(lr, lg, lb), 1e-6));
+      if (dP < 0.02 || dP > 0.99 || lP > 0.995) continue; // black / clipped
+
+      // Tone curve — every lit pixel.
+      final tb = (dP * (toneBins - 1)).round().clamp(0, toneBins - 1);
+      toneLr[tb] += lP;
+      toneN[tb] += 1;
+
       final dHsv = rgbToHsv(dr, dg, db);
       final lHsv = rgbToHsv(lr, lg, lb);
       final dSat = dHsv[1];
       final lSat = lHsv[1];
-      // Unreliable hue on near-grey pixels, and clipped pixels lie.
-      final dLumaV = _luma(dr, dg, db);
-      if (dSat < 0.07 || lSat < 0.05) continue;
-      if (dLumaV < 0.01 || dLumaV > 0.97) continue;
+      if (dSat < 0.07 || lSat < 0.05) continue; // hue is noise on greys
 
       final bin =
           (dHsv[0] / (360.0 / colorProfileBins)).round() % colorProfileBins;
       final weight = dSat; // more saturated -> more trustworthy
 
-      final hueDiff = _shortestAngle(lHsv[0] - dHsv[0]).clamp(-60.0, 60.0);
-      final satRatio = (lSat / math.max(dSat, 1e-3)).clamp(0.3, 3.0);
-      final lLumaV = _luma(lr, lg, lb);
-      final lumRatio = (lLumaV / math.max(dLumaV, 1e-3)).clamp(0.5, 2.0);
-
       wSum[bin] += weight;
-      hueSum[bin] += hueDiff * weight;
-      satSum[bin] += satRatio * weight;
-      lumSum[bin] += lumRatio * weight;
+      hueSum[bin] +=
+          _shortestAngle(lHsv[0] - dHsv[0]).clamp(-60.0, 60.0) * weight;
+      satSum[bin] += (lSat / math.max(dSat, 1e-3)).clamp(0.3, 3.0) * weight;
+      binDmP[bin] += dP * weight;
+      binLrP[bin] += lP * weight;
       used++;
     }
     stdout.writeln('$used samples');
@@ -168,7 +190,40 @@ void main(List<String> args) {
     firstRef ??= ref;
   }
 
-  // Reduce to per-bin means; bins with little data stay identity.
+  const damp = 0.9;
+
+  // ---- Tone curve ----
+  // Per tone-bin mean lr perceptual-luma; empty bins fall back to identity.
+  final toneRaw = <double>[
+    for (var t = 0; t < toneBins; t++)
+      toneN[t] > 50 ? toneLr[t] / toneN[t] : t / (toneBins - 1),
+  ];
+  // Smooth, then force monotonic (a tone curve must never invert).
+  var toneS = List<double>.from(toneRaw);
+  for (var pass = 0; pass < 3; pass++) {
+    final next = List<double>.from(toneS);
+    for (var t = 1; t < toneBins - 1; t++) {
+      next[t] = (toneS[t - 1] + 2 * toneS[t] + toneS[t + 1]) / 4.0;
+    }
+    toneS = next;
+  }
+  for (var t = 1; t < toneBins; t++) {
+    if (toneS[t] < toneS[t - 1]) toneS[t] = toneS[t - 1];
+  }
+  // Resample to the profile's point count, damped toward identity.
+  final tone = <double>[
+    for (var k = 0; k < colorProfileTonePoints; k++)
+      () {
+        final x = k / (colorProfileTonePoints - 1);
+        final f = (x * (toneBins - 1)).clamp(0.0, (toneBins - 1).toDouble());
+        final a = f.floor();
+        final bIdx = math.min(a + 1, toneBins - 1);
+        final v = toneS[a] + (toneS[bIdx] - toneS[a]) * (f - a);
+        return (x + (v - x) * damp).clamp(0.0, 1.0);
+      }(),
+  ];
+
+  // ---- Per-hue table ----
   final minWeight = 200.0;
   final rawHue = List<double>.filled(colorProfileBins, 0);
   final rawSat = List<double>.filled(colorProfileBins, 1);
@@ -177,12 +232,16 @@ void main(List<String> args) {
     if (wSum[b] < minWeight) continue;
     rawHue[b] = hueSum[b] / wSum[b];
     rawSat[b] = satSum[b] / wSum[b];
-    rawLum[b] = lumSum[b] / wSum[b];
+    // lumMul is the residual AFTER the tone curve: what the curve predicts
+    // for this bin's typical dm luma vs what Lightroom actually has.
+    final dmPmean = binDmP[b] / wSum[b];
+    final lrPmean = binLrP[b] / wSum[b];
+    final predicted = _lerpTable(tone, dmPmean);
+    rawLum[b] =
+        perceptualDecode(lrPmean) / math.max(perceptualDecode(predicted), 1e-4);
   }
 
-  // Circular 1-2-1 smooth, twice, then damp a touch so the profile guides
-  // rather than fully forces (the fit is noisy and per-scene).
-  List<double> smooth(List<double> a, double identity) {
+  List<double> smoothHue(List<double> a, double identity) {
     var cur = List<double>.from(a);
     for (var pass = 0; pass < 2; pass++) {
       final next = List<double>.filled(colorProfileBins, identity);
@@ -196,22 +255,21 @@ void main(List<String> args) {
     return cur;
   }
 
-  // Dead zone: corrections smaller than the fit's own noise floor (JPEG
-  // artefacts, resample, gamut edges — a same-image pair still lands
-  // ~±3°/±5%) snap back to identity so the profile only carries real drift.
   double dead(double v, double identity, double band) =>
       (v - identity).abs() < band ? identity : v;
 
-  const damp = 0.9;
-  final hueShift = [for (final v in smooth(rawHue, 0)) dead(v * damp, 0, 1.5)];
+  final hueShift = [
+    for (final v in smoothHue(rawHue, 0)) dead(v * damp, 0, 1.5),
+  ];
   final satMul = [
-    for (final v in smooth(rawSat, 1)) dead(1.0 + (v - 1.0) * damp, 1, 0.04),
+    for (final v in smoothHue(rawSat, 1)) dead(1.0 + (v - 1.0) * damp, 1, 0.04),
   ];
   final lumMul = [
-    for (final v in smooth(rawLum, 1)) dead(1.0 + (v - 1.0) * damp, 1, 0.025),
+    for (final v in smoothHue(rawLum, 1)) dead(1.0 + (v - 1.0) * damp, 1, 0.03),
   ];
 
   final profile = ColorProfile(
+    tone: tone,
     hueShift: hueShift,
     satMul: satMul,
     lumMul: lumMul,
@@ -219,6 +277,13 @@ void main(List<String> args) {
   );
   File(outPath).writeAsStringSync(profile.encode());
 
+  stdout.writeln('\ntone curve (in / out, perceptual-luma):');
+  for (var k = 0; k < colorProfileTonePoints; k += 4) {
+    stdout.writeln(
+      '  ${(k / (colorProfileTonePoints - 1)).toStringAsFixed(2)} -> '
+      '${tone[k].toStringAsFixed(3)}',
+    );
+  }
   stdout.writeln('\nbin  hue°   satMul  lumMul   (bin i centres on i*15°)');
   for (var b = 0; b < colorProfileBins; b++) {
     stdout.writeln(
