@@ -4676,78 +4676,37 @@ class _ImageArea extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Container(
-      key: viewportKey,
-      color: DarkmoonColors.canvas,
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(vertical: _verticalBreathingRoom),
-      child: _buildContent(l10n),
-    );
-  }
-
-  Widget _buildContent(AppLocalizations l10n) {
-    if (selected == null) {
-      return Text(
-        l10n.emptyStateOpenFolder,
-        textAlign: TextAlign.center,
-        style: const TextStyle(color: DarkmoonColors.textMuted),
-      );
-    }
-    if (fileMissing) {
-      // Takes priority over any stale cached preview still sitting in
-      // [preview]/[thumbnail] from before the file went away — showing an
-      // outdated image here would be more misleading than showing nothing.
-      return Text(
-        l10n.photoNotFoundMessage(selected!.name),
-        textAlign: TextAlign.center,
-        style: const TextStyle(color: DarkmoonColors.textMuted),
-      );
-    }
-    // Prefer the full RAW decode; fall back to the fast embedded thumbnail
-    // while it's still decoding, so something appears immediately.
-    final bytes = preview ?? thumbnail;
-    if (bytes == null) {
-      return Text(
-        l10n.decodingPhoto(selected!.name),
-        textAlign: TextAlign.center,
-        style: const TextStyle(color: DarkmoonColors.textMuted),
-      );
-    }
-    if (beforeAfterMode) {
-      // Both sides share the same viewController, so Ctrl+scroll/pan stays
-      // in sync between them instead of only working in the single-image
-      // view.
-      return Stack(
-        fit: StackFit.expand,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Falls back to the edited image until the neutral render
-              // finishes.
-              Expanded(
-                child: _zoomableLabeledImage(
-                  l10n.beforeLabel,
-                  neutralPreview ?? bytes,
-                ),
-              ),
-              Container(width: 1, color: DarkmoonColors.divider),
-              Expanded(child: _zoomableLabeledImage(l10n.afterLabel, bytes)),
-            ],
-          ),
-          _titleOverlay(),
-        ],
-      );
-    }
     return Stack(
       fit: StackFit.expand,
-      children: [_zoomableImage(bytes), _titleOverlay()],
+      children: [
+        Container(
+          key: viewportKey,
+          color: DarkmoonColors.canvas,
+          alignment: Alignment.center,
+          padding: const EdgeInsets.symmetric(
+            vertical: _verticalBreathingRoom,
+          ),
+          child: _buildContent(l10n),
+        ),
+        // A sibling of the padded Container above, not a descendant of its
+        // child — [_buildContent]'s own coordinate space starts *after*
+        // that padding is applied, so a title positioned there at
+        // `top: 14` would actually land 14px into the fitted image itself
+        // (getting in the way of editing) rather than in the blank
+        // breathing room genuinely reserved above it. Anchored here
+        // instead, `top: 14` is 14px into that reserved margin, which the
+        // image can never intrude into regardless of zoom/pan/aspect
+        // ratio (the Container's padding — not this widget's zoom level —
+        // is what carves out that space).
+        _titleOverlay(),
+      ],
     );
   }
 
   /// The photo's filename (minus extension) and its format badge, floating
   /// in the breathing room [_verticalBreathingRoom] leaves above the fitted
-  /// image — so it's always readable regardless of zoom/pan, at Fit or not.
+  /// image — always readable, and never over the photo itself, regardless
+  /// of zoom/pan or Before/After mode.
   Widget _titleOverlay() {
     final file = selected;
     if (file == null) {
@@ -4785,6 +4744,56 @@ class _ImageArea extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  Widget _buildContent(AppLocalizations l10n) {
+    if (selected == null) {
+      return Text(
+        l10n.emptyStateOpenFolder,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: DarkmoonColors.textMuted),
+      );
+    }
+    if (fileMissing) {
+      // Takes priority over any stale cached preview still sitting in
+      // [preview]/[thumbnail] from before the file went away — showing an
+      // outdated image here would be more misleading than showing nothing.
+      return Text(
+        l10n.photoNotFoundMessage(selected!.name),
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: DarkmoonColors.textMuted),
+      );
+    }
+    // Prefer the full RAW decode; fall back to the fast embedded thumbnail
+    // while it's still decoding, so something appears immediately.
+    final bytes = preview ?? thumbnail;
+    if (bytes == null) {
+      return Text(
+        l10n.decodingPhoto(selected!.name),
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: DarkmoonColors.textMuted),
+      );
+    }
+    if (beforeAfterMode) {
+      // Both sides share the same viewController, so Ctrl+scroll/pan stays
+      // in sync between them instead of only working in the single-image
+      // view.
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Falls back to the edited image until the neutral render finishes.
+          Expanded(
+            child: _zoomableLabeledImage(
+              l10n.beforeLabel,
+              neutralPreview ?? bytes,
+            ),
+          ),
+          Container(width: 1, color: DarkmoonColors.divider),
+          Expanded(child: _zoomableLabeledImage(l10n.afterLabel, bytes)),
+        ],
+      );
+    }
+    return _zoomableImage(bytes);
   }
 
   Widget _zoomableImage(Uint8List bytes) {
