@@ -73,6 +73,11 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String photoNotFoundMessage(String name) {
+    return '$name\nnão foi encontrada — pode ter sido movida, renomeada ou apagada fora do darkmoon';
+  }
+
+  @override
   String get sidebarRecentFilesSection => 'ARQUIVOS RECENTES';
 
   @override
@@ -83,6 +88,10 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get sidebarRemoveRecentFileTooltip => 'Remover dos arquivos recentes';
+
+  @override
+  String get sidebarFolderNotFoundTooltip =>
+      'Pasta não encontrada — remova da lista';
 
   @override
   String get sidebarPresetsSection => 'PRESETS';

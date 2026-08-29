@@ -33,10 +33,15 @@
   "@decodingPhoto": {
     "placeholders": { "name": {"type": "String"} }
   },
+  "photoNotFoundMessage": "{name}\ncan't be found — it may have been moved, renamed or deleted outside darkmoon",
+  "@photoNotFoundMessage": {
+    "placeholders": { "name": {"type": "String"} }
+  },
   "sidebarRecentFilesSection": "RECENT FILES",
   "sidebarFoldersSection": "FOLDERS",
   "sidebarRemoveFolderTooltip": "Remove folder",
   "sidebarRemoveRecentFileTooltip": "Remove from recent files",
+  "sidebarFolderNotFoundTooltip": "Folder not found — remove it from the list",
   "sidebarPresetsSection": "PRESETS",
   "presetImportTooltip": "Import presets (.xmp or .zip)",
   "presetSaveNewTooltip": "Save current edits as a preset",

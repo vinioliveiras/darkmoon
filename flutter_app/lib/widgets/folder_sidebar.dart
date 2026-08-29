@@ -292,6 +292,12 @@ class _FolderNodeState extends State<_FolderNode> {
   List<Directory>? _children;
   bool _loading = false;
 
+  /// True when this folder no longer exists on disk (deleted/moved/
+  /// renamed outside darkmoon, or an external drive unmounted). A cheap
+  /// synchronous check — cheaper than round-tripping through an isolate,
+  /// and this only runs once per node when it's built, not per frame.
+  late final bool _missing = !Directory(widget.path).existsSync();
+
   @override
   void initState() {
     super.initState();
@@ -349,89 +355,106 @@ class _FolderNodeState extends State<_FolderNode> {
   @override
   Widget build(BuildContext context) {
     final isSelected = widget.path == widget.selectedPath;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Material(
-          color: isSelected
-              ? DarkmoonColors.accent.withValues(alpha: 0.22)
-              : Colors.transparent,
-          child: InkWell(
-            onTap: () => widget.onSelect(widget.path),
-            child: Padding(
-              padding: EdgeInsets.only(
-                left: 8.0 + widget.depth * 16,
-                right: 8,
-                top: 5,
-                bottom: 5,
-              ),
-              child: Row(
-                children: [
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onTap: _toggleExpanded,
-                    child: SizedBox(
-                      width: 18,
-                      height: 18,
-                      child: _loading
-                          ? const Padding(
-                              padding: EdgeInsets.all(3),
-                              child: CircularProgressIndicator(
-                                strokeWidth: 1.5,
-                                color: DarkmoonColors.textMuted,
-                              ),
-                            )
-                          : Icon(
-                              _expanded
-                                  ? CupertinoIcons.chevron_down
-                                  : CupertinoIcons.chevron_right,
-                              size: 12,
-                              color: DarkmoonColors.textMuted,
-                            ),
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  Icon(
-                    CupertinoIcons.folder,
-                    size: 14,
-                    color: isSelected
-                        ? DarkmoonColors.accent
-                        : DarkmoonColors.textMuted,
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      _name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: isSelected
-                            ? DarkmoonColors.textPrimary
-                            : DarkmoonColors.textSecondary,
-                        fontSize: 12,
+    final l10n = AppLocalizations.of(context)!;
+    // A missing folder can't usefully be selected or expanded — there's
+    // nothing to load or list — so it just reads as disabled/dimmed with
+    // a warning icon in place of the usual folder one; the remove button
+    // (root nodes only) stays the one live affordance, wrapped in a
+    // tooltip explaining why.
+    final row = Padding(
+      padding: EdgeInsets.only(
+        left: 8.0 + widget.depth * 16,
+        right: 8,
+        top: 5,
+        bottom: 5,
+      ),
+      child: Row(
+        children: [
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _missing ? null : _toggleExpanded,
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: _loading
+                  ? const Padding(
+                      padding: EdgeInsets.all(3),
+                      child: CircularProgressIndicator(
+                        strokeWidth: 1.5,
+                        color: DarkmoonColors.textMuted,
                       ),
+                    )
+                  : _missing
+                  ? null
+                  : Icon(
+                      _expanded
+                          ? CupertinoIcons.chevron_down
+                          : CupertinoIcons.chevron_right,
+                      size: 12,
+                      color: DarkmoonColors.textMuted,
                     ),
-                  ),
-                  if (widget.onRemove != null)
-                    GestureDetector(
-                      behavior: HitTestBehavior.opaque,
-                      onTap: () => widget.onRemove!(widget.path),
-                      child: Tooltip(
-                        message: AppLocalizations.of(
-                          context,
-                        )!.sidebarRemoveFolderTooltip,
-                        child: const Icon(
-                          CupertinoIcons.xmark,
-                          size: 12,
-                          color: DarkmoonColors.textMuted,
-                        ),
-                      ),
-                    ),
-                ],
+            ),
+          ),
+          const SizedBox(width: 2),
+          Icon(
+            _missing
+                ? CupertinoIcons.exclamationmark_triangle
+                : CupertinoIcons.folder,
+            size: 14,
+            color: _missing
+                ? DarkmoonColors.textMuted
+                : (isSelected
+                      ? DarkmoonColors.accent
+                      : DarkmoonColors.textMuted),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              _name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: _missing
+                    ? DarkmoonColors.textMuted
+                    : (isSelected
+                          ? DarkmoonColors.textPrimary
+                          : DarkmoonColors.textSecondary),
+                fontSize: 12,
               ),
             ),
           ),
-        ),
+          if (widget.onRemove != null)
+            GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => widget.onRemove!(widget.path),
+              child: Tooltip(
+                message: _missing
+                    ? l10n.sidebarFolderNotFoundTooltip
+                    : l10n.sidebarRemoveFolderTooltip,
+                child: const Icon(
+                  CupertinoIcons.xmark,
+                  size: 12,
+                  color: DarkmoonColors.textMuted,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _missing
+            ? row
+            : Material(
+                color: isSelected
+                    ? DarkmoonColors.accent.withValues(alpha: 0.22)
+                    : Colors.transparent,
+                child: InkWell(
+                  onTap: () => widget.onSelect(widget.path),
+                  child: row,
+                ),
+              ),
         if (_expanded && _children != null)
           for (final dir in _children!)
             _FolderNode(

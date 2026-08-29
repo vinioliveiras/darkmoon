@@ -212,6 +212,12 @@ abstract class AppLocalizations {
   /// **'{name}\n(decoding...)'**
   String decodingPhoto(String name);
 
+  /// No description provided for @photoNotFoundMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{name}\ncan\'t be found — it may have been moved, renamed or deleted outside darkmoon'**
+  String photoNotFoundMessage(String name);
+
   /// No description provided for @sidebarRecentFilesSection.
   ///
   /// In en, this message translates to:
@@ -235,6 +241,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Remove from recent files'**
   String get sidebarRemoveRecentFileTooltip;
+
+  /// No description provided for @sidebarFolderNotFoundTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Folder not found — remove it from the list'**
+  String get sidebarFolderNotFoundTooltip;
 
   /// No description provided for @sidebarPresetsSection.
   ///

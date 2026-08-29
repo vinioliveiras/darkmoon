@@ -731,6 +731,12 @@ class _EditorScreenState extends State<EditorScreen> {
   ({Map<String, double> values, PhotoCurves curves, List<MaskLayer> masks})?
   _copiedEdits;
 
+  /// Paths whose decode failed because the file itself couldn't be found —
+  /// see [_loadEditSourceAndRender]. Session-only; a path is optimistically
+  /// dropped and re-tried the next time it's selected, in case the file
+  /// (or its drive) came back.
+  final Set<String> _missingFiles = {};
+
   /// Which layer the controls panel is currently editing —
   /// [imageMaskId] (the whole photo, i.e. the existing global
   /// adjustments) or one of [_currentMasks]'s ids.
@@ -2362,6 +2368,11 @@ class _EditorScreenState extends State<EditorScreen> {
     if (sources == null) {
       setState(() {
         _isDecodingPhoto = true;
+        // Optimistic retry: if this path was flagged missing before (the
+        // file was gone, an external drive unmounted, ...), give it a
+        // fresh chance now rather than staying stuck showing "not found"
+        // forever even after it comes back.
+        _missingFiles.remove(path);
       });
 
       // Cache lookup/decode happens here in the main isolate/from a
@@ -2391,6 +2402,12 @@ class _EditorScreenState extends State<EditorScreen> {
       }
       setState(() => _isDecodingPhoto = false);
       if (sources == null) {
+        // A cache miss followed by a real decode failure this deep almost
+        // always means the file itself is gone (moved/renamed/deleted
+        // outside darkmoon, or its drive unmounted) rather than a
+        // transient error — surface that instead of leaving the canvas
+        // stuck on "decoding..." forever.
+        setState(() => _missingFiles.add(path));
         return;
       }
       setState(() => _editSources[path] = sources!);
@@ -4163,6 +4180,9 @@ class _EditorScreenState extends State<EditorScreen> {
                               children: [
                                 _ImageArea(
                                   selected: selected,
+                                  fileMissing:
+                                      selected != null &&
+                                      _missingFiles.contains(selected.path),
                                   thumbnail: selected == null
                                       ? null
                                       : _thumbnails[selected.path],
@@ -4494,6 +4514,7 @@ class _MenuBarLabel extends StatelessWidget {
 class _ImageArea extends StatelessWidget {
   const _ImageArea({
     required this.selected,
+    required this.fileMissing,
     required this.thumbnail,
     required this.preview,
     required this.neutralPreview,
@@ -4524,6 +4545,13 @@ class _ImageArea extends StatelessWidget {
   });
 
   final RawFile? selected;
+
+  /// True when [selected]'s decode failed because the file itself is gone
+  /// (moved/renamed/deleted outside darkmoon, or its drive unmounted) —
+  /// takes priority over the "decoding..." fallback so the canvas doesn't
+  /// spin forever on a decode that will never finish.
+  final bool fileMissing;
+
   final Uint8List? thumbnail;
   final Uint8List? preview;
   final Uint8List? neutralPreview;
@@ -4611,6 +4639,16 @@ class _ImageArea extends StatelessWidget {
     if (selected == null) {
       return Text(
         l10n.emptyStateOpenFolder,
+        textAlign: TextAlign.center,
+        style: const TextStyle(color: DarkmoonColors.textMuted),
+      );
+    }
+    if (fileMissing) {
+      // Takes priority over any stale cached preview still sitting in
+      // [preview]/[thumbnail] from before the file went away — showing an
+      // outdated image here would be more misleading than showing nothing.
+      return Text(
+        l10n.photoNotFoundMessage(selected!.name),
         textAlign: TextAlign.center,
         style: const TextStyle(color: DarkmoonColors.textMuted),
       );
