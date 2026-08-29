@@ -416,6 +416,15 @@ void applyGlobalPointOps(
     params,
     subTimings: subTimings,
   );
+  // applyPostDenoisePointOps ran its own Stopwatch (with its own resets)
+  // to produce its share of subTimings above — reset this function's sw
+  // too, silently (no mark), so the *next* mark below only measures
+  // Saturation's own time instead of also swallowing everything that
+  // just happened inside the nested call. Without this, "saturation"'s
+  // reported cost is really "postDenoisePointOps total + saturation" —
+  // the bug that made Saturation look absurdly (impossibly) expensive
+  // despite having no pow/exp and no allocations in its per-pixel loop.
+  sw?.reset();
   // Saturation before Vibrance, matching RapidRAW's apply_creative_color:
   // Vibrance's saturation/hue masks read the already-saturated color.
   _applySaturation(buffer, pixelCount, params.saturation);

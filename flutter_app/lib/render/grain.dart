@@ -63,24 +63,80 @@ double _hash(double px, double py) {
   return _fract((x + y) * z);
 }
 
-/// Port of shader.wgsl's `gradient_noise(vec2)` — quintic-smoothed value
-/// noise in roughly [-1, 1].
-double _gradientNoise(double px, double py) {
-  final ix = px.floorToDouble();
-  final iy = py.floorToDouble();
+double _quintic(double t) => t * t * t * (t * (t * 6.0 - 15.0) + 10.0);
+
+/// One octave's precomputed `gradient_noise` corner values — every integer
+/// lattice coordinate a band's pixels can land on (plus the +1 border the
+/// interpolation's far corner needs), each hashed exactly once.
+///
+/// `gradient_noise` is a per-pixel bilinear-ish blend of the 4 lattice
+/// corners surrounding it, each corner needing 2 `_hash` calls (one for
+/// its X pseudo-gradient, one for Y). `calGrainSizePxAt0`/`At100` are both
+/// under 5px, and export resolutions divide that by a `refScale` that's
+/// >1 for anything bigger than the 1080px reference — so in practice one
+/// lattice cell spans anywhere from a handful to a few dozen pixels.
+/// Re-deriving the same corner's hash from scratch for every pixel inside
+/// that cell (the original implementation) was by far the single most
+/// expensive step in the whole point-ops pipeline; building each octave's
+/// lattice once per band call and looking corners up from it turns a
+/// per-pixel hash into a per-lattice-point one.
+class _GradientLattice {
+  factory _GradientLattice({
+    required double firstX,
+    required double lastX,
+    required double firstY,
+    required double lastY,
+  }) {
+    final minX = firstX.floor();
+    final minY = firstY.floor();
+    final width = lastX.floor() + 1 - minX + 1;
+    final height = lastY.floor() + 1 - minY + 1;
+    final gx = Float64List(width * height);
+    final gy = Float64List(width * height);
+    for (var iy = 0; iy < height; iy++) {
+      final y = (minY + iy).toDouble();
+      final rowBase = iy * width;
+      for (var ix = 0; ix < width; ix++) {
+        final x = (minX + ix).toDouble();
+        final idx = rowBase + ix;
+        gx[idx] = _hash(x, y) * 2.0 - 1.0;
+        gy[idx] = _hash(x + 11.0, y + 37.0) * 2.0 - 1.0;
+      }
+    }
+    return _GradientLattice._(minX, minY, width, gx, gy);
+  }
+
+  _GradientLattice._(this._minX, this._minY, this._width, this._gx, this._gy);
+
+  final int _minX;
+  final int _minY;
+  final int _width;
+  final Float64List _gx;
+  final Float64List _gy;
+
+  int _index(int x, int y) => (y - _minY) * _width + (x - _minX);
+  double gradX(int x, int y) => _gx[_index(x, y)];
+  double gradY(int x, int y) => _gy[_index(x, y)];
+}
+
+/// Same math as the old per-pixel `gradient_noise`, but sourcing each
+/// corner's pseudo-gradient from a precomputed [_GradientLattice] instead
+/// of calling `_hash` fresh.
+double _gradientNoise(_GradientLattice lattice, double px, double py) {
+  final ix = px.floor();
+  final iy = py.floor();
   final fx = px - ix;
   final fy = py - iy;
-  final ux = fx * fx * fx * (fx * (fx * 6.0 - 15.0) + 10.0);
-  final uy = fy * fy * fy * (fy * (fy * 6.0 - 15.0) + 10.0);
+  final ux = _quintic(fx);
+  final uy = _quintic(fy);
 
-  double gradX(double cx, double cy) => _hash(ix + cx, iy + cy) * 2.0 - 1.0;
-  double gradY(double cx, double cy) =>
-      _hash(ix + cx + 11.0, iy + cy + 37.0) * 2.0 - 1.0;
-
-  final dot00 = gradX(0, 0) * fx + gradY(0, 0) * fy;
-  final dot10 = gradX(1, 0) * (fx - 1.0) + gradY(1, 0) * fy;
-  final dot01 = gradX(0, 1) * fx + gradY(0, 1) * (fy - 1.0);
-  final dot11 = gradX(1, 1) * (fx - 1.0) + gradY(1, 1) * (fy - 1.0);
+  final dot00 = lattice.gradX(ix, iy) * fx + lattice.gradY(ix, iy) * fy;
+  final dot10 =
+      lattice.gradX(ix + 1, iy) * (fx - 1.0) + lattice.gradY(ix + 1, iy) * fy;
+  final dot01 =
+      lattice.gradX(ix, iy + 1) * fx + lattice.gradY(ix, iy + 1) * (fy - 1.0);
+  final dot11 = lattice.gradX(ix + 1, iy + 1) * (fx - 1.0) +
+      lattice.gradY(ix + 1, iy + 1) * (fy - 1.0);
 
   final bottom = dot00 + (dot10 - dot00) * ux;
   final top = dot01 + (dot11 - dot01) * ux;
@@ -126,6 +182,20 @@ void applyGrain(
   final frequency = (1.0 / math.max(grainSizePx, 0.1)) / refScale;
   final roughFrequency = frequency * calGrainRoughCoordScale;
 
+  final lastAy = (rowOffset + height - 1).toDouble();
+  final baseLattice = _GradientLattice(
+    firstX: 0,
+    lastX: (width - 1) * frequency,
+    firstY: rowOffset * frequency,
+    lastY: lastAy * frequency,
+  );
+  final roughLattice = _GradientLattice(
+    firstX: 5.2,
+    lastX: (width - 1) * roughFrequency + 5.2,
+    firstY: rowOffset * roughFrequency + 1.3,
+    lastY: lastAy * roughFrequency + 1.3,
+  );
+
   for (var y = 0; y < height; y++) {
     final ay = y + rowOffset;
     for (var x = 0; x < width; x++) {
@@ -141,8 +211,10 @@ void applyGrain(
       if (lumaMask <= 0.0) {
         continue;
       }
-      final noiseBase = _gradientNoise(x * frequency, ay * frequency);
+      final noiseBase =
+          _gradientNoise(baseLattice, x * frequency, ay * frequency);
       final noiseRough = _gradientNoise(
+        roughLattice,
         x * roughFrequency + 5.2,
         ay * roughFrequency + 1.3,
       );
