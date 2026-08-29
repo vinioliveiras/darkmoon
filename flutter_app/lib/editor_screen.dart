@@ -4009,6 +4009,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                   beforeAfterMode: _beforeAfterMode,
                                   viewController: _viewController,
                                   viewportKey: _viewportKey,
+                                  zoomScale: _zoomScale,
                                   onPointerSignal: _handlePointerSignal,
                                   onResetZoom: _resetZoom,
                                   editingMask:
@@ -4332,6 +4333,7 @@ class _ImageArea extends StatelessWidget {
     required this.beforeAfterMode,
     required this.viewController,
     required this.viewportKey,
+    required this.zoomScale,
     required this.onPointerSignal,
     required this.onResetZoom,
     required this.editingMask,
@@ -4360,6 +4362,11 @@ class _ImageArea extends StatelessWidget {
   final bool beforeAfterMode;
   final TransformationController viewController;
   final GlobalKey viewportKey;
+
+  /// Current pan/zoom factor, so the mask overlays can counter-scale their
+  /// handles/outlines and stay a fixed screen size no matter the zoom.
+  final double zoomScale;
+
   final void Function(PointerSignalEvent) onPointerSignal;
 
   /// Double-click / "Fit" button — resets pan+zoom *and* the parent's
@@ -4608,6 +4615,7 @@ class _ImageArea extends StatelessWidget {
                         containerSize: containerSize,
                         imageWidth: source.width,
                         imageHeight: source.height,
+                        zoomScale: zoomScale,
                         mask: mask,
                         brushRadius: brushRadius,
                         brushHardness: brushHardness,
@@ -4633,6 +4641,7 @@ class _ImageArea extends StatelessWidget {
                         containerSize: containerSize,
                         imageWidth: source.width,
                         imageHeight: source.height,
+                        zoomScale: zoomScale,
                         mask: mask,
                         onChanged: onMaskGeometryChanged,
                         onChangeEnd: onMaskGeometryChangeEnd,

@@ -33,6 +33,7 @@ class GradientMaskOverlay extends StatefulWidget {
     required this.mask,
     required this.onChanged,
     required this.onChangeEnd,
+    this.zoomScale = 1.0,
     this.showOverlay = true,
     this.overlayOpacity = _defaultShadeAlpha,
   });
@@ -43,6 +44,13 @@ class GradientMaskOverlay extends StatefulWidget {
   final MaskLayer mask;
   final ValueChanged<MaskLayer> onChanged;
   final ValueChanged<MaskLayer> onChangeEnd;
+
+  /// The InteractiveViewer's current zoom factor. This overlay lives inside
+  /// the zoomed subtree, so without dividing by it the handles, hit targets
+  /// and stroke widths would balloon with the image — making a mask on a
+  /// small detail impossible to grab precisely. Only the *chrome* is
+  /// counter-scaled; the mask geometry itself still tracks the image.
+  final double zoomScale;
 
   /// Whether the shaded coverage area + handles are drawn — when false,
   /// drag handling still works (invisibly), so hiding the overlay doesn't
@@ -82,6 +90,13 @@ class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
   _Handle? _active;
   Offset _lastLocal = Offset.zero;
 
+  /// Chrome sizes are authored in screen pixels; divide by the zoom so they
+  /// stay that size on screen after the InteractiveViewer scales this
+  /// subtree up.
+  double get _s => widget.zoomScale <= 0 ? 1.0 : widget.zoomScale;
+  double get _hit => _hitRadius / _s;
+  double get _rotGap => _rotateHandleGap / _s;
+
   Rect _imageRect() {
     final imageAspect = widget.imageWidth / widget.imageHeight;
     final size = widget.containerSize;
@@ -112,7 +127,7 @@ class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
       final dStart = (_lastLocal - start).distance;
       final dEnd = (_lastLocal - end).distance;
       final closest = dStart <= dEnd ? dStart : dEnd;
-      _active = closest > _hitRadius
+      _active = closest > _hit
           ? null
           : (dStart <= dEnd ? _Handle.linearStart : _Handle.linearEnd);
     } else {
@@ -129,7 +144,7 @@ class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
         (_Handle.radialRadiusX, center - axisX * rxPx),
         (_Handle.radialRadiusY, center + axisY * ryPx),
         (_Handle.radialRadiusY, center - axisY * ryPx),
-        (_Handle.radialRotate, center - axisY * (ryPx + _rotateHandleGap)),
+        (_Handle.radialRotate, center - axisY * (ryPx + _rotGap)),
       ];
       _Handle? best;
       var bestDist = double.infinity;
@@ -140,7 +155,7 @@ class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
           best = handle;
         }
       }
-      _active = bestDist > _hitRadius ? null : best;
+      _active = bestDist > _hit ? null : best;
     }
   }
 
@@ -245,6 +260,7 @@ class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
                         imageRect,
                       ),
                       shadeAlpha: widget.overlayOpacity,
+                      scale: _s,
                     )
                   : _RadialHandlesPainter(
                       center: _toLocal(
@@ -259,6 +275,7 @@ class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
                       innerFraction:
                           1.0 - mask.radial.feather.clamp(0.0, 1.0),
                       shadeAlpha: widget.overlayOpacity,
+                      scale: _s,
                     ),
             )
           : SizedBox.fromSize(size: widget.containerSize),
@@ -266,15 +283,15 @@ class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
   }
 }
 
-void _drawHandle(Canvas canvas, Offset center) {
-  canvas.drawCircle(center, 7, Paint()..color = DarkmoonColors.accent);
+void _drawHandle(Canvas canvas, Offset center, double scale) {
+  canvas.drawCircle(center, 7 / scale, Paint()..color = DarkmoonColors.accent);
   canvas.drawCircle(
     center,
-    7,
+    7 / scale,
     Paint()
       ..color = Colors.black54
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5,
+      ..strokeWidth = 1.5 / scale,
   );
 }
 
@@ -283,11 +300,17 @@ class _LinearHandlesPainter extends CustomPainter {
     required this.start,
     required this.end,
     required this.shadeAlpha,
+    required this.scale,
   });
 
   final Offset start;
   final Offset end;
   final double shadeAlpha;
+
+  /// Zoom factor — chrome (line/tick/handle widths) is drawn at `1 / scale`
+  /// so it stays a fixed size on screen; the shade gradient (geometry)
+  /// isn't touched.
+  final double scale;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -307,7 +330,7 @@ class _LinearHandlesPainter extends CustomPainter {
       end,
       Paint()
         ..color = DarkmoonColors.accent
-        ..strokeWidth = 1.5,
+        ..strokeWidth = 1.5 / scale,
     );
     // Perpendicular ticks at each end mark exactly where full effect
     // starts and where it fades to nothing, since that's easy to lose
@@ -316,25 +339,26 @@ class _LinearHandlesPainter extends CustomPainter {
     final length = direction.distance;
     if (length > 0) {
       final unit = direction / length;
-      final perp = Offset(-unit.dy, unit.dx) * 24;
-      canvas.drawLine(start - perp, start + perp, _tickPaint());
-      canvas.drawLine(end - perp, end + perp, _tickPaint());
+      final perp = Offset(-unit.dy, unit.dx) * (24 / scale);
+      canvas.drawLine(start - perp, start + perp, _tickPaint(scale));
+      canvas.drawLine(end - perp, end + perp, _tickPaint(scale));
     }
 
-    _drawHandle(canvas, start);
-    _drawHandle(canvas, end);
+    _drawHandle(canvas, start, scale);
+    _drawHandle(canvas, end, scale);
   }
 
   @override
   bool shouldRepaint(covariant _LinearHandlesPainter oldDelegate) =>
       oldDelegate.start != start ||
       oldDelegate.end != end ||
-      oldDelegate.shadeAlpha != shadeAlpha;
+      oldDelegate.shadeAlpha != shadeAlpha ||
+      oldDelegate.scale != scale;
 }
 
-Paint _tickPaint() => Paint()
+Paint _tickPaint(double scale) => Paint()
   ..color = DarkmoonColors.accent.withValues(alpha: 0.7)
-  ..strokeWidth = 1;
+  ..strokeWidth = 1 / scale;
 
 class _RadialHandlesPainter extends CustomPainter {
   const _RadialHandlesPainter({
@@ -344,6 +368,7 @@ class _RadialHandlesPainter extends CustomPainter {
     required this.angle,
     required this.innerFraction,
     required this.shadeAlpha,
+    required this.scale,
   });
 
   final Offset center;
@@ -358,10 +383,16 @@ class _RadialHandlesPainter extends CustomPainter {
   final double innerFraction;
   final double shadeAlpha;
 
+  /// Zoom factor — outlines, the rotation-knob gap and the handle dots are
+  /// drawn at `1 / scale` so they hold a fixed screen size; the ellipse
+  /// itself (geometry) tracks the image.
+  final double scale;
+
   @override
   void paint(Canvas canvas, Size size) {
     final rx = radiusXPx <= 0 ? 0.001 : radiusXPx;
     final ry = radiusYPx <= 0 ? 0.001 : radiusYPx;
+    final rotGap = _rotateHandleGap / scale;
 
     // Shades the covered area the same way the linear painter does. The
     // shader is a *unit* radial gradient stretched into the rotated
@@ -396,7 +427,7 @@ class _RadialHandlesPainter extends CustomPainter {
       Paint()
         ..color = DarkmoonColors.accent
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5,
+        ..strokeWidth = 1.5 / scale,
     );
     if (innerFraction > 0 && innerFraction < 1) {
       canvas.drawOval(
@@ -408,15 +439,15 @@ class _RadialHandlesPainter extends CustomPainter {
         Paint()
           ..color = DarkmoonColors.accent.withValues(alpha: 0.5)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1,
+          ..strokeWidth = 1 / scale,
       );
     }
     canvas.drawLine(
       Offset(0, -ry),
-      Offset(0, -(ry + _rotateHandleGap)),
+      Offset(0, -(ry + rotGap)),
       Paint()
         ..color = DarkmoonColors.accent.withValues(alpha: 0.7)
-        ..strokeWidth = 1,
+        ..strokeWidth = 1 / scale,
     );
     canvas.restore();
 
@@ -424,12 +455,12 @@ class _RadialHandlesPainter extends CustomPainter {
     // dots stay crisp circles.
     final axisX = Offset(math.cos(angle), math.sin(angle));
     final axisY = Offset(-axisX.dy, axisX.dx);
-    _drawHandle(canvas, center);
-    _drawHandle(canvas, center + axisX * rx);
-    _drawHandle(canvas, center - axisX * rx);
-    _drawHandle(canvas, center + axisY * ry);
-    _drawHandle(canvas, center - axisY * ry);
-    _drawRotateHandle(canvas, center - axisY * (ry + _rotateHandleGap));
+    _drawHandle(canvas, center, scale);
+    _drawHandle(canvas, center + axisX * rx, scale);
+    _drawHandle(canvas, center - axisX * rx, scale);
+    _drawHandle(canvas, center + axisY * ry, scale);
+    _drawHandle(canvas, center - axisY * ry, scale);
+    _drawRotateHandle(canvas, center - axisY * (ry + rotGap), scale);
   }
 
   @override
@@ -439,19 +470,20 @@ class _RadialHandlesPainter extends CustomPainter {
       oldDelegate.radiusYPx != radiusYPx ||
       oldDelegate.angle != angle ||
       oldDelegate.innerFraction != innerFraction ||
-      oldDelegate.shadeAlpha != shadeAlpha;
+      oldDelegate.shadeAlpha != shadeAlpha ||
+      oldDelegate.scale != scale;
 }
 
 /// The rotation knob: hollow ring, visually distinct from the filled
 /// resize/move dots so it reads as "spin", not "stretch".
-void _drawRotateHandle(Canvas canvas, Offset center) {
-  canvas.drawCircle(center, 6, Paint()..color = Colors.black54);
+void _drawRotateHandle(Canvas canvas, Offset center, double scale) {
+  canvas.drawCircle(center, 6 / scale, Paint()..color = Colors.black54);
   canvas.drawCircle(
     center,
-    6,
+    6 / scale,
     Paint()
       ..color = DarkmoonColors.accent
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2,
+      ..strokeWidth = 2 / scale,
   );
 }

@@ -34,6 +34,7 @@ class BrushMaskOverlay extends StatefulWidget {
     required this.brushErase,
     required this.onChanged,
     required this.onChangeEnd,
+    this.zoomScale = 1.0,
     this.showOverlay = true,
     this.overlayOpacity = 0.4,
   });
@@ -42,6 +43,12 @@ class BrushMaskOverlay extends StatefulWidget {
   final int imageWidth;
   final int imageHeight;
   final MaskLayer mask;
+
+  /// The InteractiveViewer's zoom factor — the hover cursor ring's outline
+  /// is drawn at `1 / zoomScale` so it stays a hairline on screen instead
+  /// of thickening with the image. The ring's *radius* still tracks the
+  /// image (it shows the actual painted area).
+  final double zoomScale;
 
   /// Normalized to image width, same convention as [RadialGradientGeometry.radius].
   final double brushRadius;
@@ -169,6 +176,7 @@ class _BrushMaskOverlayState extends State<BrushMaskOverlay> {
             radiusPx: widget.brushRadius * imageRect.width,
             cursor: _hoverLocal,
             overlayOpacity: widget.overlayOpacity,
+            scale: widget.zoomScale <= 0 ? 1.0 : widget.zoomScale,
           ),
         ),
       ),
@@ -183,6 +191,7 @@ class _BrushPreviewPainter extends CustomPainter {
     required this.radiusPx,
     required this.cursor,
     required this.overlayOpacity,
+    required this.scale,
   });
 
   /// Every stroke the mask currently has, including the one still being
@@ -197,6 +206,7 @@ class _BrushPreviewPainter extends CustomPainter {
   final double radiusPx;
   final Offset? cursor;
   final double overlayOpacity;
+  final double scale;
 
   void _paintDabs(
     Canvas canvas,
@@ -248,7 +258,7 @@ class _BrushPreviewPainter extends CustomPainter {
         Paint()
           ..color = DarkmoonColors.accent
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.2,
+          ..strokeWidth = 1.2 / scale,
       );
     }
   }
@@ -259,5 +269,6 @@ class _BrushPreviewPainter extends CustomPainter {
       oldDelegate.imageRect != imageRect ||
       oldDelegate.radiusPx != radiusPx ||
       oldDelegate.cursor != cursor ||
-      oldDelegate.overlayOpacity != overlayOpacity;
+      oldDelegate.overlayOpacity != overlayOpacity ||
+      oldDelegate.scale != scale;
 }
