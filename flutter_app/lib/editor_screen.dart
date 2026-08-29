@@ -33,6 +33,7 @@ import 'presets/preset_xmp.dart';
 import 'presets/preset_zip.dart';
 import 'raw_files.dart';
 import 'render/ai_denoise.dart';
+import 'render/ai_enhance_job.dart' show AiEnhanceProgress;
 import 'render/color_profile.dart';
 import 'render/histogram.dart';
 import 'render/lens_correction.dart';
@@ -674,6 +675,22 @@ class _EditorScreenState extends State<EditorScreen> {
   /// since it's a deliberate action the user just confirmed rather than an
   /// incidental slow render.
   bool _isApplyingAiDenoise = false;
+
+  /// True while item 13's neural Enhance pipeline itself is running
+  /// (`_runNeuralEnhance`) — this is the slow step (denoise + upscale
+  /// through the ONNX models, 30s-2min on a full photo, worse on CPU
+  /// fallback), so it needs its own loading overlay entry distinct from
+  /// [_isApplyingAiDenoise] (which only covers the quick render pass
+  /// *after* the enhanced source is ready). Without this, the dialog
+  /// closed and nothing visible happened for the whole duration of the
+  /// actual AI work — looked exactly like the button did nothing.
+  bool _isRunningNeuralEnhance = false;
+
+  /// Real per-tile progress for [_isRunningNeuralEnhance], forwarded from
+  /// `decodeEditSourcesWithAiEnhance`'s `onStage` callback. Null while the
+  /// pipeline hasn't reported a tile yet (cache lookup / RAW decode still
+  /// in progress) — the overlay shows an indeterminate message then.
+  AiEnhanceProgress? _aiEnhanceProgress;
 
   /// Real progress for the loading overlay while a folder's thumbnails are
   /// being decoded — [_thumbnailsTotal] is 0 until the file list is known.
@@ -3197,17 +3214,26 @@ class _EditorScreenState extends State<EditorScreen> {
   /// (having already reverted the `_neuralEnhanceKey` marker and shown a
   /// message) on failure, so the caller can skip rendering/history for a
   /// change that didn't actually happen.
+  ///
+  /// Owns [_isRunningNeuralEnhance]/[_aiEnhanceProgress] end-to-end (set
+  /// on entry, cleared on every exit path) — this is the operation that
+  /// can take 30s-2min, so without a loading overlay covering exactly
+  /// this call the dialog just closes and appears to do nothing for that
+  /// whole stretch.
   Future<bool> _runNeuralEnhance(String path) async {
+    setState(() {
+      _isRunningNeuralEnhance = true;
+      _aiEnhanceProgress = null;
+    });
     final cacheDir = await resolveAiEnhanceCacheDir();
     if (!mounted) return false;
     final sources = await decodeEditSourcesWithAiEnhance(
       path,
       cacheDir,
       (stage) {
-        // Per-tile progress (AiEnhanceProgress) is available here but not
-        // surfaced yet — _isApplyingAiDenoise's existing indeterminate
-        // message covers correctness; a tile-count readout is future
-        // polish once the end-to-end flow itself is confirmed working.
+        if (mounted && stage is AiEnhanceProgress) {
+          setState(() => _aiEnhanceProgress = stage);
+        }
       },
       previewMaxDimension: _settings.previewResolution,
     );
@@ -3215,9 +3241,11 @@ class _EditorScreenState extends State<EditorScreen> {
       return false;
     }
     if (sources == null) {
-      setState(
-        () => _paramValues = {..._paramValues, _neuralEnhanceKey: 0.0},
-      );
+      setState(() {
+        _paramValues = {..._paramValues, _neuralEnhanceKey: 0.0};
+        _isRunningNeuralEnhance = false;
+        _aiEnhanceProgress = null;
+      });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -3227,7 +3255,11 @@ class _EditorScreenState extends State<EditorScreen> {
       );
       return false;
     }
-    setState(() => _editSources[path] = sources);
+    setState(() {
+      _editSources[path] = sources;
+      _isRunningNeuralEnhance = false;
+      _aiEnhanceProgress = null;
+    });
     return true;
   }
 
@@ -4246,6 +4278,29 @@ class _EditorScreenState extends State<EditorScreen> {
         progress: _thumbnailsTotal > 0
             ? _thumbnailsLoaded / _thumbnailsTotal
             : null,
+      );
+    }
+    // Checked before _isApplyingAiDenoise: the neural Enhance pipeline
+    // itself (denoise + upscale through the ONNX models) is the slow part
+    // of picking that choice — _isApplyingAiDenoise only covers the quick
+    // render pass that follows once the enhanced source is ready.
+    if (_isRunningNeuralEnhance) {
+      final progress = _aiEnhanceProgress;
+      if (progress == null) {
+        return _LoadingInfo(message: l10n.aiDenoiseEnhanceStartingMessage);
+      }
+      final stageLabel = progress.stage == 'upscale'
+          ? l10n.aiDenoiseEnhanceStageUpscale
+          : l10n.aiDenoiseEnhanceStageDenoise;
+      return _LoadingInfo(
+        message: l10n.aiDenoiseEnhanceTileProgress(
+          stageLabel,
+          progress.tileIndex,
+          progress.totalTiles,
+        ),
+        progress: progress.totalTiles == 0
+            ? null
+            : progress.tileIndex / progress.totalTiles,
       );
     }
     // Deliberately NOT handled here: _isDecodingPhoto (opening a single

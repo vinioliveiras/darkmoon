@@ -110,6 +110,17 @@
   "aiDenoiseEnhanceOffLabel": "Off",
   "aiDenoiseEnhanceOnLabel": "Denoise + Upscale",
   "aiDenoiseEnhanceFailedMessage": "AI Enhance couldn't run on this photo. It's been turned back off.",
+  "aiDenoiseEnhanceStartingMessage": "Running AI Enhance...",
+  "aiDenoiseEnhanceStageDenoise": "Denoising",
+  "aiDenoiseEnhanceStageUpscale": "Upscaling",
+  "aiDenoiseEnhanceTileProgress": "{stage} — tile {tile}/{total}",
+  "@aiDenoiseEnhanceTileProgress": {
+    "placeholders": {
+      "stage": {"type": "String"},
+      "tile": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
 
   "exportPanelButton": "Export",
   "exportingButton": "Exporting...",

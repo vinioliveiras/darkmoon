@@ -270,6 +270,20 @@ class AppLocalizationsEn extends AppLocalizations {
       'AI Enhance couldn\'t run on this photo. It\'s been turned back off.';
 
   @override
+  String get aiDenoiseEnhanceStartingMessage => 'Running AI Enhance...';
+
+  @override
+  String get aiDenoiseEnhanceStageDenoise => 'Denoising';
+
+  @override
+  String get aiDenoiseEnhanceStageUpscale => 'Upscaling';
+
+  @override
+  String aiDenoiseEnhanceTileProgress(String stage, int tile, int total) {
+    return '$stage — tile $tile/$total';
+  }
+
+  @override
   String get exportPanelButton => 'Export';
 
   @override

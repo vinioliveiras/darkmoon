@@ -86,6 +86,17 @@
   "aiDenoiseEnhanceOffLabel": "Desligado",
   "aiDenoiseEnhanceOnLabel": "Denoise + Upscale",
   "aiDenoiseEnhanceFailedMessage": "O AI Enhance não conseguiu rodar nessa foto. Foi desligado de novo.",
+  "aiDenoiseEnhanceStartingMessage": "Rodando AI Enhance...",
+  "aiDenoiseEnhanceStageDenoise": "Removendo ruído",
+  "aiDenoiseEnhanceStageUpscale": "Ampliando",
+  "aiDenoiseEnhanceTileProgress": "{stage} — bloco {tile}/{total}",
+  "@aiDenoiseEnhanceTileProgress": {
+    "placeholders": {
+      "stage": {"type": "String"},
+      "tile": {"type": "int"},
+      "total": {"type": "int"}
+    }
+  },
 
   "exportPanelButton": "Exportar",
   "exportingButton": "Exportando...",

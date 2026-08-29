@@ -89,6 +89,23 @@ install(FILES
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# ONNX Runtime (+ DirectML EP) and the item-13 neural Enhance models
+# (NAFNet-SIDD denoise, Real-ESRGAN 2x upscale) — `onnx_runtime.dart`
+# resolves all of these next to the executable, same convention as
+# raw_r.dll above. The two .onnx files are gitignored (~510MB combined),
+# so this only produces a working build on a machine that already has
+# them under windows/native/ — see PENDING.md item 13 for the still-open
+# real distribution question (first-run download? release asset?). Use
+# GLOB instead of naming the .onnx files directly so a future model swap
+# doesn't also require touching this file.
+file(GLOB DARKMOON_ONNX_MODELS "${CMAKE_CURRENT_SOURCE_DIR}/native/*.onnx")
+install(FILES
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/onnxruntime.dll"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/DirectML.dll"
+  ${DARKMOON_ONNX_MODELS}
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
 if(PLUGIN_BUNDLED_LIBRARIES)
   install(FILES "${PLUGIN_BUNDLED_LIBRARIES}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

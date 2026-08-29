@@ -270,6 +270,20 @@ class AppLocalizationsPt extends AppLocalizations {
       'O AI Enhance não conseguiu rodar nessa foto. Foi desligado de novo.';
 
   @override
+  String get aiDenoiseEnhanceStartingMessage => 'Rodando AI Enhance...';
+
+  @override
+  String get aiDenoiseEnhanceStageDenoise => 'Removendo ruído';
+
+  @override
+  String get aiDenoiseEnhanceStageUpscale => 'Ampliando';
+
+  @override
+  String aiDenoiseEnhanceTileProgress(String stage, int tile, int total) {
+    return '$stage — bloco $tile/$total';
+  }
+
+  @override
   String get exportPanelButton => 'Exportar';
 
   @override

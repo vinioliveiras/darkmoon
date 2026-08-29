@@ -578,6 +578,30 @@ abstract class AppLocalizations {
   /// **'AI Enhance couldn\'t run on this photo. It\'s been turned back off.'**
   String get aiDenoiseEnhanceFailedMessage;
 
+  /// No description provided for @aiDenoiseEnhanceStartingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Running AI Enhance...'**
+  String get aiDenoiseEnhanceStartingMessage;
+
+  /// No description provided for @aiDenoiseEnhanceStageDenoise.
+  ///
+  /// In en, this message translates to:
+  /// **'Denoising'**
+  String get aiDenoiseEnhanceStageDenoise;
+
+  /// No description provided for @aiDenoiseEnhanceStageUpscale.
+  ///
+  /// In en, this message translates to:
+  /// **'Upscaling'**
+  String get aiDenoiseEnhanceStageUpscale;
+
+  /// No description provided for @aiDenoiseEnhanceTileProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'{stage} — tile {tile}/{total}'**
+  String aiDenoiseEnhanceTileProgress(String stage, int tile, int total);
+
   /// No description provided for @exportPanelButton.
   ///
   /// In en, this message translates to:
