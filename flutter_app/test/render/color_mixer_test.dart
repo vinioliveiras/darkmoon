@@ -16,7 +16,10 @@ void main() {
   // Expected values below were computed from RapidRAW's apply_hsl_panel
   // (shader.wgsl) via a reference Python port — scene-linear HSV, per-band
   // Gaussian influence normalized per pixel, saturation-gated — independent
-  // of color_mixer.dart's implementation.
+  // of color_mixer.dart's implementation. The hue-shift cases were
+  // re-derived 2026-08-29 after `calMixerHueStrength` raised the per-unit
+  // hue rotation from RapidRAW's 0.6 toward the Lightroom Color Mixer;
+  // saturation/luminance-only cases are unaffected.
 
   test('a saturation boost on a saturated pixel near a band center', () {
     final source = Uint8List.fromList([
@@ -57,9 +60,9 @@ void main() {
       ),
     );
 
-    expect(result[0], closeTo(148, 1));
+    expect(result[0], closeTo(170, 1));
     expect(result[1], closeTo(0, 1));
-    expect(result[2], closeTo(233, 1));
+    expect(result[2], closeTo(187, 1));
   });
 
   test(
@@ -78,7 +81,7 @@ void main() {
         ),
       );
 
-      expect(result[0], closeTo(143, 1));
+      expect(result[0], closeTo(145, 1));
       expect(result[1], closeTo(144, 1));
       expect(result[2], closeTo(154, 1));
     },

@@ -295,6 +295,36 @@ const double calVibranceSkinDampen = 0.6;
 const double calSaturationStrength = 1.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  COR — Mixer de Cor / HSL (8 bandas)                                      ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+/// **Mixer → Matiz (Hue)** — quantos graus de rotação de matiz cada unidade
+/// do slider gera (antes da normalização por banda e da máscara de
+/// saturação). O porte do RapidRAW usava 0.6 (= `0.3 * 2.0`); a comparação
+/// com o Lightroom (Filmatic Fuji 2 na DSF1309, 2026-08-29) mostrou que o
+/// usuário precisou de ~1.9× o valor do Lightroom em Orange/Yellow/Aqua/
+/// Blue — ou seja, o Hue do darkmoon estava fraco. Subido pra 1.15.
+///   ↑ maior  = mesmo valor de Hue no slider gira mais a cor
+///   ↓ menor  = gira menos (0.6 = comportamento RapidRAW original)
+/// ⚠️ muda presets antigos que mexeram no Hue do Mixer (vão girar mais).
+/// padrão: 1.15   (RapidRAW original: 0.6)   [também no GPU: point_ops_post_denoise.frag]
+const double calMixerHueStrength = 1.15;
+
+/// **Mixer → largura efetiva das bandas** — o "sharpness" da gaussiana que
+/// decide o quanto cada banda (Vermelho, Laranja…) influencia um pixel de
+/// determinado matiz. Número ALTO = bandas mais estreitas, menos "vazamento"
+/// entre bandas vizinhas (ex.: mexer no Verde não puxa tanto o Amarelo/
+/// Aqua). Número BAIXO = bandas mais largas e sobrepostas.
+///   ↑ maior (ex.: 2.5) = bandas mais separadas, efeito mais cirúrgico
+///   ↓ menor (ex.: 1.0) = bandas mais largas (mais "vazamento")
+/// Sintoma de estar baixo demais: no Lightroom você tira saturação só do
+/// Verde e no darkmoon precisa compensar Amarelo/Aqua porque o Verde
+/// "vazou" pra eles. Comparação de 2026-08-29 sugere que pode estar largo
+/// demais; teste subir. Mantido em 1.5 (RapidRAW original) por enquanto.
+/// padrão: 1.5   [também no GPU: point_ops_post_denoise.frag → rawHslInfluence]
+const double calMixerBandSharpness = 1.5;
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  DETALHE — Nitidez (Sharpen)                                              ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 

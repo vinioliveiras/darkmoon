@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'calibration.dart';
 import 'color_space.dart';
 import 'hsl.dart';
 
@@ -111,7 +112,7 @@ double _rawHslInfluence(double hue, double center, double width) {
   if (dist > 180) {
     dist = 360 - dist;
   }
-  const sharpness = 1.5;
+  const sharpness = calMixerBandSharpness;
   final falloff = dist / (width * 0.5);
   return math.exp(-sharpness * falloff * falloff);
 }
@@ -170,7 +171,7 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
   final satAmt = Float64List(n);
   final lumAmt = Float64List(n);
   for (var c = 0; c < n; c++) {
-    hueAmt[c] = channels[c].hue * 0.3 * 2.0;
+    hueAmt[c] = channels[c].hue * calMixerHueStrength;
     satAmt[c] = channels[c].saturation / 100.0;
     lumAmt[c] = channels[c].luminance / 100.0;
   }
@@ -211,9 +212,10 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
       final normalizedInfluence = rawInfluences[c] / totalRawInfluence;
       final hueSatInfluence = normalizedInfluence * saturationMask;
       final lumaInfluence = normalizedInfluence * luminanceWeight;
-      // hueAmt/satAmt/lumAmt fold in RapidRAW's SCALES
-      // (hsl_hue_multiplier 0.3 × the shader's own ×2.0; /100 for
-      // sat/lum), precomputed per channel above.
+      // hueAmt/satAmt/lumAmt are precomputed per channel above: hue folds
+      // in `calMixerHueStrength` (was RapidRAW's 0.3 × the shader's ×2.0 =
+      // 0.6, raised toward the Lightroom Color Mixer — see calibration.dart),
+      // sat/lum are just /100.
       totalHueShift += hueAmt[c] * hueSatInfluence;
       totalSatMultiplier += satAmt[c] * hueSatInfluence;
       totalLumAdjust += lumAmt[c] * lumaInfluence;
@@ -224,8 +226,7 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
       // pixel collapses to gray at its (Luminance-adjusted) luma, not its
       // HSV value (the max channel) — those two aren't the same number
       // for a non-gray color.
-      final finalLuma =
-          (originalLuma * (1.0 + totalLumAdjust)).clamp(0.0, 1.0);
+      final finalLuma = (originalLuma * (1.0 + totalLumAdjust)).clamp(0.0, 1.0);
       final v = linearToSrgb(finalLuma) * 255.0;
       img[i] = v;
       img[i + 1] = v;

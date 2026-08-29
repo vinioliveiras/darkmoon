@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import '../calibration.dart';
 import '../color_grading.dart';
 import '../render_params.dart';
 import '../tone_curve.dart';
@@ -266,6 +267,8 @@ Future<ui.Image> _runPostDenoise(
   shader.setFloat(i++, highlightsAdd);
   shader.setFloat(i++, whitesAdd);
   shader.setFloat(i++, blacksAdd);
+  shader.setFloat(i++, calMixerHueStrength);
+  shader.setFloat(i++, calMixerBandSharpness);
   for (final ch in mixerChannels) {
     shader.setFloat(i++, ch.hue);
     shader.setFloat(i++, ch.saturation);
