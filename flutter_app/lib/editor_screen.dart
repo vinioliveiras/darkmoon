@@ -157,6 +157,14 @@ String _sectionLabel(AppLocalizations l10n, String key) {
   }
 }
 
+/// Temporary: while export perf is being profiled, the success snackbar
+/// appends a per-stage timing breakdown (source / render sub-stages /
+/// encode / write). Flip to true to bring it back. The underlying
+/// instrumentation in `export_job.dart` / `render_parallel.dart` stays —
+/// it's cheap and only surfaces here. Remove all of it (this flag + the
+/// `timings` plumbing) once export is settled. See PENDING "Débitos".
+const bool _showExportTimings = false;
+
 /// Zoom bounds and step, matching the Python app's MIN_ZOOM/MAX_ZOOM/ZOOM_STEP.
 const double _minZoom = 0.1;
 const double _maxZoom = 4.0;
@@ -3804,10 +3812,12 @@ class _EditorScreenState extends State<EditorScreen> {
       _exportStage = null;
     });
     if (!wasCancelled) {
-      final timingLine = [
-        if (srcTiming != null) srcTiming,
-        if (result.timings != null) result.timings!,
-      ].join('\n');
+      final timingLine = _showExportTimings
+          ? [
+              if (srcTiming != null) srcTiming,
+              if (result.timings != null) result.timings!,
+            ].join('\n')
+          : '';
       final message = result.success
           ? '${l10n.exportSuccessMessage(result.destPath!)}'
                 '${timingLine.isEmpty ? '' : '\n$timingLine'}'
