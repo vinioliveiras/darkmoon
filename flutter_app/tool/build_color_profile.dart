@@ -295,9 +295,10 @@ void main(List<String> args) {
   }
   stdout.writeln('\nwrote $outPath');
 
-  // Eyeball aids for the first pair.
+  // Eyeball aids for the first pair — written to the CWD (not next to the
+  // profile, which may live in assets/ where they'd get bundled).
   if (firstDm != null && firstRef != null) {
-    final base = p.withoutExtension(outPath);
+    final base = p.basenameWithoutExtension(outPath);
     img.encodeJpgFile('${base}_before.jpg', firstDm);
 
     final dmBytes = firstDm.getBytes(order: img.ChannelOrder.rgb);
