@@ -2666,7 +2666,17 @@ class _EditorScreenState extends State<EditorScreen> {
     if (onStage != null) {
       return renderJobToJpegWithProgress(job, onStage);
     }
-    if (allowGpu && _settings.useGpuRender && await isGpuRenderAvailable()) {
+    // The GPU shader doesn't apply the "darkmoon Color" profile yet
+    // (Phase 3) — falling through to it while a profile with a real tone
+    // curve is active would render everything at LibRaw's dark baseline.
+    // Force CPU until the shader port lands.
+    final profileActive =
+        job.params.colorProfile != null &&
+        !job.params.colorProfile!.toneIsIdentity;
+    if (allowGpu &&
+        !profileActive &&
+        _settings.useGpuRender &&
+        await isGpuRenderAvailable()) {
       return renderJobToJpegGpu(job);
     }
     return compute(renderJobToJpeg, job);
