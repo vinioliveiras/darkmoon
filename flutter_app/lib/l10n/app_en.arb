@@ -163,6 +163,8 @@
   "filmstripResetEditsAction": "Reset all edits",
   "filmstripShowOnDiskAction": "Show on disk",
   "filmstripDeleteAction": "Delete",
+  "imageContextCopyEditsAction": "Copy Edits",
+  "imageContextPasteEditsAction": "Paste Edits",
   "filmstripResetEditsConfirmTitle": "Reset all edits?",
   "filmstripResetEditsConfirmMessage": "This resets \"{name}\" back to its untouched state — every adjustment, curve, and mask. This can't be undone.",
   "@filmstripResetEditsConfirmMessage": {

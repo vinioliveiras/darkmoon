@@ -133,6 +133,8 @@
   "filmstripResetEditsAction": "Resetar todas as edições",
   "filmstripShowOnDiskAction": "Mostrar no disco",
   "filmstripDeleteAction": "Excluir",
+  "imageContextCopyEditsAction": "Copiar Edições",
+  "imageContextPasteEditsAction": "Colar Edições",
   "filmstripResetEditsConfirmTitle": "Resetar todas as edições?",
   "filmstripResetEditsConfirmMessage": "Isso volta \"{name}\" ao estado original — todo ajuste, curva e máscara. Não pode ser desfeito.",
   "filmstripDeleteConfirmTitle": "Excluir foto?",

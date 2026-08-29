@@ -409,6 +409,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filmstripDeleteAction => 'Delete';
 
   @override
+  String get imageContextCopyEditsAction => 'Copy Edits';
+
+  @override
+  String get imageContextPasteEditsAction => 'Paste Edits';
+
+  @override
   String get filmstripResetEditsConfirmTitle => 'Reset all edits?';
 
   @override

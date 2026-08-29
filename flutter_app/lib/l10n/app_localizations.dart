@@ -836,6 +836,18 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get filmstripDeleteAction;
 
+  /// No description provided for @imageContextCopyEditsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Copy Edits'**
+  String get imageContextCopyEditsAction;
+
+  /// No description provided for @imageContextPasteEditsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste Edits'**
+  String get imageContextPasteEditsAction;
+
   /// No description provided for @filmstripResetEditsConfirmTitle.
   ///
   /// In en, this message translates to:

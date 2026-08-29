@@ -413,6 +413,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get filmstripDeleteAction => 'Excluir';
 
   @override
+  String get imageContextCopyEditsAction => 'Copiar Edições';
+
+  @override
+  String get imageContextPasteEditsAction => 'Colar Edições';
+
+  @override
   String get filmstripResetEditsConfirmTitle => 'Resetar todas as edições?';
 
   @override

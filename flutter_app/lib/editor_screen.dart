@@ -723,6 +723,14 @@ class _EditorScreenState extends State<EditorScreen> {
   /// pattern.
   List<MaskLayer> _currentMasks = [];
 
+  /// The last photo's edits copied via the image's right-click menu — a
+  /// session-only clipboard (not persisted). Null = nothing copied yet, so
+  /// "Paste Edits" stays disabled. Deliberately doesn't include crop/lens
+  /// (those are framing/geometry, not "look" — pasting them onto a
+  /// different photo would usually be wrong).
+  ({Map<String, double> values, PhotoCurves curves, List<MaskLayer> masks})?
+  _copiedEdits;
+
   /// Which layer the controls panel is currently editing —
   /// [imageMaskId] (the whole photo, i.e. the existing global
   /// adjustments) or one of [_currentMasks]'s ids.
@@ -830,6 +838,15 @@ class _EditorScreenState extends State<EditorScreen> {
 
   late final AppLifecycleListener _lifecycleListener;
 
+  /// Owns focus for the app-wide keyboard shortcuts (undo/redo, Before/
+  /// After). A bare `Focus(autofocus: true)` only requests focus once, the
+  /// first time it's inserted into the tree — after an alt-tab away and
+  /// back, Flutter's embedding doesn't hand focus back to it on its own,
+  /// so Ctrl+Z/Ctrl+Y silently stop doing anything until the user clicks
+  /// something focusable. [_lifecycleListener]'s `onResume`/`onShow`
+  /// explicitly reclaim it once the window is frontmost again.
+  final FocusNode _shortcutsFocusNode = FocusNode(debugLabel: 'shortcuts');
+
   /// Main-isolate-only (path_provider isn't guaranteed safe to call from
   /// the compute() isolates thumbnail decoding runs on, and it batches
   /// writes per month file, which needs a single owner). Null until
@@ -864,7 +881,20 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     _lifecycleListener = AppLifecycleListener(
       onExitRequested: _handleExitRequested,
+      // Alt-tabbing back to the window doesn't hand keyboard focus back to
+      // any particular widget on its own — reclaim it for the shortcuts
+      // scope explicitly. onShow/onResume can fire independently
+      // depending on platform, so handle both the same way; requestFocus()
+      // on an already-focused node is a harmless no-op.
+      onResume: _reclaimShortcutsFocus,
+      onShow: _reclaimShortcutsFocus,
     );
+  }
+
+  void _reclaimShortcutsFocus() {
+    if (!_shortcutsFocusNode.hasFocus) {
+      _shortcutsFocusNode.requestFocus();
+    }
   }
 
   Future<void> _loadThumbnailCache() async {
@@ -1538,6 +1568,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _completeVisibleThumbnailsReady();
     _viewController.dispose();
     _lifecycleListener.dispose();
+    _shortcutsFocusNode.dispose();
     super.dispose();
   }
 
@@ -1801,6 +1832,68 @@ class _EditorScreenState extends State<EditorScreen> {
     await saveCatalog(_edits);
     await savePhotoCurves(_photoCurves);
     await savePhotoMasks(_photoMasks);
+  }
+
+  /// Right-click on the image — "Copy Edits" / "Paste Edits", the same
+  /// idea as Lightroom's Copy/Paste Settings but with no picker (everything
+  /// copies: sliders, curves, masks — not crop/lens, see [_copiedEdits]'s
+  /// own doc comment).
+  Future<void> _showImageContextMenu(Offset globalPosition) async {
+    if (_selectedIndex == null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final action = await showMenu<VoidCallback>(
+      context: context,
+      position: RelativeRect.fromRect(
+        globalPosition & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        PopupMenuItem(
+          value: _copyEdits,
+          child: Text(l10n.imageContextCopyEditsAction),
+        ),
+        PopupMenuItem(
+          value: _copiedEdits == null ? null : _pasteEdits,
+          enabled: _copiedEdits != null,
+          child: Text(l10n.imageContextPasteEditsAction),
+        ),
+      ],
+    );
+    action?.call();
+  }
+
+  void _copyEdits() {
+    setState(() {
+      _copiedEdits = (
+        values: {..._paramValues},
+        curves: _currentCurves,
+        masks: [..._currentMasks],
+      );
+    });
+  }
+
+  void _pasteEdits() {
+    final copied = _copiedEdits;
+    if (_selectedIndex == null || copied == null) {
+      return;
+    }
+    setState(() {
+      _paramValues = {...copied.values};
+      _currentCurves = copied.curves;
+      _currentMasks = [...copied.masks];
+      _activeMaskId = imageMaskId;
+      // A pasted edit isn't tied to the preset (if any) it came from —
+      // matches _applyPreset's own baseline-reset behaviour.
+      _appliedPresetId = null;
+      _presetBaseline = null;
+    });
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
   }
 
   /// Opens [file]'s containing folder in Windows Explorer with the file
@@ -3922,7 +4015,11 @@ class _EditorScreenState extends State<EditorScreen> {
         ): _redo,
         const SingleActivator(LogicalKeyboardKey.keyY, control: true): _redo,
       },
-      child: Focus(autofocus: true, child: _buildScaffold(selected)),
+      child: Focus(
+        focusNode: _shortcutsFocusNode,
+        autofocus: true,
+        child: _buildScaffold(selected),
+      ),
     );
   }
 
@@ -4110,6 +4207,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                       _onCropTransformChanged,
                                   onCropTransformChangeEnd:
                                       _onCropTransformChangeEnd,
+                                  onSecondaryTapUp: _showImageContextMenu,
                                 ),
                                 // Opening a photo (RAW decode, or a
                                 // preview-cache hit) gets a small spinner
@@ -4422,6 +4520,7 @@ class _ImageArea extends StatelessWidget {
     required this.cropAspectRatio,
     required this.onCropTransformChanged,
     required this.onCropTransformChangeEnd,
+    required this.onSecondaryTapUp,
   });
 
   final RawFile? selected;
@@ -4485,6 +4584,9 @@ class _ImageArea extends StatelessWidget {
   final double? cropAspectRatio;
   final ValueChanged<CropTransformParams> onCropTransformChanged;
   final ValueChanged<CropTransformParams> onCropTransformChangeEnd;
+
+  /// Right-click on the image — opens the copy/paste-edits context menu.
+  final void Function(Offset globalPosition) onSecondaryTapUp;
 
   /// Vertical breathing room around the fitted image — without this, a
   /// photo whose aspect ratio closely matches the viewport (most photos,
@@ -4555,6 +4657,7 @@ class _ImageArea extends StatelessWidget {
       onPointerSignal: onPointerSignal,
       child: GestureDetector(
         onDoubleTap: doubleTapToFit ? onResetZoom : null,
+        onSecondaryTapUp: (details) => onSecondaryTapUp(details.globalPosition),
         child: InteractiveViewer(
           transformationController: viewController,
           minScale: _minZoom,
