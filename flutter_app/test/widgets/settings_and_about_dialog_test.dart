@@ -28,7 +28,7 @@ Widget _wrap(Widget dialog) {
 
 void main() {
   group('SettingsDialog', () {
-    testWidgets('renders every group and its own iOS-style close button '
+    testWidgets('renders every tab and its own iOS-style close button '
         '(no bottom Close text button)', (tester) async {
       await tester.pumpWidget(
         _wrap(
@@ -44,16 +44,23 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Settings'), findsOneWidget);
-      expect(find.text('GENERAL'), findsOneWidget);
-      expect(find.text('LIBRARY'), findsOneWidget);
-      expect(find.text('PREVIEW & PERFORMANCE'), findsOneWidget);
-      expect(find.text('COLOR'), findsOneWidget);
-      expect(find.text('USER DATA'), findsOneWidget);
+      expect(find.text('General'), findsOneWidget);
+      expect(find.text('Performance'), findsOneWidget);
+      expect(find.text('Color'), findsOneWidget);
+      expect(find.text('Data'), findsOneWidget);
+
+      // Starts on the General tab.
+      expect(find.text('Language'), findsOneWidget);
 
       // The bottom "Close" text action is gone — replaced by the icon
       // button in the title row.
       expect(find.widgetWithText(TextButton, 'Close'), findsNothing);
       expect(find.byTooltip('Close'), findsOneWidget);
+
+      // Switching tabs shows that tab's own content.
+      await tester.tap(find.text('Data'));
+      await tester.pumpAndSettle();
+      expect(find.text('Clear thumbnail cache'), findsOneWidget);
 
       await tester.tap(find.byTooltip('Close'));
       await tester.pumpAndSettle();
@@ -77,6 +84,8 @@ void main() {
         );
         await tester.tap(find.text('open'));
         await tester.pumpAndSettle();
+        await tester.tap(find.text('Performance'));
+        await tester.pumpAndSettle();
         expect(find.text('Preview resolution'), findsOneWidget);
       },
     );
@@ -95,6 +104,8 @@ void main() {
           ),
         );
         await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Performance'));
         await tester.pumpAndSettle();
         expect(find.text('Preview resolution'), findsNWidgets(2));
       },

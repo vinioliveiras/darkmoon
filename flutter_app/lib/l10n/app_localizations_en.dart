@@ -319,16 +319,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDialogTitle => 'Settings';
 
   @override
-  String get settingsSectionGeneral => 'GENERAL';
+  String get settingsTabGeneral => 'General';
 
   @override
-  String get settingsSectionLibrary => 'LIBRARY';
+  String get settingsTabPerformance => 'Performance';
 
   @override
-  String get settingsSectionPreview => 'PREVIEW & PERFORMANCE';
+  String get settingsTabColor => 'Color';
 
   @override
-  String get settingsSectionColor => 'COLOR';
+  String get settingsTabData => 'Data';
 
   @override
   String get settingsLanguageLabel => 'Language';
@@ -386,9 +386,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsThumbnailThreadsLabel => 'Thumbnail loading threads';
-
-  @override
-  String get settingsUserDataSection => 'USER DATA';
 
   @override
   String get settingsClearThumbnailsButton => 'Clear thumbnail cache';

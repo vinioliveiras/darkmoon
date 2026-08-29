@@ -43,8 +43,19 @@ class SettingsDialog extends StatefulWidget {
   State<SettingsDialog> createState() => _SettingsDialogState();
 }
 
-class _SettingsDialogState extends State<SettingsDialog> {
+class _SettingsDialogState extends State<SettingsDialog>
+    with SingleTickerProviderStateMixin {
   late AppSettings _settings = widget.settings;
+  late final TabController _tabController = TabController(
+    length: 4,
+    vsync: this,
+  );
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   void _update(AppSettings next) {
     setState(() => _settings = next);
@@ -76,16 +87,19 @@ class _SettingsDialogState extends State<SettingsDialog> {
     }
   }
 
+  static const _labelStyle = TextStyle(
+    fontSize: 12,
+    fontWeight: FontWeight.w500,
+    color: DarkmoonColors.textSecondary,
+  );
+  static const _hintStyle = TextStyle(
+    fontSize: 11,
+    color: DarkmoonColors.textMuted,
+  );
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-
-    const labelStyle = TextStyle(
-      fontSize: 12,
-      fontWeight: FontWeight.w500,
-      color: DarkmoonColors.textSecondary,
-    );
-    const hintStyle = TextStyle(fontSize: 11, color: DarkmoonColors.textMuted);
 
     return AlertDialog(
       backgroundColor: DarkmoonColors.surfaceRaised,
@@ -94,326 +108,320 @@ class _SettingsDialogState extends State<SettingsDialog> {
         closeTooltip: l10n.closeButton,
       ),
       content: SizedBox(
-        width: 380,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
+        width: 420,
+        height: 460,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TabBar(
+              controller: _tabController,
+              labelColor: DarkmoonColors.textPrimary,
+              unselectedLabelColor: DarkmoonColors.textMuted,
+              indicatorColor: DarkmoonColors.accent,
+              indicatorSize: TabBarIndicatorSize.label,
+              dividerColor: DarkmoonColors.divider,
+              overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+              labelStyle: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+              unselectedLabelStyle: const TextStyle(fontSize: 12.5),
+              tabs: [
+                Tab(text: l10n.settingsTabGeneral),
+                Tab(text: l10n.settingsTabPerformance),
+                Tab(text: l10n.settingsTabColor),
+                Tab(text: l10n.settingsTabData),
+              ],
+            ),
+            const SizedBox(height: 14),
+            Expanded(
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  _buildGeneralTab(l10n),
+                  _buildPerformanceTab(l10n),
+                  _buildColorTab(l10n),
+                  _buildDataTab(l10n),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGeneralTab(AppLocalizations l10n) {
+    return SingleChildScrollView(
+      child: SettingsGroup(
+        children: [
+          Row(
             children: [
-              SettingsGroupHeader(l10n.settingsSectionGeneral),
-              SettingsGroup(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          l10n.settingsLanguageLabel,
-                          style: labelStyle,
-                        ),
-                      ),
-                      StyledDropdown<String>(
-                        value: _settings.language,
-                        width: 170,
-                        items: [
-                          StyledDropdownItem(
-                            value: 'auto',
-                            label: l10n.settingsLanguageAuto,
-                          ),
-                          StyledDropdownItem(
-                            value: 'en',
-                            label: l10n.settingsLanguageEnglish,
-                          ),
-                          StyledDropdownItem(
-                            value: 'pt',
-                            label: l10n.settingsLanguagePortuguese,
-                          ),
-                        ],
-                        onChanged: (value) =>
-                            _update(_settings.copyWith(language: value)),
-                      ),
-                    ],
-                  ),
-                ],
+              Expanded(
+                child: Text(l10n.settingsLanguageLabel, style: _labelStyle),
               ),
-
-              const SizedBox(height: 20),
-
-              SettingsGroupHeader(l10n.settingsSectionLibrary),
-              SettingsGroup(
-                children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: Text(
-                      l10n.settingsRawOnlyLabel,
-                      style: labelStyle,
-                    ),
-                    subtitle: Text(
-                      l10n.settingsRawOnlyHint,
-                      style: hintStyle,
-                    ),
-                    value: _settings.rawOnly,
-                    onChanged: (v) =>
-                        _update(_settings.copyWith(rawOnly: v)),
+              StyledDropdown<String>(
+                value: _settings.language,
+                width: 170,
+                items: [
+                  StyledDropdownItem(
+                    value: 'auto',
+                    label: l10n.settingsLanguageAuto,
+                  ),
+                  StyledDropdownItem(
+                    value: 'en',
+                    label: l10n.settingsLanguageEnglish,
+                  ),
+                  StyledDropdownItem(
+                    value: 'pt',
+                    label: l10n.settingsLanguagePortuguese,
                   ),
                 ],
-              ),
-
-              const SizedBox(height: 20),
-
-              SettingsGroupHeader(l10n.settingsSectionPreview),
-              SettingsGroup(
-                children: [
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: Text(
-                      l10n.settingsFastPreviewLabel,
-                      style: labelStyle,
-                    ),
-                    value: _settings.fastPreview,
-                    onChanged: (v) =>
-                        _update(_settings.copyWith(fastPreview: v)),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        l10n.settingsPreviewResolutionLabel,
-                        style: labelStyle,
-                      ),
-                      const SizedBox(height: 8),
-                      StyledDropdown<int>(
-                        value: _settings.previewResolution,
-                        width: 170,
-                        items: [
-                          for (final size in previewResolutionOptions)
-                            StyledDropdownItem(
-                              value: size,
-                              label: '$size px',
-                            ),
-                        ],
-                        onChanged: (value) => _update(
-                          _settings.copyWith(previewResolution: value),
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        l10n.settingsPreviewResolutionHint,
-                        style: hintStyle,
-                      ),
-                    ],
-                  ),
-                  SwitchListTile(
-                    contentPadding: EdgeInsets.zero,
-                    dense: true,
-                    title: Text(
-                      l10n.settingsGpuRenderLabel,
-                      style: labelStyle,
-                    ),
-                    subtitle: Text(
-                      l10n.settingsGpuRenderHint,
-                      style: hintStyle,
-                    ),
-                    value: _settings.useGpuRender,
-                    onChanged: (v) =>
-                        _update(_settings.copyWith(useGpuRender: v)),
-                  ),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      SwitchListTile(
-                        contentPadding: EdgeInsets.zero,
-                        dense: true,
-                        title: Text(
-                          l10n.settingsDynamicFullPreviewLabel,
-                          style: labelStyle,
-                        ),
-                        subtitle: Text(
-                          l10n.settingsDynamicFullPreviewHint,
-                          style: hintStyle,
-                        ),
-                        value: _settings.dynamicFullPreview,
-                        onChanged: (v) => _update(
-                          _settings.copyWith(dynamicFullPreview: v),
-                        ),
-                      ),
-                      if (_settings.dynamicFullPreview) ...[
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                l10n.settingsFullQualityScaleLabel,
-                                style: labelStyle,
-                              ),
-                            ),
-                            Text(
-                              '${_settings.fullQualityPercent}%',
-                              style: hintStyle,
-                            ),
-                          ],
-                        ),
-                        SliderTheme(
-                          data: SliderTheme.of(context).copyWith(
-                            trackShape: const RectangularSliderTrackShape(),
-                          ),
-                          child: Slider(
-                            min: 25,
-                            max: 100,
-                            divisions: 75,
-                            value: _settings.fullQualityPercent.toDouble(),
-                            onChanged: (v) => _update(
-                              _settings.copyWith(
-                                fullQualityPercent: v.round(),
-                              ),
-                            ),
-                          ),
-                        ),
-                        if (widget.nativeWidth != null &&
-                            widget.nativeHeight != null)
-                          Align(
-                            alignment: Alignment.centerRight,
-                            child: Padding(
-                              padding: const EdgeInsets.only(bottom: 2),
-                              child: Text(
-                                l10n.exportRapidScaleResultLabel(
-                                  (widget.nativeWidth! *
-                                          _settings.fullQualityPercent /
-                                          100)
-                                      .round(),
-                                  (widget.nativeHeight! *
-                                          _settings.fullQualityPercent /
-                                          100)
-                                      .round(),
-                                ),
-                                style: hintStyle,
-                              ),
-                            ),
-                          ),
-                      ],
-                    ],
-                  ),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          l10n.settingsThumbnailThreadsLabel,
-                          style: labelStyle,
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _settings.thumbnailConcurrency > 1
-                            ? () => _update(
-                                _settings.copyWith(
-                                  thumbnailConcurrency:
-                                      _settings.thumbnailConcurrency - 1,
-                                ),
-                              )
-                            : null,
-                        icon: const Icon(CupertinoIcons.minus, size: 15),
-                      ),
-                      SizedBox(
-                        width: 28,
-                        child: Text(
-                          '${_settings.thumbnailConcurrency}',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontSize: 13,
-                            color: DarkmoonColors.textPrimary,
-                          ),
-                        ),
-                      ),
-                      IconButton(
-                        onPressed: _settings.thumbnailConcurrency < 16
-                            ? () => _update(
-                                _settings.copyWith(
-                                  thumbnailConcurrency:
-                                      _settings.thumbnailConcurrency + 1,
-                                ),
-                              )
-                            : null,
-                        icon: const Icon(CupertinoIcons.add, size: 15),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-
-              SettingsGroupHeader(l10n.settingsSectionColor),
-              SettingsGroup(
-                children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              l10n.settingsBaseContrastLabel,
-                              style: labelStyle,
-                            ),
-                          ),
-                          Text(
-                            _settings.baseContrast.round().toString(),
-                            style: hintStyle,
-                          ),
-                        ],
-                      ),
-                      SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          trackShape: const RectangularSliderTrackShape(),
-                        ),
-                        child: Slider(
-                          min: 0,
-                          max: 60,
-                          divisions: 60,
-                          value: _settings.baseContrast.clamp(0.0, 60.0),
-                          onChanged: (v) => _update(
-                            _settings.copyWith(baseContrast: v.roundToDouble()),
-                          ),
-                        ),
-                      ),
-                      Text(l10n.settingsBaseContrastHint, style: hintStyle),
-                    ],
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 20),
-
-              SettingsGroupHeader(l10n.settingsUserDataSection),
-              SettingsGroup(
-                children: [
-                  _ClearDataRow(
-                    label: l10n.settingsClearThumbnailsButton,
-                    onPressed: () => _confirmAndRun(
-                      l10n.confirmClearThumbnailsMessage,
-                      widget.onClearThumbnails,
-                    ),
-                  ),
-                  _ClearDataRow(
-                    label: l10n.settingsClearRecentFilesButton,
-                    onPressed: () => _confirmAndRun(
-                      l10n.confirmClearRecentFilesMessage,
-                      () =>
-                          _update(_settings.copyWith(recentFiles: const [])),
-                    ),
-                  ),
-                  _ClearDataRow(
-                    label: l10n.settingsClearCatalogButton,
-                    onPressed: () => _confirmAndRun(
-                      l10n.confirmClearCatalogMessage,
-                      widget.onClearCatalog,
-                    ),
-                  ),
-                ],
+                onChanged: (value) =>
+                    _update(_settings.copyWith(language: value)),
               ),
             ],
           ),
-        ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(l10n.settingsRawOnlyLabel, style: _labelStyle),
+            subtitle: Text(l10n.settingsRawOnlyHint, style: _hintStyle),
+            value: _settings.rawOnly,
+            onChanged: (v) => _update(_settings.copyWith(rawOnly: v)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildPerformanceTab(AppLocalizations l10n) {
+    return SingleChildScrollView(
+      child: SettingsGroup(
+        children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(l10n.settingsFastPreviewLabel, style: _labelStyle),
+            value: _settings.fastPreview,
+            onChanged: (v) => _update(_settings.copyWith(fastPreview: v)),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.settingsPreviewResolutionLabel, style: _labelStyle),
+              const SizedBox(height: 8),
+              StyledDropdown<int>(
+                value: _settings.previewResolution,
+                width: 170,
+                items: [
+                  for (final size in previewResolutionOptions)
+                    StyledDropdownItem(value: size, label: '$size px'),
+                ],
+                onChanged: (value) =>
+                    _update(_settings.copyWith(previewResolution: value)),
+              ),
+              const SizedBox(height: 4),
+              Text(l10n.settingsPreviewResolutionHint, style: _hintStyle),
+            ],
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(l10n.settingsGpuRenderLabel, style: _labelStyle),
+            subtitle: Text(l10n.settingsGpuRenderHint, style: _hintStyle),
+            value: _settings.useGpuRender,
+            onChanged: (v) => _update(_settings.copyWith(useGpuRender: v)),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                dense: true,
+                title: Text(
+                  l10n.settingsDynamicFullPreviewLabel,
+                  style: _labelStyle,
+                ),
+                subtitle: Text(
+                  l10n.settingsDynamicFullPreviewHint,
+                  style: _hintStyle,
+                ),
+                value: _settings.dynamicFullPreview,
+                onChanged: (v) =>
+                    _update(_settings.copyWith(dynamicFullPreview: v)),
+              ),
+              if (_settings.dynamicFullPreview) ...[
+                const SizedBox(height: 4),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        l10n.settingsFullQualityScaleLabel,
+                        style: _labelStyle,
+                      ),
+                    ),
+                    Text('${_settings.fullQualityPercent}%', style: _hintStyle),
+                  ],
+                ),
+                Builder(
+                  builder: (context) => SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      trackShape: const RectangularSliderTrackShape(),
+                    ),
+                    child: Slider(
+                      min: 25,
+                      max: 100,
+                      divisions: 75,
+                      value: _settings.fullQualityPercent.toDouble(),
+                      onChanged: (v) => _update(
+                        _settings.copyWith(fullQualityPercent: v.round()),
+                      ),
+                    ),
+                  ),
+                ),
+                if (widget.nativeWidth != null && widget.nativeHeight != null)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Padding(
+                      padding: const EdgeInsets.only(bottom: 2),
+                      child: Text(
+                        l10n.exportRapidScaleResultLabel(
+                          (widget.nativeWidth! *
+                                  _settings.fullQualityPercent /
+                                  100)
+                              .round(),
+                          (widget.nativeHeight! *
+                                  _settings.fullQualityPercent /
+                                  100)
+                              .round(),
+                        ),
+                        style: _hintStyle,
+                      ),
+                    ),
+                  ),
+              ],
+            ],
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.settingsThumbnailThreadsLabel,
+                  style: _labelStyle,
+                ),
+              ),
+              IconButton(
+                onPressed: _settings.thumbnailConcurrency > 1
+                    ? () => _update(
+                        _settings.copyWith(
+                          thumbnailConcurrency:
+                              _settings.thumbnailConcurrency - 1,
+                        ),
+                      )
+                    : null,
+                icon: const Icon(CupertinoIcons.minus, size: 15),
+              ),
+              SizedBox(
+                width: 28,
+                child: Text(
+                  '${_settings.thumbnailConcurrency}',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: DarkmoonColors.textPrimary,
+                  ),
+                ),
+              ),
+              IconButton(
+                onPressed: _settings.thumbnailConcurrency < 16
+                    ? () => _update(
+                        _settings.copyWith(
+                          thumbnailConcurrency:
+                              _settings.thumbnailConcurrency + 1,
+                        ),
+                      )
+                    : null,
+                icon: const Icon(CupertinoIcons.add, size: 15),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildColorTab(AppLocalizations l10n) {
+    return SingleChildScrollView(
+      child: SettingsGroup(
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.settingsBaseContrastLabel,
+                      style: _labelStyle,
+                    ),
+                  ),
+                  Text(
+                    _settings.baseContrast.round().toString(),
+                    style: _hintStyle,
+                  ),
+                ],
+              ),
+              Builder(
+                builder: (context) => SliderTheme(
+                  data: SliderTheme.of(
+                    context,
+                  ).copyWith(trackShape: const RectangularSliderTrackShape()),
+                  child: Slider(
+                    min: 0,
+                    max: 60,
+                    divisions: 60,
+                    value: _settings.baseContrast.clamp(0.0, 60.0),
+                    onChanged: (v) => _update(
+                      _settings.copyWith(baseContrast: v.roundToDouble()),
+                    ),
+                  ),
+                ),
+              ),
+              Text(l10n.settingsBaseContrastHint, style: _hintStyle),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDataTab(AppLocalizations l10n) {
+    return SingleChildScrollView(
+      child: SettingsGroup(
+        children: [
+          _ClearDataRow(
+            label: l10n.settingsClearThumbnailsButton,
+            onPressed: () => _confirmAndRun(
+              l10n.confirmClearThumbnailsMessage,
+              widget.onClearThumbnails,
+            ),
+          ),
+          _ClearDataRow(
+            label: l10n.settingsClearRecentFilesButton,
+            onPressed: () => _confirmAndRun(
+              l10n.confirmClearRecentFilesMessage,
+              () => _update(_settings.copyWith(recentFiles: const [])),
+            ),
+          ),
+          _ClearDataRow(
+            label: l10n.settingsClearCatalogButton,
+            onPressed: () => _confirmAndRun(
+              l10n.confirmClearCatalogMessage,
+              widget.onClearCatalog,
+            ),
+          ),
+        ],
       ),
     );
   }

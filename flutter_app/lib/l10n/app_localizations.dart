@@ -668,29 +668,29 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settingsDialogTitle;
 
-  /// No description provided for @settingsSectionGeneral.
+  /// No description provided for @settingsTabGeneral.
   ///
   /// In en, this message translates to:
-  /// **'GENERAL'**
-  String get settingsSectionGeneral;
+  /// **'General'**
+  String get settingsTabGeneral;
 
-  /// No description provided for @settingsSectionLibrary.
+  /// No description provided for @settingsTabPerformance.
   ///
   /// In en, this message translates to:
-  /// **'LIBRARY'**
-  String get settingsSectionLibrary;
+  /// **'Performance'**
+  String get settingsTabPerformance;
 
-  /// No description provided for @settingsSectionPreview.
+  /// No description provided for @settingsTabColor.
   ///
   /// In en, this message translates to:
-  /// **'PREVIEW & PERFORMANCE'**
-  String get settingsSectionPreview;
+  /// **'Color'**
+  String get settingsTabColor;
 
-  /// No description provided for @settingsSectionColor.
+  /// No description provided for @settingsTabData.
   ///
   /// In en, this message translates to:
-  /// **'COLOR'**
-  String get settingsSectionColor;
+  /// **'Data'**
+  String get settingsTabData;
 
   /// No description provided for @settingsLanguageLabel.
   ///
@@ -793,12 +793,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Thumbnail loading threads'**
   String get settingsThumbnailThreadsLabel;
-
-  /// No description provided for @settingsUserDataSection.
-  ///
-  /// In en, this message translates to:
-  /// **'USER DATA'**
-  String get settingsUserDataSection;
 
   /// No description provided for @settingsClearThumbnailsButton.
   ///
