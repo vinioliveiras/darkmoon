@@ -166,6 +166,15 @@ String _sectionLabel(AppLocalizations l10n, String key) {
 /// `timings` plumbing) once export is settled. See PENDING "Débitos".
 const bool _showExportTimings = false;
 
+/// Off since 2026-08-29: the fitted "darkmoon Color" profile (tone curve +
+/// per-hue table) overcorrected bright outdoor scenes (blown/washed
+/// highlights) — caught by real-photo testing right after the
+/// no_auto_bright change it depends on. Both are reverted together (see
+/// libraw.dart's own note). Flip back on once the profile fit protects
+/// highlights properly — the loader, RenderParams plumbing and GPU guard
+/// are all still in place. See project_darkmoon_color_profile.md.
+const bool _colorProfileEnabled = false;
+
 /// Zoom bounds and step, matching the Python app's MIN_ZOOM/MAX_ZOOM/ZOOM_STEP.
 const double _minZoom = 0.1;
 const double _maxZoom = 4.0;
@@ -846,7 +855,9 @@ class _EditorScreenState extends State<EditorScreen> {
     unawaited(_loadSettings());
     unawaited(_loadThumbnailCache());
     unawaited(_loadLensProfiles());
-    unawaited(_loadColorProfile());
+    if (_colorProfileEnabled) {
+      unawaited(_loadColorProfile());
+    }
     _lifecycleListener = AppLifecycleListener(
       onExitRequested: _handleExitRequested,
     );
