@@ -7,15 +7,54 @@ import 'package:path/path.dart' as p;
 
 import 'onnxruntime_bindings.dart';
 
-/// Filename the tiled NAFNet-SIDD model is vendored under, next to
-/// `onnxruntime.dll`/`DirectML.dll` — see `windows/native/` and
-/// `windows/CMakeLists.txt`'s install(FILES ...) block.
-const String _modelFileName = 'nafnet_sidd_width32.onnx';
+/// Describes one ONNX model's execution geometry — everything [OnnxModel]
+/// needs to know to marshal tensors for it, without hand-coding a second
+/// copy of the tensor-marshaling logic per model.
+///
+/// [inputTileSize]: every tile fed to the model must be exactly this many
+/// pixels on each side. NAFNet-SIDD's own export is fully dynamic
+/// (any width/height), but Real-ESRGAN's export is traced at a fixed
+/// 64x64 input — using one fixed tile size for both keeps [OnnxModel]
+/// itself model-agnostic rather than special-casing one of them.
+/// [scaleFactor]: 1 for same-resolution models (denoise), 2/4 for
+/// upscalers — the output tile is `inputTileSize * scaleFactor` per side.
+class OnnxModelSpec {
+  const OnnxModelSpec({
+    required this.fileName,
+    required this.inputTileSize,
+    required this.scaleFactor,
+  });
 
-/// Every tile this model was exported for must be exactly this size on
-/// each side (divisible by 16, the network's downsample factor) — see
-/// `third_party/onnxruntime_headers/README.md` and the model export notes.
-const int nafnetTileSize = 256;
+  final String fileName;
+  final int inputTileSize;
+  final int scaleFactor;
+
+  int get outputTileSize => inputTileSize * scaleFactor;
+}
+
+/// NAFNet-SIDD-width64 (MIT, megvii-research/NAFNet, SIDD-trained —
+/// real sensor noise, not synthetic gaussian) — reconstructive denoise +
+/// film-grain removal. Exported with dynamic spatial dims; 256 is chosen
+/// here (divisible by 16, the network's downsample factor) to balance
+/// tile count against per-tile GPU overhead, same reasoning as the
+/// original plan.
+const denoiseModelSpec = OnnxModelSpec(
+  fileName: 'NAFNet-SIDD-width64.onnx',
+  inputTileSize: 256,
+  scaleFactor: 1,
+);
+
+/// Real-ESRGAN x2plus (BSD-3-Clause, xinntao/Real-ESRGAN) — 2x super-
+/// resolution / detail reconstruction. This particular export is traced
+/// at a *fixed* 64x64 input (not dynamic like NAFNet's) — see
+/// `third_party/onnxruntime_headers/README.md` for the provenance note
+/// and the perf implication (many more, smaller tiles than the denoise
+/// pass) this fixed size forces.
+const upscaleModelSpec = OnnxModelSpec(
+  fileName: 'Real-ESRGAN_x2plus.onnx',
+  inputTileSize: 64,
+  scaleFactor: 2,
+);
 
 /// Thrown when an ONNX Runtime C API call returns a non-null `OrtStatus*`.
 /// Carries the human-readable message `OrtApi::GetErrorMessage` returns,
@@ -66,12 +105,25 @@ class _OrtLib {
 
   static DynamicLibrary _load() {
     if (Platform.isWindows) {
+      final override = _nativeDirOverride;
+      if (override != null) {
+        return DynamicLibrary.open(p.join(override, 'onnxruntime.dll'));
+      }
       // Installed next to the executable by windows/CMakeLists.txt, same
       // as raw_r.dll.
       return DynamicLibrary.open('onnxruntime.dll');
     }
     throw UnsupportedError('ONNX Runtime is only wired up for Windows so far.');
   }
+
+  /// Set only for standalone `dart run tool/*.dart` smoke tests (see
+  /// `tool/onnx_denoise_smoke_test.dart`) — a bare `dart run` process's
+  /// `Platform.resolvedExecutable` is the Dart SDK's own `dart.exe`, not
+  /// this app's build output, so neither the DLL nor the model file would
+  /// resolve without this override. Unset (the normal app run/build path),
+  /// this is a no-op and behavior is unchanged.
+  static String? get _nativeDirOverride =>
+      Platform.environment['DARKMOON_NATIVE_DIR'];
 
   /// Resolved once and reused for the process lifetime — unlike raw_r.dll's
   /// per-file open/close session, an ORT model session is expensive to
@@ -81,8 +133,10 @@ class _OrtLib {
   /// resolution rather than pulling in path_provider (kept dependency-free
   /// here the same way thumbnail_cache.dart's cache logic is, so this file
   /// stays safe to use from a `compute()`/spawned isolate).
-  static String get modelPath =>
-      p.join(p.dirname(Platform.resolvedExecutable), _modelFileName);
+  static String modelPath(String fileName) => p.join(
+    _nativeDirOverride ?? p.dirname(Platform.resolvedExecutable),
+    fileName,
+  );
 }
 
 /// Throws [OrtException] with `status`'s message if it's non-null, and
@@ -107,15 +161,22 @@ void _check(Pointer<OrtStatus> status) {
   }
 }
 
-/// One loaded NAFNet-SIDD inference session, with the DirectML execution
-/// provider registered — GPU-only by design (see `isDirectMLAvailable`):
-/// this app doesn't fall back to ORT's default CPU execution provider.
+/// One loaded inference session for a given [OnnxModelSpec] — either the
+/// denoise or the upscale model, both go through this same class.
+///
+/// Tries the DirectML execution provider first (GPU); if that fails for
+/// any reason (no DX12-capable GPU, driver too old, a graph node DML
+/// can't run), transparently falls back to ORT's default CPU execution
+/// provider instead of failing outright — slower, but always available.
+/// [usingGpu] reports which one actually ended up running, so callers can
+/// warn the user ("this will be slower on CPU") rather than silently
+/// eating the cost.
 ///
 /// Expensive to create (graph load + DirectML device init), so callers
 /// should keep one instance around rather than recreating it per tile —
-/// [DenoiseModel.instance] is a lazy singleton for that reason.
-class DenoiseModel {
-  DenoiseModel._(this._env, this._session, this._memoryInfo);
+/// [OnnxModel.forSpec] caches one instance per model file for that reason.
+class OnnxModel {
+  OnnxModel._(this._spec, this._env, this._session, this._memoryInfo, this.usingGpu);
 
   // Never read directly, only kept alive: the env must outlive the
   // session for the process lifetime of this singleton (there's no
@@ -126,18 +187,35 @@ class DenoiseModel {
   final Pointer<OrtEnv> _env;
   final Pointer<OrtSession> _session;
   final Pointer<OrtMemoryInfo> _memoryInfo;
+  final OnnxModelSpec _spec;
 
-  static DenoiseModel? _instance;
+  /// True if this session is actually running on the DirectML (GPU)
+  /// execution provider; false if it fell back to plain CPU.
+  final bool usingGpu;
 
-  /// Lazily creates (once) and returns the shared model session. Throws
-  /// [OrtException] if the model file is missing, the DirectML EP can't be
-  /// registered (no DX12-capable GPU / driver too old), or session
-  /// creation otherwise fails — callers that only want to know "is this
-  /// available" should use [isDirectMLAvailable] instead, which catches
-  /// this.
-  static DenoiseModel get instance => _instance ??= _create();
+  static final Map<String, OnnxModel> _instances = {};
 
-  static DenoiseModel _create() {
+  /// Lazily creates (once per [spec]) and returns a shared model session.
+  /// Throws [OrtException] only if *both* the GPU and CPU session-creation
+  /// attempts fail (e.g. the model file itself is missing/corrupt) —
+  /// a GPU-only failure is caught internally and silently retried on CPU.
+  static OnnxModel forSpec(OnnxModelSpec spec) =>
+      _instances[spec.fileName] ??= _create(spec);
+
+  static OnnxModel _create(OnnxModelSpec spec) {
+    try {
+      return _createSession(spec, useDirectMl: true);
+    } on OrtException {
+      // GPU path failed (no DX12-capable GPU, driver too old, or a node
+      // DML can't run) — fall back to CPU rather than making the whole
+      // feature unavailable. If this *also* throws, the real problem is
+      // something more fundamental (missing/corrupt model file) and
+      // should propagate.
+      return _createSession(spec, useDirectMl: false);
+    }
+  }
+
+  static OnnxModel _createSession(OnnxModelSpec spec, {required bool useDirectMl}) {
     final api = _OrtLib.api;
 
     final envOut = calloc<Pointer<OrtEnv>>();
@@ -181,43 +259,44 @@ class DenoiseModel {
     }
 
     try {
-      // GPU-only requirement: registering the DirectML EP does not, by
-      // itself, guarantee zero CPU execution — ORT's default behavior lets
-      // individual graph nodes the DML EP doesn't support silently fall
-      // back to the CPU EP. This session-config entry is the documented
-      // mechanism to make that a hard failure instead (session creation
-      // below then fails if any node can't run on DML), matching this
-      // app's "GPU-only, no silent CPU fallback" requirement. Best-effort:
-      // some ORT builds/versions have had this config entry not fully
-      // enforced for every op type, so isDirectMLAvailable's real
-      // session-creation probe (not just "did this call succeed") remains
-      // the source of truth for whether the feature works end-to-end.
-      final key = 'session.disable_cpu_ep_fallback'.toNativeUtf8();
-      final value = '1'.toNativeUtf8();
-      try {
+      if (useDirectMl) {
+        // Ask ORT to fail session creation outright if any graph node
+        // can't run on DML, rather than silently mixing in the CPU EP
+        // node-by-node — that "did it actually fully succeed on GPU"
+        // signal is exactly what decides whether _create falls back to
+        // a full CPU session below. Best-effort: some ORT builds/versions
+        // haven't fully enforced this for every op type, so a session
+        // that "succeeds" here is still only a strong signal, not an
+        // absolute guarantee, that zero CPU execution happened.
+        final key = 'session.disable_cpu_ep_fallback'.toNativeUtf8();
+        final value = '1'.toNativeUtf8();
+        try {
+          _check(
+            api.ref.AddSessionConfigEntry
+                .asFunction<
+                  Pointer<OrtStatus> Function(
+                    Pointer<OrtSessionOptions>,
+                    Pointer<Char>,
+                    Pointer<Char>,
+                  )
+                >()(options, key.cast(), value.cast()),
+          );
+        } finally {
+          calloc.free(key);
+          calloc.free(value);
+        }
+
         _check(
-          api.ref.AddSessionConfigEntry
-              .asFunction<
-                Pointer<OrtStatus> Function(
-                  Pointer<OrtSessionOptions>,
-                  Pointer<Char>,
-                  Pointer<Char>,
-                )
-              >()(options, key.cast(), value.cast()),
+          _OrtLib.bindings.OrtSessionOptionsAppendExecutionProvider_DML(
+            options,
+            0,
+          ),
         );
-      } finally {
-        calloc.free(key);
-        calloc.free(value);
       }
+      // useDirectMl == false: append nothing — ORT always registers its
+      // own CPU execution provider by default, no explicit call needed.
 
-      _check(
-        _OrtLib.bindings.OrtSessionOptionsAppendExecutionProvider_DML(
-          options,
-          0,
-        ),
-      );
-
-      final modelPathPtr = _OrtLib.modelPath.toNativeUtf16();
+      final modelPathPtr = _OrtLib.modelPath(spec.fileName).toNativeUtf16();
       final sessionOut = calloc<Pointer<OrtSession>>();
       final Pointer<OrtSession> session;
       try {
@@ -260,28 +339,33 @@ class DenoiseModel {
         calloc.free(memInfoOut);
       }
 
-      return DenoiseModel._(env, session, memoryInfo);
+      return OnnxModel._(spec, env, session, memoryInfo, useDirectMl);
     } finally {
       api.ref.ReleaseSessionOptions
           .asFunction<void Function(Pointer<OrtSessionOptions>)>()(options);
     }
   }
 
-  /// Runs one [nafnetTileSize] x [nafnetTileSize] RGB tile through the
-  /// model. [rgbTile] is packed, row-major, 3 floats/pixel (channel order
-  /// R,G,B), already normalized to whatever range the model expects (see
-  /// `third_party/onnxruntime_headers/README.md`'s export notes) —
-  /// normalization/denormalization is the caller's responsibility, this
-  /// function only marshals tensors and runs inference.
+  /// Runs one [OnnxModelSpec.inputTileSize] x `inputTileSize` RGB tile
+  /// through the model, returning an [OnnxModelSpec.outputTileSize] x
+  /// `outputTileSize` RGB tile. [rgbTile] is packed, row-major, 3
+  /// floats/pixel (channel order R,G,B), already normalized to whatever
+  /// range the model expects (see `third_party/onnxruntime_headers/
+  /// README.md`'s export notes) — normalization/denormalization is the
+  /// caller's responsibility, this function only marshals tensors and
+  /// runs inference.
   ///
   /// Blocking native call — run on a background isolate, same convention
   /// as `libraw.dart`'s decode functions.
   Float32List runTile(Float32List rgbTile) {
-    final expectedLength = nafnetTileSize * nafnetTileSize * 3;
-    if (rgbTile.length != expectedLength) {
+    final inSize = _spec.inputTileSize;
+    final outSize = _spec.outputTileSize;
+    final expectedInLength = inSize * inSize * 3;
+    final expectedOutLength = outSize * outSize * 3;
+    if (rgbTile.length != expectedInLength) {
       throw ArgumentError(
-        'rgbTile must have $expectedLength floats '
-        '($nafnetTileSize x $nafnetTileSize x 3), got ${rgbTile.length}',
+        'rgbTile must have $expectedInLength floats '
+        '($inSize x $inSize x 3), got ${rgbTile.length}',
       );
     }
     final api = _OrtLib.api;
@@ -290,11 +374,11 @@ class DenoiseModel {
     final shape = calloc<Int64>(4);
     shape[0] = 1;
     shape[1] = 3;
-    shape[2] = nafnetTileSize;
-    shape[3] = nafnetTileSize;
+    shape[2] = inSize;
+    shape[3] = inSize;
 
-    final inputData = calloc<Float>(expectedLength);
-    _packChwFromRgb(rgbTile, inputData.asTypedList(expectedLength));
+    final inputData = calloc<Float>(expectedInLength);
+    _packChwFromRgb(rgbTile, inputData.asTypedList(expectedInLength), inSize);
 
     final inputValueOut = calloc<Pointer<OrtValue>>();
     final outputValue = calloc<Pointer<OrtValue>>();
@@ -322,7 +406,7 @@ class DenoiseModel {
             >()(
           _memoryInfo,
           inputData.cast(),
-          expectedLength * sizeOf<Float>(),
+          expectedInLength * sizeOf<Float>(),
           shape,
           4,
           ONNXTensorElementDataType.ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT.value,
@@ -373,9 +457,9 @@ class DenoiseModel {
         calloc.free(outDataOut);
       }
 
-      final chwOut = outData.cast<Float>().asTypedList(expectedLength);
-      final rgbOut = Float32List(expectedLength);
-      _unpackRgbFromChw(chwOut, rgbOut);
+      final chwOut = outData.cast<Float>().asTypedList(expectedOutLength);
+      final rgbOut = Float32List(expectedOutLength);
+      _unpackRgbFromChw(chwOut, rgbOut, outSize);
       return rgbOut;
     } finally {
       if (outputValue.value != nullptr) {
@@ -403,8 +487,8 @@ class DenoiseModel {
 /// Rearranges packed-RGB (`[r,g,b,r,g,b,...]`) into planar NCHW
 /// (`[r,r,r,...,g,g,g,...,b,b,b,...]`), the layout ONNX image models
 /// conventionally expect.
-void _packChwFromRgb(Float32List rgb, Float32List chwOut) {
-  final pixelCount = nafnetTileSize * nafnetTileSize;
+void _packChwFromRgb(Float32List rgb, Float32List chwOut, int tileSize) {
+  final pixelCount = tileSize * tileSize;
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
     chwOut[p] = rgb[i];
@@ -414,8 +498,8 @@ void _packChwFromRgb(Float32List rgb, Float32List chwOut) {
 }
 
 /// Inverse of [_packChwFromRgb].
-void _unpackRgbFromChw(Float32List chw, Float32List rgbOut) {
-  final pixelCount = nafnetTileSize * nafnetTileSize;
+void _unpackRgbFromChw(Float32List chw, Float32List rgbOut, int tileSize) {
+  final pixelCount = tileSize * tileSize;
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
     rgbOut[i] = chw[p];
@@ -424,21 +508,18 @@ void _unpackRgbFromChw(Float32List chw, Float32List rgbOut) {
   }
 }
 
-/// Probes whether AI Denoise can actually run on this machine — reuses
-/// [DenoiseModel]'s real session-creation path (env → session options →
-/// DML EP registration → session creation against the real vendored
-/// model) as the capability check, rather than writing separate D3D12
-/// device-enumeration code: if a session can be created, inference will
-/// work; if the GPU/driver doesn't support DirectML (or is too old), the
-/// same failure that would happen on first use happens here instead,
-/// caught and reported as `false`.
+/// Probes whether the given model can load at all (GPU or CPU — see
+/// [OnnxModel]'s fallback behavior) on this machine. Reuses [OnnxModel]'s
+/// real session-creation path as the capability check, rather than writing
+/// separate device-enumeration code: if a session can be created, inference
+/// will work.
 ///
 /// Blocking native call — run on a background isolate. Expensive (session
 /// creation, not a lightweight query), so callers should cache the result
 /// rather than probing repeatedly.
-bool probeDirectMlAvailable() {
+bool probeOnnxAvailable(OnnxModelSpec spec) {
   try {
-    DenoiseModel.instance;
+    OnnxModel.forSpec(spec);
     return true;
   } catch (_) {
     return false;

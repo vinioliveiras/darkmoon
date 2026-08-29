@@ -10,3 +10,8 @@ PENDING.md
 flutter_app/raw_r.dll
 flutter_app/vcomp140.dll
 
+# AI-denoise/upscale model weights (item 13) — large (hundreds of MB),
+# not committed by decision (2026-08-29): downloaded locally for now,
+# distribution mechanism (release asset? first-run download?) TBD.
+flutter_app/windows/native/*.onnx
+
