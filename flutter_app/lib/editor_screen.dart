@@ -164,7 +164,7 @@ String _sectionLabel(AppLocalizations l10n, String key) {
 /// instrumentation in `export_job.dart` / `render_parallel.dart` stays —
 /// it's cheap and only surfaces here. Remove all of it (this flag + the
 /// `timings` plumbing) once export is settled. See PENDING "Débitos".
-const bool _showExportTimings = true;
+const bool _showExportTimings = false;
 
 /// Off again 2026-08-29: even after the isotonic-regression re-fit + the
 /// stale-cache fix, real-photo testing still came back overexposed on the
