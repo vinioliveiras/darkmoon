@@ -7,6 +7,7 @@ import 'blur.dart';
 import 'calibration.dart';
 import 'color_grading.dart';
 import 'color_mixer.dart';
+import 'color_profile.dart';
 import 'color_space.dart';
 import 'dehaze.dart';
 import 'grain.dart';
@@ -288,6 +289,13 @@ void applyPostDenoisePointOps(
   // free — applied first, so every tone slider and curve below works on
   // top of it, matching Lightroom's order (profile curve -> Basic panel).
   _applyBaseContrast(buffer, params.baseContrast);
+  // ...then the per-hue "darkmoon Color" correction — the other half of
+  // what an Adobe profile bakes in (its HueSatMap). Still before any user
+  // adjustment, matching Lightroom's profile-then-Basic order.
+  final profile = params.colorProfile;
+  if (profile != null) {
+    applyColorProfile(buffer, profile, params.colorProfileStrength);
+  }
   _applyRapidBrightness(buffer, params.brightness);
   _applyRapidWhites(buffer, pixelCount, params.whites);
   _applyRapidHighlights(buffer, pixelCount, params.highlights);

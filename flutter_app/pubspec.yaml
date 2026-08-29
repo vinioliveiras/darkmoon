@@ -77,6 +77,7 @@ flutter:
     - assets/splash/featured.jpg
     - assets/splash/app_icon.png
     - assets/lens_profiles/
+    - assets/color_profiles/
 
   # GPU render pipeline shaders — see project_gpu_render_plan.md. Phase 0
   # spike only so far; more get added as later phases land.

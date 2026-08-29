@@ -2,6 +2,7 @@ import 'ai_denoise.dart';
 import 'calibration.dart';
 import 'color_grading.dart';
 import 'color_mixer.dart';
+import 'color_profile.dart';
 import 'grain.dart';
 import 'sharpen.dart';
 import 'tone_curve.dart';
@@ -18,6 +19,8 @@ class RenderParams {
     this.asShotTint = 0,
     this.preserveTintBrightness = false,
     this.baseContrast = calBaseContrast,
+    this.colorProfile,
+    this.colorProfileStrength = 1.0,
     this.exposure = 0,
     this.brightness = 0,
     this.contrast = 0,
@@ -52,6 +55,8 @@ class RenderParams {
     double asShotKelvin = 5500,
     double asShotTint = 0,
     double baseContrast = calBaseContrast,
+    ColorProfile? colorProfile,
+    double colorProfileStrength = 1.0,
   }) {
     const defaults = RenderParams();
     return RenderParams(
@@ -60,6 +65,8 @@ class RenderParams {
       asShotKelvin: asShotKelvin,
       asShotTint: asShotTint,
       baseContrast: baseContrast,
+      colorProfile: colorProfile,
+      colorProfileStrength: colorProfileStrength,
       preserveTintBrightness:
           (values['WhiteBalancePreserveTintBrightness'] ?? 0) != 0,
       exposure: values['Exposure'] ?? defaults.exposure,
@@ -96,6 +103,17 @@ class RenderParams {
   /// like [asShotKelvin]; only tests that isolate a non-tonal step set it
   /// to 0 to keep their reference numbers exact.
   final double baseContrast;
+
+  /// The fitted "darkmoon Color" per-hue correction — darkmoon's stand-in
+  /// for the Adobe Color profile's HueSatMap (see `color_profile.dart`).
+  /// Null = no correction (the pre-profile behaviour). Loaded from a
+  /// bundled asset on the main isolate and threaded through like [curves],
+  /// not carried in the values map.
+  final ColorProfile? colorProfile;
+
+  /// 0..1 blend of [colorProfile] toward identity — backs the "darkmoon
+  /// Color" amount slider. Ignored when [colorProfile] is null.
+  final double colorProfileStrength;
 
   /// The photo's camera as-shot white balance (from `RawMetadata`), used
   /// as the neutral reference for [temperature]/[tint]: at

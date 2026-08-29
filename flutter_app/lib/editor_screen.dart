@@ -31,6 +31,7 @@ import 'presets/preset_xmp.dart';
 import 'presets/preset_zip.dart';
 import 'raw_files.dart';
 import 'render/ai_denoise.dart';
+import 'render/color_profile.dart';
 import 'render/histogram.dart';
 import 'render/lens_correction.dart';
 import 'render/mask.dart';
@@ -543,6 +544,10 @@ class _EditorScreenState extends State<EditorScreen> {
   /// whatever's rendered before it finishes loading.
   List<LensProfile> _lensProfiles = const [];
 
+  /// The fitted "darkmoon Color" per-hue correction, if bundled (see
+  /// [_loadColorProfile]). Null = no correction.
+  ColorProfile? _colorProfile;
+
   /// Unedited render of whichever photos have had Before/After turned on,
   /// computed lazily (only when first needed) since most photos are never
   /// compared this way.
@@ -833,6 +838,7 @@ class _EditorScreenState extends State<EditorScreen> {
     unawaited(_loadSettings());
     unawaited(_loadThumbnailCache());
     unawaited(_loadLensProfiles());
+    unawaited(_loadColorProfile());
     _lifecycleListener = AppLifecycleListener(
       onExitRequested: _handleExitRequested,
     );
@@ -888,6 +894,31 @@ class _EditorScreenState extends State<EditorScreen> {
   /// Correction was already on for the photo showing when this finishes,
   /// the render it produced before now had nothing to resolve a profile
   /// against, so it's redone once the database is actually usable.
+  /// Loads the bundled "darkmoon Color" per-hue correction, if one has been
+  /// fitted and dropped in (`assets/color_profiles/darkmoon_fuji.json` —
+  /// see `tool/build_color_profile.dart`). Missing asset = no correction,
+  /// same as before profiles existed. Not awaited from initState; a
+  /// re-render is kicked once it lands so the open photo picks it up.
+  Future<void> _loadColorProfile() async {
+    ColorProfile? profile;
+    try {
+      final raw = await rootBundle.loadString(
+        'assets/color_profiles/darkmoon_fuji.json',
+      );
+      profile = ColorProfile.decode(raw);
+    } catch (_) {
+      profile = null; // not bundled — fine
+    }
+    if (!mounted || profile == null) {
+      return;
+    }
+    setState(() => _colorProfile = profile);
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected != null) {
+      _scheduleRender(live: false);
+    }
+  }
+
   Future<void> _loadLensProfiles() async {
     final profiles = await LensProfileDatabase.load();
     if (!mounted) {
@@ -2539,6 +2570,7 @@ class _EditorScreenState extends State<EditorScreen> {
         asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
         asShotTint: metadata?.asShotTint ?? wbDefaultTint,
         baseContrast: _settings.baseContrast,
+        colorProfile: _colorProfile,
       ),
       masks: _effectiveMasks,
       cropTransform: cropTransform,
@@ -2770,10 +2802,13 @@ class _EditorScreenState extends State<EditorScreen> {
       renderJobToJpeg,
       RenderJob(
         source: sources.preview,
-        // "Before" still gets the base profile curve — it's part of the
-        // baseline rendering (like Lightroom keeping the camera profile),
-        // not a develop edit.
-        params: RenderParams(baseContrast: _settings.baseContrast),
+        // "Before" still gets the base profile (contrast curve + colour
+        // correction) — it's part of the baseline rendering, like Lightroom
+        // keeping the camera profile, not a develop edit.
+        params: RenderParams(
+          baseContrast: _settings.baseContrast,
+          colorProfile: _colorProfile,
+        ),
       ),
     );
     if (!mounted) {
@@ -3785,6 +3820,7 @@ class _EditorScreenState extends State<EditorScreen> {
           asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
           asShotTint: metadata?.asShotTint ?? wbDefaultTint,
           baseContrast: _settings.baseContrast,
+          colorProfile: _colorProfile,
         ),
         masks: _effectiveMasks,
         format: options.format,
