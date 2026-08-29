@@ -5794,6 +5794,41 @@ class _SectionHeader extends StatelessWidget {
   }
 }
 
+/// Animates a section's content growing/shrinking under its
+/// [_SectionHeader] instead of popping in/out — [child] stays mounted the
+/// whole time (so its own state, e.g. a slider mid-drag, survives a
+/// collapse/expand), just laid out at zero height and fully transparent
+/// while [collapsed]. `ClipRect` hides the part of [child] that doesn't
+/// fit during the animation (`AnimatedAlign`'s `heightFactor` shrinks the
+/// space it's *given*, not [child]'s own painted size, so without the
+/// clip it would bleed into the next section while collapsing).
+class _CollapsibleSection extends StatelessWidget {
+  const _CollapsibleSection({required this.collapsed, required this.child});
+
+  final bool collapsed;
+  final Widget child;
+
+  static const _duration = Duration(milliseconds: 160);
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRect(
+      child: AnimatedAlign(
+        duration: _duration,
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        heightFactor: collapsed ? 0.0 : 1.0,
+        child: AnimatedOpacity(
+          duration: _duration,
+          curve: Curves.easeOutCubic,
+          opacity: collapsed ? 0.0 : 1.0,
+          child: child,
+        ),
+      ),
+    );
+  }
+}
+
 class _ControlsPanel extends StatefulWidget {
   const _ControlsPanel({
     required this.values,
@@ -6040,6 +6075,21 @@ class _ControlsPanelState extends State<_ControlsPanel> {
     });
   }
 
+  /// Wraps [children] in a single [_CollapsibleSection] so a section's
+  /// content animates in/out under its header instead of popping. Returns
+  /// a one-element list (not the widget directly) so call sites can keep
+  /// spreading it into a `children:` list with `...` the same way the old
+  /// `if (!_collapsed.contains(section)) ...[ ... ]` collection-if did.
+  List<Widget> _collapsible(String section, List<Widget> children) => [
+    _CollapsibleSection(
+      collapsed: _collapsed.contains(section),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    ),
+  ];
+
   @override
   Widget build(BuildContext context) {
     final values = widget.values;
@@ -6271,7 +6321,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                             onChangeEnd(key, v ? 1 : 0);
                           },
                         ),
-                        if (!_collapsed.contains(entry.key)) ...[
+                        ..._collapsible(entry.key, [
                           if (entry.key == 'WHITE BALANCE')
                             Padding(
                               padding: const EdgeInsets.only(
@@ -6305,7 +6355,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                           // was removed — the current WB model is
                           // luminance-normalised by construction, so it
                           // was a no-op. The param still exists, inert.)
-                        ],
+                        ]),
                         // Tone Curve/Color Curve/Color Mixer/Color Grading/
                         // Effects are available for masks too — `curves`/
                         // `onChanged`/`onChangeEnd` above already resolve to
@@ -6330,7 +6380,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChangeEnd(key, v ? 1 : 0);
                             },
                           ),
-                          if (!_collapsed.contains('TONE CURVE')) ...[
+                          ..._collapsible('TONE CURVE', [
                             Padding(
                               padding: const EdgeInsets.only(bottom: 12),
                               child: ToneCurveEditor(
@@ -6361,7 +6411,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   onChangeEnd: (v) => onChangeEnd(spec.name, v),
                                 ),
                               ),
-                          ],
+                          ]),
                           _SectionHeader(
                             label: l10n.sectionColorCurve,
                             collapsed: _collapsed.contains('COLOR CURVE'),
@@ -6376,7 +6426,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChangeEnd(key, v ? 1 : 0);
                             },
                           ),
-                          if (!_collapsed.contains('COLOR CURVE')) ...[
+                          ..._collapsible('COLOR CURVE', [
                             Padding(
                               padding: const EdgeInsets.only(top: 4, bottom: 8),
                               child: _ColorChannelTabs(
@@ -6405,7 +6455,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 ),
                               ),
                             ),
-                          ],
+                          ]),
                           _SectionHeader(
                             label: l10n.sectionColorMixer,
                             collapsed: _collapsed.contains('COLOR MIXER'),
@@ -6420,7 +6470,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChangeEnd(key, v ? 1 : 0);
                             },
                           ),
-                          if (!_collapsed.contains('COLOR MIXER')) ...[
+                          ..._collapsible('COLOR MIXER', [
                             Padding(
                               padding: const EdgeInsets.only(
                                 top: 6,
@@ -6542,7 +6592,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                     ],
                                   ),
                                 ),
-                          ],
+                          ]),
                           _SectionHeader(
                             label: l10n.sectionColorGrading,
                             collapsed: _collapsed.contains('COLOR GRADING'),
@@ -6557,7 +6607,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChangeEnd(key, v ? 1 : 0);
                             },
                           ),
-                          if (!_collapsed.contains('COLOR GRADING')) ...[
+                          ..._collapsible('COLOR GRADING', [
                             Padding(
                               padding: const EdgeInsets.only(
                                 top: 6,
@@ -6627,7 +6677,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 ),
                               ),
                             ),
-                          ],
+                          ]),
                           _SectionHeader(
                             label: l10n.sectionEffects,
                             collapsed: _collapsed.contains('EFFECTS'),
@@ -6641,7 +6691,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChangeEnd(key, v ? 1 : 0);
                             },
                           ),
-                          if (!_collapsed.contains('EFFECTS'))
+                          ..._collapsible('EFFECTS', [
                             for (final spec in [
                               ..._vignetteSliders,
                               ..._grainSliders,
@@ -6659,6 +6709,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   onChangeEnd: (v) => onChangeEnd(spec.name, v),
                                 ),
                               ),
+                          ]),
                           _SectionHeader(
                             label: l10n.sectionLensCorrection,
                             collapsed: _collapsed.contains('LENS CORRECTION'),
@@ -6669,7 +6720,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   widget.lensCorrection.copyWith(enabled: v),
                                 ),
                           ),
-                          if (!_collapsed.contains('LENS CORRECTION'))
+                          ..._collapsible('LENS CORRECTION', [
                             Padding(
                               padding: const EdgeInsets.only(top: 10),
                               child: LensCorrectionPanel(
@@ -6681,6 +6732,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 onChangeEnd: widget.onLensCorrectionChangeEnd,
                               ),
                             ),
+                          ]),
                         ],
                       ],
                     ],
