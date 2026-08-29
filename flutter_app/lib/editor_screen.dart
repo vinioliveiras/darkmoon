@@ -3160,6 +3160,27 @@ class _EditorScreenState extends State<EditorScreen> {
 
   void _zoomOut() => _zoomBy(1 / _zoomStep);
 
+  /// Fit-relative zoom level a double-click jumps to (item 25) — matches
+  /// `_zoomScale`'s own "1.0 = Fit" convention (see `_ViewerToolbar`'s
+  /// `zoomLabel`), not a literal 100%/200%-of-native-pixels figure, since
+  /// darkmoon's zoom is defined relative to Fit rather than native
+  /// resolution. 2.0 sits comfortably under `_maxZoom` (4.0) so a second
+  /// double-click-in is still possible after the initial jump if wanted,
+  /// while leaving Ctrl+scroll to reach the rest of the range.
+  static const double _doubleTapZoomLevel = 2.0;
+
+  /// Double-click on the image (item 25): zoom in centered on the click
+  /// point if currently at Fit or below, or back out to Fit if already
+  /// zoomed in — the same toggle Lightroom/Photoshop use, adapted to
+  /// darkmoon's fit-relative zoom scale.
+  void _onDoubleTapZoom(Offset localPosition) {
+    if (_zoomScale > 1.0) {
+      _resetZoom();
+    } else {
+      _zoomBy(_doubleTapZoomLevel / _zoomScale, anchor: localPosition);
+    }
+  }
+
   /// Ctrl+scroll zooms (anchored at the cursor); plain scroll does nothing,
   /// matching the Python app's wheelEvent behavior.
   void _handlePointerSignal(PointerSignalEvent event) {
@@ -4245,6 +4266,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                   zoomScale: _zoomScale,
                                   onPointerSignal: _handlePointerSignal,
                                   onResetZoom: _resetZoom,
+                                  onDoubleTapZoom: _onDoubleTapZoom,
                                   editingMask:
                                       (_beforeAfterMode || selected == null)
                                       ? null
@@ -4574,6 +4596,7 @@ class _ImageArea extends StatelessWidget {
     required this.zoomScale,
     required this.onPointerSignal,
     required this.onResetZoom,
+    required this.onDoubleTapZoom,
     required this.editingMask,
     required this.editingSource,
     required this.onMaskGeometryChanged,
@@ -4615,10 +4638,15 @@ class _ImageArea extends StatelessWidget {
 
   final void Function(PointerSignalEvent) onPointerSignal;
 
-  /// Double-click / "Fit" button — resets pan+zoom *and* the parent's
+  /// "Fit" toolbar button — resets pan+zoom *and* the parent's
   /// `_zoomScale` (so the % readout and the +/- buttons stay in sync,
   /// which a bare `viewController.value = identity` doesn't do).
   final VoidCallback onResetZoom;
+
+  /// Double-click on the image — zooms in centered on the click point if
+  /// not already zoomed in, or back out to Fit if it is (the parent
+  /// decides which, since that depends on its own `_zoomScale`).
+  final ValueChanged<Offset> onDoubleTapZoom;
 
   /// The mask currently being edited (Linear/Radial Gradient), if any —
   /// draws its draggable handles over the image. Null outside of
@@ -4797,15 +4825,27 @@ class _ImageArea extends StatelessWidget {
   }
 
   Widget _zoomableImage(Uint8List bytes) {
-    // Double-click resets zoom/pan to Fit — but not while a mode with its
-    // own tap handling is active (mask editing, crop overlay, eyedropper),
-    // where the tap-delay double-tap introduces would make those laggy.
-    final doubleTapToFit =
+    // Double-click zooms in (Lightroom/Photoshop-style, centered on the
+    // click point) if not already zoomed in, or back out to Fit if it is
+    // — but not while a mode with its own tap handling is active (mask
+    // editing, crop overlay, eyedropper), where the tap-delay double-tap
+    // introduces would make those laggy.
+    final doubleTapZoomEnabled =
         editingMask == null && !cropOverlayActive && !wbEyedropperActive;
+    // onDoubleTapDown fires (with the tap's position) just before
+    // onDoubleTap itself, which carries no position of its own — capturing
+    // it here and reading it back a moment later is the standard Flutter
+    // pattern for a positioned double-tap gesture.
+    Offset doubleTapPosition = Offset.zero;
     return Listener(
       onPointerSignal: onPointerSignal,
       child: GestureDetector(
-        onDoubleTap: doubleTapToFit ? onResetZoom : null,
+        onDoubleTapDown: doubleTapZoomEnabled
+            ? (details) => doubleTapPosition = details.localPosition
+            : null,
+        onDoubleTap: doubleTapZoomEnabled
+            ? () => onDoubleTapZoom(doubleTapPosition)
+            : null,
         onSecondaryTapUp: (details) => onSecondaryTapUp(details.globalPosition),
         child: InteractiveViewer(
           transformationController: viewController,
