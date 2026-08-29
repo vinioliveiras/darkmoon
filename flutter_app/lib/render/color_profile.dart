@@ -163,10 +163,7 @@ void applyColorProfile(Float32List img, ColorProfile profile, double strength) {
 
     // 2. Per-hue HueSat correction.
     if ((r - g).abs() >= 0.001 || (g - b).abs() >= 0.001) {
-      final hsv = rgbToHsv(r, g, b);
-      final hue = hsv[0];
-      final sat = hsv[1];
-      final val = hsv[2];
+      final (hue, sat, val) = rgbToHsv(r, g, b);
       final mask = _smoothstep(0.04, 0.18, sat);
       if (mask >= 0.001) {
         final originalLuma = _linearLuma(r, g, b);
@@ -183,16 +180,16 @@ void applyColorProfile(Float32List img, ColorProfile profile, double strength) {
         var newHue = (hue + hueShiftDeg) % 360.0;
         if (newHue < 0) newHue += 360.0;
         final newSat = (sat * satMul).clamp(0.0, 1.0);
-        final shifted = hsvToRgb(newHue, newSat, val);
-        final shiftedLuma = _linearLuma(shifted[0], shifted[1], shifted[2]);
+        final (sr, sg, sb) = hsvToRgb(newHue, newSat, val);
+        final shiftedLuma = _linearLuma(sr, sg, sb);
         final targetLuma = originalLuma * lumMul;
         if (shiftedLuma < 0.0001) {
           r = g = b = math.max(0.0, targetLuma);
         } else {
           final rescale = targetLuma / shiftedLuma;
-          r = shifted[0] * rescale;
-          g = shifted[1] * rescale;
-          b = shifted[2] * rescale;
+          r = sr * rescale;
+          g = sg * rescale;
+          b = sb * rescale;
         }
       }
     }

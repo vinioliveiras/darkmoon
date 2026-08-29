@@ -61,10 +61,20 @@ List<double> hslToRgb(double h, double s, double l) {
   ];
 }
 
-/// Converts [r], [g], [b] (each 0..1) to `[hue, saturation, value]` —
+/// Converts [r], [g], [b] (each 0..1) to `(hue, saturation, value)` —
 /// same convention as RapidRAW's `rgb_to_hsv` (WGSL), which is HSV, not
 /// HSL: value is the max channel, not `(max+min)/2`.
-List<double> rgbToHsv(double r, double g, double b) {
+///
+/// Returns a record, not a `List<double>` — this runs once or twice per
+/// pixel in `color_mixer.dart`'s (and `color_profile.dart`'s) hot loop,
+/// and a heap-allocated List per pixel across a full-resolution export
+/// was a measurable source of GC pressure (records are value types: no
+/// allocation).
+(double hue, double saturation, double value) rgbToHsv(
+  double r,
+  double g,
+  double b,
+) {
   final maxC = r > g ? (r > b ? r : b) : (g > b ? g : b);
   final minC = r < g ? (r < b ? r : b) : (g < b ? g : b);
   final delta = maxC - minC;
@@ -79,29 +89,24 @@ List<double> rgbToHsv(double r, double g, double b) {
     }
     if (hue < 0) hue += 360.0;
   }
-  return [hue, maxC == 0 ? 0.0 : delta / maxC, maxC];
+  return (hue, maxC == 0 ? 0.0 : delta / maxC, maxC);
 }
 
-/// Converts [h] (degrees, 0..360), [s] and [v] (each 0..1) to `[r, g, b]`
+/// Converts [h] (degrees, 0..360), [s] and [v] (each 0..1) to `(r, g, b)`
 /// (each 0..1) — inverse of [rgbToHsv], same convention as RapidRAW's
 /// `hsv_to_rgb` (WGSL).
-List<double> hsvToRgb(double h, double s, double v) {
+///
+/// Returns a record — see [rgbToHsv]'s doc comment; this version also
+/// drops the old intermediate `rgbPrime` list, so a per-pixel call here
+/// used to cost two heap allocations and now costs none.
+(double r, double g, double b) hsvToRgb(double h, double s, double v) {
   final c = v * s;
   final x = c * (1.0 - ((h / 60.0) % 2.0 - 1.0).abs());
   final m = v - c;
-  List<double> rgbPrime;
-  if (h < 60) {
-    rgbPrime = [c, x, 0.0];
-  } else if (h < 120) {
-    rgbPrime = [x, c, 0.0];
-  } else if (h < 180) {
-    rgbPrime = [0.0, c, x];
-  } else if (h < 240) {
-    rgbPrime = [0.0, x, c];
-  } else if (h < 300) {
-    rgbPrime = [x, 0.0, c];
-  } else {
-    rgbPrime = [c, 0.0, x];
-  }
-  return [rgbPrime[0] + m, rgbPrime[1] + m, rgbPrime[2] + m];
+  if (h < 60) return (c + m, x + m, m);
+  if (h < 120) return (x + m, c + m, m);
+  if (h < 180) return (m, c + m, x + m);
+  if (h < 240) return (m, x + m, c + m);
+  if (h < 300) return (x + m, m, c + m);
+  return (c + m, m, x + m);
 }

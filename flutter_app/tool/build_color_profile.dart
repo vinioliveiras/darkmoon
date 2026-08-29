@@ -215,19 +215,17 @@ void main(List<String> args) {
       toneLr[tb] += lP;
       toneN[tb] += 1;
 
-      final dHsv = rgbToHsv(dr, dg, db);
-      final lHsv = rgbToHsv(lr, lg, lb);
-      final dSat = dHsv[1];
-      final lSat = lHsv[1];
+      final (dHue, dSat, _) = rgbToHsv(dr, dg, db);
+      final (lHue, lSat, _) = rgbToHsv(lr, lg, lb);
       if (dSat < 0.07 || lSat < 0.05) continue; // hue is noise on greys
 
       final bin =
-          (dHsv[0] / (360.0 / colorProfileBins)).round() % colorProfileBins;
+          (dHue / (360.0 / colorProfileBins)).round() % colorProfileBins;
       final weight = dSat; // more saturated -> more trustworthy
 
       wSum[bin] += weight;
       hueSum[bin] +=
-          _shortestAngle(lHsv[0] - dHsv[0]).clamp(-60.0, 60.0) * weight;
+          _shortestAngle(lHue - dHue).clamp(-60.0, 60.0) * weight;
       satSum[bin] += (lSat / math.max(dSat, 1e-3)).clamp(0.3, 3.0) * weight;
       binDmP[bin] += dP * weight;
       binLrP[bin] += lP * weight;

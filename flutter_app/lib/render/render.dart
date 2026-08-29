@@ -800,10 +800,10 @@ void _applyVibrance(Float32List img, int pixelCount, double amount) {
       continue;
     }
     final currentSaturation = (maxC - minC) / math.max(maxC, 0.001);
-    final hsv = rgbToHsv(r, g, b);
+    final (hue, _, _) = rgbToHsv(r, g, b);
     final hueDistance = math.min(
-      (hsv[0] - 25.0).abs(),
-      360.0 - (hsv[0] - 25.0).abs(),
+      (hue - 25.0).abs(),
+      360.0 - (hue - 25.0).abs(),
     );
     final skin = _smoothstep(35.0, 10.0, hueDistance);
     final skinDampener = 1.0 + (calVibranceSkinDampen - 1.0) * skin;

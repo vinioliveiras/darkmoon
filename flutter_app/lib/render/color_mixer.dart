@@ -185,10 +185,7 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
       continue;
     }
 
-    final hsv = rgbToHsv(r, g, b);
-    final originalHue = hsv[0];
-    final originalSat = hsv[1];
-    final originalVal = hsv[2];
+    final (originalHue, originalSat, originalVal) = rgbToHsv(r, g, b);
     final originalLuma = _linearLuma(r, g, b);
 
     final saturationMask = _smoothstep(0.05, 0.20, originalSat);
@@ -239,8 +236,8 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
       hue += 360.0;
     }
     final sat = (originalSat * (1.0 + totalSatMultiplier)).clamp(0.0, 1.0);
-    final shifted = hsvToRgb(hue, sat, originalVal);
-    final newLuma = _linearLuma(shifted[0], shifted[1], shifted[2]);
+    final (sr, sg, sb) = hsvToRgb(hue, sat, originalVal);
+    final newLuma = _linearLuma(sr, sg, sb);
     final targetLuma = originalLuma * (1.0 + totalLumAdjust);
 
     final double fr;
@@ -250,9 +247,9 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
       fr = fg = fb = math.max(0.0, targetLuma);
     } else {
       final scale = targetLuma / newLuma;
-      fr = shifted[0] * scale;
-      fg = shifted[1] * scale;
-      fb = shifted[2] * scale;
+      fr = sr * scale;
+      fg = sg * scale;
+      fb = sb * scale;
     }
     img[i] = linearToSrgb(fr) * 255.0;
     img[i + 1] = linearToSrgb(fg) * 255.0;
