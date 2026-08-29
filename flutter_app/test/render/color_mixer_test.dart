@@ -9,7 +9,7 @@ import 'package:darkmoon/render/render_params.dart';
 void main() {
   test('identity mixer leaves the source unchanged', () {
     final source = Uint8List.fromList([50, 90, 200]);
-    final result = renderRgb(1, 1, source, const RenderParams());
+    final result = renderRgb(1, 1, source, const RenderParams(baseContrast: 0));
     expect(result, source);
   });
 
@@ -19,12 +19,17 @@ void main() {
   // of color_mixer.dart's implementation.
 
   test('a saturation boost on a saturated pixel near a band center', () {
-    final source = Uint8List.fromList([180, 90, 90]); // hue 0, close to Red's 358° center
+    final source = Uint8List.fromList([
+      180,
+      90,
+      90,
+    ]); // hue 0, close to Red's 358° center
     final result = renderRgb(
       1,
       1,
       source,
       const RenderParams(
+        baseContrast: 0,
         colorMixer: ColorMixerValues(red: ChannelAdjust(saturation: 60)),
       ),
     );
@@ -35,12 +40,17 @@ void main() {
   });
 
   test('a hue+saturation push on a deep blue pixel', () {
-    final source = Uint8List.fromList([50, 90, 200]); // hue ~232, near Blue's 225° center
+    final source = Uint8List.fromList([
+      50,
+      90,
+      200,
+    ]); // hue ~232, near Blue's 225° center
     final result = renderRgb(
       1,
       1,
       source,
       const RenderParams(
+        baseContrast: 0,
         colorMixer: ColorMixerValues(
           blue: ChannelAdjust(hue: 50, saturation: 40),
         ),
@@ -52,31 +62,40 @@ void main() {
     expect(result[2], closeTo(233, 1));
   });
 
-  test('a low-saturation pixel is only partially affected (saturation gate)', () {
-    final source = Uint8List.fromList([142, 145, 150]); // saturation ~0.113
-    final result = renderRgb(
-      1,
-      1,
-      source,
-      const RenderParams(
-        colorMixer: ColorMixerValues(
-          blue: ChannelAdjust(hue: 80, saturation: 80),
+  test(
+    'a low-saturation pixel is only partially affected (saturation gate)',
+    () {
+      final source = Uint8List.fromList([142, 145, 150]); // saturation ~0.113
+      final result = renderRgb(
+        1,
+        1,
+        source,
+        const RenderParams(
+          baseContrast: 0,
+          colorMixer: ColorMixerValues(
+            blue: ChannelAdjust(hue: 80, saturation: 80),
+          ),
         ),
-      ),
-    );
+      );
 
-    expect(result[0], closeTo(143, 1));
-    expect(result[1], closeTo(144, 1));
-    expect(result[2], closeTo(154, 1));
-  });
+      expect(result[0], closeTo(143, 1));
+      expect(result[1], closeTo(144, 1));
+      expect(result[2], closeTo(154, 1));
+    },
+  );
 
   test('a luminance boost brightens a pixel near a band center', () {
-    final source = Uint8List.fromList([120, 150, 180]); // hue ~214, near Blue's 225° center
+    final source = Uint8List.fromList([
+      120,
+      150,
+      180,
+    ]); // hue ~214, near Blue's 225° center
     final result = renderRgb(
       1,
       1,
       source,
       const RenderParams(
+        baseContrast: 0,
         colorMixer: ColorMixerValues(blue: ChannelAdjust(luminance: 60)),
       ),
     );
@@ -93,6 +112,7 @@ void main() {
       1,
       source,
       const RenderParams(
+        baseContrast: 0,
         colorMixer: ColorMixerValues(blue: ChannelAdjust(luminance: -60)),
       ),
     );
@@ -109,6 +129,7 @@ void main() {
       1,
       source,
       const RenderParams(
+        baseContrast: 0,
         colorMixer: ColorMixerValues(
           red: ChannelAdjust(hue: 50, saturation: 80),
           blue: ChannelAdjust(hue: -50, saturation: 80),

@@ -15,7 +15,7 @@ void main() {
 
     test('neutral temperature (5500K) and tint 0 is an identity', () {
       final src = flatGray(4, 4, 150);
-      final out = renderRgb(4, 4, src, const RenderParams());
+      final out = renderRgb(4, 4, src, const RenderParams(baseContrast: 0));
       for (var i = 0; i < out.length; i++) {
         expect(out[i], 150);
       }
@@ -24,13 +24,23 @@ void main() {
     test('raising temperature above 5500K warms the image (R > B), '
         'matching Lightroom/Camera Raw convention', () {
       final src = flatGray(4, 4, 150);
-      final out = renderRgb(4, 4, src, const RenderParams(temperature: 7000));
+      final out = renderRgb(
+        4,
+        4,
+        src,
+        const RenderParams(baseContrast: 0, temperature: 7000),
+      );
       expect(out[0], greaterThan(out[2]));
     });
 
     test('lowering temperature below 5500K cools the image (B > R)', () {
       final src = flatGray(4, 4, 150);
-      final out = renderRgb(4, 4, src, const RenderParams(temperature: 4193));
+      final out = renderRgb(
+        4,
+        4,
+        src,
+        const RenderParams(baseContrast: 0, temperature: 4193),
+      );
       expect(out[2], greaterThan(out[0]));
     });
 
@@ -42,13 +52,19 @@ void main() {
         4,
         4,
         src,
-        const RenderParams(temperature: 4193), // ~1307K below neutral
+        const RenderParams(
+          baseContrast: 0,
+          temperature: 4193,
+        ), // ~1307K below neutral
       );
       final warm = renderRgb(
         4,
         4,
         src,
-        const RenderParams(temperature: 6807), // ~1307K above neutral
+        const RenderParams(
+          baseContrast: 0,
+          temperature: 6807,
+        ), // ~1307K above neutral
       );
       final coolShift = (cool[2].toDouble() - cool[0].toDouble()).abs();
       final warmShift = (warm[0].toDouble() - warm[2].toDouble()).abs();
@@ -59,7 +75,12 @@ void main() {
         'without desaturating red/blue asymmetrically, matching Lightroom '
         "convention and this slider's green->magenta gradient", () {
       final src = flatGray(4, 4, 150);
-      final out = renderRgb(4, 4, src, const RenderParams(tint: 50));
+      final out = renderRgb(
+        4,
+        4,
+        src,
+        const RenderParams(baseContrast: 0, tint: 50),
+      );
       expect(out[1], lessThan(150));
       // Red and blue should move together (both up) rather than only
       // green moving in isolation.
@@ -72,7 +93,12 @@ void main() {
         'shifts overall brightness', () {
       final src = flatGray(4, 4, 150);
       for (final tint in [-60.0, -20.0, 40.0, 90.0]) {
-        final out = renderRgb(4, 4, src, RenderParams(tint: tint));
+        final out = renderRgb(
+          4,
+          4,
+          src,
+          RenderParams(baseContrast: 0, tint: tint),
+        );
         final lum = 0.2126 * out[0] + 0.7152 * out[1] + 0.0722 * out[2];
         expect(lum, closeTo(150, 8), reason: 'tint $tint');
       }
@@ -81,12 +107,21 @@ void main() {
     test('preserveTintBrightness is a harmless no-op now (model already '
         'luminance-normalised)', () {
       final src = flatGray(4, 4, 150);
-      final off = renderRgb(4, 4, src, const RenderParams(tint: 40));
+      final off = renderRgb(
+        4,
+        4,
+        src,
+        const RenderParams(baseContrast: 0, tint: 40),
+      );
       final on = renderRgb(
         4,
         4,
         src,
-        const RenderParams(tint: 40, preserveTintBrightness: true),
+        const RenderParams(
+          baseContrast: 0,
+          tint: 40,
+          preserveTintBrightness: true,
+        ),
       );
       for (var i = 0; i < off.length; i++) {
         expect(on[i], off[i]);
@@ -102,6 +137,7 @@ void main() {
         4,
         src,
         const RenderParams(
+          baseContrast: 0,
           temperature: 5200,
           tint: 6,
           asShotKelvin: 5200,
@@ -116,6 +152,7 @@ void main() {
         4,
         src,
         const RenderParams(
+          baseContrast: 0,
           temperature: 5500,
           tint: 0,
           asShotKelvin: 5200,

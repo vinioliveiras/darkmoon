@@ -105,21 +105,19 @@ const double calWbAsShotTintScaleFallback = 200.0;
 // Contraste +20 embutido.
 //
 //   ↑ maior  = ponto de partida mais contrastado (mais perto do Lightroom)
-//   ↓ menor  = mais plano
+//   ↓ menor  = mais plano (0.0 = desligado, comportamento antigo)
 //
-// COMO TESTAR: mude para 20.0, rode a build, abra a DSF1309, importe o
-// "Filmatic Fuji 2 Lightroom.xmp" SEM alterar e compare com o JPEG do
-// Lightroom. Ajuste entre ~12 e ~28 até o contraste geral bater. Depois é
-// que se reavalia Whites/Blacks dos presets.
+// Calibrado em 20.0 comparando a DSF1309 com um export real do Lightroom
+// (perfil "Filmatic Fuji 2 Lightroom.xmp" importado sem alterar) —
+// 2026-08-29. Nessa faixa (~12 a ~28) o contraste geral bate.
 //
-// ⚠️ Sai de fábrica em 0.0 (desligado) porque mexer aqui muda o visual de
-//    toda foto e todo preset — inclusive os que você já ajustou no darkmoon
-//    (vão ficar mais contrastados). Ligue, calibre, e só então reajuste os
-//    presets antigos.
+// ⚠️ Mexer aqui muda o visual de toda foto e todo preset — inclusive os que
+//    você já ajustou no darkmoon antes de 2026-08-29 (vão ficar mais
+//    contrastados). Reajuste esses presets partindo deste valor, não de 0.
 //
 // Só CPU (o render GPU opcional não aplica esta curva).
-/// padrão: 0.0   (desligado; 20.0 é um bom ponto de partida pra testar)
-const double calBaseContrast = 0.0;
+/// padrão: 20.0   (0.0 = desliga)
+const double calBaseContrast = 20.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  BÁSICO — Exposição / Brilho / Contraste                                  ║

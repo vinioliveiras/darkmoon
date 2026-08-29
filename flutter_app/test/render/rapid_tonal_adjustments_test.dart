@@ -6,63 +6,96 @@ import 'package:darkmoon/render/render.dart';
 import 'package:darkmoon/render/render_params.dart';
 
 Uint8List _solid(int value) => Uint8List.fromList([
-      value,
-      value,
-      value,
-      value,
-      value,
-      value,
-      value,
-      value,
-      value,
-      value,
-      value,
-      value,
-    ]);
+  value,
+  value,
+  value,
+  value,
+  value,
+  value,
+  value,
+  value,
+  value,
+  value,
+  value,
+  value,
+]);
 
 void main() {
   test('neutral tonal settings preserve the source', () {
     final source = Uint8List.fromList([
-      12, 34, 56,
-      96, 128, 160,
-      200, 180, 150,
-      240, 220, 200,
+      12,
+      34,
+      56,
+      96,
+      128,
+      160,
+      200,
+      180,
+      150,
+      240,
+      220,
+      200,
     ]);
 
-    expect(renderRgb(2, 2, source, const RenderParams()), source);
+    expect(
+      renderRgb(2, 2, source, const RenderParams(baseContrast: 0)),
+      source,
+    );
   });
 
-  test('brightness and exposure move the luminance in the expected direction', () {
-    final source = _solid(96);
-    final brighter = renderRgb(
-      2,
-      2,
-      source,
-      const RenderParams(brightness: 50),
-    );
-    final exposed = renderRgb(
-      2,
-      2,
-      source,
-      const RenderParams(exposure: 50),
+  test('the base "profile" contrast curve is a wired-in S (darks down, '
+      'lights up) at the default calBaseContrast', () {
+    final dark = _solid(48);
+    final light = _solid(208);
+    // Default params -> baseContrast defaults to calBaseContrast (non-zero).
+    final darkOut = renderRgb(1, 1, dark, const RenderParams());
+    final lightOut = renderRgb(1, 1, light, const RenderParams());
+    final darkFlat = renderRgb(1, 1, dark, const RenderParams(baseContrast: 0));
+    final lightFlat = renderRgb(
+      1,
+      1,
+      light,
+      const RenderParams(baseContrast: 0),
     );
 
-    expect(brighter[0], greaterThan(source[0]));
-    expect(exposed[0], greaterThan(source[0]));
+    expect(darkOut[0], lessThan(darkFlat[0]));
+    expect(lightOut[0], greaterThan(lightFlat[0]));
   });
+
+  test(
+    'brightness and exposure move the luminance in the expected direction',
+    () {
+      final source = _solid(96);
+      final brighter = renderRgb(
+        2,
+        2,
+        source,
+        const RenderParams(baseContrast: 0, brightness: 50),
+      );
+      final exposed = renderRgb(
+        2,
+        2,
+        source,
+        const RenderParams(baseContrast: 0, exposure: 50),
+      );
+
+      expect(brighter[0], greaterThan(source[0]));
+      expect(exposed[0], greaterThan(source[0]));
+    },
+  );
 
   test('shadows and whites target their respective tonal ranges', () {
     final dark = renderRgb(
       2,
       2,
       _solid(32),
-      const RenderParams(shadows: 100),
+      const RenderParams(baseContrast: 0, shadows: 100),
     );
     final bright = renderRgb(
       2,
       2,
       _solid(224),
-      const RenderParams(whites: -100),
+      const RenderParams(baseContrast: 0, whites: -100),
     );
 
     expect(dark[0], greaterThan(32));
@@ -74,13 +107,13 @@ void main() {
       2,
       2,
       _solid(32),
-      const RenderParams(contrast: 100),
+      const RenderParams(baseContrast: 0, contrast: 100),
     );
     final bright = renderRgb(
       2,
       2,
       _solid(224),
-      const RenderParams(contrast: 100),
+      const RenderParams(baseContrast: 0, contrast: 100),
     );
 
     expect(dark[0], lessThan(32));
@@ -100,13 +133,13 @@ void main() {
       1,
       1,
       Uint8List.fromList([204, 51, 51]),
-      const RenderParams(saturation: 50),
+      const RenderParams(baseContrast: 0, saturation: 50),
     );
     final desaturated = renderRgb(
       1,
       1,
       Uint8List.fromList([204, 51, 51]),
-      const RenderParams(saturation: -50),
+      const RenderParams(baseContrast: 0, saturation: -50),
     );
 
     expect(saturated[0], closeTo(235, 1));
@@ -119,8 +152,18 @@ void main() {
 
   test('vibrance mixes toward luminance in linear light', () {
     final source = Uint8List.fromList([120, 150, 180]);
-    final boosted = renderRgb(1, 1, source, const RenderParams(vibrance: 50));
-    final reduced = renderRgb(1, 1, source, const RenderParams(vibrance: -50));
+    final boosted = renderRgb(
+      1,
+      1,
+      source,
+      const RenderParams(baseContrast: 0, vibrance: 50),
+    );
+    final reduced = renderRgb(
+      1,
+      1,
+      source,
+      const RenderParams(baseContrast: 0, vibrance: -50),
+    );
 
     expect(boosted[0], closeTo(81, 1));
     expect(boosted[1], closeTo(153, 1));
@@ -135,7 +178,7 @@ void main() {
       1,
       1,
       Uint8List.fromList([120, 150, 180]),
-      const RenderParams(saturation: 30, vibrance: 40),
+      const RenderParams(baseContrast: 0, saturation: 30, vibrance: 40),
     );
 
     // Applying the two steps in the opposite order (vibrance's masks

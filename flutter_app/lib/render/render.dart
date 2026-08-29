@@ -288,7 +288,7 @@ void applyPostDenoisePointOps(
   // The "profile" contrast the Adobe Color base curve gives Lightroom for
   // free — applied first, so every tone slider and curve below works on
   // top of it, matching Lightroom's order (profile curve -> Basic panel).
-  _applyBaseContrast(buffer);
+  _applyBaseContrast(buffer, params.baseContrast);
   _applyRapidBrightness(buffer, params.brightness);
   _applyRapidWhites(buffer, pixelCount, params.whites);
   _applyRapidHighlights(buffer, pixelCount, params.highlights);
@@ -513,12 +513,12 @@ void _applyRapidContrast(Float32List img, double contrast) {
 /// darkmoon's straight-sRGB decode otherwise lacks (see [calBaseContrast]).
 /// Uses the exact same S as the Contrast slider, so [calBaseContrast] reads
 /// on the same scale ("20" ≈ a baked-in Contrast +20).
-void _applyBaseContrast(Float32List img) {
-  if (calBaseContrast == 0) {
+void _applyBaseContrast(Float32List img, double amount) {
+  if (amount == 0) {
     return;
   }
   final gamma =
-      math.pow(2.0, calBaseContrast / 100.0 * calContrastStrength).toDouble();
+      math.pow(2.0, amount / 100.0 * calContrastStrength).toDouble();
   _applyContrastGamma(img, gamma);
 }
 

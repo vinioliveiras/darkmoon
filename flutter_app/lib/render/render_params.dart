@@ -1,4 +1,5 @@
 import 'ai_denoise.dart';
+import 'calibration.dart';
 import 'color_grading.dart';
 import 'color_mixer.dart';
 import 'grain.dart';
@@ -16,6 +17,7 @@ class RenderParams {
     this.asShotKelvin = 5500,
     this.asShotTint = 0,
     this.preserveTintBrightness = false,
+    this.baseContrast = calBaseContrast,
     this.exposure = 0,
     this.brightness = 0,
     this.contrast = 0,
@@ -83,6 +85,15 @@ class RenderParams {
 
   final double temperature;
   final double tint;
+
+  /// Strength of the fixed "profile" S-curve every photo gets before the
+  /// tone sliders — darkmoon's stand-in for the contrast the Adobe Color
+  /// profile bakes into Lightroom's own zero-edit rendering (see
+  /// [calBaseContrast]). Same scale as the Contrast slider. Not a user
+  /// slider and not read from the values map — it's per-pipeline context,
+  /// like [asShotKelvin]; only tests that isolate a non-tonal step set it
+  /// to 0 to keep their reference numbers exact.
+  final double baseContrast;
 
   /// The photo's camera as-shot white balance (from `RawMetadata`), used
   /// as the neutral reference for [temperature]/[tint]: at
