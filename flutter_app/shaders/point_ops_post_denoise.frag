@@ -17,6 +17,14 @@ uniform vec2 uSize;
 uniform float uBrightness255; // brightness param normalized from -100..100
 uniform float uContrastGamma; // pow(2, contrast/100*1.25), 1.0 = no-op
 
+// The fixed "profile" contrast curve every photo gets before the tone
+// sliders — darkmoon's stand-in for the S-curve the Adobe Color profile
+// bakes into Lightroom's zero-edit render (render.dart's _applyBaseContrast
+// / calBaseContrast). Same endpoint-preserving S as uContrastGamma, so
+// 1.0 = no-op. Applied first thing in main(), matching the CPU order
+// (top of applyPostDenoisePointOps).
+uniform float uBaseContrastGamma; // pow(2, baseContrast/100*1.25), 1.0 = no-op
+
 // Highlights/shadows — _applyHighlightsShadows. Precomputed as
 // (param/100)*80/255 on the CPU side so the shader just multiplies by a
 // per-pixel weight.
@@ -265,6 +273,13 @@ vec3 rapidShadowsBlacks(
 void main() {
   vec2 uv = FlutterFragCoord().xy / uSize;
   vec3 c = texture(uTexture, uv).rgb;
+
+  // Base "profile" contrast first — same space/curve as the Contrast
+  // slider below, mirrors render.dart's _applyBaseContrast at the top of
+  // applyPostDenoisePointOps. gamma == 1.0 reduces to identity.
+  c.r = linearToSrgb(pow(contrastCurve(pow(srgbToLinear(c.r), 1.0 / 2.2), uBaseContrastGamma), 2.2));
+  c.g = linearToSrgb(pow(contrastCurve(pow(srgbToLinear(c.g), 1.0 / 2.2), uBaseContrastGamma), 2.2));
+  c.b = linearToSrgb(pow(contrastCurve(pow(srgbToLinear(c.b), 1.0 / 2.2), uBaseContrastGamma), 2.2));
 
   // RapidRAW order: filmic brightness, whites, shadows/blacks, then contrast.
   c = rapidBrightness(c, uBrightness255);

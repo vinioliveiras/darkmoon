@@ -115,7 +115,9 @@ const double calWbAsShotTintScaleFallback = 200.0;
 //    você já ajustou no darkmoon antes de 2026-08-29 (vão ficar mais
 //    contrastados). Reajuste esses presets partindo deste valor, não de 0.
 //
-// Só CPU (o render GPU opcional não aplica esta curva).
+// Este é o VALOR DE FÁBRICA. O usuário pode sobrescrever ao vivo em
+// Configurações → "Perfil darkmoon Color" (salvo no AppSettings), sem
+// rebuildar. CPU e GPU aplicam a curva.
 /// padrão: 20.0   (0.0 = desliga)
 const double calBaseContrast = 20.0;
 

@@ -740,6 +740,18 @@ abstract class AppLocalizations {
   /// **'Preview resolution'**
   String get settingsFullQualityScaleLabel;
 
+  /// No description provided for @settingsBaseContrastLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'darkmoon Color profile'**
+  String get settingsBaseContrastLabel;
+
+  /// No description provided for @settingsBaseContrastHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A fixed contrast curve applied to every photo before your edits — darkmoon\'s stand-in for the profile contrast Lightroom bakes in. Raise it if imported Lightroom presets look flat, lower it (0 = off) for a neutral starting point. Changes every photo and preset.'**
+  String get settingsBaseContrastHint;
+
   /// No description provided for @settingsThumbnailThreadsLabel.
   ///
   /// In en, this message translates to:

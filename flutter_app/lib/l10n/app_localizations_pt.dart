@@ -359,6 +359,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsFullQualityScaleLabel => 'Resolução do preview';
 
   @override
+  String get settingsBaseContrastLabel => 'Perfil darkmoon Color';
+
+  @override
+  String get settingsBaseContrastHint =>
+      'Uma curva de contraste fixa aplicada em toda foto antes das suas edições — o equivalente no darkmoon ao contraste de perfil que o Lightroom já embute. Aumente se presets importados do Lightroom ficam sem contraste, diminua (0 = desligado) pra um ponto de partida neutro. Muda toda foto e todo preset.';
+
+  @override
   String get settingsThumbnailThreadsLabel =>
       'Threads de carregamento de miniaturas';
 

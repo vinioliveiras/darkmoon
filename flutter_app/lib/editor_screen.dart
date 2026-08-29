@@ -785,7 +785,6 @@ class _EditorScreenState extends State<EditorScreen> {
     return null;
   }
 
-
   bool _exporting = false;
 
   /// Which stage the in-progress export is on, so the loading overlay can
@@ -945,8 +944,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _photoPresets = photoPresets;
       // If the restored photo already has a preset marker, adopt it now
       // (its edit values were restored from the catalog on selection).
-      final selected =
-          _selectedIndex == null ? null : _files[_selectedIndex!];
+      final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
       if (selected != null && _appliedPresetId == null) {
         _appliedPresetId = _photoPresets[selected.path];
       }
@@ -981,10 +979,7 @@ class _EditorScreenState extends State<EditorScreen> {
     // already stored (so Amount drags and A->B preset switches both blend
     // from a clean slate rather than compounding).
     if (_appliedPresetId == null || _presetBaseline == null) {
-      _presetBaseline = (
-        values: {..._paramValues},
-        curves: _currentCurves,
-      );
+      _presetBaseline = (values: {..._paramValues}, curves: _currentCurves);
     }
     final baseValues = _presetBaseline!.values;
     final baseCurves = _presetBaseline!.curves;
@@ -1033,8 +1028,7 @@ class _EditorScreenState extends State<EditorScreen> {
       final tgtTint = presetTint ?? asShot.tint;
       blendedValues['Temperature'] = baseTemp + (tgtTemp - baseTemp) * fraction;
       blendedValues['Tint'] = baseTint + (tgtTint - baseTint) * fraction;
-      blendedValues[_wbModeKey] =
-          presetMode ?? WbMode.custom.index.toDouble();
+      blendedValues[_wbModeKey] = presetMode ?? WbMode.custom.index.toDouble();
     } else {
       blendedValues['Temperature'] = asShot.kelvin;
       blendedValues['Tint'] = asShot.tint;
@@ -1095,8 +1089,9 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _presets = _sortPresets([..._presets, saved]));
   }
 
-  List<Preset> _sortPresets(List<Preset> presets) => presets
-    ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+  List<Preset> _sortPresets(List<Preset> presets) =>
+      presets
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
 
   Future<void> _renamePreset(Preset preset) async {
     final l10n = AppLocalizations.of(context)!;
@@ -1825,7 +1820,7 @@ class _EditorScreenState extends State<EditorScreen> {
       _neutralPreviews.remove(path);
       _edits.remove(path);
       _photoCurves.remove(path);
-     
+
       if (removedIndex == _selectedIndex) {
         _selectedIndex = null;
       } else if (_selectedIndex != null && removedIndex < _selectedIndex!) {
@@ -2499,7 +2494,8 @@ class _EditorScreenState extends State<EditorScreen> {
     // `onStage != null` (the AI Denoise apply/remove) still gets a phase-2
     // pass — the progress bar just tracks phase 1 — so the canvas doesn't
     // stay at preview resolution after toggling denoise.
-    final fullQuality = !live &&
+    final fullQuality =
+        !live &&
         _settings.dynamicFullPreview &&
         _activeMaskId == imageMaskId &&
         !_cropOverlayActive &&
@@ -2513,6 +2509,7 @@ class _EditorScreenState extends State<EditorScreen> {
         curves: _effectiveCurves,
         asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
         asShotTint: metadata?.asShotTint ?? wbDefaultTint,
+        baseContrast: _settings.baseContrast,
       ),
       masks: _effectiveMasks,
       cropTransform: cropTransform,
@@ -2615,8 +2612,9 @@ class _EditorScreenState extends State<EditorScreen> {
   /// the full sensor on every settle — sharp everywhere, but each settle
   /// pays a longer inline JPEG encode (see `render_job_gpu.dart`).
   int _fullQualityWorkingRes(EditSource native) {
-    final nativeLong =
-        native.width > native.height ? native.width : native.height;
+    final nativeLong = native.width > native.height
+        ? native.width
+        : native.height;
     var target = (nativeLong * _settings.fullQualityPercent / 100).round();
     if (target < _settings.previewResolution) {
       target = _settings.previewResolution;
@@ -2636,10 +2634,10 @@ class _EditorScreenState extends State<EditorScreen> {
     if (cached != null) {
       return cached;
     }
-    final scaled = await compute(
-      scaleEditSource,
-      (source: native, maxDim: _fullQualityWorkingRes(native)),
-    );
+    final scaled = await compute(scaleEditSource, (
+      source: native,
+      maxDim: _fullQualityWorkingRes(native),
+    ));
     _fullQualityScaled = scaled;
     return scaled;
   }
@@ -2678,15 +2676,18 @@ class _EditorScreenState extends State<EditorScreen> {
       native = await compute(decodeNativeSourceFromCachedJpeg, cachedJpeg);
     }
     native ??= await compute(
-      lowPriority ? decodeFullQualitySourceLowPriority : decodeFullQualitySource,
+      lowPriority
+          ? decodeFullQualitySourceLowPriority
+          : decodeFullQualitySource,
       path,
     );
     if (native != null && cachedJpeg == null) {
       final toCache = native;
       unawaited(
-        compute(encodeNativeSourceForCache, toCache).then(
-          (bytes) => _storeNativeSource(path, bytes),
-        ),
+        compute(
+          encodeNativeSourceForCache,
+          toCache,
+        ).then((bytes) => _storeNativeSource(path, bytes)),
       );
     }
     return native;
@@ -2713,8 +2714,9 @@ class _EditorScreenState extends State<EditorScreen> {
     } finally {
       _decodingFullQuality = false;
     }
-    final stillSelected =
-        _selectedIndex == null ? null : _files[_selectedIndex!];
+    final stillSelected = _selectedIndex == null
+        ? null
+        : _files[_selectedIndex!];
     if (!mounted ||
         native == null ||
         stillSelected?.path != path ||
@@ -2737,7 +2739,13 @@ class _EditorScreenState extends State<EditorScreen> {
     }
     final result = await compute(
       renderJobToJpeg,
-      RenderJob(source: sources.preview, params: const RenderParams()),
+      RenderJob(
+        source: sources.preview,
+        // "Before" still gets the base profile curve — it's part of the
+        // baseline rendering (like Lightroom keeping the camera profile),
+        // not a develop edit.
+        params: RenderParams(baseContrast: _settings.baseContrast),
+      ),
     );
     if (!mounted) {
       return;
@@ -3473,8 +3481,7 @@ class _EditorScreenState extends State<EditorScreen> {
   /// instead of `_defaultParamValues()` wherever `_paramValues` is reset.
   Map<String, double> _freshParamValues([String? path]) {
     final target =
-        path ??
-        (_selectedIndex == null ? null : _files[_selectedIndex!].path);
+        path ?? (_selectedIndex == null ? null : _files[_selectedIndex!].path);
     final asShot = target == null
         ? (kelvin: wbDefaultKelvin, tint: wbDefaultTint)
         : _asShotFor(target);
@@ -3748,6 +3755,7 @@ class _EditorScreenState extends State<EditorScreen> {
           curves: _effectiveCurves,
           asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
           asShotTint: metadata?.asShotTint ?? wbDefaultTint,
+          baseContrast: _settings.baseContrast,
         ),
         masks: _effectiveMasks,
         format: options.format,
@@ -3789,8 +3797,7 @@ class _EditorScreenState extends State<EditorScreen> {
           content: Text(message),
           action: SnackBarAction(
             label: l10n.copyButton,
-            onPressed: () =>
-                Clipboard.setData(ClipboardData(text: message)),
+            onPressed: () => Clipboard.setData(ClipboardData(text: message)),
           ),
         ),
       );
@@ -4761,7 +4768,10 @@ class _HiddenLoadingIndicator extends StatelessWidget {
                   tooltip: l10n.cancelButton,
                   visualDensity: VisualDensity.compact,
                   padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 24, minHeight: 20),
+                  constraints: const BoxConstraints(
+                    minWidth: 24,
+                    minHeight: 20,
+                  ),
                   iconSize: 15,
                   color: Colors.white,
                   icon: const Icon(CupertinoIcons.xmark),
@@ -4782,9 +4792,7 @@ class _HiddenLoadingIndicator extends StatelessWidget {
                   : LinearProgressIndicator(
                       value: progress,
                       backgroundColor: Colors.white24,
-                      valueColor: const AlwaysStoppedAnimation(
-                        Colors.white,
-                      ),
+                      valueColor: const AlwaysStoppedAnimation(Colors.white),
                     ),
             ),
           ),
@@ -5690,9 +5698,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
     if (name != 'Temperature' && name != 'Tint') {
       return null;
     }
-    final modeIndex = (widget.values['WhiteBalanceMode'] ?? 0)
-        .toInt()
-        .clamp(0, WbMode.values.length - 1);
+    final modeIndex = (widget.values['WhiteBalanceMode'] ?? 0).toInt().clamp(
+      0,
+      WbMode.values.length - 1,
+    );
     final preset = wbModePreset(WbMode.values[modeIndex]);
     if (preset != null) {
       return name == 'Temperature' ? preset.kelvin : preset.tint;
@@ -6015,7 +6024,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                         if (!_collapsed.contains(entry.key)) ...[
                           if (entry.key == 'WHITE BALANCE')
                             Padding(
-                              padding: const EdgeInsets.only(top: 6, bottom: 14),
+                              padding: const EdgeInsets.only(
+                                top: 6,
+                                bottom: 14,
+                              ),
                               child: _buildWhiteBalanceModeRow(l10n, values),
                             ),
                           for (final spec in entry.value)
@@ -6092,13 +6104,11 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   name: _sliderLabel(l10n, spec.name),
                                   min: spec.min,
                                   max: spec.max,
-                                  value:
-                                      values[spec.name] ?? spec.defaultValue,
+                                  value: values[spec.name] ?? spec.defaultValue,
                                   decimals: spec.decimals,
                                   defaultValue: spec.defaultValue,
                                   onChanged: (v) => onChanged(spec.name, v),
-                                  onChangeEnd: (v) =>
-                                      onChangeEnd(spec.name, v),
+                                  onChangeEnd: (v) => onChangeEnd(spec.name, v),
                                 ),
                               ),
                           ],
@@ -6501,11 +6511,7 @@ List<Color> _mixerTrackColors(String channel, String suffix) {
         at(hue + 42, 0.85, 0.95),
       ];
     case 'Luminance':
-      return [
-        at(hue, 0.7, 0.22),
-        at(hue, 0.85, 0.92),
-        at(hue, 0.2, 1.0),
-      ];
+      return [at(hue, 0.7, 0.22), at(hue, 0.85, 0.92), at(hue, 0.2, 1.0)];
     default: // Saturation
       return [const Color(0xFF6C6C72), at(hue, 0.9, 0.95)];
   }

@@ -66,9 +66,8 @@ Future<ui.Image> renderImageGpu(
     height,
     params.aiDenoise,
   );
-  final tonalBlur = (params.shadows == 0 &&
-          params.blacks == 0 &&
-          params.whites == 0)
+  final tonalBlur =
+      (params.shadows == 0 && params.blacks == 0 && params.whites == 0)
       ? null
       : await runGaussianBlurGpu(
           await GpuPass.run(
@@ -160,12 +159,10 @@ Future<ui.Image> _runPreDenoise(
   ui.Image source,
   int width,
   int height,
-  RenderParams params,
-  {
+  RenderParams params, {
   bool applyWhiteBalance = true,
   bool applyExposure = true,
-  }
-) async {
+}) async {
   final program = await _loadProgram(
     'shaders/point_ops_pre_denoise.frag',
     () => _preDenoiseProgram,
@@ -225,6 +222,11 @@ Future<ui.Image> _runPostDenoise(
   final contrastGamma = params.contrast == 0
       ? 1.0
       : math.pow(2.0, params.contrast / 100.0 * 1.25).toDouble();
+  // The fixed "profile" contrast curve (render.dart's _applyBaseContrast /
+  // calBaseContrast) — same S as the Contrast slider. 1.0 = no-op.
+  final baseContrastGamma = params.baseContrast == 0
+      ? 1.0
+      : math.pow(2.0, params.baseContrast / 100.0 * 1.25).toDouble();
   final shadowsAdd = params.shadows / 100.0;
   final highlightsAdd = params.highlights / 100.0;
   final whitesAdd = params.whites / 100.0;
@@ -259,6 +261,7 @@ Future<ui.Image> _runPostDenoise(
   shader.setFloat(i++, height.toDouble());
   shader.setFloat(i++, params.brightness / 20.0);
   shader.setFloat(i++, contrastGamma);
+  shader.setFloat(i++, baseContrastGamma);
   shader.setFloat(i++, shadowsAdd);
   shader.setFloat(i++, highlightsAdd);
   shader.setFloat(i++, whitesAdd);

@@ -19,7 +19,6 @@ import 'tone_curve.dart';
 import 'vignette.dart';
 import 'white_balance.dart';
 
-
 /// Applies the tonal/color adjustment pipeline to packed 8-bit RGB pixel
 /// data (3 bytes/pixel, row-major, no padding) and returns a new buffer of
 /// the same shape.
@@ -90,6 +89,10 @@ Uint8List renderRgbWithMasks(
         curves: mask.curves,
         asShotKelvin: globalParams.asShotKelvin,
         asShotTint: globalParams.asShotTint,
+        // The base "profile" curve belongs to the base image only — a mask
+        // layer re-runs the pipeline over the already-profiled buffer, so
+        // letting it apply again would double the contrast under the mask.
+        baseContrast: 0,
       ),
     );
     final alpha = computeMaskAlpha(
@@ -183,15 +186,12 @@ int localAdjustmentHaloPx(RenderParams params) {
 /// — the reach of Dehaze's sigma-40 "structure" Gaussian (3-pass box,
 /// ~4.5·sigma), 0 when Dehaze is off (then it's just the O(n) exposure
 /// multiply).
-int exposureDehazeHaloPx(RenderParams params) =>
-    params.dehaze != 0 ? 180 : 0;
+int exposureDehazeHaloPx(RenderParams params) => params.dehaze != 0 ? 180 : 0;
 
 /// Halo (px) [applyGlobalPointOps] needs on a band — just the sigma-3.5
 /// tonal blur behind Shadows/Whites/Blacks.
 int globalPointOpsHaloPx(RenderParams params) =>
-    (params.shadows != 0 || params.blacks != 0 || params.whites != 0)
-    ? 24
-    : 0;
+    (params.shadows != 0 || params.blacks != 0 || params.whites != 0) ? 24 : 0;
 
 void _applyAdjustmentSteps(
   Float32List buffer,
@@ -275,9 +275,8 @@ void applyPostDenoisePointOps(
   RenderParams params,
 ) {
   final pixelCount = width * height;
-  final tonalBlur = (params.shadows == 0 &&
-          params.blacks == 0 &&
-          params.whites == 0)
+  final tonalBlur =
+      (params.shadows == 0 && params.blacks == 0 && params.whites == 0)
       ? null
       : gaussianBlurChannel(
           _luminanceChannel(buffer, pixelCount),
@@ -476,8 +475,7 @@ void _applyRapidBrightness(Float32List img, double brightness) {
     final r = srgbToLinear(img[i] / 255.0);
     final g = srgbToLinear(img[i + 1] / 255.0);
     final b = srgbToLinear(img[i + 2] / 255.0);
-    final originalLuma =
-      _linearLuminance(r, g, b);
+    final originalLuma = _linearLuminance(r, g, b);
     if (originalLuma.abs() < 0.00001) {
       continue;
     }
@@ -489,13 +487,14 @@ void _applyRapidBrightness(Float32List img, double brightness) {
     final totalLumaScale = newLuma / originalLuma;
     final lumaWeight = (newLuma.clamp(0.0, 2.0)) * 0.5;
     final dynamicExponent = 0.95 + (0.65 - 0.95) * lumaWeight;
-    final chromaScale = math.pow(totalLumaScale, dynamicExponent).toDouble() /
+    final chromaScale =
+        math.pow(totalLumaScale, dynamicExponent).toDouble() /
         (1 + math.max(0.0, newLuma - 0.9) * 2.0);
     img[i] = linearToSrgb(newLuma + (r - originalLuma) * chromaScale) * 255.0;
     img[i + 1] =
-      linearToSrgb(newLuma + (g - originalLuma) * chromaScale) * 255.0;
+        linearToSrgb(newLuma + (g - originalLuma) * chromaScale) * 255.0;
     img[i + 2] =
-      linearToSrgb(newLuma + (b - originalLuma) * chromaScale) * 255.0;
+        linearToSrgb(newLuma + (b - originalLuma) * chromaScale) * 255.0;
   }
 }
 
@@ -503,8 +502,9 @@ void _applyRapidContrast(Float32List img, double contrast) {
   if (contrast == 0) {
     return;
   }
-  final gamma =
-      math.pow(2.0, contrast / 100.0 * calContrastStrength).toDouble();
+  final gamma = math
+      .pow(2.0, contrast / 100.0 * calContrastStrength)
+      .toDouble();
   _applyContrastGamma(img, gamma);
 }
 
@@ -517,8 +517,7 @@ void _applyBaseContrast(Float32List img, double amount) {
   if (amount == 0) {
     return;
   }
-  final gamma =
-      math.pow(2.0, amount / 100.0 * calContrastStrength).toDouble();
+  final gamma = math.pow(2.0, amount / 100.0 * calContrastStrength).toDouble();
   _applyContrastGamma(img, gamma);
 }
 
@@ -540,15 +539,13 @@ void _applyContrastGamma(Float32List img, double gamma) {
     final c = x <= 0.0 ? 0.0 : (x >= 255.0 ? 255.0 : x);
     final p = c * (256.0 / 255.0);
     final lo = p.toInt();
-    img[i] = lo >= 256 ? lut[256] : lut[lo] + (lut[lo + 1] - lut[lo]) * (p - lo);
+    img[i] = lo >= 256
+        ? lut[256]
+        : lut[lo] + (lut[lo + 1] - lut[lo]) * (p - lo);
   }
 }
 
-void _applyRapidWhites(
-  Float32List img,
-  int pixelCount,
-  double whites,
-) {
+void _applyRapidWhites(Float32List img, int pixelCount, double whites) {
   if (whites == 0) return;
   final amount = whites / 100.0;
   for (var p = 0; p < pixelCount; p++) {
@@ -558,11 +555,13 @@ void _applyRapidWhites(
     final b = srgbToLinear(img[i + 2] / 255.0);
     final luma = _linearLuminance(r, g, b);
     final x = math.max(luma, 0.0001) * 1.5;
-    final whiteMaskInput = (math.exp(2.0 * x) - 1.0) /
-      (math.exp(2.0 * x) + 1.0);
+    final whiteMaskInput =
+        (math.exp(2.0 * x) - 1.0) / (math.exp(2.0 * x) + 1.0);
     final whiteT =
-        ((whiteMaskInput - calWhitesMaskLow) / (0.98 - calWhitesMaskLow))
-            .clamp(0.0, 1.0);
+        ((whiteMaskInput - calWhitesMaskLow) / (0.98 - calWhitesMaskLow)).clamp(
+          0.0,
+          1.0,
+        );
     final whiteMask = whiteT * whiteT * (3.0 - 2.0 * whiteT);
     final multiplier =
         1.0 / math.max(1.0 - amount * calWhitesLevelCoeff * whiteMask, 0.01);
@@ -614,7 +613,7 @@ void _applyRapidShadowsBlacks(
     final noiseProtection = (blurredT / 0.1).clamp(0.0, 1.0);
     final detailExponent = 1.0 + lift * 1.2 * noiseProtection;
     final detailCorrection =
-      math.pow(detailRatio, detailExponent).toDouble() / detailRatio;
+        math.pow(detailRatio, detailExponent).toDouble() / detailRatio;
     final multiplier = ratio * math.pow(detailCorrection, 2.2).toDouble();
     img[i] = linearToSrgb(r * multiplier) * 255.0;
     img[i + 1] = linearToSrgb(g * multiplier) * 255.0;
@@ -641,7 +640,7 @@ double _tanh(double value) {
 }
 
 double _linearLuminance(double r, double g, double b) =>
-  0.2126 * r + 0.7152 * g + 0.0722 * b;
+    0.2126 * r + 0.7152 * g + 0.0722 * b;
 
 /// `pow(x, exp)` for the two fixed Shadows/Blacks falloff exponents,
 /// computed by multiplication (× ~15 faster than `math.pow` with a
@@ -726,12 +725,14 @@ void _applyVibrance(Float32List img, int pixelCount, double amount) {
     final skin = _smoothstep(35.0, 10.0, hueDistance);
     final skinDampener = 1.0 + (calVibranceSkinDampen - 1.0) * skin;
     final factor = normalizedAmount >= 0
-      ? 1.0 + normalizedAmount *
-        (1.0 - _smoothstep(0.4, 0.9, currentSaturation)) *
-        skinDampener *
-        calVibranceStrength
-      : 1.0 + normalizedAmount *
-        (1.0 - _smoothstep(0.2, 0.8, currentSaturation));
+        ? 1.0 +
+              normalizedAmount *
+                  (1.0 - _smoothstep(0.4, 0.9, currentSaturation)) *
+                  skinDampener *
+                  calVibranceStrength
+        : 1.0 +
+              normalizedAmount *
+                  (1.0 - _smoothstep(0.2, 0.8, currentSaturation));
     img[i] = linearToSrgb(luminance + (r - luminance) * factor) * 255.0;
     img[i + 1] = linearToSrgb(luminance + (g - luminance) * factor) * 255.0;
     img[i + 2] = linearToSrgb(luminance + (b - luminance) * factor) * 255.0;

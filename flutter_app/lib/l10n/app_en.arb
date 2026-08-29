@@ -146,6 +146,8 @@
   "settingsDynamicFullPreviewLabel": "Dynamic full-resolution preview",
   "settingsDynamicFullPreviewHint": "A moment after an edit settles, re-render at the sensor's native resolution so a zoomed-in view sharpens up. Decoded sources are cached to disk.",
   "settingsFullQualityScaleLabel": "Preview resolution",
+  "settingsBaseContrastLabel": "darkmoon Color profile",
+  "settingsBaseContrastHint": "A fixed contrast curve applied to every photo before your edits — darkmoon's stand-in for the profile contrast Lightroom bakes in. Raise it if imported Lightroom presets look flat, lower it (0 = off) for a neutral starting point. Changes every photo and preset.",
   "settingsThumbnailThreadsLabel": "Thumbnail loading threads",
   "settingsUserDataSection": "USER DATA",
   "settingsClearThumbnailsButton": "Clear thumbnail cache",

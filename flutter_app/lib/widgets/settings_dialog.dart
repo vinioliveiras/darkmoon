@@ -85,10 +85,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
       fontWeight: FontWeight.w500,
       color: DarkmoonColors.textSecondary,
     );
-    const hintStyle = TextStyle(
-      fontSize: 11,
-      color: DarkmoonColors.textMuted,
-    );
+    const hintStyle = TextStyle(fontSize: 11, color: DarkmoonColors.textMuted);
 
     return AlertDialog(
       backgroundColor: DarkmoonColors.surfaceRaised,
@@ -177,8 +174,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
               title: Text(l10n.settingsGpuRenderLabel, style: labelStyle),
               subtitle: Text(l10n.settingsGpuRenderHint, style: hintStyle),
               value: _settings.useGpuRender,
-              onChanged: (v) =>
-                  _update(_settings.copyWith(useGpuRender: v)),
+              onChanged: (v) => _update(_settings.copyWith(useGpuRender: v)),
             ),
 
             const SizedBox(height: 8),
@@ -212,17 +208,14 @@ class _SettingsDialogState extends State<SettingsDialog> {
                         style: labelStyle,
                       ),
                     ),
-                    Text(
-                      '${_settings.fullQualityPercent}%',
-                      style: hintStyle,
-                    ),
+                    Text('${_settings.fullQualityPercent}%', style: hintStyle),
                   ],
                 ),
               ),
               SliderTheme(
-                data: SliderTheme.of(context).copyWith(
-                  trackShape: const RectangularSliderTrackShape(),
-                ),
+                data: SliderTheme.of(
+                  context,
+                ).copyWith(trackShape: const RectangularSliderTrackShape()),
                 child: Slider(
                   min: 25,
                   max: 100,
@@ -254,6 +247,39 @@ class _SettingsDialogState extends State<SettingsDialog> {
                   ),
                 ),
             ],
+
+            const SizedBox(height: 16),
+
+            // darkmoon Color profile strength (base contrast curve)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    l10n.settingsBaseContrastLabel,
+                    style: labelStyle,
+                  ),
+                ),
+                Text(
+                  _settings.baseContrast.round().toString(),
+                  style: hintStyle,
+                ),
+              ],
+            ),
+            SliderTheme(
+              data: SliderTheme.of(
+                context,
+              ).copyWith(trackShape: const RectangularSliderTrackShape()),
+              child: Slider(
+                min: 0,
+                max: 60,
+                divisions: 60,
+                value: _settings.baseContrast.clamp(0.0, 60.0),
+                onChanged: (v) => _update(
+                  _settings.copyWith(baseContrast: v.roundToDouble()),
+                ),
+              ),
+            ),
+            Text(l10n.settingsBaseContrastHint, style: hintStyle),
 
             const SizedBox(height: 16),
 

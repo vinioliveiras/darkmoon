@@ -51,6 +51,7 @@ class RenderParams {
     PhotoCurves? curves,
     double asShotKelvin = 5500,
     double asShotTint = 0,
+    double baseContrast = calBaseContrast,
   }) {
     const defaults = RenderParams();
     return RenderParams(
@@ -58,6 +59,7 @@ class RenderParams {
       tint: values['Tint'] ?? asShotTint,
       asShotKelvin: asShotKelvin,
       asShotTint: asShotTint,
+      baseContrast: baseContrast,
       preserveTintBrightness:
           (values['WhiteBalancePreserveTintBrightness'] ?? 0) != 0,
       exposure: values['Exposure'] ?? defaults.exposure,

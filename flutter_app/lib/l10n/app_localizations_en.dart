@@ -357,6 +357,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsFullQualityScaleLabel => 'Preview resolution';
 
   @override
+  String get settingsBaseContrastLabel => 'darkmoon Color profile';
+
+  @override
+  String get settingsBaseContrastHint =>
+      'A fixed contrast curve applied to every photo before your edits — darkmoon\'s stand-in for the profile contrast Lightroom bakes in. Raise it if imported Lightroom presets look flat, lower it (0 = off) for a neutral starting point. Changes every photo and preset.';
+
+  @override
   String get settingsThumbnailThreadsLabel => 'Thumbnail loading threads';
 
   @override
