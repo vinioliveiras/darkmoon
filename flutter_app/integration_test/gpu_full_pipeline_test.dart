@@ -13,6 +13,7 @@ import 'package:darkmoon/render/ai_denoise.dart';
 import 'package:darkmoon/render/color_grading.dart';
 import 'package:darkmoon/render/color_mixer.dart';
 import 'package:darkmoon/render/gpu/render_gpu.dart';
+import 'package:darkmoon/render/grain.dart';
 import 'package:darkmoon/render/render.dart';
 import 'package:darkmoon/render/render_params.dart';
 import 'package:darkmoon/render/sharpen.dart';
@@ -167,6 +168,47 @@ void main() {
           clarity: 30,
         ),
         'ai denoise + sharpen + clarity',
+      );
+    });
+
+    // Grain (item: "grão no GPU") — the shader ports grain.dart's
+    // gradient_noise directly per-pixel rather than the CPU path's
+    // lattice-cache optimization (see grain.dart's _GradientLattice doc
+    // comment): a GPU invocation is already one independent thread per
+    // pixel, so there's no repeated-corner-hashing cost to amortize the
+    // way there is in a serial CPU loop.
+    testWidgets('grain alone', (tester) async {
+      await expectMatchesCpu(
+        const RenderParams(
+          grain: GrainParams(amount: 70, size: 40, roughness: 60),
+        ),
+        'grain alone',
+        // Mean diff stays low (~1.3/255 — see post_dehaze.frag's grain
+        // block for the fix that got it there: FlutterFragCoord()'s
+        // +0.5 pixel-center offset needs flooring before it feeds a
+        // hash, unlike the smooth vignette gradient above it). The
+        // occasional higher max comes from float32 (GPU) vs float64
+        // (CPU) rounding a pixel right at a lattice-cell boundary to
+        // opposite sides of it — adjacent cells are uncorrelated by
+        // design of a hash, so that rare pixel's noise value can differ
+        // by close to the full amplitude even though its neighbors
+        // (safely inside a cell) match closely.
+        maxTolerance: 50,
+      );
+    });
+
+    testWidgets('grain combined with tone edits and vignette', (
+      tester,
+    ) async {
+      await expectMatchesCpu(
+        const RenderParams(
+          exposure: 10,
+          contrast: 10,
+          shadows: 15,
+          grain: GrainParams(amount: 50, size: 15, roughness: 20),
+          vignette: VignetteParams(amount: -20, midpoint: 50, feather: 50),
+        ),
+        'grain + tone + vignette',
       );
     });
   });

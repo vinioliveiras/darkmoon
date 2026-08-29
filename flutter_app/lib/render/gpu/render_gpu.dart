@@ -18,8 +18,9 @@ import 'sharpen_gpu.dart';
 /// `_applyAdjustmentSteps` — the full 18-stage pipeline, assembled in
 /// Phases 1-6 of `project_gpu_render_plan.md`. Reproduces
 /// `applyLocalAdjustmentSteps` (white balance through Clarity) followed by
-/// `applyGlobalAdjustmentSteps` (Dehaze, Saturation, Vibrance, Vignette) in
-/// the exact same order, each stage delegating to its own phase's module
+/// `applyGlobalAdjustmentSteps` (Dehaze, Saturation, Vibrance, Vignette,
+/// Grain) in the exact same order, each stage delegating to its own phase's
+/// module
 /// (`denoise_gpu.dart`, `sharpen_gpu.dart`, `local_contrast_gpu.dart`,
 /// `dehaze_gpu.dart`) rather than being reimplemented here.
 ///
@@ -309,8 +310,8 @@ Future<ui.Image> _runPostDenoise(
   return _rasterize(shader, width, height);
 }
 
-/// Fused Saturation + Vibrance + Vignette pass — see
-/// `shaders/post_dehaze.frag`'s doc comment for why these three are their
+/// Fused Saturation + Vibrance + Vignette + Grain pass — see
+/// `shaders/post_dehaze.frag`'s doc comment for why these are their
 /// own small post-Dehaze pass rather than folded into
 /// `_runPostDenoise`'s shader.
 Future<ui.Image> _runPostDehaze(
@@ -331,6 +332,24 @@ Future<ui.Image> _runPostDehaze(
   final vignetteStart = (vignette.midpoint / 100.0).clamp(0.0, 1.0);
   final vignetteFeatherWidth = (vignette.feather / 100.0).clamp(0.02, 1.0);
 
+  // Grain — mirrors grain.dart's applyGrain exactly, minus the CPU path's
+  // `* 255.0` (this shader stays in 0..1 space) and any rowOffset/
+  // fullHeight banding math (the GPU path always renders the whole image
+  // in one dispatch, never a band, so fullHeight == height here).
+  final grain = params.grain;
+  final grainAmount = grain.isIdentity
+      ? 0.0
+      : (grain.amount / 100.0) * 0.5 * calGrainStrength;
+  final grainSizePx =
+      calGrainSizePxAt0 +
+      (grain.size / 100.0).clamp(0.0, 1.0) *
+          (calGrainSizePxAt100 - calGrainSizePxAt0);
+  final grainRefScale = math.max(0.1, math.min(width, height) / 1080.0);
+  final grainFrequency =
+      (1.0 / math.max(grainSizePx, 0.1)) / grainRefScale;
+  final grainRoughFrequency = grainFrequency * calGrainRoughCoordScale;
+  final grainRoughness = (grain.roughness / 100.0).clamp(0.0, 1.0);
+
   var i = 0;
   shader.setFloat(i++, width.toDouble());
   shader.setFloat(i++, height.toDouble());
@@ -339,6 +358,10 @@ Future<ui.Image> _runPostDehaze(
   shader.setFloat(i++, vignetteStrength);
   shader.setFloat(i++, vignetteStart);
   shader.setFloat(i++, vignetteFeatherWidth);
+  shader.setFloat(i++, grainAmount);
+  shader.setFloat(i++, grainFrequency);
+  shader.setFloat(i++, grainRoughFrequency);
+  shader.setFloat(i++, grainRoughness);
   shader.setImageSampler(0, source);
 
   return _rasterize(shader, width, height);

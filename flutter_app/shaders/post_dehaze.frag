@@ -1,8 +1,10 @@
 #version 460 core
 #include <flutter/runtime_effect.glsl>
 
-// Fused GPU pass for Saturation + Vibrance + Vignette (in that order,
-// matching RapidRAW's apply_creative_color) — the three stages
+// Fused GPU pass for Saturation + Vibrance + Vignette + Grain (in that
+// order — Saturation/Vibrance/Vignette match RapidRAW's
+// apply_creative_color, and Grain is the last thing render.dart's
+// applyGlobalPointOps adds, after Vignette) — the stages
 // render.dart's applyGlobalAdjustmentSteps runs *after* Dehaze. Kept as
 // their own small pass (rather than folded into point_ops_post_denoise.frag)
 // to preserve render.dart's exact stage order without restructuring it:
@@ -18,6 +20,14 @@ uniform float uSaturationFactor; // 1.0 + params.saturation / 100.0
 uniform float uVignetteStrength; // params.vignette.amount/100 * 0.8
 uniform float uVignetteStart; // clamp(midpoint/100, 0, 1)
 uniform float uVignetteFeatherWidth; // clamp(feather/100, 0.02, 1)
+// Grain — grain.dart's applyGrain. This shader stays in 0..1 space
+// throughout (unlike render.dart's 0..255 buffer), so uGrainAmount omits
+// the CPU side's `* 255.0` — everything else (frequency/roughFrequency/
+// roughness) is identical. 0.0 = off.
+uniform float uGrainAmount;
+uniform float uGrainFrequency;
+uniform float uGrainRoughFrequency;
+uniform float uGrainRoughness;
 uniform sampler2D uSource;
 
 out vec4 fragColor;
@@ -55,6 +65,58 @@ float hueOf(vec3 c) {
   hue *= 60.0;
   if (hue < 0.0) hue += 360.0;
   return hue;
+}
+
+// --- Grain (grain.dart port) ---
+//
+// Unlike the CPU path (see grain.dart's _GradientLattice), this runs the
+// per-pixel hash directly with no precomputed lattice cache: on the GPU
+// every pixel is already an independent parallel invocation, so there's
+// no "same 4 corners re-hashed for every pixel in a lattice cell" cost
+// to amortize the way there was in the CPU's serial per-pixel loop —
+// the lattice cache was a CPU-specific optimization, not something this
+// shader needs.
+
+float grainFract(float x) { return x - floor(x); }
+
+// Port of grain.dart's _hash — note the two equal (x, z) inputs.
+float grainHash(float px, float py) {
+  float x = grainFract(px * 0.1031);
+  float y = grainFract(py * 0.1031);
+  float z = grainFract(px * 0.1031);
+  float d = x * (y + 33.33) + y * (z + 33.33) + z * (x + 33.33);
+  x += d;
+  y += d;
+  z += d;
+  return grainFract((x + y) * z);
+}
+
+// Port of grain.dart's _gradientNoise (quintic-smoothed value noise).
+float grainGradientNoise(float px, float py) {
+  float ix = floor(px);
+  float iy = floor(py);
+  float fx = px - ix;
+  float fy = py - iy;
+  float ux = fx * fx * fx * (fx * (fx * 6.0 - 15.0) + 10.0);
+  float uy = fy * fy * fy * (fy * (fy * 6.0 - 15.0) + 10.0);
+
+  float gx00 = grainHash(ix, iy) * 2.0 - 1.0;
+  float gy00 = grainHash(ix + 11.0, iy + 37.0) * 2.0 - 1.0;
+  float gx10 = grainHash(ix + 1.0, iy) * 2.0 - 1.0;
+  float gy10 = grainHash(ix + 12.0, iy + 37.0) * 2.0 - 1.0;
+  float gx01 = grainHash(ix, iy + 1.0) * 2.0 - 1.0;
+  float gy01 = grainHash(ix + 11.0, iy + 38.0) * 2.0 - 1.0;
+  float gx11 = grainHash(ix + 1.0, iy + 1.0) * 2.0 - 1.0;
+  float gy11 = grainHash(ix + 12.0, iy + 38.0) * 2.0 - 1.0;
+
+  float dot00 = gx00 * fx + gy00 * fy;
+  float dot10 = gx10 * (fx - 1.0) + gy10 * fy;
+  float dot01 = gx01 * fx + gy01 * (fy - 1.0);
+  float dot11 = gx11 * (fx - 1.0) + gy11 * (fy - 1.0);
+
+  float bottom = dot00 + (dot10 - dot00) * ux;
+  float top = dot01 + (dot11 - dot01) * ux;
+  return bottom + (top - bottom) * uy;
 }
 
 void main() {
@@ -116,6 +178,38 @@ void main() {
   float weight = t * t * (3.0 - 2.0 * t);
   float vignetteFactor = 1.0 + uVignetteStrength * weight;
   c *= vignetteFactor;
+
+  // Grain — matches grain.dart's applyGrain: luma-masked so it fades out
+  // of deep shadows and bright highlights, on the gamma-encoded `c`
+  // directly (not linear), same as the CPU path at this point in the
+  // pipeline.
+  if (uGrainAmount != 0.0) {
+    float grainLuma = dot(c, kLumaWeights);
+    if (grainLuma > 0.0) {
+      float grainLumaMask = smoothstep(0.0, 0.15, grainLuma) *
+          (1.0 - smoothstep(0.6, 1.0, grainLuma));
+      if (grainLumaMask > 0.0) {
+        // grain.dart's noise is a hash keyed off the *integer* pixel
+        // coordinate — unlike the smooth vignette gradient above,
+        // FlutterFragCoord()'s +0.5 pixel-center offset matters here: a
+        // hash-based lattice is only continuous *within* a cell, so
+        // leaving the offset in would shift some pixels into the
+        // neighboring (uncorrelated) cell relative to the CPU path.
+        // floor() recovers the same integer coordinate grain.dart uses.
+        vec2 pixelCoord = floor(fragCoord);
+        float noiseBase = grainGradientNoise(
+          pixelCoord.x * uGrainFrequency,
+          pixelCoord.y * uGrainFrequency
+        );
+        float noiseRough = grainGradientNoise(
+          pixelCoord.x * uGrainRoughFrequency + 5.2,
+          pixelCoord.y * uGrainRoughFrequency + 1.3
+        );
+        float noiseVal = noiseBase + (noiseRough - noiseBase) * uGrainRoughness;
+        c += vec3(noiseVal * uGrainAmount * grainLumaMask);
+      }
+    }
+  }
 
   fragColor = vec4(c, 1.0);
 }
