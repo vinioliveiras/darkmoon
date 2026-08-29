@@ -672,21 +672,37 @@ void _applyRapidHighlights(Float32List img, int pixelCount, double highlights) {
   // Loop-invariant for the positive branch.
   final gainPos = math.pow(2.0, amount * calHighlightsStrength).toDouble();
   final expNeg = 1.0 - amount * calHighlightsStrength;
+
+  // `multiplier` below is a pure function of `luma` alone once `amount`
+  // (this call's `highlights` value) is fixed — every other term is a
+  // per-render constant. Bake luma -> multiplier into a 512-entry LUT once
+  // instead of paying a tanh() + pow() per pixel; the exact math still
+  // runs, just 513 times instead of once per pixel.
+  const lutSize = 512;
+  final lut = Float32List(lutSize + 1);
+  for (var i = 0; i <= lutSize; i++) {
+    final luma = i / lutSize;
+    final maskInput = _tanh(luma * 1.5);
+    final t = ((maskInput - 0.55) / (0.95 - 0.55)).clamp(0.0, 1.0);
+    final mask = t * t * (3.0 - 2.0 * t);
+    final newLuma = amount < 0
+        ? math.pow(luma, expNeg).toDouble()
+        : luma * gainPos;
+    final ratio = newLuma / math.max(luma, 0.0001);
+    lut[i] = 1.0 + (ratio - 1.0) * mask;
+  }
+
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
     final r = srgbToLinear(img[i] / 255.0);
     final g = srgbToLinear(img[i + 1] / 255.0);
     final b = srgbToLinear(img[i + 2] / 255.0);
-    final luma = _linearLuminance(r, g, b);
-    final maskInput = _tanh(luma * 1.5);
-    final t = ((maskInput - 0.55) / (0.95 - 0.55)).clamp(0.0, 1.0);
-    final mask = t * t * (3.0 - 2.0 * t);
-    if (mask == 0) continue;
-    final newLuma = amount < 0
-        ? math.pow(luma, expNeg).toDouble()
-        : luma * gainPos;
-    final ratio = newLuma / math.max(luma, 0.0001);
-    final multiplier = 1.0 + (ratio - 1.0) * mask;
+    final luma = _linearLuminance(r, g, b).clamp(0.0, 1.0);
+    final f = luma * lutSize;
+    final lo = f.floor();
+    final multiplier = lo >= lutSize
+        ? lut[lutSize]
+        : lut[lo] + (lut[lo + 1] - lut[lo]) * (f - lo);
     img[i] = linearToSrgb(r * multiplier) * 255.0;
     img[i + 1] = linearToSrgb(g * multiplier) * 255.0;
     img[i + 2] = linearToSrgb(b * multiplier) * 255.0;
