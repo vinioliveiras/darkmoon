@@ -4717,22 +4717,74 @@ class _ImageArea extends StatelessWidget {
       // Both sides share the same viewController, so Ctrl+scroll/pan stays
       // in sync between them instead of only working in the single-image
       // view.
-      return Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      return Stack(
+        fit: StackFit.expand,
         children: [
-          // Falls back to the edited image until the neutral render finishes.
-          Expanded(
-            child: _zoomableLabeledImage(
-              l10n.beforeLabel,
-              neutralPreview ?? bytes,
-            ),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Falls back to the edited image until the neutral render
+              // finishes.
+              Expanded(
+                child: _zoomableLabeledImage(
+                  l10n.beforeLabel,
+                  neutralPreview ?? bytes,
+                ),
+              ),
+              Container(width: 1, color: DarkmoonColors.divider),
+              Expanded(child: _zoomableLabeledImage(l10n.afterLabel, bytes)),
+            ],
           ),
-          Container(width: 1, color: DarkmoonColors.divider),
-          Expanded(child: _zoomableLabeledImage(l10n.afterLabel, bytes)),
+          _titleOverlay(),
         ],
       );
     }
-    return _zoomableImage(bytes);
+    return Stack(
+      fit: StackFit.expand,
+      children: [_zoomableImage(bytes), _titleOverlay()],
+    );
+  }
+
+  /// The photo's filename (minus extension) and its format badge, floating
+  /// in the breathing room [_verticalBreathingRoom] leaves above the fitted
+  /// image — so it's always readable regardless of zoom/pan, at Fit or not.
+  Widget _titleOverlay() {
+    final file = selected;
+    if (file == null) {
+      return const SizedBox.shrink();
+    }
+    return Positioned(
+      top: 14,
+      left: 0,
+      right: 0,
+      child: IgnorePointer(
+        child: Center(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+            decoration: BoxDecoration(
+              color: Colors.black.withValues(alpha: 0.55),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 320),
+                  child: Text(
+                    p.basenameWithoutExtension(file.path),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontSize: 12),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                _FileTypeBadge(label: file.typeLabel, isRaw: file.isRaw),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _zoomableImage(Uint8List bytes) {
@@ -6200,6 +6252,14 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                     ),
                     HistogramView(histogram: histogram),
                     PhotoMetadataView(metadata: widget.metadata),
+                    const Padding(
+                      padding: EdgeInsets.only(top: 12),
+                      child: Divider(
+                        color: DarkmoonColors.divider,
+                        height: 1,
+                        thickness: 1,
+                      ),
+                    ),
                   ],
                 ),
               ),

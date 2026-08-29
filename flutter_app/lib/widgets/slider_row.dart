@@ -185,7 +185,7 @@ class _SliderRowState extends State<SliderRow> {
     }
   }
 
-  void _onDoubleTap() {
+  void _resetToDefault() {
     final reset = widget.defaultValue;
     if (reset == null) {
       return;
@@ -202,7 +202,37 @@ class _SliderRowState extends State<SliderRow> {
   /// side; approximate that so the ends still reach min/max.
   static const _trackInset = 12.0;
 
+  /// Double-click-to-reset is detected by hand (two [_onTrackTap] calls
+  /// close in time and position) instead of `GestureDetector.onDoubleTap`:
+  /// having a double-tap recognizer on the same detector as `onTapUp`
+  /// makes Flutter hold every *single* tap's resolution back by
+  /// `kDoubleTapTimeout` (~300ms) to see whether a second tap follows,
+  /// which — stacked on top of the render debounce — read as "clicking
+  /// the track doesn't update the preview" (it did, just ~300ms late,
+  /// vs. dragging's instant per-frame feedback). Tracking it ourselves
+  /// keeps a plain click-to-jump instant.
+  static const _doubleTapTimeout = Duration(milliseconds: 300);
+  static const _doubleTapSlopPx = 40.0;
+  DateTime? _lastTapTime;
+  double? _lastTapX;
+
   void _onTrackTap(double localX, double boxWidth) {
+    final now = DateTime.now();
+    final isDoubleTap = widget.defaultValue != null &&
+        _lastTapTime != null &&
+        now.difference(_lastTapTime!) < _doubleTapTimeout &&
+        _lastTapX != null &&
+        (localX - _lastTapX!).abs() < _doubleTapSlopPx;
+    // A third tap right after a recognized double-tap starts a fresh pair
+    // instead of chaining into another reset.
+    _lastTapTime = isDoubleTap ? null : now;
+    _lastTapX = isDoubleTap ? null : localX;
+
+    if (isDoubleTap) {
+      _resetToDefault();
+      return;
+    }
+
     final usable = boxWidth - 2 * _trackInset;
     if (usable <= 0) {
       return;
@@ -248,12 +278,12 @@ class _SliderRowState extends State<SliderRow> {
         ),
         LayoutBuilder(
           builder: (context, constraints) => GestureDetector(
+            key: const Key('sliderRowTrack'),
             behavior: HitTestBehavior.opaque,
             onHorizontalDragUpdate: (details) =>
                 _onDragUpdate(details.delta.dx),
             onHorizontalDragEnd: (_) => _onDragEnd(),
             onHorizontalDragCancel: _onDragEnd,
-            onDoubleTap: _onDoubleTap,
             onTapUp: (details) =>
                 _onTrackTap(details.localPosition.dx, constraints.maxWidth),
             child: IgnorePointer(
