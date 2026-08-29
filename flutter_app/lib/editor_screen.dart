@@ -5072,6 +5072,15 @@ class _HiddenLoadingIndicator extends StatelessWidget {
                     minWidth: 24,
                     minHeight: 20,
                   ),
+                  // Override the app-wide IconButtonTheme's filled
+                  // rounded-square + border — this bar is meant to read as
+                  // bare chrome (see this class's doc comment), not another
+                  // boxed toolbar button.
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.transparent,
+                    side: BorderSide.none,
+                    shape: const CircleBorder(),
+                  ),
                   iconSize: 15,
                   color: Colors.white,
                   icon: const Icon(CupertinoIcons.xmark),
