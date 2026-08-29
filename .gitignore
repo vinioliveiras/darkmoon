@@ -9,3 +9,8 @@ PENDING.md
 # wb_dump/wb_scan copy these here at runtime from windows/native/
 flutter_app/raw_r.dll
 flutter_app/vcomp140.dll
+
+# color-profile fit eyeball images (tool output, not bundled)
+flutter_app/assets/color_profiles/*_before.jpg
+flutter_app/assets/color_profiles/*_after.jpg
+flutter_app/assets/color_profiles/*_reference.jpg
