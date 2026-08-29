@@ -319,6 +319,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsDialogTitle => 'Configurações';
 
   @override
+  String get settingsSectionGeneral => 'GERAL';
+
+  @override
+  String get settingsSectionLibrary => 'BIBLIOTECA';
+
+  @override
+  String get settingsSectionPreview => 'PRÉ-VISUALIZAÇÃO E PERFORMANCE';
+
+  @override
+  String get settingsSectionColor => 'COR';
+
+  @override
   String get settingsLanguageLabel => 'Idioma';
 
   @override

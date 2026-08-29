@@ -137,6 +137,10 @@
   "resetTooltip": "Reset",
 
   "settingsDialogTitle": "Settings",
+  "settingsSectionGeneral": "GENERAL",
+  "settingsSectionLibrary": "LIBRARY",
+  "settingsSectionPreview": "PREVIEW & PERFORMANCE",
+  "settingsSectionColor": "COLOR",
   "settingsLanguageLabel": "Language",
   "settingsLanguageAuto": "Automatic (system)",
   "settingsLanguageEnglish": "English",

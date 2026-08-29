@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../theme.dart';
+import 'dialog_chrome.dart';
 
 /// Displayed app version — bump this alongside pubspec.yaml's `version:`
 /// and the git tag on each release.
@@ -18,71 +19,76 @@ class DarkmoonAboutDialog extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
       backgroundColor: DarkmoonColors.surfaceRaised,
-      title: Text(l10n.aboutDialogTitle),
-      content: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.asset(
-                    'assets/splash/app_icon.png',
-                    width: 40,
-                    height: 40,
+      title: DialogTitleRow(
+        title: l10n.aboutDialogTitle,
+        closeTooltip: l10n.closeButton,
+      ),
+      content: SizedBox(
+        width: 340,
+        child: SingleChildScrollView(
+          child: SettingsGroup(
+            children: [
+              Row(
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.asset(
+                      'assets/splash/app_icon.png',
+                      width: 40,
+                      height: 40,
+                    ),
                   ),
-                ),
-                const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      'darkmoon',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        color: DarkmoonColors.textPrimary,
-                        fontWeight: FontWeight.w600,
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'darkmoon',
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              color: DarkmoonColors.textPrimary,
+                              fontWeight: FontWeight.w600,
+                            ),
                       ),
-                    ),
-                    Text(
-                      darkmoonAppVersion,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: DarkmoonColors.textMuted,
+                      Text(
+                        darkmoonAppVersion,
+                        style: Theme.of(
+                          context,
+                        ).textTheme.bodySmall?.copyWith(
+                          color: DarkmoonColors.textMuted,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ],
+              ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l10n.aboutCredits),
+                  const SizedBox(height: 4),
+                  // Selectable, not a launchable link: the app has no
+                  // url_launcher dependency anywhere else, and adding one
+                  // for this single label isn't worth the new
+                  // native-plugin surface — select-and-copy already gets
+                  // the user to the repo.
+                  const SelectableText(
+                    'github.com/vinioliveiras/darkmoon',
+                    style: TextStyle(color: DarkmoonColors.textSecondary),
+                  ),
+                ],
+              ),
+              Text(
+                l10n.splashLicense,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: DarkmoonColors.textMuted,
                 ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Text(l10n.aboutCredits),
-            const SizedBox(height: 4),
-            // Selectable, not a launchable link: the app has no
-            // url_launcher dependency anywhere else, and adding one for
-            // this single label isn't worth the new native-plugin surface
-            // — select-and-copy already gets the user to the repo.
-            const SelectableText(
-              'github.com/vinioliveiras/darkmoon',
-              style: TextStyle(color: DarkmoonColors.textSecondary),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              l10n.splashLicense,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: DarkmoonColors.textMuted),
-            ),
-          ],
+              ),
+            ],
+          ),
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.closeButton),
-        ),
-      ],
     );
   }
 }

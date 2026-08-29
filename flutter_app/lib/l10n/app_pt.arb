@@ -104,6 +104,10 @@
   "resetTooltip": "Redefinir ajustes",
 
   "settingsDialogTitle": "Configurações",
+  "settingsSectionGeneral": "GERAL",
+  "settingsSectionLibrary": "BIBLIOTECA",
+  "settingsSectionPreview": "PRÉ-VISUALIZAÇÃO E PERFORMANCE",
+  "settingsSectionColor": "COR",
   "settingsLanguageLabel": "Idioma",
   "settingsLanguageAuto": "Automático (sistema)",
   "settingsLanguageEnglish": "English",

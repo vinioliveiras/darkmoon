@@ -668,6 +668,30 @@ abstract class AppLocalizations {
   /// **'Settings'**
   String get settingsDialogTitle;
 
+  /// No description provided for @settingsSectionGeneral.
+  ///
+  /// In en, this message translates to:
+  /// **'GENERAL'**
+  String get settingsSectionGeneral;
+
+  /// No description provided for @settingsSectionLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'LIBRARY'**
+  String get settingsSectionLibrary;
+
+  /// No description provided for @settingsSectionPreview.
+  ///
+  /// In en, this message translates to:
+  /// **'PREVIEW & PERFORMANCE'**
+  String get settingsSectionPreview;
+
+  /// No description provided for @settingsSectionColor.
+  ///
+  /// In en, this message translates to:
+  /// **'COLOR'**
+  String get settingsSectionColor;
+
   /// No description provided for @settingsLanguageLabel.
   ///
   /// In en, this message translates to:

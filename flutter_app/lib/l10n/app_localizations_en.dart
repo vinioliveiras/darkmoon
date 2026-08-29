@@ -319,6 +319,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsDialogTitle => 'Settings';
 
   @override
+  String get settingsSectionGeneral => 'GENERAL';
+
+  @override
+  String get settingsSectionLibrary => 'LIBRARY';
+
+  @override
+  String get settingsSectionPreview => 'PREVIEW & PERFORMANCE';
+
+  @override
+  String get settingsSectionColor => 'COLOR';
+
+  @override
   String get settingsLanguageLabel => 'Language';
 
   @override
