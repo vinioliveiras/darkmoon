@@ -285,6 +285,10 @@ void applyPostDenoisePointOps(
           height,
           3.5,
         );
+  // The "profile" contrast the Adobe Color base curve gives Lightroom for
+  // free — applied first, so every tone slider and curve below works on
+  // top of it, matching Lightroom's order (profile curve -> Basic panel).
+  _applyBaseContrast(buffer);
   _applyRapidBrightness(buffer, params.brightness);
   _applyRapidWhites(buffer, pixelCount, params.whites);
   _applyRapidHighlights(buffer, pixelCount, params.highlights);
@@ -499,11 +503,30 @@ void _applyRapidContrast(Float32List img, double contrast) {
   if (contrast == 0) {
     return;
   }
-  // Contrast is a pure byte-in -> byte-out S-curve with a per-render gamma,
-  // so bake it into a 257-entry LUT once and interpolate — the pixel loop
-  // then costs a lookup instead of ~4 pow() per channel.
   final gamma =
       math.pow(2.0, contrast / 100.0 * calContrastStrength).toDouble();
+  _applyContrastGamma(img, gamma);
+}
+
+/// The fixed "profile" S-curve every photo gets before the tone sliders —
+/// approximates the contrast the Adobe Color profile bakes in, which
+/// darkmoon's straight-sRGB decode otherwise lacks (see [calBaseContrast]).
+/// Uses the exact same S as the Contrast slider, so [calBaseContrast] reads
+/// on the same scale ("20" ≈ a baked-in Contrast +20).
+void _applyBaseContrast(Float32List img) {
+  if (calBaseContrast == 0) {
+    return;
+  }
+  final gamma =
+      math.pow(2.0, calBaseContrast / 100.0 * calContrastStrength).toDouble();
+  _applyContrastGamma(img, gamma);
+}
+
+/// A pure byte-in -> byte-out contrast S-curve at [gamma] (>1 = more
+/// contrast, pivoting on perceptual mid-grey), baked into a 257-entry LUT
+/// once and interpolated — the pixel loop then costs a lookup instead of
+/// ~4 pow() per channel.
+void _applyContrastGamma(Float32List img, double gamma) {
   final lut = Float32List(257);
   for (var v = 0; v <= 256; v++) {
     final perceptual = perceptualEncode(srgbToLinear(v / 256.0));

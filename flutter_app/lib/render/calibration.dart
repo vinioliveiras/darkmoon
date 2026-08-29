@@ -89,6 +89,39 @@ const double calWbAsShotCctMiredBias = 3.0;
 const double calWbAsShotTintScaleFallback = 200.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  LOOK BASE — a "curva de perfil" (aproxima o "Adobe Color" do Lightroom)  ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+//
+// O Lightroom, com 0 de edição, JÁ aplica a curva de tom do perfil "Adobe
+// Color" (um S-curve suave embutido no perfil). O darkmoon decodifica o RAW
+// com gama sRGB reta e mais nada, então o ponto de partida dele é bem mais
+// PLANO. Resultado prático: presets feitos no Lightroom ficam sem contraste
+// aqui, e você acaba compensando no Preto/Branco de cada preset.
+//
+// Este número aplica um S-curve fixo em TODA foto, logo no começo dos ajustes
+// de tom (depois de Exposição/WB, antes de Realces/Sombras/Pretos/Brancos e
+// das curvas) — a mesma posição da curva de perfil no Lightroom. A matemática
+// é idêntica à do slider Contraste, então "20" aqui = mais ou menos um
+// Contraste +20 embutido.
+//
+//   ↑ maior  = ponto de partida mais contrastado (mais perto do Lightroom)
+//   ↓ menor  = mais plano
+//
+// COMO TESTAR: mude para 20.0, rode a build, abra a DSF1309, importe o
+// "Filmatic Fuji 2 Lightroom.xmp" SEM alterar e compare com o JPEG do
+// Lightroom. Ajuste entre ~12 e ~28 até o contraste geral bater. Depois é
+// que se reavalia Whites/Blacks dos presets.
+//
+// ⚠️ Sai de fábrica em 0.0 (desligado) porque mexer aqui muda o visual de
+//    toda foto e todo preset — inclusive os que você já ajustou no darkmoon
+//    (vão ficar mais contrastados). Ligue, calibre, e só então reajuste os
+//    presets antigos.
+//
+// Só CPU (o render GPU opcional não aplica esta curva).
+/// padrão: 0.0   (desligado; 20.0 é um bom ponto de partida pra testar)
+const double calBaseContrast = 0.0;
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  BÁSICO — Exposição / Brilho / Contraste                                  ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
