@@ -166,15 +166,18 @@ String _sectionLabel(AppLocalizations l10n, String key) {
 /// `timings` plumbing) once export is settled. See PENDING "Débitos".
 const bool _showExportTimings = false;
 
-/// Re-enabled 2026-08-29 after redoing the fit: weighted isotonic
-/// regression (not a naive floor-clamp) for the tone curve plus a hard
-/// lift/drop ceiling on both the tone curve and the per-hue luminance
-/// table — see tool/build_color_profile.dart. Validated against every one
-/// of the 15 calibration pairs (all improved, ~0 newly-clipped pixels),
-/// including a bright outdoor scene (sky, direct sun) — the exact category
-/// that blew out under the first attempt. See
-/// project_darkmoon_color_profile.md for the full story.
-const bool _colorProfileEnabled = true;
+/// Off again 2026-08-29: even after the isotonic-regression re-fit + the
+/// stale-cache fix, real-photo testing still came back overexposed on the
+/// backlit/hazy test photo — with a preset applied, which should have
+/// pulled it back down. Three rounds of "fixed it" that weren't, once
+/// tested live, is a sign the validation loop (my own eyeballing of a
+/// couple of pairs) isn't catching what real use does. Paused rather than
+/// spending a fourth round guessing — see
+/// project_darkmoon_color_profile.md for what's been tried and why each
+/// attempt fell short. The loader, RenderParams plumbing, GPU guard and
+/// _effectiveBaseContrast fallback all stay in place for whenever this
+/// gets picked back up with a better way to validate before shipping.
+const bool _colorProfileEnabled = false;
 
 /// Zoom bounds and step, matching the Python app's MIN_ZOOM/MAX_ZOOM/ZOOM_STEP.
 const double _minZoom = 0.1;
