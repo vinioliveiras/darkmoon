@@ -751,6 +751,18 @@ class _EditorScreenState extends State<EditorScreen> {
   /// the preview samples a neutral and sets Temperature/Tint. Session-only.
   bool _wbEyedropperActive = false;
 
+  /// True while the Straighten slider is actively being dragged (item 28)
+  /// — lets [CropOverlay] show a denser guide grid only during that
+  /// interaction, matching Lightroom. Session-only.
+  bool _straighteningActive = false;
+
+  void _setStraighteningActive(bool value) {
+    if (_straighteningActive == value) {
+      return;
+    }
+    setState(() => _straighteningActive = value);
+  }
+
   /// True for the duration of a slider drag on one of the active mask's
   /// own values (Tone/Presence/etc., opacity, Color Range tolerance/
   /// feather) — while true, the mask overlay is hidden regardless of
@@ -4296,6 +4308,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                       _onCropTransformChanged,
                                   onCropTransformChangeEnd:
                                       _onCropTransformChangeEnd,
+                                  straighteningActive: _straighteningActive,
                                   onSecondaryTapUp: _showImageContextMenu,
                                 ),
                                 // Opening a photo (RAW decode, or a
@@ -4409,6 +4422,7 @@ class _EditorScreenState extends State<EditorScreen> {
                             onCropAspectRatioChanged: _setCropAspectRatio,
                             onToggleCropOverlay: _toggleCropOverlay,
                             onResetCropTransform: _resetCropTransform,
+                            onStraighteningChanged: _setStraighteningActive,
                             lensCorrection: _lensCorrection,
                             onLensCorrectionChanged: _onLensCorrectionChanged,
                             onLensCorrectionChangeEnd:
@@ -4614,6 +4628,7 @@ class _ImageArea extends StatelessWidget {
     required this.cropAspectRatio,
     required this.onCropTransformChanged,
     required this.onCropTransformChangeEnd,
+    required this.straighteningActive,
     required this.onSecondaryTapUp,
   });
 
@@ -4690,6 +4705,10 @@ class _ImageArea extends StatelessWidget {
   final double? cropAspectRatio;
   final ValueChanged<CropTransformParams> onCropTransformChanged;
   final ValueChanged<CropTransformParams> onCropTransformChangeEnd;
+
+  /// True while the Straighten slider is being dragged — [CropOverlay]
+  /// shows a denser guide grid while this is set (item 28).
+  final bool straighteningActive;
 
   /// Right-click on the image — opens the copy/paste-edits context menu.
   final void Function(Offset globalPosition) onSecondaryTapUp;
@@ -4947,6 +4966,7 @@ class _ImageArea extends StatelessWidget {
                   lockedAspectRatio: cropAspectRatio,
                   onChanged: onCropTransformChanged,
                   onChangeEnd: onCropTransformChangeEnd,
+                  straighteningActive: straighteningActive,
                 ),
               ],
             );
@@ -5639,6 +5659,7 @@ class _CropTransformPanel extends StatelessWidget {
     required this.onAspectRatioChanged,
     required this.onDone,
     required this.onReset,
+    required this.onStraighteningChanged,
   });
 
   final CropTransformParams params;
@@ -5653,6 +5674,9 @@ class _CropTransformPanel extends StatelessWidget {
   /// Resets crop/rotate/keystone back to identity, without closing the
   /// overlay — matches Lightroom's own Crop panel "Reset" behavior.
   final VoidCallback onReset;
+
+  /// See [_ControlsPanel.onStraighteningChanged].
+  final ValueChanged<bool> onStraighteningChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -5717,9 +5741,14 @@ class _CropTransformPanel extends StatelessWidget {
             value: params.straightenAngle,
             decimals: 1,
             defaultValue: 0,
-            onChanged: (v) => onChanged(params.copyWith(straightenAngle: v)),
-            onChangeEnd: (v) =>
-                onChangeEnd(params.copyWith(straightenAngle: v)),
+            onChanged: (v) {
+              onStraighteningChanged(true);
+              onChanged(params.copyWith(straightenAngle: v));
+            },
+            onChangeEnd: (v) {
+              onStraighteningChanged(false);
+              onChangeEnd(params.copyWith(straightenAngle: v));
+            },
           ),
           const SizedBox(height: 10),
           SliderRow(
@@ -6038,6 +6067,7 @@ class _ControlsPanel extends StatefulWidget {
     required this.onCropAspectRatioChanged,
     required this.onToggleCropOverlay,
     required this.onResetCropTransform,
+    required this.onStraighteningChanged,
     required this.lensCorrection,
     required this.onLensCorrectionChanged,
     required this.onLensCorrectionChangeEnd,
@@ -6108,6 +6138,11 @@ class _ControlsPanel extends StatefulWidget {
   final ValueChanged<double?> onCropAspectRatioChanged;
   final VoidCallback onToggleCropOverlay;
   final VoidCallback onResetCropTransform;
+
+  /// Fires as the Straighten slider is dragged (true) and once it's
+  /// released (false) — lets the crop overlay show a denser guide grid
+  /// only while the user's actively trying to level a horizon (item 28).
+  final ValueChanged<bool> onStraighteningChanged;
 
   final LensCorrectionParams lensCorrection;
   final ValueChanged<LensCorrectionParams> onLensCorrectionChanged;
@@ -6332,6 +6367,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                           onAspectRatioChanged: widget.onCropAspectRatioChanged,
                           onDone: widget.onToggleCropOverlay,
                           onReset: widget.onResetCropTransform,
+                          onStraighteningChanged: widget.onStraighteningChanged,
                         ),
                         const SizedBox(height: 12),
                       ],

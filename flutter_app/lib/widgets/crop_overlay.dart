@@ -42,6 +42,7 @@ class CropOverlay extends StatefulWidget {
     required this.params,
     required this.onChanged,
     required this.onChangeEnd,
+    required this.straighteningActive,
     this.lockedAspectRatio,
   });
 
@@ -52,6 +53,11 @@ class CropOverlay extends StatefulWidget {
   final ValueChanged<CropTransformParams> onChanged;
   final ValueChanged<CropTransformParams> onChangeEnd;
   final double? lockedAspectRatio;
+
+  /// True while the Straighten slider is being actively dragged — shows a
+  /// denser guide grid (instead of the default rule-of-thirds) so it's
+  /// easier to see whether a horizon/vertical has been leveled.
+  final bool straighteningActive;
 
   @override
   State<CropOverlay> createState() => _CropOverlayState();
@@ -258,6 +264,7 @@ class _CropOverlayState extends State<CropOverlay> {
         painter: _CropPainter(
           imageRect: imageRect,
           cropRect: _cropRectLocal(imageRect),
+          denseGrid: widget.straighteningActive,
         ),
       ),
     );
@@ -265,10 +272,20 @@ class _CropOverlayState extends State<CropOverlay> {
 }
 
 class _CropPainter extends CustomPainter {
-  const _CropPainter({required this.imageRect, required this.cropRect});
+  const _CropPainter({
+    required this.imageRect,
+    required this.cropRect,
+    required this.denseGrid,
+  });
 
   final Rect imageRect;
   final Rect cropRect;
+
+  /// True while Straighten is being dragged — swaps the default 3x3
+  /// rule-of-thirds grid for a denser one (easier to spot a tilted
+  /// horizon/vertical against), at higher opacity so it reads clearly
+  /// over the image during that specific interaction.
+  final bool denseGrid;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -287,18 +304,21 @@ class _CropPainter extends CustomPainter {
       scrimPaint,
     );
 
-    // Rule-of-thirds guide lines inside the crop rect.
+    // Rule-of-thirds guide lines inside the crop rect — a denser grid
+    // (item 28) while Straighten is actively being dragged, so a tilted
+    // horizon/vertical is easier to line up against.
+    final divisions = denseGrid ? 8 : 3;
     final gridPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.5)
+      ..color = Colors.white.withValues(alpha: denseGrid ? 0.7 : 0.5)
       ..strokeWidth = 1;
-    for (var i = 1; i < 3; i++) {
-      final x = cropRect.left + cropRect.width * i / 3;
+    for (var i = 1; i < divisions; i++) {
+      final x = cropRect.left + cropRect.width * i / divisions;
       canvas.drawLine(
         Offset(x, cropRect.top),
         Offset(x, cropRect.bottom),
         gridPaint,
       );
-      final y = cropRect.top + cropRect.height * i / 3;
+      final y = cropRect.top + cropRect.height * i / divisions;
       canvas.drawLine(
         Offset(cropRect.left, y),
         Offset(cropRect.right, y),
@@ -334,5 +354,7 @@ class _CropPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CropPainter oldDelegate) =>
-      oldDelegate.imageRect != imageRect || oldDelegate.cropRect != cropRect;
+      oldDelegate.imageRect != imageRect ||
+      oldDelegate.cropRect != cropRect ||
+      oldDelegate.denseGrid != denseGrid;
 }
