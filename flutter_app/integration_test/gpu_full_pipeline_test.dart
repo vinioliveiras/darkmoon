@@ -171,7 +171,7 @@ void main() {
       );
     });
 
-    // Grain (item: "grão no GPU") — the shader ports grain.dart's
+    // Grain (the "grain on GPU" PENDING item) — the shader ports grain.dart's
     // gradient_noise directly per-pixel rather than the CPU path's
     // lattice-cache optimization (see grain.dart's _GradientLattice doc
     // comment): a GPU invocation is already one independent thread per

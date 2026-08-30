@@ -1,406 +1,409 @@
 /// ============================================================================
-///  ARQUIVO DE CALIBRAÇÃO — o "quanto" de cada slider
+///  CALIBRATION FILE — the "how much" behind every slider
 /// ============================================================================
 ///
-/// Aqui ficam, num lugar só, os números que controlam **a força e o formato**
-/// de cada ajuste da aplicação. A escala que você vê na tela (ex.: Exposure
-/// -5..+5, Contrast -100..+100) NÃO muda — o que muda é o quanto aquele valor
-/// realmente empurra a imagem.
+/// This is the one place that holds the numbers controlling **the strength
+/// and shape** of every adjustment in the app. The scale you see on screen
+/// (e.g. Exposure -5..+5, Contrast -100..+100) does NOT change — what changes
+/// is how hard that value actually pushes the image.
 ///
-/// COMO USAR
-///   1. Edite um número abaixo.
-///   2. Rode a build:  flutter run -d windows     (ou build windows --release)
-///   3. Abra uma foto, mexa no slider correspondente e compare (ex.: com o
-///      Lightroom no mesmo valor).
-///   4. Não gostou? Volte pro valor "padrão:" anotado no comentário.
+/// HOW TO USE THIS
+///   1. Edit a number below.
+///   2. Run the build:  flutter run -d windows     (or build windows --release)
+///   3. Open a photo, move the matching slider, and compare (e.g. against
+///      Lightroom at the same value).
+///   4. Don't like it? Go back to the "default:" noted in the comment.
 ///
-/// REGRA GERAL
-///   • Cada comentário diz pra que lado mexer ("↑ maior = mais forte" etc.).
-///   • Comece com passos pequenos (ex.: 0.42 → 0.50, não 0.42 → 2.0).
-///   • Mudar aqui afeta TODAS as fotos e TODOS os presets.
+/// GENERAL RULE
+///   • Every comment says which way to move it ("↑ higher = stronger" etc.).
+///   • Start with small steps (e.g. 0.42 → 0.50, not 0.42 → 2.0).
+///   • Changing a value here affects EVERY photo and EVERY preset.
 ///
-/// CPU x GPU
-///   Estes valores valem para o render em CPU (o padrão da aplicação e o que
-///   você testa). O render em GPU (Configurações → opção avançada, desligado
-///   por padrão) ainda usa os números fixos dentro dos shaders `.frag`; quando
-///   um valor também existe no shader, o comentário marca com  [também no GPU:
-///   arquivo.frag]  pra você casar os dois na mão se usar GPU.
+/// CPU vs GPU
+///   These values apply to the CPU render (the app's default, and what you
+///   test against). The GPU render (Settings → advanced option, off by
+///   default) still uses fixed numbers baked into the `.frag` shaders; when a
+///   value also exists in a shader, the comment marks it with  [also on GPU:
+///   file.frag]  so you can match the two by hand if you use GPU.
 ///
-/// Sem imports de Flutter de propósito: as funções de render rodam em isolates
-/// e leem estas constantes direto, sem precisar passar nada.
+/// Deliberately no Flutter imports: the render functions run in isolates and
+/// read these constants directly, without needing anything passed in.
 library;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  WHITE BALANCE (Temperatura / Tonalidade)                                 ║
+// ║  WHITE BALANCE (Temperature / Tint)                                       ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-/// Força do slider **Tonalidade (Tint)** — o quanto um Tint de ±100 empurra
-/// verde contra magenta.
-///   ↑ maior  = Tint mais agressivo (verde/magenta aparece mais rápido)
-///   ↓ menor  = Tint mais suave
-/// padrão: 0.35   (o modelo antigo usava 0.25; subimos rumo ao Lightroom)
+/// Strength of the **Tint** slider — how hard a Tint of ±100 pushes toward
+/// green vs. magenta.
+///   ↑ higher = more aggressive Tint (green/magenta shows up faster)
+///   ↓ lower  = gentler Tint
+/// default: 0.35   (the old model used 0.25; raised toward Lightroom)
 const double calWbTintStrength = 0.35;
 
-/// Gama do espaço de trabalho em que os ganhos de WB são aplicados.
-/// Isto é técnico — só mexa se souber o motivo. Mudar desalinha a Temperatura
-/// do "As Shot" (o ponto neutro por foto).
-/// padrão: 2.2
+/// Working-space gamma the WB gains are applied in.
+/// This is technical — only change it if you know why. Changing it throws
+/// off Temperature relative to "As Shot" (the per-photo neutral point).
+/// default: 2.2
 const double calWbWorkingGamma = 2.2;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  WHITE BALANCE — estimador do "As Shot" (colorimetria)                    ║
+// ║  WHITE BALANCE — "As Shot" estimator (colorimetry)                        ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 //
-// NÃO temos o perfil de câmera do Adobe ("Adobe Color" = ForwardMatrix +
-// HueSatMap + tone curve — dados fechados). O que temos é: o decode usa a
-// matriz de cor embutida na própria câmera (`use_camera_matrix`), e o "As
-// Shot" (Kelvin/Tint que aparece com 0 de edição) é ESTIMADO por
-// colorimetria (adaptação de Bradford + projeção de Ohno na locus).
+// We don't have Adobe's camera profile ("Adobe Color" = ForwardMatrix +
+// HueSatMap + tone curve — closed data). What we do have: the decode uses
+// the color matrix embedded in the camera itself (`use_camera_matrix`), and
+// "As Shot" (the Kelvin/Tint shown at 0 edits) is ESTIMATED via colorimetry
+// (Bradford adaptation + Ohno projection onto the locus).
 //
-// Estes 3 valores foram ajustados por mínimos quadrados contra o Lightroom
-// em 4 arquivos reais de X100VI (batem ~2% Kelvin / ~3.5 tint). Se você
-// usa outra câmera e o "As Shot" está puxando verde/magenta ou frio/quente
-// vs o Lightroom, re-ajuste aqui (anote fotos de referência).
+// These 3 values were fit by least squares against Lightroom on 4 real
+// X100VI files (matches within ~2% Kelvin / ~3.5 tint). If you use a
+// different camera and "As Shot" is skewing green/magenta or cool/warm vs.
+// Lightroom, re-tune here (note the reference photos you used).
 
-/// Δuv (verde/magenta) fixo somado antes de virar Tint — a nossa locus de
-/// branco de referência fica ~0.0065 uv verde demais vs a do Lightroom.
-///   ↑ maior  = "As Shot" puxa mais pro magenta (Tint mais positivo)
-///   ↓ menor  = puxa mais pro verde
-/// padrão: 0.00655
+/// Fixed Δuv (green/magenta) added before converting to Tint — our reference
+/// white locus sits ~0.0065 uv too green compared to Lightroom's.
+///   ↑ higher = "As Shot" skews more toward magenta (more positive Tint)
+///   ↓ lower  = skews more toward green
+/// default: 0.00655
 const double calWbAsShotDuvBias = 0.00655;
 
-/// Escala de Δuv → unidades de Tint (-150..150).
-///   ↑ maior  = mesma cor da câmera vira um Tint maior no "As Shot"
-///   ↓ menor  = Tint estimado menor
-/// padrão: 3220.0
+/// Δuv → Tint units (-150..150) scale factor.
+///   ↑ higher = the same camera color yields a bigger estimated "As Shot" Tint
+///   ↓ lower  = smaller estimated Tint
+/// default: 3220.0
 const double calWbAsShotTintPerDuv = 3220.0;
 
-/// Mireds subtraídos da temperatura estimada (a nossa CCT lê alguns mired
-/// mais fria que o Lightroom no X100VI).
-///   ↑ maior  = "As Shot" mais QUENTE (Kelvin maior)
-///   ↓ menor  = mais frio
-/// padrão: 3.0
+/// Mireds subtracted from the estimated temperature (our CCT reads a few
+/// mireds cooler than Lightroom's on the X100VI).
+///   ↑ higher = "As Shot" runs WARMER (higher Kelvin)
+///   ↓ lower  = cooler
+/// default: 3.0
 const double calWbAsShotCctMiredBias = 3.0;
 
-/// Caminho de fallback (câmera sem matriz de cor utilizável): Tint por
-/// dobra do excesso de ganho R+B. Bem mais grosseiro que o colorimétrico.
-///   ↑ maior  = Tint estimado mais forte no fallback
-/// padrão: 200.0
+/// Fallback path (camera with no usable color matrix): Tint from the R+B
+/// gain-excess ratio. Much cruder than the colorimetric path.
+///   ↑ higher = stronger estimated Tint in the fallback path
+/// default: 200.0
 const double calWbAsShotTintScaleFallback = 200.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  LOOK BASE — a "curva de perfil" (aproxima o "Adobe Color" do Lightroom)  ║
+// ║  BASE LOOK — the "profile curve" (approximates Lightroom's "Adobe Color") ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 //
-// O Lightroom, com 0 de edição, JÁ aplica a curva de tom do perfil "Adobe
-// Color" (um S-curve suave embutido no perfil). O darkmoon decodifica o RAW
-// com gama sRGB reta e mais nada, então o ponto de partida dele é bem mais
-// PLANO. Resultado prático: presets feitos no Lightroom ficam sem contraste
-// aqui, e você acaba compensando no Preto/Branco de cada preset.
+// Lightroom, at 0 edits, ALREADY applies the "Adobe Color" profile's tone
+// curve (a gentle S-curve baked into the profile). darkmoon decodes the RAW
+// with a straight sRGB gamma and nothing else, so its starting point is much
+// FLATTER. In practice: presets made in Lightroom look low-contrast here,
+// and you end up compensating via Blacks/Whites in every preset.
 //
-// Este número aplica um S-curve fixo em TODA foto, logo no começo dos ajustes
-// de tom (depois de Exposição/WB, antes de Realces/Sombras/Pretos/Brancos e
-// das curvas) — a mesma posição da curva de perfil no Lightroom. A matemática
-// é idêntica à do slider Contraste, então "20" aqui = mais ou menos um
-// Contraste +20 embutido.
+// This number applies a fixed S-curve to every photo, right at the start of
+// tone adjustments (after Exposure/WB, before Highlights/Shadows/Blacks/
+// Whites and the curves) — the same slot the profile curve occupies in
+// Lightroom. The math is identical to the Contrast slider's, so "20" here is
+// roughly a built-in Contrast +20.
+///
+//   ↑ higher = a more contrasty starting point (closer to Lightroom)
+//   ↓ lower  = flatter (0.0 = off, the old behavior)
 //
-//   ↑ maior  = ponto de partida mais contrastado (mais perto do Lightroom)
-//   ↓ menor  = mais plano (0.0 = desligado, comportamento antigo)
+// Calibrated to 20.0 by comparing DSF1309 against a real Lightroom export
+// (the "Filmatic Fuji 2 Lightroom.xmp" profile imported unmodified) —
+// 2026-08-29. In this range (~12 to ~28) overall contrast matches.
 //
-// Calibrado em 20.0 comparando a DSF1309 com um export real do Lightroom
-// (perfil "Filmatic Fuji 2 Lightroom.xmp" importado sem alterar) —
-// 2026-08-29. Nessa faixa (~12 a ~28) o contraste geral bate.
+// ⚠️ Changing this changes the look of every photo and every preset —
+//    including ones you already tuned in darkmoon before 2026-08-29 (they'll
+//    get more contrasty). Re-tune those presets starting from this value,
+//    not from 0.
 //
-// ⚠️ Mexer aqui muda o visual de toda foto e todo preset — inclusive os que
-//    você já ajustou no darkmoon antes de 2026-08-29 (vão ficar mais
-//    contrastados). Reajuste esses presets partindo deste valor, não de 0.
-//
-// Este é o VALOR DE FÁBRICA. O usuário pode sobrescrever ao vivo em
-// Configurações → "Perfil darkmoon Color" (salvo no AppSettings), sem
-// rebuildar. CPU e GPU aplicam a curva.
-/// padrão: 20.0   (0.0 = desliga)
+// This is the FACTORY value. The user can override it live in
+// Settings → "darkmoon Color Profile" (saved in AppSettings), no rebuild
+// needed. Both CPU and GPU apply the curve.
+/// default: 20.0   (0.0 = off)
 const double calBaseContrast = 20.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  BÁSICO — Exposição / Brilho / Contraste                                  ║
+// ║  BASIC — Exposure / Brightness / Contrast                                 ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-/// **Exposição**: quantas unidades do slider equivalem a 1 stop (dobrar/
-/// metade da luz). O efeito é  2^(valorDoSlider / este número).
-///   ↑ maior  = Exposure mais fraca (precisa arrastar mais pra mesma mudança)
-///   ↓ menor  = Exposure mais forte
-/// padrão: 20.0
+/// **Exposure**: how many slider units equal 1 stop (doubling/halving the
+/// light). The effect is  2^(sliderValue / this number).
+///   ↑ higher = weaker Exposure (needs a bigger drag for the same change)
+///   ↓ lower  = stronger Exposure
+/// default: 20.0
 const double calExposureUnitsPerStop = 20.0;
 
-/// **Brilho**: igual à Exposição, unidades do slider por stop, mas o Brilho
-/// usa uma curva que protege pretos e brancos (não estoura as pontas).
-///   ↑ maior  = Brilho mais fraco     ↓ menor = Brilho mais forte
-/// padrão: 20.0
+/// **Brightness**: same idea as Exposure, slider units per stop, but
+/// Brightness uses a curve that protects blacks and whites (no clipping).
+///   ↑ higher = weaker Brightness     ↓ lower = stronger Brightness
+/// default: 20.0
 const double calBrightnessUnitsPerStop = 20.0;
 
-/// **Brilho** — o quanto a curva concentra o efeito nos tons médios (em vez de
-/// espalhar por toda a faixa).
-///   ↑ maior  = mexe mais nos médios, pontas mais preservadas
-///   ↓ menor  = efeito mais linear/parelho
-/// padrão: 1.2
+/// **Brightness** — how much the curve concentrates the effect in midtones
+/// (instead of spreading across the whole range).
+///   ↑ higher = affects midtones more, extremes stay more protected
+///   ↓ lower  = more linear/even effect
+/// default: 1.2
 const double calBrightnessMidtoneStrength = 1.2;
 
-/// **Contraste**: o quão forte o slider inclina a curva em S.
-///   ↑ maior  = Contraste mais agressivo no mesmo valor
-///   ↓ menor  = Contraste mais suave
-/// padrão: 1.25
+/// **Contrast**: how hard the slider tilts the S-curve.
+///   ↑ higher = more aggressive Contrast at the same value
+///   ↓ lower  = gentler Contrast
+/// default: 1.25
 const double calContrastStrength = 1.25;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  BÁSICO — Realces / Sombras / Brancos / Pretos                            ║
+// ║  BASIC — Highlights / Shadows / Whites / Blacks                           ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-/// **Realces (Highlights)**: força da recuperação/estouro.
-///   ↑ maior  = Highlights recupera/levanta muito mais rápido
-///   ↓ menor  = mais sutil
-/// padrão: 1.75
+/// **Highlights**: recovery/blowout strength.
+///   ↑ higher = Highlights recovers/lifts much faster
+///   ↓ lower  = subtler
+/// default: 1.75
 const double calHighlightsStrength = 1.75;
 
-/// **Sombras (Shadows)**: multiplicador em cima do valor do slider.
-///   ↑ maior  = Shadows mais forte     ↓ menor = mais fraco
-/// padrão: 1.0
+/// **Shadows**: multiplier on top of the slider value.
+///   ↑ higher = stronger Shadows     ↓ lower = weaker
+/// default: 1.0
 const double calShadowsAmountScale = 1.0;
 
-/// **Sombras** — largura da faixa de tons afetada. É um expoente: número ALTO
-/// concentra o efeito só nas sombras mais fechadas; número BAIXO espalha pros
-/// tons médios-escuros também.
-///   ↑ maior  = efeito mais restrito às sombras profundas
-///   ↓ menor  = pega uma faixa maior de sombra (mais "Lightroom")
-/// padrão: 4.5
+/// **Shadows** — width of the affected tonal range. This is an exponent: a
+/// HIGH number confines the effect to only the deepest shadows; a LOW number
+/// spreads it into the shadow-midtones too.
+///   ↑ higher = effect more confined to deep shadows
+///   ↓ lower  = reaches a wider shadow range (more "Lightroom"-like)
+/// default: 4.5
 const double calShadowsFalloff = 4.5;
 
-/// **Brancos (Whites)** — a partir de que brilho o slider começa a agir.
-/// É o piso de uma máscara (0..1 na luminância percebida).
-///   ↑ maior (ex.: 0.5) = só os brancos mais claros mudam (efeito "fraco")
-///   ↓ menor (ex.: 0.30) = pega também os médios-altos (efeito "forte")
-/// padrão: 0.32     [também no GPU: point_ops_post_denoise.frag → rapidWhiteMask]
+/// **Whites** — the brightness level above which the slider starts acting.
+/// This is the floor of a mask (0..1 on perceived luminance).
+///   ↑ higher (e.g. 0.5) = only the brightest whites move ("weak" effect)
+///   ↓ lower (e.g. 0.30) = also reaches the upper-midtones ("strong" effect)
+/// default: 0.32     [also on GPU: point_ops_post_denoise.frag → rapidWhiteMask]
 const double calWhitesMaskLow = 0.32;
 
-/// **Brancos (Whites)** — o quanto ergue o ponto de branco no valor máximo.
-///   ↑ maior  = Whites +100 clareia muito mais
-///   ↓ menor  = Whites +100 quase não muda
-/// padrão: 0.42   (RapidRAW original: 0.25)   [também no GPU: point_ops_post_denoise.frag]
+/// **Whites** — how much it lifts the white point at the slider's max value.
+///   ↑ higher = Whites +100 brightens much more
+///   ↓ lower  = Whites +100 barely changes anything
+/// default: 0.42   (original RapidRAW: 0.25)   [also on GPU: point_ops_post_denoise.frag]
 const double calWhitesLevelCoeff = 0.42;
 
-/// **Pretos (Blacks)** — multiplicador em cima do valor do slider.
-///   ↑ maior  = Blacks mais forte (afunda/levanta o preto muito mais)
-///   ↓ menor  = Blacks mais fraco
-/// padrão: 1.5   (RapidRAW original: 1.0)   [também no GPU: point_ops_post_denoise.frag]
+/// **Blacks** — multiplier on top of the slider value.
+///   ↑ higher = stronger Blacks (crushes/lifts black much harder)
+///   ↓ lower  = weaker Blacks
+/// default: 1.5   (original RapidRAW: 1.0)   [also on GPU: point_ops_post_denoise.frag]
 const double calBlacksAmountScale = 1.5;
 
-/// **Pretos (Blacks)** — largura da faixa afetada (expoente, igual ao de
-/// Sombras).
-///   ↑ maior (ex.: 12) = só o preto mais fechado muda
-///   ↓ menor (ex.: 7)  = pega uma faixa maior de sombra
-/// padrão: 9.0   (RapidRAW original: 12.0)   [também no GPU: point_ops_post_denoise.frag]
+/// **Blacks** — width of the affected range (exponent, same idea as
+/// Shadows').
+///   ↑ higher (e.g. 12) = only the deepest black moves
+///   ↓ lower (e.g. 7)   = reaches a wider shadow range
+/// default: 9.0   (original RapidRAW: 12.0)   [also on GPU: point_ops_post_denoise.frag]
 const double calBlacksFalloff = 9.0;
 
-/// **Sombras/Pretos** — reforço de contraste local aplicado junto do
-/// levantamento, pra imagem não ficar "chapada" ao abrir muito as sombras.
-///   ↑ maior  = mais "punch" ao levantar sombras
-///   ↓ menor  = levantamento mais plano
-/// padrão: 1.3
+/// **Shadows/Blacks** — a local-contrast boost applied alongside the lift, so
+/// the image doesn't go "flat" when shadows are opened up a lot.
+///   ↑ higher = more "punch" when lifting shadows
+///   ↓ lower  = flatter lift
+/// default: 1.3
 const double calShadowBlacksStretch = 1.3;
 
-/// **Sombras/Pretos** — mistura entre a curva pura (0.0) e a curva com o
-/// reforço de contraste acima (1.0).
-///   ↑ maior  = usa mais o reforço de contraste
-///   ↓ menor  = usa mais a curva pura
-/// padrão: 0.85
+/// **Shadows/Blacks** — blend between the plain curve (0.0) and the
+/// contrast-boosted curve above (1.0).
+///   ↑ higher = leans more on the contrast boost
+///   ↓ lower  = leans more on the plain curve
+/// default: 0.85
 const double calShadowBlacksContrastMix = 0.85;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  PRESENÇA — Textura / Clareza / Remover Névoa (Dehaze)                    ║
+// ║  PRESENCE — Texture / Clarity / Dehaze                                    ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-/// **Textura** — raio (em pixels) do detalhe que ela realça. Pequeno = detalhe
-/// bem fino (poros, fios); grande = detalhe mais grosso.
-///   ↑ maior  = realça estruturas maiores
-///   ↓ menor  = realça só o detalhe mais fino
-/// padrão: 3.0
+/// **Texture** — radius (in pixels) of the detail it enhances. Small = very
+/// fine detail (pores, hair); large = coarser detail.
+///   ↑ higher = enhances larger structures
+///   ↓ lower  = enhances only the finest detail
+/// default: 3.0
 const double calTextureSigma = 3.0;
 
-/// **Textura** — multiplicador de força em cima do slider.
-///   ↑ maior  = Textura mais forte     ↓ menor = mais fraca
-/// padrão: 1.0
+/// **Texture** — strength multiplier on top of the slider.
+///   ↑ higher = stronger Texture     ↓ lower = weaker
+/// default: 1.0
 const double calTextureStrength = 1.0;
 
-/// **Clareza** — raio (em pixels) do contraste local. Grande de propósito
-/// (contraste de médio alcance, tipo "definição").
-///   ↑ maior  = efeito mais amplo/"halo" maior
-///   ↓ menor  = efeito mais localizado
-/// padrão: 25.0
+/// **Clarity** — radius (in pixels) of the local contrast. Deliberately
+/// large (mid-range contrast, more like "definition").
+///   ↑ higher = wider effect/bigger "halo"
+///   ↓ lower  = more localized effect
+/// default: 25.0
 const double calClaritySigma = 25.0;
 
-/// **Clareza** — multiplicador de força em cima do slider.
-///   ↑ maior  = Clareza mais forte     ↓ menor = mais fraca
-/// padrão: 1.0
+/// **Clarity** — strength multiplier on top of the slider.
+///   ↑ higher = stronger Clarity     ↓ lower = weaker
+/// default: 1.0
 const double calClarityStrength = 1.0;
 
-/// **Remover Névoa (Dehaze +)** — o quanto o slider positivo puxa a
-/// transmissão pra baixo (= remove névoa). Este é o principal controle da
-/// força do Dehaze.
-///   ↑ maior (ex.: 0.85) = Dehaze muito agressivo (RapidRAW original)
-///   ↓ menor (ex.: 0.45) = Dehaze bem suave
-/// padrão: 0.55   [também no GPU: dehaze_apply.frag]
+/// **Dehaze +** — how hard the positive slider pulls transmission down (=
+/// removes haze). This is the main control over Dehaze strength.
+///   ↑ higher (e.g. 0.85) = very aggressive Dehaze (original RapidRAW)
+///   ↓ lower (e.g. 0.45) = quite gentle Dehaze
+/// default: 0.55   [also on GPU: dehaze_apply.frag]
 const double calDehazeTransmissionCoeff = 0.55;
 
-/// **Remover Névoa** — piso da transmissão: impede o Dehage de "quebrar" a
-/// imagem nos pontos de mais névoa. Mais alto = mais seguro/suave.
-///   ↑ maior  = limita o efeito máximo (mais suave)
-///   ↓ menor  = deixa o Dehaze ir mais fundo (pode estourar)
-/// padrão: 0.22   (RapidRAW original: 0.15)   [também no GPU: dehaze_apply.frag]
+/// **Dehaze** — transmission floor: keeps Dehaze from "breaking" the image
+/// in the hazier spots. Higher = safer/gentler.
+///   ↑ higher = caps the maximum effect (gentler)
+///   ↓ lower  = lets Dehaze go further (can blow out)
+/// default: 0.22   (original RapidRAW: 0.15)   [also on GPU: dehaze_apply.frag]
 const double calDehazeTransmissionFloor = 0.22;
 
-/// **Remover Névoa** — o quanto satura a cor proporcional à névoa removida.
-///   ↑ maior  = Dehaze deixa a cor mais "puxada"
-///   ↓ menor  = Dehaze quase não mexe na saturação
-/// padrão: 0.32   (RapidRAW original: 0.5)   [também no GPU: dehaze_apply.frag]
+/// **Dehaze** — how much it saturates color in proportion to the haze
+/// removed.
+///   ↑ higher = Dehaze leaves color more "punchy"
+///   ↓ lower  = Dehaze barely touches saturation
+/// default: 0.32   (original RapidRAW: 0.5)   [also on GPU: dehaze_apply.frag]
 const double calDehazeSatBoost = 0.32;
 
-/// **Adicionar Névoa (Dehaze −)** — força do lado negativo do slider (mistura
-/// a imagem com a luz atmosférica, deixando "leitoso").
-///   ↑ maior  = Dehaze negativo mais forte
-///   ↓ menor  = mais sutil
-/// padrão: 0.55   (RapidRAW original: 0.7)   [também no GPU: dehaze_apply.frag]
+/// **Dehaze −** (add haze) — strength of the slider's negative side (blends
+/// the image with atmospheric light, making it look "milky").
+///   ↑ higher = stronger negative Dehaze
+///   ↓ lower  = subtler
+/// default: 0.55   (original RapidRAW: 0.7)   [also on GPU: dehaze_apply.frag]
 const double calDehazeAddMix = 0.55;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  COR — Vibração / Saturação                                               ║
+// ║  COLOR — Vibrance / Saturation                                            ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-/// **Vibração (Vibrance +)** — ganho do lado positivo. A Vibração já protege
-/// tons de pele e cores já saturadas; este número é a força bruta antes disso.
-///   ↑ maior  = Vibração +100 muito mais intensa
-///   ↓ menor  = mais contida
-/// padrão: 3.0
+/// **Vibrance +** — gain on the positive side. Vibrance already protects
+/// skin tones and already-saturated colors; this number is the raw strength
+/// before that protection kicks in.
+///   ↑ higher = Vibrance +100 is much more intense
+///   ↓ lower  = more restrained
+/// default: 3.0
 const double calVibranceStrength = 3.0;
 
-/// **Vibração** — o quanto ela SEGURA o efeito em tons de pele (pra rosto não
-/// ficar laranja). 1.0 = não segura nada; 0.0 = zera na pele.
-///   ↑ maior (perto de 1) = pele satura junto com o resto
-///   ↓ menor (perto de 0) = pele fica bem protegida
-/// padrão: 0.6
+/// **Vibrance** — how much it HOLDS BACK the effect on skin tones (so faces
+/// don't turn orange). 1.0 = holds back nothing; 0.0 = zeroes out on skin.
+///   ↑ higher (near 1) = skin saturates right along with everything else
+///   ↓ lower (near 0) = skin stays well protected
+/// default: 0.6
 const double calVibranceSkinDampen = 0.6;
 
-/// **Saturação** — multiplicador em cima do slider (o efeito é
-/// 1 + valorDoSlider/100 * este número).
-///   ↑ maior  = Saturação mais forte     ↓ menor = mais fraca
-/// padrão: 1.0
+/// **Saturation** — multiplier on top of the slider (the effect is
+/// 1 + sliderValue/100 * this number).
+///   ↑ higher = stronger Saturation     ↓ lower = weaker
+/// default: 1.0
 const double calSaturationStrength = 1.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  COR — Mixer de Cor / HSL (8 bandas)                                      ║
+// ║  COLOR — Color Mixer / HSL (8 bands)                                      ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-/// **Mixer → Matiz (Hue)** — quantos graus de rotação de matiz cada unidade
-/// do slider gera (antes da normalização por banda e da máscara de
-/// saturação). O porte do RapidRAW usava 0.6 (= `0.3 * 2.0`); a comparação
-/// com o Lightroom (Filmatic Fuji 2 na DSF1309, 2026-08-29) mostrou que o
-/// usuário precisou de ~1.9× o valor do Lightroom em Orange/Yellow/Aqua/
-/// Blue — ou seja, o Hue do darkmoon estava fraco. Subido pra 1.15.
-///   ↑ maior  = mesmo valor de Hue no slider gira mais a cor
-///   ↓ menor  = gira menos (0.6 = comportamento RapidRAW original)
-/// ⚠️ muda presets antigos que mexeram no Hue do Mixer (vão girar mais).
-/// padrão: 1.15   (RapidRAW original: 0.6)   [também no GPU: point_ops_post_denoise.frag]
+/// **Mixer → Hue** — how many degrees of hue rotation each slider unit
+/// produces (before per-band normalization and the saturation mask). The
+/// RapidRAW port used 0.6 (= `0.3 * 2.0`); comparing against Lightroom
+/// (Filmatic Fuji 2 on DSF1309, 2026-08-29) showed the user needed ~1.9×
+/// Lightroom's value on Orange/Yellow/Aqua/Blue — i.e. darkmoon's Hue was
+/// too weak. Raised to 1.15.
+///   ↑ higher = the same Hue slider value rotates color more
+///   ↓ lower  = rotates less (0.6 = original RapidRAW behavior)
+/// ⚠️ changes older presets that touched Mixer Hue (they'll rotate further).
+/// default: 1.15   (original RapidRAW: 0.6)   [also on GPU: point_ops_post_denoise.frag]
 const double calMixerHueStrength = 1.15;
 
-/// **Mixer → largura efetiva das bandas** — o "sharpness" da gaussiana que
-/// decide o quanto cada banda (Vermelho, Laranja…) influencia um pixel de
-/// determinado matiz. Número ALTO = bandas mais estreitas, menos "vazamento"
-/// entre bandas vizinhas (ex.: mexer no Verde não puxa tanto o Amarelo/
-/// Aqua). Número BAIXO = bandas mais largas e sobrepostas.
-///   ↑ maior (ex.: 2.5) = bandas mais separadas, efeito mais cirúrgico
-///   ↓ menor (ex.: 1.0) = bandas mais largas (mais "vazamento")
-/// Sintoma de estar baixo demais: no Lightroom você tira saturação só do
-/// Verde e no darkmoon precisa compensar Amarelo/Aqua porque o Verde
-/// "vazou" pra eles. Comparação de 2026-08-29 sugere que pode estar largo
-/// demais; teste subir. Mantido em 1.5 (RapidRAW original) por enquanto.
-/// padrão: 1.5   [também no GPU: point_ops_post_denoise.frag → rawHslInfluence]
+/// **Mixer → effective band width** — the "sharpness" of the gaussian that
+/// decides how much each band (Red, Orange…) influences a pixel of a given
+/// hue. A HIGH number = narrower bands, less "leakage" between neighboring
+/// bands (e.g. touching Green doesn't pull Yellow/Aqua along with it as
+/// much). A LOW number = wider, more overlapping bands.
+///   ↑ higher (e.g. 2.5) = bands more separated, more surgical effect
+///   ↓ lower (e.g. 1.0) = wider bands (more "leakage")
+/// Symptom of this being too low: in Lightroom you desaturate only Green,
+/// but in darkmoon you have to compensate Yellow/Aqua because Green
+/// "leaked" into them. The 2026-08-29 comparison suggests this may be too
+/// wide; worth testing higher. Kept at 1.5 (original RapidRAW) for now.
+/// default: 1.5   [also on GPU: point_ops_post_denoise.frag → rawHslInfluence]
 const double calMixerBandSharpness = 1.5;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  DETALHE — Nitidez (Sharpen)                                              ║
+// ║  DETAIL — Sharpen                                                         ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-/// **Nitidez → Quantidade** — multiplicador de força em cima do slider.
-///   ↑ maior  = Nitidez mais forte no mesmo valor
-///   ↓ menor  = mais suave
-/// padrão: 1.0
+/// **Sharpen → Amount** — strength multiplier on top of the slider.
+///   ↑ higher = stronger Sharpen at the same value
+///   ↓ lower  = gentler
+/// default: 1.0
 const double calSharpenStrength = 1.0;
 
-/// **Nitidez → Detalhe** — o quanto o slider Detalhe injeta do detalhe mais
-/// fino (vs. o contorno mais grosso).
-///   ↑ maior  = Detalhe alto vira mais "micro-detalhe" (e mais ruído)
-///   ↓ menor  = Detalhe mais comportado
-/// padrão: 0.6
+/// **Sharpen → Detail** — how much the Detail slider injects the finest
+/// detail (vs. the coarser edges).
+///   ↑ higher = high Detail becomes more "micro-detail" (and more noise)
+///   ↓ lower  = more restrained Detail
+/// default: 0.6
 const double calSharpenDetailMix = 0.6;
 
-/// **Nitidez → Mascaramento** — piso de "o que conta como borda de verdade"
-/// (escala 0..255). Abaixo disso o Mascaramento trata como área lisa/ruído e
-/// não afia.
-///   ↑ maior  = afia só bordas bem fortes (protege mais o ruído)
-///   ↓ menor  = afia detalhes mais fracos também
-/// padrão: 6.0
+/// **Sharpen → Masking** — floor for "what counts as a real edge" (0..255
+/// scale). Below this, Masking treats it as flat/noise and doesn't sharpen
+/// it.
+///   ↑ higher = only sharpens strong edges (protects noise more)
+///   ↓ lower  = sharpens weaker detail too
+/// default: 6.0
 const double calSharpenEdgeThreshold = 6.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  EFEITOS — Vinheta                                                        ║
+// ║  EFFECTS — Vignette                                                       ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-/// **Vinheta → Quantidade** — força geral em cima do slider.
-///   ↑ maior  = Vinheta escurece/clareia as bordas muito mais
-///   ↓ menor  = Vinheta mais discreta
-/// padrão: 0.8
+/// **Vignette → Amount** — overall strength on top of the slider.
+///   ↑ higher = Vignette darkens/lightens the edges much more
+///   ↓ lower  = subtler Vignette
+/// default: 0.8
 const double calVignetteStrength = 0.8;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  EFEITOS — Grão de filme (Grain)                                          ║
+// ║  EFFECTS — Film Grain                                                     ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-/// **Grão → Quantidade** — multiplicador de força em cima do slider.
-///   ↑ maior  = grão mais visível no mesmo valor
-///   ↓ menor  = grão mais sutil
-/// padrão: 1.0
+/// **Grain → Amount** — strength multiplier on top of the slider.
+///   ↑ higher = more visible grain at the same value
+///   ↓ lower  = subtler grain
+/// default: 1.0
 const double calGrainStrength = 1.0;
 
-/// **Grão → Tamanho** — o tamanho (em pixels, na referência de 1080px) de cada
-/// grão quando o slider Tamanho está em 0 e em 100. O grão é redimensionado
-/// junto com a resolução da imagem, então o tamanho relativo fica igual no
-/// preview e na exportação.
-///   ↑ maior  = grão mais grosso
-///   ↓ menor  = grão mais fino
-/// padrão: 0.8 (no 0)  e  4.8 (no 100)
+/// **Grain → Size** — the size (in pixels, at a 1080px reference) of each
+/// grain particle when the Size slider is at 0 and at 100. Grain is scaled
+/// along with the image resolution, so the relative size stays the same in
+/// the preview and in the export.
+///   ↑ higher = coarser grain
+///   ↓ lower  = finer grain
+/// default: 0.8 (at 0)  and  4.8 (at 100)
 const double calGrainSizePxAt0 = 0.8;
 const double calGrainSizePxAt100 = 4.8;
 
-/// **Grão → Aspereza (Roughness)** — o slider mistura um ruído fino (0) com um
-/// ruído mais irregular/grosseiro (100). Este número NÃO muda o efeito do
-/// slider; ele é o quanto o ruído grosseiro é "esticado" em relação ao fino.
-///   ↑ maior  = no 100 o grão fica com manchas maiores
-///   ↓ menor  = no 100 o grão fica mais parecido com o fino
-/// padrão: 0.6
+/// **Grain → Roughness** — the slider blends a fine noise (0) with a more
+/// irregular/coarse noise (100). This number does NOT change the slider's
+/// effect directly; it's how much the coarse noise is "stretched" relative
+/// to the fine one.
+///   ↑ higher = at 100, grain clumps into bigger blotches
+///   ↓ lower  = at 100, grain stays closer to the fine look
+/// default: 0.6
 const double calGrainRoughCoordScale = 0.6;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  REDUÇÃO DE RUÍDO (IA Denoise — Leve / Médio / Forte)                     ║
+// ║  NOISE REDUCTION (Classic AI Denoise — Light / Medium / Strong)           ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
-/// **IA Denoise** — multiplicador global na suavização de LUMINÂNCIA (o grão
-/// preto-e-branco), aplicado nos 3 níveis.
-///   ↑ maior  = borra mais o grão (perde mais detalhe fino)
-///   ↓ menor  = preserva detalhe (deixa mais grão)
-/// padrão: 1.0
+/// **AI Denoise** — global multiplier on LUMINANCE smoothing (the
+/// black-and-white grain), applied across all 3 levels.
+///   ↑ higher = blurs grain more (loses more fine detail)
+///   ↓ lower  = preserves detail (leaves more grain)
+/// default: 1.0
 const double calDenoiseLumaStrengthScale = 1.0;
 
-/// **IA Denoise** — multiplicador global na suavização de COR (manchas
-/// coloridas de ruído), aplicado nos 3 níveis.
-///   ↑ maior  = tira mais mancha de cor
-///   ↓ menor  = mais conservador
-/// padrão: 1.0
+/// **AI Denoise** — global multiplier on COLOR smoothing (colored noise
+/// blotches), applied across all 3 levels.
+///   ↑ higher = removes more color blotching
+///   ↓ lower  = more conservative
+/// default: 1.0
 const double calDenoiseChromaStrengthScale = 1.0;

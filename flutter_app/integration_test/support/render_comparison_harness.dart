@@ -1,14 +1,15 @@
 // A shared CPU-vs-GPU comparison harness — item 7 of the RapidRAW-parity
-// plan ("Criar harness de comparação. Gerar uma imagem sintética fixa.
-// Aplicar os mesmos parâmetros nos dois projetos. Exportar buffers RGB.
-// Calcular: erro médio; erro máximo; quantidade de pixels divergentes.
-// Usar tolerância de 1 para arredondamento.").
+// plan (translated from the original PT-BR: "Build a comparison harness.
+// Generate a fixed synthetic image. Apply the same parameters in both
+// projects. Export RGB buffers. Compute: mean error; max error; number of
+// divergent pixels. Use a tolerance of 1 for rounding.").
 //
 // What this can and can't compare: renderRgb (CPU) and renderRgbGpu (GPU)
 // are both this app's own implementations, so this harness verifies they
-// agree with *each other* pixel-for-pixel (which is what "tolerância de 1
-// para arredondamento" is really about — GPU 8-bit intermediate targets
-// vs. CPU's Float32 buffer round differently). It can't run RapidRAW's own
+// agree with *each other* pixel-for-pixel (which is what the original
+// plan's "tolerance of 1 for rounding" is really about — GPU 8-bit
+// intermediate targets vs. CPU's Float32 buffer round differently). It
+// can't run RapidRAW's own
 // Rust/wgpu pipeline directly — that's a separate Tauri app, not something
 // this Dart test process can invoke — so it isn't a substitute for the
 // per-adjustment reference-Python-port checks already in each unit test
@@ -159,7 +160,7 @@ class RenderComparisonResult {
 }
 
 /// Runs [params] through both renderers on [photo] and compares the
-/// results — "tolerância de 1 para arredondamento" from the plan this
+/// results — the "tolerance of 1 for rounding" from the plan this
 /// harness implements: a byte-level diff of 1 is expected GPU/CPU rounding
 /// noise (different intermediate precision), not a bug, so
 /// [divergentPixelBytes] counts only diffs strictly greater than
