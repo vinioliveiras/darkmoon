@@ -344,6 +344,15 @@ class AppLocalizationsDe extends AppLocalizations {
       'KI-Enhance konnte auf diesem Foto nicht ausgeführt werden. Wurde wieder deaktiviert.';
 
   @override
+  String aiDenoiseCustomModelFallbackMessage(String error) {
+    return 'Dein benutzerdefiniertes Entrauschungsmodell konnte nicht verwendet werden ($error) — stattdessen wurde das Standardmodell verwendet.';
+  }
+
+  @override
+  String get aiDenoiseCustomModelFallbackStatus =>
+      'Benutzerdefiniertes Modell fehlgeschlagen, Standard verwendet';
+
+  @override
   String get aiDenoiseEnhanceCpuWarning =>
       'Deine GPU unterstützt das noch nicht, daher läuft es stattdessen auf der CPU — das wird spürbar länger dauern.';
 
@@ -520,6 +529,27 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get settingsThumbnailThreadsLabel =>
       'Threads für das Laden von Miniaturansichten';
+
+  @override
+  String get settingsCustomDenoiseModelLabel =>
+      'Benutzerdefiniertes Entrauschungsmodell';
+
+  @override
+  String get settingsCustomDenoiseModelHint =>
+      'Ersetzt das On-Device-Denoise-Modell im Enhance-Tab des KI-Entrauschungsdialogs. Muss ein direkter Ersatz sein: 3-Kanal-RGB, gleiche Auflösung bei Ein-/Ausgabe, Tensor-Namen \"input\"/\"output\", [0,1]-normalisiert — ein Modell, das nicht passt, führt zu einem Fehler oder sichtbar falschem Ergebnis, nicht zu einem sauberen Fehlschlag.';
+
+  @override
+  String get settingsCustomDenoiseModelDefault => 'Standard (NAFNet-SIDD)';
+
+  @override
+  String get settingsCustomDenoiseModelPickerTitle =>
+      'Entrauschungsmodell wählen (.onnx)';
+
+  @override
+  String get settingsCustomDenoiseModelChooseButton => 'Datei wählen…';
+
+  @override
+  String get settingsCustomDenoiseModelResetButton => 'Zurücksetzen';
 
   @override
   String get settingsClearThumbnailsButton =>

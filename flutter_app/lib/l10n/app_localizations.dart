@@ -706,6 +706,18 @@ abstract class AppLocalizations {
   /// **'AI Enhance couldn\'t run on this photo. It\'s been turned back off.'**
   String get aiDenoiseEnhanceFailedMessage;
 
+  /// No description provided for @aiDenoiseCustomModelFallbackMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Your custom denoise model couldn\'t be used ({error}) — used the default model instead.'**
+  String aiDenoiseCustomModelFallbackMessage(String error);
+
+  /// No description provided for @aiDenoiseCustomModelFallbackStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom model failed, used default'**
+  String get aiDenoiseCustomModelFallbackStatus;
+
   /// No description provided for @aiDenoiseEnhanceCpuWarning.
   ///
   /// In en, this message translates to:
@@ -1023,6 +1035,42 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Thumbnail loading threads'**
   String get settingsThumbnailThreadsLabel;
+
+  /// No description provided for @settingsCustomDenoiseModelLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom denoise model'**
+  String get settingsCustomDenoiseModelLabel;
+
+  /// No description provided for @settingsCustomDenoiseModelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Replaces the on-device Denoise model in the AI Denoise dialog\'s Enhance tab. Must be a drop-in replacement: 3-channel RGB, same-resolution in/out, \"input\"/\"output\" tensor names, [0,1]-normalized — a model that doesn\'t match will error or produce visibly wrong output, not a clean failure.'**
+  String get settingsCustomDenoiseModelHint;
+
+  /// No description provided for @settingsCustomDenoiseModelDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Default (NAFNet-SIDD)'**
+  String get settingsCustomDenoiseModelDefault;
+
+  /// No description provided for @settingsCustomDenoiseModelPickerTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose a denoise model (.onnx)'**
+  String get settingsCustomDenoiseModelPickerTitle;
+
+  /// No description provided for @settingsCustomDenoiseModelChooseButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Choose file…'**
+  String get settingsCustomDenoiseModelChooseButton;
+
+  /// No description provided for @settingsCustomDenoiseModelResetButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset'**
+  String get settingsCustomDenoiseModelResetButton;
 
   /// No description provided for @settingsClearThumbnailsButton.
   ///

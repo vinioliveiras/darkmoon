@@ -41,7 +41,11 @@ import 'presets/preset_zip.dart';
 import 'raw_files.dart';
 import 'render/ai_denoise.dart';
 import 'render/ai_enhance_job.dart'
-    show AiEnhanceCancellationToken, AiEnhanceModelInfo, AiEnhanceProgress;
+    show
+        AiEnhanceCancellationToken,
+        AiEnhanceModelInfo,
+        AiEnhanceProgress,
+        CustomDenoiseModelFallback;
 import 'render/color_profile.dart';
 import 'render/histogram.dart';
 import 'render/lens_correction.dart';
@@ -2577,6 +2581,7 @@ class _EditorScreenState extends State<EditorScreen> {
             upscale: wantUpscale,
             rawDenoise: wantRawDenoise,
             denoiseStrengthPercent: wantDenoiseAmount,
+            denoiseModelPath: _settings.customDenoiseModelPath,
           );
           if (cachedPng != null) {
             sources = await compute(
@@ -3201,6 +3206,7 @@ class _EditorScreenState extends State<EditorScreen> {
       upscale: upscale,
       rawDenoise: rawDenoise,
       denoiseStrengthPercent: denoiseAmount,
+      denoiseModelPath: _settings.customDenoiseModelPath,
     );
     if (cachedPng == null) {
       final ok = await _runNeuralEnhance(
@@ -3220,6 +3226,7 @@ class _EditorScreenState extends State<EditorScreen> {
         upscale: upscale,
         rawDenoise: rawDenoise,
         denoiseStrengthPercent: denoiseAmount,
+        denoiseModelPath: _settings.customDenoiseModelPath,
       );
     }
     if (cachedPng == null || !mounted) {
@@ -3650,12 +3657,26 @@ class _EditorScreenState extends State<EditorScreen> {
               detail: AppLocalizations.of(context)!.aiDenoiseEnhanceCpuWarning,
             );
           }
+        } else if (stage is CustomDenoiseModelFallback) {
+          DevLog.log(
+            'Custom denoise model failed, fell back to default: ${stage.reason}',
+            tag: 'ai-enhance',
+          );
+          _notify(
+            detail: AppLocalizations.of(
+              context,
+            )!.aiDenoiseCustomModelFallbackMessage(stage.reason),
+            status: AppLocalizations.of(
+              context,
+            )!.aiDenoiseCustomModelFallbackStatus,
+          );
         }
       },
       enableDenoise: denoise,
       enableUpscale: upscale,
       enableRawDenoise: rawDenoise,
       denoiseStrengthPercent: denoiseAmount,
+      customDenoiseModelPath: _settings.customDenoiseModelPath,
       previewMaxDimension: _settings.previewResolution,
       cancellationToken: cancellation,
     );

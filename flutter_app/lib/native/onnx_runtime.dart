@@ -24,7 +24,22 @@ class OnnxModelSpec {
     required this.inputTileSize,
     required this.scaleFactor,
     this.channels = 3,
+    this.customAbsolutePath,
   });
+
+  /// Builds a spec for a user-supplied model file (Settings' "custom
+  /// denoise model" picker) — same tile geometry as [denoiseModelSpec],
+  /// since this is deliberately a drop-in replacement for it, not a
+  /// generically-introspected model (see [customAbsolutePath]'s doc for
+  /// why: pixel normalization can't be recovered from the ONNX graph
+  /// itself, so trying to support arbitrary conventions would mean
+  /// silently-wrong output is possible, not just a load error).
+  OnnxModelSpec.customDenoiseModel(String absolutePath)
+    : fileName = p.basename(absolutePath),
+      inputTileSize = 256,
+      scaleFactor = 1,
+      channels = 3,
+      customAbsolutePath = absolutePath;
 
   final String fileName;
   final int inputTileSize;
@@ -36,7 +51,28 @@ class OnnxModelSpec {
   /// (packed RGGB Bayer planes) instead.
   final int channels;
 
+  /// When set, [OnnxModel] loads the session from this exact absolute
+  /// path instead of resolving [fileName] next to the executable (see
+  /// `_OrtLib.modelPath`) — the mechanism behind Settings' "custom
+  /// denoise model" file picker. The chosen file is trusted to already
+  /// match [denoiseModelSpec]'s conventions (3-channel RGB, dynamic
+  /// same-resolution in/out, "input"/"output" tensor names, [0,1]
+  /// normalization); there's no way to verify the normalization range
+  /// from the ONNX file itself, so a model that uses a different
+  /// convention won't error, it'll just produce visibly wrong (washed
+  /// out/oversaturated) output — a real load/inference failure (wrong
+  /// channel count, wrong tensor names, corrupt file) does surface as a
+  /// normal [OrtException] though, same as any other model.
+  final String? customAbsolutePath;
+
   int get outputTileSize => inputTileSize * scaleFactor;
+
+  /// Distinguishes sessions in [OnnxModel]'s cache — the full path when
+  /// [customAbsolutePath] is set (so switching between two different
+  /// custom files, or between a custom file and the bundled default that
+  /// happens to share a basename, never reuses the wrong cached session),
+  /// otherwise just [fileName].
+  String get cacheKey => customAbsolutePath ?? fileName;
 }
 
 /// NAFNet-SIDD-width64 (MIT, megvii-research/NAFNet, SIDD-trained —
@@ -236,7 +272,7 @@ class OnnxModel {
   /// attempts fail (e.g. the model file itself is missing/corrupt) —
   /// a GPU-only failure is caught internally and silently retried on CPU.
   static OnnxModel forSpec(OnnxModelSpec spec) =>
-      _instances[spec.fileName] ??= _create(spec);
+      _instances[spec.cacheKey] ??= _create(spec);
 
   static OnnxModel _create(OnnxModelSpec spec) {
     try {
@@ -327,7 +363,8 @@ class OnnxModel {
       // useDirectMl == false: append nothing — ORT always registers its
       // own CPU execution provider by default, no explicit call needed.
 
-      final modelPathPtr = _OrtLib.modelPath(spec.fileName).toNativeUtf16();
+      final modelPathPtr = (spec.customAbsolutePath ?? _OrtLib.modelPath(spec.fileName))
+          .toNativeUtf16();
       final sessionOut = calloc<Pointer<OrtSession>>();
       final Pointer<OrtSession> session;
       try {

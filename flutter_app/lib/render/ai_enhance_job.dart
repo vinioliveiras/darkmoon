@@ -51,6 +51,21 @@ class AiEnhanceModelInfo {
   final String? directMlError;
 }
 
+/// Sent when Settings' custom denoise model ([AppSettings
+/// .customDenoiseModelPath]) failed to load or run — the pipeline falls
+/// back to the bundled NAFNet-SIDD-width64.onnx transparently rather than
+/// failing the whole Enhance pass outright, but the caller still needs to
+/// tell the user their custom model wasn't actually used this time.
+class CustomDenoiseModelFallback {
+  const CustomDenoiseModelFallback(this.reason);
+
+  /// The `Object.toString()` of whatever exception the custom model threw
+  /// (usually an `OrtException` — a shape mismatch, missing tensor names,
+  /// or a corrupt/incompatible file) — technical, shown as-is rather than
+  /// translated (same reasoning as `CloudDenoiseException.message`).
+  final String reason;
+}
+
 /// Exceptions thrown inside a spawned [Isolate] don't carry back to the
 /// caller as the original exception object (same reasoning as
 /// `export_job.dart`'s `ExportResult`) — failures are reported as a plain

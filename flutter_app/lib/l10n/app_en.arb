@@ -136,6 +136,13 @@
   "aiDenoiseEnhanceRawDenoiseLabel": "RAW denoise (before demosaic)",
   "aiDenoiseEnhanceRawDenoiseUnavailableCaption": "Only available for standard Bayer RAW files (not X-Trans, Foveon, or non-RAW formats).",
   "aiDenoiseEnhanceFailedMessage": "AI Enhance couldn't run on this photo. It's been turned back off.",
+  "aiDenoiseCustomModelFallbackMessage": "Your custom denoise model couldn't be used ({error}) — used the default model instead.",
+  "@aiDenoiseCustomModelFallbackMessage": {
+    "placeholders": {
+      "error": {"type": "String"}
+    }
+  },
+  "aiDenoiseCustomModelFallbackStatus": "Custom model failed, used default",
   "aiDenoiseEnhanceCpuWarning": "Your GPU doesn't support this yet, so it's running on the CPU instead — this will take noticeably longer.",
   "aiDenoiseEnhanceGpuIncompatibleWarning": "Your GPU isn't compatible with this yet, so it'll run on the CPU — expect this to take noticeably longer (up to a couple of minutes on a large photo).",
   "aiDenoiseEnhanceStartingMessage": "Running AI Enhance...",
@@ -207,6 +214,12 @@
   "settingsBaseContrastLabel": "darkmoon Color profile",
   "settingsBaseContrastHint": "A fixed contrast curve applied to every photo before your edits — darkmoon's stand-in for the profile contrast Lightroom bakes in. Raise it if imported Lightroom presets look flat, lower it (0 = off) for a neutral starting point. Changes every photo and preset.",
   "settingsThumbnailThreadsLabel": "Thumbnail loading threads",
+  "settingsCustomDenoiseModelLabel": "Custom denoise model",
+  "settingsCustomDenoiseModelHint": "Replaces the on-device Denoise model in the AI Denoise dialog's Enhance tab. Must be a drop-in replacement: 3-channel RGB, same-resolution in/out, \"input\"/\"output\" tensor names, [0,1]-normalized — a model that doesn't match will error or produce visibly wrong output, not a clean failure.",
+  "settingsCustomDenoiseModelDefault": "Default (NAFNet-SIDD)",
+  "settingsCustomDenoiseModelPickerTitle": "Choose a denoise model (.onnx)",
+  "settingsCustomDenoiseModelChooseButton": "Choose file…",
+  "settingsCustomDenoiseModelResetButton": "Reset",
   "settingsClearThumbnailsButton": "Clear thumbnail cache",
   "settingsClearRecentFilesButton": "Clear recent files list",
   "settingsClearCatalogButton": "Clear catalog (all edits)",

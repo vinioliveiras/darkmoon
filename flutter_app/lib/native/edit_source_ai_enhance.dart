@@ -8,7 +8,11 @@ import '../catalog/ai_enhance_cache.dart';
 import '../raw_files.dart' show isRawFile;
 import '../render/ai_enhance.dart';
 import '../render/ai_enhance_job.dart'
-    show AiEnhanceCancellationToken, AiEnhanceModelInfo, AiEnhanceProgress;
+    show
+        AiEnhanceCancellationToken,
+        AiEnhanceModelInfo,
+        AiEnhanceProgress,
+        CustomDenoiseModelFallback;
 import '../native/onnx_runtime.dart';
 import 'common_image.dart';
 import 'edit_source.dart';
@@ -113,6 +117,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
   bool enableUpscale,
   bool enableRawDenoise,
   int denoiseStrengthPercent,
+  String? customDenoiseModelPath,
   void Function(Object stage) onStage,
 ) async {
   int width;
@@ -126,6 +131,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
     upscale: enableUpscale,
     rawDenoise: enableRawDenoise,
     denoiseStrengthPercent: denoiseStrengthPercent,
+    denoiseModelPath: customDenoiseModelPath,
   );
   final cachedImage = cachedPng == null ? null : img.decodePng(cachedPng);
 
@@ -180,13 +186,28 @@ Future<EditSourcePair?> _decodeAndEnhance(
     // Only the model(s) this run actually needs pay the ~1-2s DirectML-
     // probe-then-fallback session-creation cost — asking for denoise alone
     // shouldn't also load the upscaler.
-    final denoiseModel = effectiveEnableDenoise
-        ? OnnxModel.forSpec(denoiseModelSpec)
-        : null;
-    if (denoiseModel != null) {
+    OnnxModel? denoiseModel;
+    if (effectiveEnableDenoise) {
+      var usedSpec = customDenoiseModelPath != null
+          ? OnnxModelSpec.customDenoiseModel(customDenoiseModelPath)
+          : denoiseModelSpec;
+      try {
+        denoiseModel = OnnxModel.forSpec(usedSpec);
+      } catch (e) {
+        // A custom model that fails to load (wrong channel count, missing
+        // "input"/"output" tensor names, a corrupt file) falls back to the
+        // bundled default transparently — see CustomDenoiseModelFallback's
+        // doc — rather than failing the whole Enhance pass. The *bundled*
+        // model failing to load is a much more fundamental problem (a
+        // packaging bug), so that still propagates normally.
+        if (customDenoiseModelPath == null) rethrow;
+        onStage(CustomDenoiseModelFallback(e.toString()));
+        usedSpec = denoiseModelSpec;
+        denoiseModel = OnnxModel.forSpec(usedSpec);
+      }
       onStage(
         AiEnhanceModelInfo(
-          denoiseModelSpec.fileName,
+          usedSpec.fileName,
           denoiseModel.usingGpu,
           denoiseModel.directMlError,
         ),
@@ -236,6 +257,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
       upscale: enableUpscale,
       rawDenoise: enableRawDenoise,
       denoiseStrengthPercent: denoiseStrengthPercent,
+      denoiseModelPath: customDenoiseModelPath,
     );
   }
 
@@ -271,6 +293,7 @@ class _AiEnhanceDecodeIsolateArgs {
     this.enableUpscale,
     this.enableRawDenoise,
     this.denoiseStrengthPercent,
+    this.customDenoiseModelPath,
     this.sendPort,
   );
 
@@ -281,6 +304,7 @@ class _AiEnhanceDecodeIsolateArgs {
   final bool enableUpscale;
   final bool enableRawDenoise;
   final int denoiseStrengthPercent;
+  final String? customDenoiseModelPath;
   final SendPort sendPort;
 }
 
@@ -293,6 +317,7 @@ void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
     args.enableUpscale,
     args.enableRawDenoise,
     args.denoiseStrengthPercent,
+    args.customDenoiseModelPath,
     (stage) => args.sendPort.send(stage),
   );
   args.sendPort.send(result);
@@ -317,6 +342,7 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
   required bool enableUpscale,
   bool enableRawDenoise = false,
   int denoiseStrengthPercent = 100,
+  String? customDenoiseModelPath,
   int previewMaxDimension = defaultPreviewMaxDimension,
   AiEnhanceCancellationToken? cancellationToken,
 }) async {
@@ -331,6 +357,7 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
       enableUpscale,
       enableRawDenoise,
       denoiseStrengthPercent,
+      customDenoiseModelPath,
       receivePort.sendPort,
     ),
   );
@@ -339,7 +366,8 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
       await for (final message in receivePort) {
         if (message is RawDecodeStage ||
             message is AiEnhanceModelInfo ||
-            message is AiEnhanceProgress) {
+            message is AiEnhanceProgress ||
+            message is CustomDenoiseModelFallback) {
           onStage(message);
         } else {
           return message as EditSourcePair?;

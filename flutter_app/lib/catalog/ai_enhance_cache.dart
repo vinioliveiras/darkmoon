@@ -11,7 +11,7 @@ import 'package:path/path.dart' as p;
 /// so old entries are simply never looked up again instead of serving a
 /// stale result. Mirrors `raw_decode_format_version.dart`'s exact role,
 /// scoped to this cache instead.
-const int aiEnhanceCacheVersion = 2;
+const int aiEnhanceCacheVersion = 3;
 
 /// [mode] folds which of denoise/upscale/raw-denoise actually ran (plus
 /// the denoise blend strength — see `ai_enhance.dart`'s `enhanceImage` doc
@@ -22,15 +22,20 @@ const int aiEnhanceCacheVersion = 2;
 /// incorrectly hit whichever one was cached first. [denoiseStrengthPercent]
 /// is a whole percent (0-100) rather than a float specifically so it
 /// doesn't fragment the cache into a near-infinite number of
-/// near-duplicate entries.
+/// near-duplicate entries. [denoiseModelPath] folds in *which* on-device
+/// denoise model produced this result (Settings' custom-model picker —
+/// null means the bundled default) so switching models is also treated
+/// as a distinct result, not a stale hit from whichever model ran first.
 String _modeTag(
   bool denoise,
   bool upscale,
   bool rawDenoise,
   int denoiseStrengthPercent,
+  String? denoiseModelPath,
 ) => 'd${denoise ? 1 : 0}s$denoiseStrengthPercent'
     'u${upscale ? 1 : 0}'
-    'r${rawDenoise ? 1 : 0}';
+    'r${rawDenoise ? 1 : 0}'
+    'm${denoiseModelPath ?? "default"}';
 
 /// `path_provider`-free by design (see `ai_enhance_cache_dir.dart`'s doc
 /// comment) — safe to call from a background isolate, unlike resolving
@@ -43,10 +48,11 @@ String _entryKey(
   bool upscale,
   bool rawDenoise,
   int denoiseStrengthPercent,
+  String? denoiseModelPath,
 ) {
   final raw =
       '$path|${modified.microsecondsSinceEpoch}|$size|'
-      '${_modeTag(denoise, upscale, rawDenoise, denoiseStrengthPercent)}|v$aiEnhanceCacheVersion';
+      '${_modeTag(denoise, upscale, rawDenoise, denoiseStrengthPercent, denoiseModelPath)}|v$aiEnhanceCacheVersion';
   return sha1.convert(utf8.encode(raw)).toString();
 }
 
@@ -79,6 +85,7 @@ Future<Uint8List?> lookupAiEnhanceCache(
   required bool upscale,
   bool rawDenoise = false,
   int denoiseStrengthPercent = 100,
+  String? denoiseModelPath,
 }) async {
   try {
     final stat = await File(path).stat();
@@ -93,6 +100,7 @@ Future<Uint8List?> lookupAiEnhanceCache(
           upscale,
           rawDenoise,
           denoiseStrengthPercent,
+          denoiseModelPath,
         ),
       ),
     );
@@ -119,6 +127,7 @@ Future<void> storeAiEnhanceCache(
   required bool upscale,
   bool rawDenoise = false,
   int denoiseStrengthPercent = 100,
+  String? denoiseModelPath,
 }) async {
   try {
     final stat = await File(path).stat();
@@ -130,6 +139,7 @@ Future<void> storeAiEnhanceCache(
       upscale,
       rawDenoise,
       denoiseStrengthPercent,
+      denoiseModelPath,
     );
     final dest = File(_entryFile(cacheDir, key));
     final tmp = File('${dest.path}.tmp');

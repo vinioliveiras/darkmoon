@@ -340,6 +340,15 @@ class AppLocalizationsPt extends AppLocalizations {
       'O AI Enhance não conseguiu rodar nessa foto. Foi desligado de novo.';
 
   @override
+  String aiDenoiseCustomModelFallbackMessage(String error) {
+    return 'Seu modelo de denoise customizado não pôde ser usado ($error) — usado o modelo padrão no lugar.';
+  }
+
+  @override
+  String get aiDenoiseCustomModelFallbackStatus =>
+      'Modelo customizado falhou, usado o padrão';
+
+  @override
   String get aiDenoiseEnhanceCpuWarning =>
       'Sua GPU ainda não é compatível com isso, então vai rodar na CPU — isso vai demorar bem mais.';
 
@@ -516,6 +525,26 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get settingsThumbnailThreadsLabel =>
       'Threads de carregamento de miniaturas';
+
+  @override
+  String get settingsCustomDenoiseModelLabel => 'Modelo de denoise customizado';
+
+  @override
+  String get settingsCustomDenoiseModelHint =>
+      'Substitui o modelo de Denoise on-device na aba Enhance do diálogo AI Denoise. Precisa ser um substituto direto: RGB 3 canais, mesma resolução de entrada/saída, nomes de tensor \"input\"/\"output\", valores normalizados [0,1] — um modelo que não seguir isso vai dar erro ou produzir um resultado visivelmente errado, não uma falha limpa.';
+
+  @override
+  String get settingsCustomDenoiseModelDefault => 'Padrão (NAFNet-SIDD)';
+
+  @override
+  String get settingsCustomDenoiseModelPickerTitle =>
+      'Escolha um modelo de denoise (.onnx)';
+
+  @override
+  String get settingsCustomDenoiseModelChooseButton => 'Escolher arquivo…';
+
+  @override
+  String get settingsCustomDenoiseModelResetButton => 'Redefinir';
 
   @override
   String get settingsClearThumbnailsButton => 'Limpar cache de miniaturas';

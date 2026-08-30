@@ -1,7 +1,9 @@
 import 'dart:io' show Process;
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 
 import '../diagnostics/dev_log.dart';
 import '../l10n/app_localizations.dart';
@@ -63,6 +65,24 @@ class _SettingsDialogState extends State<SettingsDialog>
   void _update(AppSettings next) {
     setState(() => _settings = next);
     widget.onChanged(next);
+  }
+
+  /// Lets the user pick a `.onnx` file to use in place of the bundled
+  /// NAFNet-SIDD-width64.onnx for the on-device Denoise pass — see
+  /// `AppSettings.customDenoiseModelPath`'s doc for the drop-in-
+  /// replacement constraint this comes with (not a generic model loader).
+  Future<void> _pickCustomDenoiseModel() async {
+    final l10n = AppLocalizations.of(context)!;
+    final result = await FilePicker.pickFiles(
+      dialogTitle: l10n.settingsCustomDenoiseModelPickerTitle,
+      type: FileType.custom,
+      allowedExtensions: ['onnx'],
+    );
+    final path = result?.files.single.path;
+    if (path == null) {
+      return;
+    }
+    _update(_settings.copyWith(customDenoiseModelPath: path));
   }
 
   Future<void> _confirmAndRun(String message, VoidCallback action) async {
@@ -350,6 +370,46 @@ class _SettingsDialogState extends State<SettingsDialog>
                       )
                     : null,
                 icon: const Icon(CupertinoIcons.add, size: 15),
+              ),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.settingsCustomDenoiseModelLabel, style: _labelStyle),
+              const SizedBox(height: 4),
+              Text(
+                l10n.settingsCustomDenoiseModelHint,
+                style: _hintStyle,
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      _settings.customDenoiseModelPath == null
+                          ? l10n.settingsCustomDenoiseModelDefault
+                          : p.basename(_settings.customDenoiseModelPath!),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 12.5,
+                        color: DarkmoonColors.textPrimary,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  TextButton(
+                    onPressed: _pickCustomDenoiseModel,
+                    child: Text(l10n.settingsCustomDenoiseModelChooseButton),
+                  ),
+                  if (_settings.customDenoiseModelPath != null)
+                    TextButton(
+                      onPressed: () =>
+                          _update(_settings.withDefaultDenoiseModel()),
+                      child: Text(l10n.settingsCustomDenoiseModelResetButton),
+                    ),
+                ],
               ),
             ],
           ),

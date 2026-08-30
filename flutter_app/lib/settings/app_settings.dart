@@ -50,6 +50,7 @@ class AppSettings {
     this.recentFiles = const [],
     this.lastActiveFolder,
     this.lastActiveFile,
+    this.customDenoiseModelPath,
   });
 
   /// 'auto' (follow the system language), 'en', or 'pt'.
@@ -137,6 +138,20 @@ class AppSettings {
   /// you were editing, not just the right folder.
   final String? lastActiveFile;
 
+  /// An absolute path to a user-supplied `.onnx` file to use for the AI
+  /// Enhance dialog's on-device Denoise pass, in place of the bundled
+  /// NAFNet-SIDD-width64.onnx — null (the default) means use the bundled
+  /// model. Treated strictly as a drop-in replacement: the file must
+  /// already follow NAFNet-SIDD's own conventions (3-channel RGB,
+  /// same-resolution in/out, "input"/"output" tensor names, [0,1]-
+  /// normalized) — see `onnx_runtime.dart`'s `OnnxModelSpec.customPath`
+  /// doc for why this app can't safely auto-detect a different
+  /// convention (pixel normalization range in particular isn't
+  /// recoverable from the ONNX graph itself). A model that doesn't match
+  /// fails loudly (a real load/inference error surfaces to the user) —
+  /// see `edit_source_ai_enhance.dart`'s fallback-to-default handling.
+  final String? customDenoiseModelPath;
+
   AppSettings copyWith({
     String? language,
     bool? fastPreview,
@@ -152,6 +167,7 @@ class AppSettings {
     List<String>? recentFiles,
     String? lastActiveFolder,
     String? lastActiveFile,
+    String? customDenoiseModelPath,
   }) => AppSettings(
     language: language ?? this.language,
     fastPreview: fastPreview ?? this.fastPreview,
@@ -170,6 +186,8 @@ class AppSettings {
     recentFiles: recentFiles ?? this.recentFiles,
     lastActiveFolder: lastActiveFolder ?? this.lastActiveFolder,
     lastActiveFile: lastActiveFile ?? this.lastActiveFile,
+    customDenoiseModelPath:
+        customDenoiseModelPath ?? this.customDenoiseModelPath,
   );
 
   /// [path] moved (or added) to the front of [recentFiles], deduplicated
@@ -182,6 +200,29 @@ class AppSettings {
           : next,
     );
   }
+
+  /// Resets [customDenoiseModelPath] back to null (use the bundled
+  /// model) — a dedicated method rather than `copyWith(customDenoiseModelPath:
+  /// null)` since `copyWith`'s `??` pattern can't distinguish "clear this"
+  /// from "leave it alone" (same limitation every other nullable field
+  /// here already has).
+  AppSettings withDefaultDenoiseModel() => AppSettings(
+    language: language,
+    fastPreview: fastPreview,
+    previewResolution: previewResolution,
+    useGpuRender: useGpuRender,
+    dynamicFullPreview: dynamicFullPreview,
+    fullQualityPercent: fullQualityPercent,
+    baseContrast: baseContrast,
+    thumbnailConcurrency: thumbnailConcurrency,
+    rawOnly: rawOnly,
+    devLogging: devLogging,
+    libraryFolders: libraryFolders,
+    recentFiles: recentFiles,
+    lastActiveFolder: lastActiveFolder,
+    lastActiveFile: lastActiveFile,
+    customDenoiseModelPath: null,
+  );
 }
 
 Future<File> _settingsFile() async {
@@ -231,6 +272,9 @@ Future<AppSettings> loadSettings() async {
           raw['lastActiveFolder'] as String? ?? defaults.lastActiveFolder,
       lastActiveFile:
           raw['lastActiveFile'] as String? ?? defaults.lastActiveFile,
+      customDenoiseModelPath:
+          raw['customDenoiseModelPath'] as String? ??
+          defaults.customDenoiseModelPath,
     );
   } catch (_) {
     return AppSettings(thumbnailConcurrency: defaultConcurrency);
@@ -256,6 +300,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'recentFiles': settings.recentFiles,
       'lastActiveFolder': settings.lastActiveFolder,
       'lastActiveFile': settings.lastActiveFile,
+      'customDenoiseModelPath': settings.customDenoiseModelPath,
     }),
   );
   await tmp.rename(file.path);
