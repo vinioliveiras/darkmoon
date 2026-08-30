@@ -9,6 +9,7 @@ import '../l10n/app_localizations.dart';
 import '../native/onnx_gpu_probe.dart';
 import '../render/ai_denoise.dart';
 import '../theme.dart';
+import 'dialog_chrome.dart';
 import 'styled_dropdown.dart';
 
 /// Sparingly used, not part of the app's usual monochrome palette — a
@@ -328,10 +329,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
     final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
       backgroundColor: DarkmoonColors.dialogBackground,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: DarkmoonColors.border),
-      ),
+      shape: dialogShape,
       title: Text(
         l10n.aiDenoiseDialogTitle,
         style: const TextStyle(color: DarkmoonColors.textPrimary, fontSize: 16),

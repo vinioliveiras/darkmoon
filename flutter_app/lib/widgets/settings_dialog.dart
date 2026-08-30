@@ -91,6 +91,7 @@ class _SettingsDialogState extends State<SettingsDialog>
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: DarkmoonColors.dialogBackground,
+        shape: dialogShape,
         title: Text(l10n.confirmClearTitle),
         content: Text(message),
         actions: [
@@ -126,6 +127,7 @@ class _SettingsDialogState extends State<SettingsDialog>
 
     return AlertDialog(
       backgroundColor: DarkmoonColors.dialogBackground,
+      shape: dialogShape,
       title: DialogTitleRow(
         title: l10n.settingsDialogTitle,
         closeTooltip: l10n.closeButton,

@@ -3,6 +3,17 @@ import 'package:flutter/material.dart';
 
 import '../theme.dart';
 
+/// The standard shape for every app dialog (Settings, About, AI Denoise,
+/// Export, confirmation prompts, etc.) — rounded corners with a subtle
+/// border, pairing with [DarkmoonColors.dialogBackground]'s near-black
+/// fill. Use as `AlertDialog`'s `shape:` so every window shares the same
+/// silhouette instead of falling back to Material's default (sharper
+/// corners, no border).
+const dialogShape = RoundedRectangleBorder(
+  borderRadius: BorderRadius.all(Radius.circular(12)),
+  side: BorderSide(color: DarkmoonColors.border),
+);
+
 /// A small circular "×" — the system-panel convention for dismissing a
 /// preferences/info panel (macOS System Settings, iOS Settings) — used
 /// instead of a bottom "Close" text button so these dialogs read less like

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../export/export_format.dart';
 import '../l10n/app_localizations.dart';
 import '../theme.dart';
+import 'dialog_chrome.dart';
 
 class ExportOptions {
   const ExportOptions({
@@ -76,10 +77,7 @@ class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
     final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
       backgroundColor: DarkmoonColors.dialogBackground,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: const BorderSide(color: DarkmoonColors.border),
-      ),
+      shape: dialogShape,
       title: Text(
         l10n.exportPhotoDialogTitle,
         style: const TextStyle(color: DarkmoonColors.textPrimary, fontSize: 16),

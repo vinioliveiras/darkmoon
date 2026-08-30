@@ -68,6 +68,7 @@ import 'widgets/brush_mask_overlay.dart';
 import 'widgets/color_range_overlay.dart';
 import 'widgets/crop_overlay.dart';
 import 'widgets/color_wheel.dart';
+import 'widgets/dialog_chrome.dart' show dialogShape;
 import 'widgets/export_dialog.dart';
 import 'widgets/folder_sidebar.dart';
 import 'widgets/gradient_mask_overlay.dart';
@@ -1394,6 +1395,7 @@ class _EditorScreenState extends State<EditorScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: DarkmoonColors.dialogBackground,
+        shape: dialogShape,
         title: Text(l10n.confirmClearTitle),
         content: Text(l10n.presetDeleteConfirmMessage(preset.name)),
         actions: [
@@ -1432,6 +1434,7 @@ class _EditorScreenState extends State<EditorScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: DarkmoonColors.dialogBackground,
+        shape: dialogShape,
         title: Text(l10n.confirmClearTitle),
         content: Text(l10n.presetDeleteManyConfirmMessage(presets.length)),
         actions: [
@@ -1974,6 +1977,7 @@ class _EditorScreenState extends State<EditorScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: DarkmoonColors.dialogBackground,
+        shape: dialogShape,
         title: Text(l10n.filmstripResetEditsConfirmTitle),
         content: Text(l10n.filmstripResetEditsConfirmMessage(file.name)),
         actions: [
@@ -2172,6 +2176,7 @@ class _EditorScreenState extends State<EditorScreen> {
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: DarkmoonColors.dialogBackground,
+        shape: dialogShape,
         title: Text(l10n.filmstripDeleteConfirmTitle),
         content: Text(l10n.filmstripDeleteConfirmMessage(file.name)),
         actions: [
