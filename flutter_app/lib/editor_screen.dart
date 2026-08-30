@@ -278,8 +278,19 @@ Map<String, double> _withCategoriesApplied(
   double asShotKelvin = 5500,
   double asShotTint = 0,
 }) {
-  bool disabled(String category) =>
-      (values[_categoryEnabledKey(category)] ?? 1) == 0;
+  bool disabled(String category) {
+    // Every other section defaults to on (a brand-new photo has no
+    // catalog entry yet, so the key is absent) — EFFECTS (Grain +
+    // Vignette) is the one exception, off by default like Lens
+    // Correction's own `enabled` flag. Motivated by a real user report:
+    // film-look presets often set Grain/Texture/Sharpen together, and a
+    // grain layer added *after* AI Enhance's denoise pass visually
+    // masked the whole improvement — defaulting Effects off keeps that
+    // choice deliberate instead of silently inherited from a preset.
+    final defaultEnabled = category == 'EFFECTS' ? 0.0 : 1.0;
+    return (values[_categoryEnabledKey(category)] ?? defaultEnabled) == 0;
+  }
+
   final overrides = <String, double>{};
   for (final entry in _sections.entries) {
     if (disabled(entry.key)) {
@@ -7242,8 +7253,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                             label: l10n.sectionEffects,
                             collapsed: _collapsed.contains('EFFECTS'),
                             onTap: () => _toggleSection('EFFECTS'),
+                            // Off by default (unlike every other section) —
+                            // see _withCategoriesApplied's disabled() doc.
                             enabled:
-                                (values[_categoryEnabledKey('EFFECTS')] ?? 1) !=
+                                (values[_categoryEnabledKey('EFFECTS')] ?? 0) !=
                                 0,
                             onEnabledChanged: (v) {
                               final key = _categoryEnabledKey('EFFECTS');
