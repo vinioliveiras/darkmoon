@@ -233,7 +233,7 @@ class _StyledDropdownState<T> extends State<StyledDropdown<T>>
             height: 34,
             padding: EdgeInsets.symmetric(horizontal: iconOnly ? 0 : 10),
             decoration: BoxDecoration(
-              color: DarkmoonColors.surfaceRaised,
+              color: DarkmoonColors.dropdownBackground,
               borderRadius: BorderRadius.circular(7),
               border: Border.all(
                 color: _isOpen ? DarkmoonColors.accent : DarkmoonColors.border,
@@ -375,7 +375,7 @@ class _StyledDropdownMenuState<T> extends State<_StyledDropdownMenu<T>> {
               color: Colors.transparent,
               child: Container(
                 decoration: BoxDecoration(
-                  color: DarkmoonColors.surfaceRaised,
+                  color: DarkmoonColors.dropdownBackground,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: DarkmoonColors.border),
                   boxShadow: [

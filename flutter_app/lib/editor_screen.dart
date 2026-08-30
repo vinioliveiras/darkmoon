@@ -2683,7 +2683,10 @@ class _EditorScreenState extends State<EditorScreen> {
       if (sources == null && !wantAnyPipeline) {
         final cachedJpeg = await _previewCache?.lookup(path);
         if (cachedJpeg != null) {
-          sources = await compute(decodeEditSourcePairFromCachedJpeg, cachedJpeg);
+          sources = await compute(
+            decodeEditSourcePairFromCachedJpeg,
+            cachedJpeg,
+          );
           fromCache = sources != null;
         }
       }
@@ -3829,7 +3832,9 @@ class _EditorScreenState extends State<EditorScreen> {
         });
         DevLog.log(message, tag: 'cloud-denoise');
         _notify(
-          detail: AppLocalizations.of(context)!.aiDenoiseCloudFailedMessage(message),
+          detail: AppLocalizations.of(
+            context,
+          )!.aiDenoiseCloudFailedMessage(message),
           status: AppLocalizations.of(context)!.aiDenoiseCloudFailedStatus,
         );
         return false;
@@ -4539,9 +4544,7 @@ class _EditorScreenState extends State<EditorScreen> {
       pixel.b.toDouble(),
     );
     _updateActiveMask(
-      (m) => m.copyWith(
-        luminance: m.luminance.copyWith(targetLuma: luma),
-      ),
+      (m) => m.copyWith(luminance: m.luminance.copyWith(targetLuma: luma)),
     );
     _pushHistory();
     _scheduleRender(live: false);
@@ -5376,8 +5379,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       onExport: selected == null ? null : _exportCurrent,
                       exporting: _exporting,
                       onReset: _resetActive,
-                      presetAmount:
-                          _paramValues[_globalEditAmountKey] ?? 100.0,
+                      presetAmount: _paramValues[_globalEditAmountKey] ?? 100.0,
                       onPresetAmountChanged: _onGlobalEditAmountChanged,
                       onPresetAmountChangeEnd: _onGlobalEditAmountChangeEnd,
                     ),
@@ -5642,9 +5644,7 @@ class _ImageArea extends StatelessWidget {
           key: viewportKey,
           color: DarkmoonColors.canvas,
           alignment: Alignment.center,
-          padding: const EdgeInsets.symmetric(
-            vertical: _verticalBreathingRoom,
-          ),
+          padding: const EdgeInsets.symmetric(vertical: _verticalBreathingRoom),
           child: _buildContent(l10n),
         ),
         // A sibling of the padded Container above, not a descendant of its
@@ -6885,8 +6885,7 @@ class _SectionHeader extends StatelessWidget {
                       child: Switch(
                         value: enabled!,
                         onChanged: onEnabledChanged,
-                        materialTapTargetSize:
-                            MaterialTapTargetSize.shrinkWrap,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
                   ),
@@ -6903,6 +6902,34 @@ class _SectionHeader extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// Wraps a section's header and collapsible body together in one
+/// rounded, bordered card sitting on the panel's own background —
+/// Photomator-style grouped section, replacing the old flat list of
+/// headers/sliders with no visual boundary between sections.
+class _SectionCard extends StatelessWidget {
+  const _SectionCard({required this.header, required this.body});
+
+  final Widget header;
+  final Widget body;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.only(top: 10),
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+      decoration: BoxDecoration(
+        color: DarkmoonColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: DarkmoonColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [header, body],
       ),
     );
   }
@@ -7211,17 +7238,31 @@ class _ControlsPanelState extends State<_ControlsPanel> {
     });
   }
 
-  /// Wraps [children] in a single [_CollapsibleSection] so a section's
-  /// content animates in/out under its header instead of popping. Returns
-  /// a one-element list (not the widget directly) so call sites can keep
-  /// spreading it into a `children:` list with `...` the same way the old
-  /// `if (!_collapsed.contains(section)) ...[ ... ]` collection-if did.
-  List<Widget> _collapsible(String section, List<Widget> children) => [
-    _CollapsibleSection(
-      collapsed: _collapsed.contains(section),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: children,
+  /// Builds one section: a [_SectionHeader] plus its collapsible body,
+  /// wrapped together in a single [_SectionCard]. Returns a one-element
+  /// list (not the widget directly) so call sites can keep spreading it
+  /// into a `children:` list with `...`.
+  List<Widget> _section(
+    String key, {
+    required String label,
+    bool? enabled,
+    ValueChanged<bool>? onEnabledChanged,
+    required List<Widget> children,
+  }) => [
+    _SectionCard(
+      header: _SectionHeader(
+        label: label,
+        collapsed: _collapsed.contains(key),
+        onTap: () => _toggleSection(key),
+        enabled: enabled,
+        onEnabledChanged: onEnabledChanged,
+      ),
+      body: _CollapsibleSection(
+        collapsed: _collapsed.contains(key),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: children,
+        ),
       ),
     ),
   ];
@@ -7242,8 +7283,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
         .where((m) => m.id == widget.activeMaskId)
         .firstOrNull;
     final isBrushActive =
-        activeMask?.type == MaskType.brush ||
-        activeMask?.type == MaskType.flow;
+        activeMask?.type == MaskType.brush || activeMask?.type == MaskType.flow;
     final isFlowActive = activeMask?.type == MaskType.flow;
     final isColorRangeActive = activeMask?.type == MaskType.colorRange;
     final isLuminanceActive = activeMask?.type == MaskType.luminance;
@@ -7476,12 +7516,14 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   activeMask!.luminance.targetLuma
                                       .round()
                                       .clamp(0, 255),
-                                  activeMask.luminance.targetLuma
-                                      .round()
-                                      .clamp(0, 255),
-                                  activeMask.luminance.targetLuma
-                                      .round()
-                                      .clamp(0, 255),
+                                  activeMask.luminance.targetLuma.round().clamp(
+                                    0,
+                                    255,
+                                  ),
+                                  activeMask.luminance.targetLuma.round().clamp(
+                                    0,
+                                    255,
+                                  ),
                                 ),
                                 borderRadius: BorderRadius.circular(6),
                                 border: Border.all(
@@ -7529,16 +7571,14 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                       ],
                       const SizedBox(height: 4),
                       for (final entry in _sections.entries) ...[
-                        const SizedBox(height: 10),
                         // `values`/`onChanged`/`onChangeEnd` already resolve to
                         // either the global layer or the active mask's own (see
                         // the comment below on Tone Curve/Color Mixer/etc.), so
                         // the toggle works identically for both — no separate
                         // mask-vs-global branch needed.
-                        _SectionHeader(
+                        ..._section(
+                          entry.key,
                           label: _sectionLabel(l10n, entry.key),
-                          collapsed: _collapsed.contains(entry.key),
-                          onTap: () => _toggleSection(entry.key),
                           enabled:
                               (values[_categoryEnabledKey(entry.key)] ?? 1) !=
                               0,
@@ -7547,42 +7587,42 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                             onChanged(key, v ? 1 : 0);
                             onChangeEnd(key, v ? 1 : 0);
                           },
+                          children: [
+                            if (entry.key == 'WHITE BALANCE')
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 6,
+                                  bottom: 14,
+                                ),
+                                child: _buildWhiteBalanceModeRow(l10n, values),
+                              ),
+                            for (final spec in entry.value)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: SliderRow(
+                                  name: _sliderLabel(l10n, spec.name),
+                                  min: spec.min,
+                                  max: spec.max,
+                                  value:
+                                      values[spec.name] ??
+                                      _wbSliderFallback(spec.name) ??
+                                      spec.defaultValue,
+                                  decimals: spec.decimals,
+                                  defaultValue:
+                                      _wbSliderFallback(spec.name) ??
+                                      spec.defaultValue,
+                                  trackColors: spec.gradientColors,
+                                  valueSuffix: spec.valueSuffix,
+                                  onChanged: (v) => onChanged(spec.name, v),
+                                  onChangeEnd: (v) => onChangeEnd(spec.name, v),
+                                ),
+                              ),
+                            // (The old "preserve brightness on Tint" toggle
+                            // was removed — the current WB model is
+                            // luminance-normalised by construction, so it
+                            // was a no-op. The param still exists, inert.)
+                          ],
                         ),
-                        ..._collapsible(entry.key, [
-                          if (entry.key == 'WHITE BALANCE')
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                top: 6,
-                                bottom: 14,
-                              ),
-                              child: _buildWhiteBalanceModeRow(l10n, values),
-                            ),
-                          for (final spec in entry.value)
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: SliderRow(
-                                name: _sliderLabel(l10n, spec.name),
-                                min: spec.min,
-                                max: spec.max,
-                                value:
-                                    values[spec.name] ??
-                                    _wbSliderFallback(spec.name) ??
-                                    spec.defaultValue,
-                                decimals: spec.decimals,
-                                defaultValue:
-                                    _wbSliderFallback(spec.name) ??
-                                    spec.defaultValue,
-                                trackColors: spec.gradientColors,
-                                valueSuffix: spec.valueSuffix,
-                                onChanged: (v) => onChanged(spec.name, v),
-                                onChangeEnd: (v) => onChangeEnd(spec.name, v),
-                              ),
-                            ),
-                          // (The old "preserve brightness on Tint" toggle
-                          // was removed — the current WB model is
-                          // luminance-normalised by construction, so it
-                          // was a no-op. The param still exists, inert.)
-                        ]),
                         // Tone Curve/Color Curve/Color Mixer/Color Grading/
                         // Effects are available for masks too — `curves`/
                         // `onChanged`/`onChangeEnd` above already resolve to
@@ -7593,10 +7633,9 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                         // loop, so Presence/Detail stay right after Tone, ahead
                         // of the advanced color tools.
                         if (entry.key == 'DETAIL') ...[
-                          _SectionHeader(
+                          ..._section(
+                            'TONE CURVE',
                             label: l10n.sectionToneCurve,
-                            collapsed: _collapsed.contains('TONE CURVE'),
-                            onTap: () => _toggleSection('TONE CURVE'),
                             enabled:
                                 (values[_categoryEnabledKey('TONE CURVE')] ??
                                     1) !=
@@ -7606,43 +7645,46 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChanged(key, v ? 1 : 0);
                               onChangeEnd(key, v ? 1 : 0);
                             },
-                          ),
-                          ..._collapsible('TONE CURVE', [
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: ToneCurveEditor(
-                                points: curves.tone,
-                                onChanged: onToneCurveChanged,
-                                onChangeEnd: onToneCurveChangeEnd,
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 6),
-                              child: Text(
-                                l10n.toneCurveParametricLabel,
-                                style: Theme.of(context).textTheme.labelSmall
-                                    ?.copyWith(color: DarkmoonColors.textMuted),
-                              ),
-                            ),
-                            for (final spec in _parametricCurveSliders)
+                            children: [
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
-                                child: SliderRow(
-                                  name: _sliderLabel(l10n, spec.name),
-                                  min: spec.min,
-                                  max: spec.max,
-                                  value: values[spec.name] ?? spec.defaultValue,
-                                  decimals: spec.decimals,
-                                  defaultValue: spec.defaultValue,
-                                  onChanged: (v) => onChanged(spec.name, v),
-                                  onChangeEnd: (v) => onChangeEnd(spec.name, v),
+                                child: ToneCurveEditor(
+                                  points: curves.tone,
+                                  onChanged: onToneCurveChanged,
+                                  onChangeEnd: onToneCurveChangeEnd,
                                 ),
                               ),
-                          ]),
-                          _SectionHeader(
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 6),
+                                child: Text(
+                                  l10n.toneCurveParametricLabel,
+                                  style: Theme.of(context).textTheme.labelSmall
+                                      ?.copyWith(
+                                        color: DarkmoonColors.textMuted,
+                                      ),
+                                ),
+                              ),
+                              for (final spec in _parametricCurveSliders)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: SliderRow(
+                                    name: _sliderLabel(l10n, spec.name),
+                                    min: spec.min,
+                                    max: spec.max,
+                                    value:
+                                        values[spec.name] ?? spec.defaultValue,
+                                    decimals: spec.decimals,
+                                    defaultValue: spec.defaultValue,
+                                    onChanged: (v) => onChanged(spec.name, v),
+                                    onChangeEnd: (v) =>
+                                        onChangeEnd(spec.name, v),
+                                  ),
+                                ),
+                            ],
+                          ),
+                          ..._section(
+                            'COLOR CURVE',
                             label: l10n.sectionColorCurve,
-                            collapsed: _collapsed.contains('COLOR CURVE'),
-                            onTap: () => _toggleSection('COLOR CURVE'),
                             enabled:
                                 (values[_categoryEnabledKey('COLOR CURVE')] ??
                                     1) !=
@@ -7652,41 +7694,44 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChanged(key, v ? 1 : 0);
                               onChangeEnd(key, v ? 1 : 0);
                             },
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 4,
+                                  bottom: 8,
+                                ),
+                                child: _ColorChannelTabs(
+                                  active: _activeColorChannel,
+                                  onSelect: (channel) => setState(
+                                    () => _activeColorChannel = channel,
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: ToneCurveEditor(
+                                  key: ValueKey(_activeColorChannel),
+                                  points: _channelPoints(
+                                    curves,
+                                    _activeColorChannel,
+                                  ),
+                                  lineColor: _channelColor(_activeColorChannel),
+                                  onChanged: (points) => onColorCurveChanged(
+                                    _activeColorChannel,
+                                    points,
+                                  ),
+                                  onChangeEnd: (points) =>
+                                      onColorCurveChangeEnd(
+                                        _activeColorChannel,
+                                        points,
+                                      ),
+                                ),
+                              ),
+                            ],
                           ),
-                          ..._collapsible('COLOR CURVE', [
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4, bottom: 8),
-                              child: _ColorChannelTabs(
-                                active: _activeColorChannel,
-                                onSelect: (channel) => setState(
-                                  () => _activeColorChannel = channel,
-                                ),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: ToneCurveEditor(
-                                key: ValueKey(_activeColorChannel),
-                                points: _channelPoints(
-                                  curves,
-                                  _activeColorChannel,
-                                ),
-                                lineColor: _channelColor(_activeColorChannel),
-                                onChanged: (points) => onColorCurveChanged(
-                                  _activeColorChannel,
-                                  points,
-                                ),
-                                onChangeEnd: (points) => onColorCurveChangeEnd(
-                                  _activeColorChannel,
-                                  points,
-                                ),
-                              ),
-                            ),
-                          ]),
-                          _SectionHeader(
+                          ..._section(
+                            'COLOR MIXER',
                             label: l10n.sectionColorMixer,
-                            collapsed: _collapsed.contains('COLOR MIXER'),
-                            onTap: () => _toggleSection('COLOR MIXER'),
                             enabled:
                                 (values[_categoryEnabledKey('COLOR MIXER')] ??
                                     1) !=
@@ -7696,134 +7741,133 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChanged(key, v ? 1 : 0);
                               onChangeEnd(key, v ? 1 : 0);
                             },
-                          ),
-                          ..._collapsible('COLOR MIXER', [
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                top: 6,
-                                bottom: 10,
-                              ),
-                              child: _MixerModeTabs(
-                                active: _mixerViewMode,
-                                onSelect: (mode) =>
-                                    setState(() => _mixerViewMode = mode),
-                              ),
-                            ),
-                            if (_mixerViewMode == 'Mixer') ...[
+                            children: [
                               Padding(
-                                padding: const EdgeInsets.only(bottom: 10),
-                                child: _MixerChannelDots(
-                                  active: _activeMixerChannel,
-                                  onSelect: (channel) => setState(
-                                    () => _activeMixerChannel = channel,
-                                  ),
+                                padding: const EdgeInsets.only(
+                                  top: 6,
+                                  bottom: 10,
+                                ),
+                                child: _MixerModeTabs(
+                                  active: _mixerViewMode,
+                                  onSelect: (mode) =>
+                                      setState(() => _mixerViewMode = mode),
                                 ),
                               ),
-                              // Luminance re-enabled: color_mixer.dart now
-                              // ports RapidRAW's apply_hsl_panel in full
-                              // (scene-linear HSV, per-band Gaussian
-                              // influence, saturation-gated), including its
-                              // luma-preserving-then-adjusting Luminance
-                              // term — a different code path from the one
-                              // previously disabled after reports of it
-                              // blowing out/pixelating pixels (that one
-                              // relied on HSL lightness directly, not luma
-                              // explicitly restored after the shift).
-                              for (final suffix in const [
-                                'Hue',
-                                'Saturation',
-                                'Luminance',
-                              ])
+                              if (_mixerViewMode == 'Mixer') ...[
                                 Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: SliderRow(
-                                    name: _mixerSliderLabel(l10n, suffix),
-                                    min: -100,
-                                    max: 100,
-                                    value:
-                                        values['Mixer$_activeMixerChannel$suffix'] ??
-                                        0,
-                                    decimals: 0,
-                                    defaultValue: 0,
-                                    trackColors: _mixerTrackColors(
-                                      _activeMixerChannel,
-                                      suffix,
-                                    ),
-                                    onChanged: (v) => onChanged(
-                                      'Mixer$_activeMixerChannel$suffix',
-                                      v,
-                                    ),
-                                    onChangeEnd: (v) => onChangeEnd(
-                                      'Mixer$_activeMixerChannel$suffix',
-                                      v,
+                                  padding: const EdgeInsets.only(bottom: 10),
+                                  child: _MixerChannelDots(
+                                    active: _activeMixerChannel,
+                                    onSelect: (channel) => setState(
+                                      () => _activeMixerChannel = channel,
                                     ),
                                   ),
                                 ),
-                            ] else
-                              for (final suffix in const [
-                                'Hue',
-                                'Saturation',
-                                'Luminance',
-                              ])
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 14),
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Padding(
-                                        padding: const EdgeInsets.only(
-                                          bottom: 4,
-                                        ),
-                                        child: Text(
-                                          _mixerSliderLabel(l10n, suffix),
-                                          style: TextStyle(
-                                            color: DarkmoonColors.textMuted,
-                                            fontSize: 11,
-                                            fontWeight: FontWeight.w600,
-                                            letterSpacing: 0.4,
-                                          ),
-                                        ),
+                                // Luminance re-enabled: color_mixer.dart now
+                                // ports RapidRAW's apply_hsl_panel in full
+                                // (scene-linear HSV, per-band Gaussian
+                                // influence, saturation-gated), including its
+                                // luma-preserving-then-adjusting Luminance
+                                // term — a different code path from the one
+                                // previously disabled after reports of it
+                                // blowing out/pixelating pixels (that one
+                                // relied on HSL lightness directly, not luma
+                                // explicitly restored after the shift).
+                                for (final suffix in const [
+                                  'Hue',
+                                  'Saturation',
+                                  'Luminance',
+                                ])
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: SliderRow(
+                                      name: _mixerSliderLabel(l10n, suffix),
+                                      min: -100,
+                                      max: 100,
+                                      value:
+                                          values['Mixer$_activeMixerChannel$suffix'] ??
+                                          0,
+                                      decimals: 0,
+                                      defaultValue: 0,
+                                      trackColors: _mixerTrackColors(
+                                        _activeMixerChannel,
+                                        suffix,
                                       ),
-                                      for (final channel in _mixerChannels)
+                                      onChanged: (v) => onChanged(
+                                        'Mixer$_activeMixerChannel$suffix',
+                                        v,
+                                      ),
+                                      onChangeEnd: (v) => onChangeEnd(
+                                        'Mixer$_activeMixerChannel$suffix',
+                                        v,
+                                      ),
+                                    ),
+                                  ),
+                              ] else
+                                for (final suffix in const [
+                                  'Hue',
+                                  'Saturation',
+                                  'Luminance',
+                                ])
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 14),
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
                                         Padding(
                                           padding: const EdgeInsets.only(
-                                            bottom: 8,
+                                            bottom: 4,
                                           ),
-                                          child: SliderRow(
-                                            name: _mixerChannelLabel(
-                                              l10n,
-                                              channel,
-                                            ),
-                                            min: -100,
-                                            max: 100,
-                                            value:
-                                                values['Mixer$channel$suffix'] ??
-                                                0,
-                                            decimals: 0,
-                                            defaultValue: 0,
-                                            trackColors: _mixerTrackColors(
-                                              channel,
-                                              suffix,
-                                            ),
-                                            onChanged: (v) => onChanged(
-                                              'Mixer$channel$suffix',
-                                              v,
-                                            ),
-                                            onChangeEnd: (v) => onChangeEnd(
-                                              'Mixer$channel$suffix',
-                                              v,
+                                          child: Text(
+                                            _mixerSliderLabel(l10n, suffix),
+                                            style: TextStyle(
+                                              color: DarkmoonColors.textMuted,
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w600,
+                                              letterSpacing: 0.4,
                                             ),
                                           ),
                                         ),
-                                    ],
+                                        for (final channel in _mixerChannels)
+                                          Padding(
+                                            padding: const EdgeInsets.only(
+                                              bottom: 8,
+                                            ),
+                                            child: SliderRow(
+                                              name: _mixerChannelLabel(
+                                                l10n,
+                                                channel,
+                                              ),
+                                              min: -100,
+                                              max: 100,
+                                              value:
+                                                  values['Mixer$channel$suffix'] ??
+                                                  0,
+                                              decimals: 0,
+                                              defaultValue: 0,
+                                              trackColors: _mixerTrackColors(
+                                                channel,
+                                                suffix,
+                                              ),
+                                              onChanged: (v) => onChanged(
+                                                'Mixer$channel$suffix',
+                                                v,
+                                              ),
+                                              onChangeEnd: (v) => onChangeEnd(
+                                                'Mixer$channel$suffix',
+                                                v,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
                                   ),
-                                ),
-                          ]),
-                          _SectionHeader(
+                            ],
+                          ),
+                          ..._section(
+                            'COLOR GRADING',
                             label: l10n.sectionColorGrading,
-                            collapsed: _collapsed.contains('COLOR GRADING'),
-                            onTap: () => _toggleSection('COLOR GRADING'),
                             enabled:
                                 (values[_categoryEnabledKey('COLOR GRADING')] ??
                                     1) !=
@@ -7833,82 +7877,81 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChanged(key, v ? 1 : 0);
                               onChangeEnd(key, v ? 1 : 0);
                             },
-                          ),
-                          ..._collapsible('COLOR GRADING', [
-                            Padding(
-                              padding: const EdgeInsets.only(
-                                top: 6,
-                                bottom: 10,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(
+                                  top: 6,
+                                  bottom: 10,
+                                ),
+                                child: _GradeRangeTabs(
+                                  active: _activeGradeRange,
+                                  onSelect: (range) =>
+                                      setState(() => _activeGradeRange = range),
+                                ),
                               ),
-                              child: _GradeRangeTabs(
-                                active: _activeGradeRange,
-                                onSelect: (range) =>
-                                    setState(() => _activeGradeRange = range),
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: Center(
-                                child: SizedBox(
-                                  width: 160,
-                                  child: ColorWheel(
-                                    key: ValueKey(_activeGradeRange),
-                                    hue:
-                                        values['Grade${_activeGradeRange}Hue'] ??
-                                        0,
-                                    saturation:
-                                        values['Grade${_activeGradeRange}Saturation'] ??
-                                        0,
-                                    onChanged: (hue, sat) {
-                                      onChanged(
-                                        'Grade${_activeGradeRange}Hue',
-                                        hue,
-                                      );
-                                      onChanged(
-                                        'Grade${_activeGradeRange}Saturation',
-                                        sat,
-                                      );
-                                    },
-                                    onChangeEnd: (hue, sat) {
-                                      onChangeEnd(
-                                        'Grade${_activeGradeRange}Hue',
-                                        hue,
-                                      );
-                                      onChangeEnd(
-                                        'Grade${_activeGradeRange}Saturation',
-                                        sat,
-                                      );
-                                    },
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: Center(
+                                  child: SizedBox(
+                                    width: 160,
+                                    child: ColorWheel(
+                                      key: ValueKey(_activeGradeRange),
+                                      hue:
+                                          values['Grade${_activeGradeRange}Hue'] ??
+                                          0,
+                                      saturation:
+                                          values['Grade${_activeGradeRange}Saturation'] ??
+                                          0,
+                                      onChanged: (hue, sat) {
+                                        onChanged(
+                                          'Grade${_activeGradeRange}Hue',
+                                          hue,
+                                        );
+                                        onChanged(
+                                          'Grade${_activeGradeRange}Saturation',
+                                          sat,
+                                        );
+                                      },
+                                      onChangeEnd: (hue, sat) {
+                                        onChangeEnd(
+                                          'Grade${_activeGradeRange}Hue',
+                                          hue,
+                                        );
+                                        onChangeEnd(
+                                          'Grade${_activeGradeRange}Saturation',
+                                          sat,
+                                        );
+                                      },
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: SliderRow(
-                                name: l10n.mixerLuminanceLabel,
-                                min: -100,
-                                max: 100,
-                                value:
-                                    values['Grade${_activeGradeRange}Luminance'] ??
-                                    0,
-                                decimals: 0,
-                                defaultValue: 0,
-                                onChanged: (v) => onChanged(
-                                  'Grade${_activeGradeRange}Luminance',
-                                  v,
-                                ),
-                                onChangeEnd: (v) => onChangeEnd(
-                                  'Grade${_activeGradeRange}Luminance',
-                                  v,
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: SliderRow(
+                                  name: l10n.mixerLuminanceLabel,
+                                  min: -100,
+                                  max: 100,
+                                  value:
+                                      values['Grade${_activeGradeRange}Luminance'] ??
+                                      0,
+                                  decimals: 0,
+                                  defaultValue: 0,
+                                  onChanged: (v) => onChanged(
+                                    'Grade${_activeGradeRange}Luminance',
+                                    v,
+                                  ),
+                                  onChangeEnd: (v) => onChangeEnd(
+                                    'Grade${_activeGradeRange}Luminance',
+                                    v,
+                                  ),
                                 ),
                               ),
-                            ),
-                          ]),
-                          _SectionHeader(
+                            ],
+                          ),
+                          ..._section(
+                            'EFFECTS',
                             label: l10n.sectionEffects,
-                            collapsed: _collapsed.contains('EFFECTS'),
-                            onTap: () => _toggleSection('EFFECTS'),
                             // Off by default (unlike every other section) —
                             // see _withCategoriesApplied's disabled() doc.
                             enabled:
@@ -7919,49 +7962,50 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChanged(key, v ? 1 : 0);
                               onChangeEnd(key, v ? 1 : 0);
                             },
-                          ),
-                          ..._collapsible('EFFECTS', [
-                            for (final spec in [
-                              ..._vignetteSliders,
-                              ..._grainSliders,
-                            ])
-                              Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
-                                child: SliderRow(
-                                  name: _sliderLabel(l10n, spec.name),
-                                  min: spec.min,
-                                  max: spec.max,
-                                  value: values[spec.name] ?? spec.defaultValue,
-                                  decimals: spec.decimals,
-                                  defaultValue: spec.defaultValue,
-                                  onChanged: (v) => onChanged(spec.name, v),
-                                  onChangeEnd: (v) => onChangeEnd(spec.name, v),
+                            children: [
+                              for (final spec in [
+                                ..._vignetteSliders,
+                                ..._grainSliders,
+                              ])
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: SliderRow(
+                                    name: _sliderLabel(l10n, spec.name),
+                                    min: spec.min,
+                                    max: spec.max,
+                                    value:
+                                        values[spec.name] ?? spec.defaultValue,
+                                    decimals: spec.decimals,
+                                    defaultValue: spec.defaultValue,
+                                    onChanged: (v) => onChanged(spec.name, v),
+                                    onChangeEnd: (v) =>
+                                        onChangeEnd(spec.name, v),
+                                  ),
                                 ),
-                              ),
-                          ]),
-                          _SectionHeader(
+                            ],
+                          ),
+                          ..._section(
+                            'LENS CORRECTION',
                             label: l10n.sectionLensCorrection,
-                            collapsed: _collapsed.contains('LENS CORRECTION'),
-                            onTap: () => _toggleSection('LENS CORRECTION'),
                             enabled: widget.lensCorrection.enabled,
                             onEnabledChanged: (v) =>
                                 widget.onLensCorrectionChangeEnd(
                                   widget.lensCorrection.copyWith(enabled: v),
                                 ),
-                          ),
-                          ..._collapsible('LENS CORRECTION', [
-                            Padding(
-                              padding: const EdgeInsets.only(top: 10),
-                              child: LensCorrectionPanel(
-                                params: widget.lensCorrection,
-                                resolvedProfile: widget.resolvedLensProfile,
-                                allProfiles: widget.lensProfiles,
-                                cameraMake: widget.metadata?.cameraMake ?? '',
-                                onChanged: widget.onLensCorrectionChanged,
-                                onChangeEnd: widget.onLensCorrectionChangeEnd,
+                            children: [
+                              Padding(
+                                padding: const EdgeInsets.only(top: 10),
+                                child: LensCorrectionPanel(
+                                  params: widget.lensCorrection,
+                                  resolvedProfile: widget.resolvedLensProfile,
+                                  allProfiles: widget.lensProfiles,
+                                  cameraMake: widget.metadata?.cameraMake ?? '',
+                                  onChanged: widget.onLensCorrectionChanged,
+                                  onChangeEnd: widget.onLensCorrectionChangeEnd,
+                                ),
                               ),
-                            ),
-                          ]),
+                            ],
+                          ),
                         ],
                       ],
                     ],
@@ -8120,51 +8164,12 @@ class _MixerModeTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Row(
-      children: [
-        for (final mode in _modes)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: Material(
-                color: mode == active
-                    ? DarkmoonColors.accent.withValues(alpha: 0.22)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(6),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(6),
-                  onTap: () => onSelect(mode),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: mode == active
-                            ? DarkmoonColors.accent
-                            : DarkmoonColors.border,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      mode == 'Mixer'
-                          ? l10n.mixerModeMixerLabel
-                          : l10n.mixerModeHslLabel,
-                      style: TextStyle(
-                        color: mode == active
-                            ? DarkmoonColors.accent
-                            : DarkmoonColors.textSecondary,
-                        fontSize: 11,
-                        fontWeight: mode == active
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
+    return _SegmentedTabs<String>(
+      items: _modes,
+      active: active,
+      onSelect: onSelect,
+      labelOf: (mode) =>
+          mode == 'Mixer' ? l10n.mixerModeMixerLabel : l10n.mixerModeHslLabel,
     );
   }
 }

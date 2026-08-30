@@ -19,6 +19,12 @@ class DarkmoonColors {
   /// image viewport" stay independently adjustable even though they
   /// happen to match today.
   static const dialogBackground = Color(0xFF141416);
+
+  /// Darker, more recessed fill for dropdown buttons/menus — same near-
+  /// black tone as [dialogBackground] rather than the lighter
+  /// [surfaceRaised] most other boxed controls use, matching Photomator's
+  /// own darker chrome.
+  static const dropdownBackground = Color(0xFF141416);
   static const border = Color(0xFF38383D);
   static const divider = Color(0xFF303034);
   static const textPrimary = Color(0xFFE6E6E8);
@@ -94,12 +100,16 @@ ThemeData buildDarkmoonTheme() {
             }),
           ),
     ),
+    // Experiment (2026-08-30): plain icon buttons — no boxed background,
+    // no border — matching Photomator's toolbar, where only primary
+    // actions get a pill and everything else is a bare glyph. Hover/press
+    // still give a flat opacity overlay for feedback (below). Being
+    // tried in the editor's controls panel first.
     iconButtonTheme: IconButtonThemeData(
       style:
           IconButton.styleFrom(
-            backgroundColor: DarkmoonColors.surfaceRaised,
+            backgroundColor: Colors.transparent,
             foregroundColor: DarkmoonColors.textPrimary,
-            side: const BorderSide(color: DarkmoonColors.border),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(8),
             ),
