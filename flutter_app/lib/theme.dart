@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 /// so the two versions stay visually consistent while this port is built out.
 class DarkmoonColors {
   static const background = Color(0xFF1E1E20);
-  static const panel = Color(0xFF1B1B1D);
+  static const panel = Color(0xFF161618);
   static const canvas = Color(0xFF141416);
   static const filmstrip = Color(0xFF19191B);
   static const surfaceRaised = Color(0xFF2C2C30);
@@ -31,7 +31,7 @@ class DarkmoonColors {
   /// reads as a gentle edge rather than a hard line, while staying
   /// visibly lighter than [panel]/[dialogBackground] so it's still an
   /// outline, not invisible.
-  static const border = Color(0xFF232326);
+  static const border = Color(0xFF1E1E21);
 
   /// Fill for a [_SectionCard]-style grouped card — darker still than
   /// the first pass (which read as too light a gray), only a hair
