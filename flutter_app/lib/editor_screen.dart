@@ -6923,7 +6923,7 @@ class _SectionCard extends StatelessWidget {
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
       decoration: BoxDecoration(
-        color: DarkmoonColors.surfaceRaised,
+        color: DarkmoonColors.sectionCardBackground,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: DarkmoonColors.border),
       ),

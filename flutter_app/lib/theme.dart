@@ -25,7 +25,20 @@ class DarkmoonColors {
   /// [surfaceRaised] most other boxed controls use, matching Photomator's
   /// own darker chrome.
   static const dropdownBackground = Color(0xFF141416);
-  static const border = Color(0xFF38383D);
+
+  /// Outline color for windows/dialogs and every boxed component
+  /// (dropdowns, cards, tooltips, …) — darker/softer than earlier so the
+  /// contrast against the near-black backgrounds it usually sits on
+  /// reads as a gentle edge rather than a hard line, while staying
+  /// visibly lighter than [panel]/[dialogBackground] so it's still an
+  /// outline, not invisible.
+  static const border = Color(0xFF2A2A2E);
+
+  /// Fill for a [_SectionCard]-style grouped card — noticeably darker
+  /// than [surfaceRaised] (which stayed too close to a plain light gray)
+  /// while still a touch lighter than [panel] so the card reads as
+  /// faintly raised off the panel background rather than flush with it.
+  static const sectionCardBackground = Color(0xFF222225);
   static const divider = Color(0xFF303034);
   static const textPrimary = Color(0xFFE6E6E8);
   static const textSecondary = Color(0xFFC8C8CC);
@@ -62,7 +75,7 @@ ThemeData buildDarkmoonTheme() {
       inactiveTrackColor: DarkmoonColors.border,
       thumbColor: Color(0xFFF2F2F2),
       overlayColor: Colors.transparent,
-      thumbShape: RoundSliderThumbShape(enabledThumbRadius: 5),
+      thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6.5),
     ),
     dividerTheme: const DividerThemeData(
       color: DarkmoonColors.divider,
