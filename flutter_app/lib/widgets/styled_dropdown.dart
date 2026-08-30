@@ -396,7 +396,11 @@ class _StyledDropdownMenuState<T> extends State<_StyledDropdownMenu<T>> {
               color: Colors.transparent,
               child: Container(
                 decoration: BoxDecoration(
-                  color: DarkmoonColors.dropdownBackground,
+                  // Same tone as the Settings dialog panel, matching the
+                  // File menu / right-click context menu (popupMenuTheme
+                  // in theme.dart) — the border below wraps the whole
+                  // list once, not per item.
+                  color: DarkmoonColors.dialogBackground,
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(color: DarkmoonColors.border),
                   boxShadow: [

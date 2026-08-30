@@ -5448,12 +5448,7 @@ class _TopMenuBar extends StatelessWidget {
         children: [
           PopupMenuButton<VoidCallback>(
             tooltip: '',
-            color: DarkmoonColors.surfaceRaised,
             offset: const Offset(0, 26),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(8),
-              side: const BorderSide(color: DarkmoonColors.border),
-            ),
             itemBuilder: (context) => [
               PopupMenuItem(value: onOpenFile, child: Text(l10n.menuOpenFile)),
               PopupMenuItem(

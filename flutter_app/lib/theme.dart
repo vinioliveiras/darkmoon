@@ -181,7 +181,11 @@ ThemeData buildDarkmoonTheme() {
       ),
     ),
     popupMenuTheme: PopupMenuThemeData(
-      color: DarkmoonColors.surfaceRaised,
+      // Same tone as the Settings dialog panel — covers both the File
+      // menu (PopupMenuButton) and the image's right-click context menu
+      // (showMenu), which share this one theme. The border below is on
+      // `shape`, i.e. drawn once around the whole menu, not per item.
+      color: DarkmoonColors.dialogBackground,
       surfaceTintColor: Colors.transparent,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(9),
