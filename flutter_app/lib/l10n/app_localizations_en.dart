@@ -683,9 +683,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sliderTint => 'Tint';
 
   @override
-  String get whiteBalancePreserveBrightnessLabel => 'Preserve brightness';
-
-  @override
   String get wbModeAsShot => 'As Shot';
 
   @override

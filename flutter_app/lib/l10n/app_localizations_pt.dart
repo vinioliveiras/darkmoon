@@ -687,9 +687,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sliderTint => 'Matiz';
 
   @override
-  String get whiteBalancePreserveBrightnessLabel => 'Preservar brilho';
-
-  @override
   String get wbModeAsShot => 'Como capturada';
 
   @override

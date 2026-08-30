@@ -1352,12 +1352,6 @@ abstract class AppLocalizations {
   /// **'Tint'**
   String get sliderTint;
 
-  /// No description provided for @whiteBalancePreserveBrightnessLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Preserve brightness'**
-  String get whiteBalancePreserveBrightnessLabel;
-
   /// No description provided for @wbModeAsShot.
   ///
   /// In en, this message translates to:
