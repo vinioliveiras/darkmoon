@@ -6715,6 +6715,10 @@ class _CropTransformPanel extends StatelessWidget {
             value: params.straightenAngle,
             decimals: 1,
             defaultValue: 0,
+            // Nailing an exact horizon angle needs finer per-pixel
+            // control than the default drag sensitivity gives — nearly
+            // 3x the usual full-range drag distance.
+            maxFullRangeDragPixels: 1400,
             onChanged: (v) {
               onStraighteningChanged(true);
               onChanged(params.copyWith(straightenAngle: v));

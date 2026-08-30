@@ -39,6 +39,7 @@ class SliderRow extends StatefulWidget {
     this.valueSuffix = '',
     this.labelFontSize = 12.5,
     this.valueFontSize = 11.5,
+    this.maxFullRangeDragPixels = _maxFullRangeDragPixels,
   });
 
   final String name;
@@ -71,6 +72,13 @@ class SliderRow extends StatefulWidget {
   /// used for color-affecting controls (Temperature, Tint, Vibrance,
   /// Saturation) so the track itself hints at the effect, Lightroom-style.
   final List<Color>? trackColors;
+
+  /// Overrides the cap on how many pixels a full min..max drag takes
+  /// (see [_maxFullRangeDragPixels]'s doc) — raise this for a control
+  /// where the default already-fine-grained feel still isn't precise
+  /// enough (e.g. Straighten, where a whole-pixel nudge is too coarse
+  /// to nail an exact horizon angle).
+  final double maxFullRangeDragPixels;
 
   @override
   State<SliderRow> createState() => _SliderRowState();
@@ -111,7 +119,7 @@ class _SliderRowState extends State<SliderRow> {
     final range = widget.max - widget.min;
     final precise = range / (_referenceTrackWidth * math.pow(10, widget.decimals));
     // ...but never so fine that a full-range drag exceeds the cap.
-    return math.max(precise, range / _maxFullRangeDragPixels);
+    return math.max(precise, range / widget.maxFullRangeDragPixels);
   }
 
   @override
