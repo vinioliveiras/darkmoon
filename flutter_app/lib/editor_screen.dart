@@ -6214,17 +6214,20 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
   /// Blurred while [placeholder] — visibly reads as "not the real thing
   /// yet" rather than just a soft/low-quality render.
   Widget _layer(Uint8List bytes, bool placeholder) {
-    final image = Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true);
     if (!placeholder) {
-      return image;
+      return Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true);
     }
+    // BoxFit.cover (not .contain) so the placeholder fills the box with no
+    // letterboxed margin — otherwise the blur kernel smears the photo's
+    // edge pixels out into that transparent margin, reading as a haze
+    // escaping the photo's own frame.
     return ImageFiltered(
       imageFilter: ImageFilter.blur(
         sigmaX: 14,
         sigmaY: 14,
         tileMode: TileMode.decal,
       ),
-      child: image,
+      child: Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true),
     );
   }
 
