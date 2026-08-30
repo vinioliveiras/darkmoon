@@ -6228,10 +6228,14 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
     return FittedBox(
       fit: BoxFit.contain,
       child: ImageFiltered(
+        // TileMode.clamp (not .decal) so the blur samples the edge
+        // pixels' own color past the boundary instead of transparent —
+        // .decal fades the whole border toward see-through, reading as
+        // a soft vignette instead of a crisp-edged rectangle.
         imageFilter: ImageFilter.blur(
           sigmaX: 14,
           sigmaY: 14,
-          tileMode: TileMode.decal,
+          tileMode: TileMode.clamp,
         ),
         child: Image.memory(bytes, gaplessPlayback: true),
       ),
