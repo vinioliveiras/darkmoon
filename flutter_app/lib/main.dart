@@ -101,6 +101,8 @@ Locale? localeForLanguage(String language) {
       return const Locale('en');
     case 'pt':
       return const Locale('pt');
+    case 'de':
+      return const Locale('de');
     default:
       // 'auto' — null tells MaterialApp to resolve from the system locale
       // against supportedLocales itself.

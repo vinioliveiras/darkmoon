@@ -397,6 +397,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsLanguagePortuguese => 'Portuguese';
 
   @override
+  String get settingsLanguageGerman => 'German';
+
+  @override
   String get settingsFastPreviewLabel => 'Fast preview while dragging sliders';
 
   @override

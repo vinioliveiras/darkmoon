@@ -179,6 +179,10 @@ class _SettingsDialogState extends State<SettingsDialog>
                     value: 'pt',
                     label: l10n.settingsLanguagePortuguese,
                   ),
+                  StyledDropdownItem(
+                    value: 'de',
+                    label: l10n.settingsLanguageGerman,
+                  ),
                 ],
                 onChanged: (value) =>
                     _update(_settings.copyWith(language: value)),

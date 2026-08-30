@@ -167,6 +167,7 @@
   "settingsLanguageAuto": "Automatic (system)",
   "settingsLanguageEnglish": "English",
   "settingsLanguagePortuguese": "Portuguese",
+  "settingsLanguageGerman": "German",
   "settingsFastPreviewLabel": "Fast preview while dragging sliders",
   "settingsPreviewResolutionLabel": "Preview resolution",
   "settingsPreviewResolutionHint": "Lower is faster to open and edit photos; export always uses the full sensor resolution",
