@@ -20,11 +20,10 @@ class DarkmoonColors {
   /// happen to match today.
   static const dialogBackground = Color(0xFF141416);
 
-  /// Darker, more recessed fill for dropdown buttons/menus — same near-
-  /// black tone as [dialogBackground] rather than the lighter
-  /// [surfaceRaised] most other boxed controls use, matching Photomator's
-  /// own darker chrome.
-  static const dropdownBackground = Color(0xFF141416);
+  /// Fill for dropdown buttons/menus — darker than [surfaceRaised] but
+  /// not as recessed as [dialogBackground] (that read as too dark once
+  /// tried), sitting roughly between [panel] and [surfaceRaised].
+  static const dropdownBackground = Color(0xFF202024);
 
   /// Outline color for windows/dialogs and every boxed component
   /// (dropdowns, cards, tooltips, …) — darker/softer than earlier so the
@@ -32,13 +31,13 @@ class DarkmoonColors {
   /// reads as a gentle edge rather than a hard line, while staying
   /// visibly lighter than [panel]/[dialogBackground] so it's still an
   /// outline, not invisible.
-  static const border = Color(0xFF2A2A2E);
+  static const border = Color(0xFF232326);
 
-  /// Fill for a [_SectionCard]-style grouped card — noticeably darker
-  /// than [surfaceRaised] (which stayed too close to a plain light gray)
-  /// while still a touch lighter than [panel] so the card reads as
-  /// faintly raised off the panel background rather than flush with it.
-  static const sectionCardBackground = Color(0xFF222225);
+  /// Fill for a [_SectionCard]-style grouped card — darker still than
+  /// the first pass (which read as too light a gray), only a hair
+  /// lighter than [panel] so the card reads as faintly raised rather
+  /// than flush with the panel background.
+  static const sectionCardBackground = Color(0xFF1D1D20);
   static const divider = Color(0xFF303034);
   static const textPrimary = Color(0xFFE6E6E8);
   static const textSecondary = Color(0xFFC8C8CC);
