@@ -263,6 +263,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiDenoiseEnhanceDenoiseLabel => 'Denoise';
 
   @override
+  String get aiDenoiseEnhanceAmountLabel => 'Amount';
+
+  @override
   String get aiDenoiseEnhanceUpscaleLabel => 'Upscale 2x';
 
   @override
@@ -274,6 +277,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Your GPU doesn\'t support this yet, so it\'s running on the CPU instead — this will take noticeably longer.';
 
   @override
+  String get aiDenoiseEnhanceGpuIncompatibleWarning =>
+      'Your GPU isn\'t compatible with this yet, so it\'ll run on the CPU — expect this to take noticeably longer (up to a couple of minutes on a large photo).';
+
+  @override
   String get aiDenoiseEnhanceStartingMessage => 'Running AI Enhance...';
 
   @override
@@ -283,8 +290,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiDenoiseEnhanceStageUpscale => 'Upscaling';
 
   @override
-  String aiDenoiseEnhanceTileProgress(String stage, int tile, int total) {
-    return '$stage — tile $tile/$total';
+  String aiDenoiseEnhanceTileProgress(String stage, int percent) {
+    return '$stage — $percent%';
   }
 
   @override
@@ -344,6 +351,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String exportSuccessMessage(String path) {
     return 'Exported to $path';
   }
+
+  @override
+  String get exportDoneStatus => 'Done!';
+
+  @override
+  String get exportFailedStatus => 'Export failed';
+
+  @override
+  String get aiDenoiseEnhanceFailedStatus => 'AI Enhance failed';
 
   @override
   String exportFailureMessage(String error) {

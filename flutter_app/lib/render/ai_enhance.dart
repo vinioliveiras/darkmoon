@@ -51,6 +51,17 @@ AiEnhanceResult enhanceImage(
   required Float32List Function(Float32List tile) upscale,
   bool enableDenoise = true,
   bool enableUpscale = true,
+  // NAFNet-SIDD is a fixed, blind denoiser — it has no built-in strength
+  // knob (unlike e.g. FFDNet-style models that take a noise-level map as
+  // an extra input channel), so "how strong" can only be controlled
+  // afterward: linearly blending its full-strength output back toward
+  // the original at [denoiseStrength] (1.0 = the model's raw output,
+  // untouched; 0.0 = pure original, i.e. no denoise at all). Ignored
+  // when [enableDenoise] is false. Blending happens *before* the
+  // optional upscale pass, same reasoning as running denoise before
+  // upscale in the first place — the upscaler should never see more
+  // noise than the user actually asked to keep.
+  double denoiseStrength = 1.0,
   void Function(String stage, int tileIndex, int totalTiles)? onProgress,
 }) {
   final floatRgb = Float32List(rgbBytes.length);
@@ -58,18 +69,27 @@ AiEnhanceResult enhanceImage(
     floatRgb[i] = rgbBytes[i] / 255.0;
   }
 
-  final denoised = enableDenoise
-      ? denoiseTiled(
-          floatRgb,
-          width,
-          height,
-          inputTileSize: denoiseModelSpec.inputTileSize,
-          overlap: denoiseModelSpec.inputTileSize ~/ 8,
-          scaleFactor: denoiseModelSpec.scaleFactor,
-          processTile: denoise,
-          onProgress: (i, total) => onProgress?.call('denoise', i, total),
-        )
-      : floatRgb;
+  Float32List denoised;
+  if (enableDenoise) {
+    denoised = denoiseTiled(
+      floatRgb,
+      width,
+      height,
+      inputTileSize: denoiseModelSpec.inputTileSize,
+      overlap: denoiseModelSpec.inputTileSize ~/ 8,
+      scaleFactor: denoiseModelSpec.scaleFactor,
+      processTile: denoise,
+      onProgress: (i, total) => onProgress?.call('denoise', i, total),
+    );
+    if (denoiseStrength < 1.0) {
+      final strength = denoiseStrength.clamp(0.0, 1.0);
+      for (var i = 0; i < denoised.length; i++) {
+        denoised[i] = floatRgb[i] + (denoised[i] - floatRgb[i]) * strength;
+      }
+    }
+  } else {
+    denoised = floatRgb;
+  }
 
   final upscaled = enableUpscale
       ? denoiseTiled(

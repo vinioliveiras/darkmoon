@@ -99,13 +99,19 @@ EditSourcePair? decodeCachedAiEnhanceSources(DecodeCachedAiEnhanceArgs args) {
 /// run (see `ai_enhance.dart`'s `enhanceImage`) — at least one must be
 /// true; callers that want neither should skip this function entirely and
 /// decode normally instead (`_revertToNormalEditSource` in
-/// `editor_screen.dart` does exactly that).
+/// `editor_screen.dart` does exactly that). [denoiseStrengthPercent] (0-100,
+/// meaningful only when [enableDenoise] is true) is a whole-percent blend
+/// ratio rather than a raw 0.0-1.0 double specifically so the cache key
+/// (see `ai_enhance_cache.dart`) doesn't fragment into a near-infinite
+/// number of near-duplicate entries from a slider being dragged through
+/// every float in between.
 Future<EditSourcePair?> _decodeAndEnhance(
   String path,
   String cacheDir,
   int previewMaxDimension,
   bool enableDenoise,
   bool enableUpscale,
+  int denoiseStrengthPercent,
   void Function(Object stage) onStage,
 ) async {
   int width;
@@ -117,6 +123,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
     path,
     denoise: enableDenoise,
     upscale: enableUpscale,
+    denoiseStrengthPercent: denoiseStrengthPercent,
   );
   final cachedImage = cachedPng == null ? null : img.decodePng(cachedPng);
 
@@ -166,6 +173,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
       upscale: (tile) => upscaleModel!.runTile(tile),
       enableDenoise: enableDenoise,
       enableUpscale: enableUpscale,
+      denoiseStrength: denoiseStrengthPercent / 100.0,
       onProgress: (stage, i, total) =>
           onStage(AiEnhanceProgress(stage, i, total)),
     );
@@ -186,6 +194,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
       Uint8List.fromList(img.encodePng(enhancedImage)),
       denoise: enableDenoise,
       upscale: enableUpscale,
+      denoiseStrengthPercent: denoiseStrengthPercent,
     );
   }
 
@@ -219,6 +228,7 @@ class _AiEnhanceDecodeIsolateArgs {
     this.previewMaxDimension,
     this.enableDenoise,
     this.enableUpscale,
+    this.denoiseStrengthPercent,
     this.sendPort,
   );
 
@@ -227,6 +237,7 @@ class _AiEnhanceDecodeIsolateArgs {
   final int previewMaxDimension;
   final bool enableDenoise;
   final bool enableUpscale;
+  final int denoiseStrengthPercent;
   final SendPort sendPort;
 }
 
@@ -237,6 +248,7 @@ void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
     args.previewMaxDimension,
     args.enableDenoise,
     args.enableUpscale,
+    args.denoiseStrengthPercent,
     (stage) => args.sendPort.send(stage),
   );
   args.sendPort.send(result);
@@ -259,6 +271,7 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
   void Function(Object stage) onStage, {
   required bool enableDenoise,
   required bool enableUpscale,
+  int denoiseStrengthPercent = 100,
   int previewMaxDimension = defaultPreviewMaxDimension,
   AiEnhanceCancellationToken? cancellationToken,
 }) async {
@@ -271,6 +284,7 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
       previewMaxDimension,
       enableDenoise,
       enableUpscale,
+      denoiseStrengthPercent,
       receivePort.sendPort,
     ),
   );

@@ -891,6 +891,52 @@ class _EditorScreenState extends State<EditorScreen> {
   /// instead of an indeterminate spinner for the whole export.
   ExportStage? _exportStage;
 
+  /// A brief, non-cancellable confirmation shown in the same docked bar
+  /// real loading operations use (see [_LoadingInfo.isStatus]) — e.g.
+  /// "Done!" after an export, in place of a SnackBar for the common case
+  /// (Developer Mode off) where the full technical detail a SnackBar can
+  /// hold isn't needed, just a quick "it worked" beat. Cleared by
+  /// [_transientStatusTimer] a few seconds after being set.
+  String? _transientStatus;
+  Timer? _transientStatusTimer;
+
+  /// Shows [message] in the docked status bar for [duration], then clears
+  /// it automatically — see [_transientStatus].
+  void _showTransientStatus(String message, {Duration? duration}) {
+    _transientStatusTimer?.cancel();
+    setState(() => _transientStatus = message);
+    _transientStatusTimer = Timer(duration ?? const Duration(seconds: 2), () {
+      if (mounted) {
+        setState(() => _transientStatus = null);
+      }
+    });
+  }
+
+  /// The result of a background operation (export, AI Enhance), reported
+  /// the way that fits who's actually looking: Developer Mode on shows
+  /// [detail] in full via a SnackBar with a copy button (raw paths,
+  /// timings, error text — exactly what a bug report needs, and exactly
+  /// what an everyday export doesn't); off, [status] (if given — pass
+  /// null for a mid-operation FYI that isn't really a completion event,
+  /// like the CPU-fallback notice) shows as a brief non-technical "Done!"
+  /// beat in the docked status bar instead of a SnackBar.
+  void _notify({required String detail, String? status}) {
+    if (_settings.devLogging) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          duration: const Duration(seconds: 10),
+          content: Text(detail),
+          action: SnackBarAction(
+            label: AppLocalizations.of(context)!.copyButton,
+            onPressed: () => Clipboard.setData(ClipboardData(text: detail)),
+          ),
+        ),
+      );
+    } else if (status != null) {
+      _showTransientStatus(status);
+    }
+  }
+
   AppSettings _settings = const AppSettings();
 
   late final AppLifecycleListener _lifecycleListener;
@@ -1625,6 +1671,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _dynamicPreviewTimer?.cancel();
     _thumbnailFlushTimer?.cancel();
     _thumbnailUiFlushTimer?.cancel();
+    _transientStatusTimer?.cancel();
     _completeVisibleThumbnailsReady();
     _viewController.dispose();
     _lifecycleListener.dispose();
@@ -2491,6 +2538,8 @@ class _EditorScreenState extends State<EditorScreen> {
       // _loadEnhancedNativeSource's doc).
       final wantDenoise = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
       final wantUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
+      final wantDenoiseAmount =
+          (_paramValues[_neuralDenoiseAmountKey] ?? 100.0).round();
       if (wantDenoise || wantUpscale) {
         final cacheDir = await resolveAiEnhanceCacheDir();
         if (mounted) {
@@ -2499,6 +2548,7 @@ class _EditorScreenState extends State<EditorScreen> {
             path,
             denoise: wantDenoise,
             upscale: wantUpscale,
+            denoiseStrengthPercent: wantDenoiseAmount,
           );
           if (cachedPng != null) {
             sources = await compute(
@@ -3070,6 +3120,7 @@ class _EditorScreenState extends State<EditorScreen> {
     String path, {
     required bool denoise,
     required bool upscale,
+    int denoiseAmount = 100,
   }) async {
     final cacheDir = await resolveAiEnhanceCacheDir();
     if (!mounted) return null;
@@ -3078,9 +3129,15 @@ class _EditorScreenState extends State<EditorScreen> {
       path,
       denoise: denoise,
       upscale: upscale,
+      denoiseStrengthPercent: denoiseAmount,
     );
     if (cachedPng == null) {
-      final ok = await _runNeuralEnhance(path, denoise: denoise, upscale: upscale);
+      final ok = await _runNeuralEnhance(
+        path,
+        denoise: denoise,
+        upscale: upscale,
+        denoiseAmount: denoiseAmount,
+      );
       if (!mounted || !ok) {
         return null;
       }
@@ -3089,6 +3146,7 @@ class _EditorScreenState extends State<EditorScreen> {
         path,
         denoise: denoise,
         upscale: upscale,
+        denoiseStrengthPercent: denoiseAmount,
       );
     }
     if (cachedPng == null || !mounted) {
@@ -3248,6 +3306,13 @@ class _EditorScreenState extends State<EditorScreen> {
   static const _neuralDenoiseKey = 'AiNeuralDenoise';
   static const _neuralUpscaleKey = 'AiNeuralUpscale';
 
+  /// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.denoiseAmount` — 0-100,
+  /// persisted the same way as the two flags above. Defaults to 100 (the
+  /// model's full-strength output) when absent, matching
+  /// `NeuralEnhanceChoice`'s own default for a photo that predates this
+  /// slider.
+  static const _neuralDenoiseAmountKey = 'AiNeuralDenoiseAmount';
+
   /// Opens the AI Denoise dialog (Classic level picker / Enhance neural
   /// toggle — see `AiDenoiseDialog`) and, if the user confirms a choice,
   /// applies it — a deliberate one-shot action (with its own loading
@@ -3261,6 +3326,8 @@ class _EditorScreenState extends State<EditorScreen> {
     final currentLevel = AiDenoiseParams.fromValues(_paramValues).level;
     final neuralDenoise = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
     final neuralUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
+    final neuralDenoiseAmount =
+        (_paramValues[_neuralDenoiseAmountKey] ?? 100.0).round();
     final wasNeuralActive = neuralDenoise || neuralUpscale;
     final choice = await showAnimatedDialog<AiDenoiseChoice>(
       context: context,
@@ -3268,6 +3335,7 @@ class _EditorScreenState extends State<EditorScreen> {
         initialLevel: currentLevel,
         neuralDenoise: neuralDenoise,
         neuralUpscale: neuralUpscale,
+        neuralDenoiseAmount: neuralDenoiseAmount,
       ),
     );
     if (choice == null || !mounted) {
@@ -3294,13 +3362,18 @@ class _EditorScreenState extends State<EditorScreen> {
           if (!mounted) return;
         }
         await _applyAiDenoiseChoiceAndRender(selected.path);
-      case NeuralEnhanceChoice(denoise: final wantDenoise, upscale: final wantUpscale)
+      case NeuralEnhanceChoice(
+            denoise: final wantDenoise,
+            upscale: final wantUpscale,
+            denoiseAmount: final wantDenoiseAmount,
+          )
           when wantDenoise || wantUpscale:
         setState(() {
           _paramValues = {
             ..._paramValues,
             _neuralDenoiseKey: wantDenoise ? 1.0 : 0.0,
             _neuralUpscaleKey: wantUpscale ? 1.0 : 0.0,
+            _neuralDenoiseAmountKey: wantDenoiseAmount.toDouble(),
             'AiDenoiseLevel': 0.0,
           };
         });
@@ -3308,6 +3381,7 @@ class _EditorScreenState extends State<EditorScreen> {
           selected.path,
           denoise: wantDenoise,
           upscale: wantUpscale,
+          denoiseAmount: wantDenoiseAmount,
         );
         if (!mounted || !ok) {
           return;
@@ -3362,6 +3436,7 @@ class _EditorScreenState extends State<EditorScreen> {
     String path, {
     required bool denoise,
     required bool upscale,
+    int denoiseAmount = 100,
   }) async {
     setState(() {
       _isRunningNeuralEnhance = true;
@@ -3394,18 +3469,19 @@ class _EditorScreenState extends State<EditorScreen> {
           );
           if (!stage.usingGpu && !cpuWarningShown) {
             cpuWarningShown = true;
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text(
-                  AppLocalizations.of(context)!.aiDenoiseEnhanceCpuWarning,
-                ),
-              ),
+            // No non-dev status equivalent — the AI Denoise dialog itself
+            // already warns about this before the user even applies (see
+            // probeAiEnhanceGpuSupport), so this is purely a Dev Mode
+            // detail at this point, not a first notice.
+            _notify(
+              detail: AppLocalizations.of(context)!.aiDenoiseEnhanceCpuWarning,
             );
           }
         }
       },
       enableDenoise: denoise,
       enableUpscale: upscale,
+      denoiseStrengthPercent: denoiseAmount,
       previewMaxDimension: _settings.previewResolution,
       cancellationToken: cancellation,
     );
@@ -3428,12 +3504,9 @@ class _EditorScreenState extends State<EditorScreen> {
       // showing "AI Enhance couldn't run" on top of that would misreport
       // the user's own action as a failure.
       if (!wasCancelled) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(context)!.aiDenoiseEnhanceFailedMessage,
-            ),
-          ),
+        _notify(
+          detail: AppLocalizations.of(context)!.aiDenoiseEnhanceFailedMessage,
+          status: AppLocalizations.of(context)!.aiDenoiseEnhanceFailedStatus,
         );
       }
       return false;
@@ -4344,6 +4417,8 @@ class _EditorScreenState extends State<EditorScreen> {
     // _loadEnhancedNativeSource's doc for the bug this fixes.
     final wantDenoise = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
     final wantUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
+    final wantDenoiseAmount =
+        (_paramValues[_neuralDenoiseAmountKey] ?? 100.0).round();
     EditSource? nativeForExport;
     final srcSw = Stopwatch()..start();
     try {
@@ -4352,6 +4427,7 @@ class _EditorScreenState extends State<EditorScreen> {
           selected.path,
           denoise: wantDenoise,
           upscale: wantUpscale,
+          denoiseAmount: wantDenoiseAmount,
         );
       }
       nativeForExport ??= await _loadNativeSource(
@@ -4419,19 +4495,15 @@ class _EditorScreenState extends State<EditorScreen> {
               if (result.timings != null) result.timings!,
             ].join('\n')
           : '';
-      final message = result.success
+      final detail = result.success
           ? '${l10n.exportSuccessMessage(result.destPath!)}'
                 '${timingLine.isEmpty ? '' : '\n$timingLine'}'
           : l10n.exportFailureMessage(result.error!);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          duration: const Duration(seconds: 10),
-          content: Text(message),
-          action: SnackBarAction(
-            label: l10n.copyButton,
-            onPressed: () => Clipboard.setData(ClipboardData(text: message)),
-          ),
-        ),
+      _notify(
+        detail: detail,
+        status: result.success
+            ? l10n.exportDoneStatus
+            : l10n.exportFailedStatus,
       );
     }
   }
@@ -4488,12 +4560,14 @@ class _EditorScreenState extends State<EditorScreen> {
       final stageLabel = progress.stage == 'upscale'
           ? l10n.aiDenoiseEnhanceStageUpscale
           : l10n.aiDenoiseEnhanceStageDenoise;
+      // A raw tile count (hundreds, for a full-res photo tiled into small
+      // 256px-ish squares) isn't a meaningful number to show — percentage
+      // is what the rest of the app's progress messages use too.
+      final percent = progress.totalTiles == 0
+          ? 0
+          : (progress.tileIndex * 100 ~/ progress.totalTiles);
       return _LoadingInfo(
-        message: l10n.aiDenoiseEnhanceTileProgress(
-          stageLabel,
-          progress.tileIndex,
-          progress.totalTiles,
-        ),
+        message: l10n.aiDenoiseEnhanceTileProgress(stageLabel, percent),
         progress: progress.totalTiles == 0
             ? null
             : progress.tileIndex / progress.totalTiles,
@@ -4535,6 +4609,12 @@ class _EditorScreenState extends State<EditorScreen> {
           ExportStage.writing => 0.9,
         },
       );
+    }
+    // Last: a genuinely new operation starting (any of the checks above)
+    // always wins over a leftover "Done!" from whatever just finished.
+    final transientStatus = _transientStatus;
+    if (transientStatus != null) {
+      return _LoadingInfo(message: transientStatus, isStatus: true);
     }
     return null;
   }
@@ -5407,10 +5487,20 @@ class _ImageArea extends StatelessWidget {
 /// What the loading overlay shows: a message, an optional real progress
 /// fraction (null means indeterminate — no measurable sub-steps yet).
 class _LoadingInfo {
-  const _LoadingInfo({required this.message, this.progress});
+  const _LoadingInfo({
+    required this.message,
+    this.progress,
+    this.isStatus = false,
+  });
 
   final String message;
   final double? progress;
+
+  /// True for a brief, non-cancellable confirmation (e.g. "Done!" after an
+  /// export) rather than an actual in-progress operation — hides the
+  /// Cancel button and the progress bar, neither of which mean anything
+  /// once the operation they'd apply to has already finished.
+  final bool isStatus;
 }
 
 /// A dark scrim with a centered card, shown over the whole editor area
@@ -5551,48 +5641,59 @@ class _HiddenLoadingIndicator extends StatelessWidget {
               SizedBox(
                 width: 24,
                 height: 20,
-                child: IconButton(
-                  onPressed: onCancel,
-                  tooltip: l10n.cancelButton,
-                  visualDensity: VisualDensity.compact,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 24,
-                    minHeight: 20,
-                  ),
-                  // Override the app-wide IconButtonTheme's filled
-                  // rounded-square + border — this bar is meant to read as
-                  // bare chrome (see this class's doc comment), not another
-                  // boxed toolbar button.
-                  style: IconButton.styleFrom(
-                    backgroundColor: Colors.transparent,
-                    side: BorderSide.none,
-                    shape: const CircleBorder(),
-                  ),
-                  iconSize: 15,
-                  color: Colors.white,
-                  icon: const Icon(CupertinoIcons.xmark),
-                ),
+                // A status message (e.g. "Done!") has nothing left running
+                // to cancel — leave the space blank instead of a
+                // meaningless button.
+                child: info.isStatus
+                    ? null
+                    : IconButton(
+                        onPressed: onCancel,
+                        tooltip: l10n.cancelButton,
+                        visualDensity: VisualDensity.compact,
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 24,
+                          minHeight: 20,
+                        ),
+                        // Override the app-wide IconButtonTheme's filled
+                        // rounded-square + border — this bar is meant to
+                        // read as bare chrome (see this class's doc
+                        // comment), not another boxed toolbar button.
+                        style: IconButton.styleFrom(
+                          backgroundColor: Colors.transparent,
+                          side: BorderSide.none,
+                          shape: const CircleBorder(),
+                        ),
+                        iconSize: 15,
+                        color: Colors.white,
+                        icon: const Icon(CupertinoIcons.xmark),
+                      ),
               ),
             ],
           ),
-          const SizedBox(height: 4),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(2),
-            child: SizedBox(
-              height: 3,
-              child: progress == null
-                  ? const LinearProgressIndicator(
-                      backgroundColor: Colors.white24,
-                      valueColor: AlwaysStoppedAnimation(Colors.white),
-                    )
-                  : LinearProgressIndicator(
-                      value: progress,
-                      backgroundColor: Colors.white24,
-                      valueColor: const AlwaysStoppedAnimation(Colors.white),
-                    ),
+          // A status message doesn't have real progress to show — the bar
+          // below is either genuine percent-complete or an indeterminate
+          // "something's happening" spinner, neither of which applies once
+          // the operation it described is already done.
+          if (!info.isStatus) ...[
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: SizedBox(
+                height: 3,
+                child: progress == null
+                    ? const LinearProgressIndicator(
+                        backgroundColor: Colors.white24,
+                        valueColor: AlwaysStoppedAnimation(Colors.white),
+                      )
+                    : LinearProgressIndicator(
+                        value: progress,
+                        backgroundColor: Colors.white24,
+                        valueColor: const AlwaysStoppedAnimation(Colors.white),
+                      ),
+              ),
             ),
-          ),
+          ],
         ],
       ),
     );

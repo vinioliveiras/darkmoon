@@ -84,18 +84,19 @@
   "aiDenoiseTabEnhance": "Enhance",
   "aiDenoiseEnhanceMessage": "Remove ruído, elimina grão de filme e dobra a resolução usando uma rede neural — mais perto de como o detalhe real da foto era antes do ruído e da compressão. Roda bem mais devagar que o Clássico, principalmente sem uma GPU compatível.",
   "aiDenoiseEnhanceDenoiseLabel": "Denoise",
+  "aiDenoiseEnhanceAmountLabel": "Intensidade",
   "aiDenoiseEnhanceUpscaleLabel": "Upscale 2x",
   "aiDenoiseEnhanceFailedMessage": "O AI Enhance não conseguiu rodar nessa foto. Foi desligado de novo.",
   "aiDenoiseEnhanceCpuWarning": "Sua GPU ainda não é compatível com isso, então vai rodar na CPU — isso vai demorar bem mais.",
+  "aiDenoiseEnhanceGpuIncompatibleWarning": "Sua GPU ainda não é compatível com isso, então vai rodar na CPU — espere que isso demore bem mais (até alguns minutos numa foto grande).",
   "aiDenoiseEnhanceStartingMessage": "Rodando AI Enhance...",
   "aiDenoiseEnhanceStageDenoise": "Removendo ruído",
   "aiDenoiseEnhanceStageUpscale": "Ampliando",
-  "aiDenoiseEnhanceTileProgress": "{stage} — bloco {tile}/{total}",
+  "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
   "@aiDenoiseEnhanceTileProgress": {
     "placeholders": {
       "stage": {"type": "String"},
-      "tile": {"type": "int"},
-      "total": {"type": "int"}
+      "percent": {"type": "int"}
     }
   },
 
@@ -118,6 +119,9 @@
   "hideButton": "Ocultar",
   "exportSuccessMessage": "Exportado para {path}",
   "exportFailureMessage": "Falha ao exportar: {error}",
+  "exportDoneStatus": "Pronto!",
+  "exportFailedStatus": "Falha ao exportar",
+  "aiDenoiseEnhanceFailedStatus": "AI Enhance falhou",
 
   "resetTooltip": "Redefinir ajustes",
 

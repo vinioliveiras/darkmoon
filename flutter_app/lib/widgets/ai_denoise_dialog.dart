@@ -1,8 +1,19 @@
+import 'dart:async';
+
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import '../native/onnx_gpu_probe.dart';
 import '../render/ai_denoise.dart';
 import '../theme.dart';
+
+/// Sparingly used, not part of the app's usual monochrome palette — a
+/// genuine caution color reads faster than another gray box for the one
+/// thing in this dialog that's actually worth interrupting for (a GPU
+/// that won't be used, when the whole point of the model choice was
+/// speed).
+const _warningColor = Color(0xFFE8A33D);
 
 String _levelLabel(AppLocalizations l10n, AiDenoiseLevel? level) =>
     switch (level) {
@@ -49,10 +60,23 @@ class ClassicDenoiseChoice extends AiDenoiseChoice {
 /// [active] (both false) means "turn it back off" — checked by callers
 /// instead of a stray null case.
 class NeuralEnhanceChoice extends AiDenoiseChoice {
-  const NeuralEnhanceChoice({required this.denoise, required this.upscale});
+  const NeuralEnhanceChoice({
+    required this.denoise,
+    required this.upscale,
+    this.denoiseAmount = 100,
+  });
 
   final bool denoise;
   final bool upscale;
+
+  /// 0-100 blend between the original and NAFNet-SIDD's full-strength
+  /// output (see `ai_enhance.dart`'s `enhanceImage` doc — the model has
+  /// no strength control of its own, so this is a linear blend applied
+  /// afterward). Only meaningful when [denoise] is true; ignored
+  /// otherwise, and left at its default rather than made nullable so
+  /// callers don't need a null-check for a value that never actually
+  /// matters when unused.
+  final int denoiseAmount;
 
   bool get active => denoise || upscale;
 }
@@ -72,6 +96,7 @@ class AiDenoiseDialog extends StatefulWidget {
     required this.initialLevel,
     required this.neuralDenoise,
     required this.neuralUpscale,
+    this.neuralDenoiseAmount = 100,
   });
 
   /// The classical level already applied to the current photo, if any —
@@ -85,6 +110,9 @@ class AiDenoiseDialog extends StatefulWidget {
   final bool neuralDenoise;
   final bool neuralUpscale;
 
+  /// See [NeuralEnhanceChoice.denoiseAmount].
+  final int neuralDenoiseAmount;
+
   @override
   State<AiDenoiseDialog> createState() => _AiDenoiseDialogState();
 }
@@ -94,11 +122,17 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
   late AiDenoiseLevel? _level = widget.initialLevel;
   late bool _neuralDenoise = widget.neuralDenoise;
   late bool _neuralUpscale = widget.neuralUpscale;
+  late int _denoiseAmount = widget.neuralDenoiseAmount;
   late final TabController _tabController = TabController(
     length: 2,
     vsync: this,
     initialIndex: (widget.neuralDenoise || widget.neuralUpscale) ? 1 : 0,
   );
+
+  /// null while the probe hasn't resolved yet — the Enhance tab shows
+  /// nothing extra until then rather than guessing. `false` is exactly
+  /// the case the warning below exists for.
+  bool? _gpuAvailable;
 
   @override
   void initState() {
@@ -107,6 +141,17 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
     // there's no TabBarView/PageView here (see the `content` comment), so
     // nothing else rebuilds this widget when a tab is tapped.
     _tabController.addListener(() => setState(() {}));
+    unawaited(_probeGpu());
+  }
+
+  /// Cached after the first probe (see `probeAiEnhanceGpuSupport`'s own
+  /// doc) — creating a real ONNX session costs ~1-2s either way, so this
+  /// dialog only pays that once per app run, not once per open.
+  Future<void> _probeGpu() async {
+    final available = await probeAiEnhanceGpuSupport();
+    if (mounted) {
+      setState(() => _gpuAvailable = available);
+    }
   }
 
   @override
@@ -148,7 +193,11 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
   }
 
   AiDenoiseChoice get _currentChoice => (_neuralDenoise || _neuralUpscale)
-      ? NeuralEnhanceChoice(denoise: _neuralDenoise, upscale: _neuralUpscale)
+      ? NeuralEnhanceChoice(
+          denoise: _neuralDenoise,
+          upscale: _neuralUpscale,
+          denoiseAmount: _denoiseAmount,
+        )
       : ClassicDenoiseChoice(_level);
 
   @override
@@ -165,7 +214,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         style: const TextStyle(color: DarkmoonColors.textPrimary, fontSize: 16),
       ),
       content: SizedBox(
-        width: 320,
+        width: 360,
         // No fixed height: Classic's and Enhance's messages are very
         // different lengths, and a hard-coded height either overflows the
         // shorter tab into a scroll it doesn't need or clips the taller one.
@@ -255,6 +304,44 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
           l10n.aiDenoiseEnhanceMessage,
           style: Theme.of(context).textTheme.bodyMedium,
         ),
+        // Told up front, before the user commits to running it — the
+        // same fact `editor_screen.dart`'s CPU-fallback SnackBar reports,
+        // just moved earlier so it can actually change the user's mind
+        // instead of only explaining a slow wait after it's started.
+        // Silent while `_gpuAvailable` is still null (mid-probe) or true
+        // (nothing worth interrupting for).
+        if (_gpuAvailable == false) ...[
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color: _warningColor.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: _warningColor.withValues(alpha: 0.5)),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Icon(
+                  CupertinoIcons.exclamationmark_triangle_fill,
+                  size: 14,
+                  color: _warningColor,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    l10n.aiDenoiseEnhanceGpuIncompatibleWarning,
+                    style: const TextStyle(
+                      fontSize: 11.5,
+                      color: DarkmoonColors.textPrimary,
+                      height: 1.35,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 4),
         // Independent toggles, not a single on/off switch — denoising a
         // noisy JPEG without upscaling it, or upscaling an already-clean
@@ -270,6 +357,46 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
           value: _neuralDenoise,
           onChanged: _setNeuralDenoise,
         ),
+        // Only shown once Denoise is on — an amount for a pass that isn't
+        // even running has nothing to control. NAFNet-SIDD itself has no
+        // strength input (see NeuralEnhanceChoice.denoiseAmount's doc);
+        // this blends its full-strength output back toward the original.
+        if (_neuralDenoise) ...[
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.aiDenoiseEnhanceAmountLabel,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: DarkmoonColors.textSecondary,
+                  ),
+                ),
+              ),
+              Text(
+                '$_denoiseAmount%',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: DarkmoonColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+          SliderTheme(
+            data: SliderTheme.of(
+              context,
+            ).copyWith(trackShape: const RectangularSliderTrackShape()),
+            child: Slider(
+              min: 0,
+              max: 100,
+              divisions: 100,
+              value: _denoiseAmount.toDouble(),
+              onChanged: (v) => setState(() => _denoiseAmount = v.round()),
+            ),
+          ),
+        ],
+        const SizedBox(height: 4),
         _ToggleRow(
           label: l10n.aiDenoiseEnhanceUpscaleLabel,
           value: _neuralUpscale,

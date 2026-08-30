@@ -566,6 +566,12 @@ abstract class AppLocalizations {
   /// **'Denoise'**
   String get aiDenoiseEnhanceDenoiseLabel;
 
+  /// No description provided for @aiDenoiseEnhanceAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get aiDenoiseEnhanceAmountLabel;
+
   /// No description provided for @aiDenoiseEnhanceUpscaleLabel.
   ///
   /// In en, this message translates to:
@@ -583,6 +589,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Your GPU doesn\'t support this yet, so it\'s running on the CPU instead — this will take noticeably longer.'**
   String get aiDenoiseEnhanceCpuWarning;
+
+  /// No description provided for @aiDenoiseEnhanceGpuIncompatibleWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Your GPU isn\'t compatible with this yet, so it\'ll run on the CPU — expect this to take noticeably longer (up to a couple of minutes on a large photo).'**
+  String get aiDenoiseEnhanceGpuIncompatibleWarning;
 
   /// No description provided for @aiDenoiseEnhanceStartingMessage.
   ///
@@ -605,8 +617,8 @@ abstract class AppLocalizations {
   /// No description provided for @aiDenoiseEnhanceTileProgress.
   ///
   /// In en, this message translates to:
-  /// **'{stage} — tile {tile}/{total}'**
-  String aiDenoiseEnhanceTileProgress(String stage, int tile, int total);
+  /// **'{stage} — {percent}%'**
+  String aiDenoiseEnhanceTileProgress(String stage, int percent);
 
   /// No description provided for @exportPanelButton.
   ///
@@ -715,6 +727,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Exported to {path}'**
   String exportSuccessMessage(String path);
+
+  /// No description provided for @exportDoneStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Done!'**
+  String get exportDoneStatus;
+
+  /// No description provided for @exportFailedStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Export failed'**
+  String get exportFailedStatus;
+
+  /// No description provided for @aiDenoiseEnhanceFailedStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'AI Enhance failed'**
+  String get aiDenoiseEnhanceFailedStatus;
 
   /// No description provided for @exportFailureMessage.
   ///

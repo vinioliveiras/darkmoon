@@ -108,18 +108,19 @@
   "aiDenoiseTabEnhance": "Enhance",
   "aiDenoiseEnhanceMessage": "Denoise, remove film grain, and double the resolution using a neural network — closer to what the shot's real detail looked like before noise and compression. Runs noticeably slower than Classic, especially without a compatible GPU.",
   "aiDenoiseEnhanceDenoiseLabel": "Denoise",
+  "aiDenoiseEnhanceAmountLabel": "Amount",
   "aiDenoiseEnhanceUpscaleLabel": "Upscale 2x",
   "aiDenoiseEnhanceFailedMessage": "AI Enhance couldn't run on this photo. It's been turned back off.",
   "aiDenoiseEnhanceCpuWarning": "Your GPU doesn't support this yet, so it's running on the CPU instead — this will take noticeably longer.",
+  "aiDenoiseEnhanceGpuIncompatibleWarning": "Your GPU isn't compatible with this yet, so it'll run on the CPU — expect this to take noticeably longer (up to a couple of minutes on a large photo).",
   "aiDenoiseEnhanceStartingMessage": "Running AI Enhance...",
   "aiDenoiseEnhanceStageDenoise": "Denoising",
   "aiDenoiseEnhanceStageUpscale": "Upscaling",
-  "aiDenoiseEnhanceTileProgress": "{stage} — tile {tile}/{total}",
+  "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
   "@aiDenoiseEnhanceTileProgress": {
     "placeholders": {
       "stage": {"type": "String"},
-      "tile": {"type": "int"},
-      "total": {"type": "int"}
+      "percent": {"type": "int"}
     }
   },
 
@@ -147,6 +148,9 @@
   "@exportSuccessMessage": {
     "placeholders": { "path": {"type": "String"} }
   },
+  "exportDoneStatus": "Done!",
+  "exportFailedStatus": "Export failed",
+  "aiDenoiseEnhanceFailedStatus": "AI Enhance failed",
   "exportFailureMessage": "Export failed: {error}",
   "@exportFailureMessage": {
     "placeholders": { "error": {"type": "String"} }

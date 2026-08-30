@@ -136,4 +136,77 @@ void main() {
       }
     },
   );
+
+  group('denoiseStrength (NAFNet-SIDD has no strength control of its own — '
+      'see enhanceImage\'s doc — so this blend is the only way to make it '
+      'weaker than full strength)', () {
+    // Always returns solid black — makes the blend easy to check by eye:
+    // the "denoised" value is always 0, so the blended output is exactly
+    // `original * (1 - strength)`.
+    Float32List blackDenoise(Float32List tile) => Float32List(tile.length);
+
+    Uint8List buildRgb(int width, int height, int value) {
+      final rgb = Uint8List(width * height * 3);
+      rgb.fillRange(0, rgb.length, value);
+      return rgb;
+    }
+
+    test('strength 1.0 (default) uses the model\'s output untouched', () {
+      final rgb = buildRgb(32, 32, 200);
+      final result = enhanceImage(
+        rgb,
+        32,
+        32,
+        denoise: blackDenoise,
+        upscale: _identityDenoise, // scaleFactor 1 when enableUpscale: false
+        enableUpscale: false,
+      );
+      expect(result.rgbBytes, everyElement(0));
+    });
+
+    test('strength 0.0 discards the model\'s output entirely, keeping the '
+        'original', () {
+      final rgb = buildRgb(32, 32, 200);
+      final result = enhanceImage(
+        rgb,
+        32,
+        32,
+        denoise: blackDenoise,
+        upscale: _identityDenoise,
+        enableUpscale: false,
+        denoiseStrength: 0.0,
+      );
+      expect(result.rgbBytes, everyElement(200));
+    });
+
+    test('strength 0.5 blends halfway between original and model output', () {
+      final rgb = buildRgb(32, 32, 200);
+      final result = enhanceImage(
+        rgb,
+        32,
+        32,
+        denoise: blackDenoise,
+        upscale: _identityDenoise,
+        enableUpscale: false,
+        denoiseStrength: 0.5,
+      );
+      // original(200) + (denoised(0) - original(200)) * 0.5 = 100
+      expect(result.rgbBytes, everyElement(closeTo(100, 1)));
+    });
+
+    test('ignored entirely when enableDenoise is false', () {
+      final rgb = buildRgb(32, 32, 200);
+      final result = enhanceImage(
+        rgb,
+        32,
+        32,
+        denoise: blackDenoise,
+        upscale: _identityDenoise,
+        enableDenoise: false,
+        enableUpscale: false,
+        denoiseStrength: 0.0, // would zero everything out if it ran at all
+      );
+      expect(result.rgbBytes, everyElement(200));
+    });
+  });
 }

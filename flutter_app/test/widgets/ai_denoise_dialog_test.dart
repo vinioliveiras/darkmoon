@@ -5,6 +5,18 @@ import 'package:darkmoon/l10n/app_localizations.dart';
 import 'package:darkmoon/render/ai_denoise.dart';
 import 'package:darkmoon/widgets/ai_denoise_dialog.dart';
 
+/// The default test surface (800x600) is shorter than the dialog's
+/// Enhance tab now needs once the Amount slider and GPU warning are both
+/// showing — same fix `widget_test.dart` already uses. Real app windows
+/// are comfortably taller than this in practice; this is purely a test-
+/// harness limitation, not a real content-fit problem.
+void _useTallSurface(WidgetTester tester) {
+  tester.view.physicalSize = const Size(800, 900);
+  tester.view.devicePixelRatio = 1.0;
+  addTearDown(tester.view.resetPhysicalSize);
+  addTearDown(tester.view.resetDevicePixelRatio);
+}
+
 Future<void> _openDialog(
   WidgetTester tester, {
   AiDenoiseLevel? initialLevel,
@@ -42,6 +54,7 @@ void main() {
   group('AiDenoiseDialog', () {
     testWidgets('opens on the Classic tab by default, with the initial '
         'level preselected', (tester) async {
+      _useTallSurface(tester);
       await _openDialog(tester, initialLevel: AiDenoiseLevel.medium);
 
       expect(find.text('Classic'), findsOneWidget);
@@ -53,6 +66,7 @@ void main() {
 
     testWidgets('opens on the Enhance tab when either toggle was already '
         'active', (tester) async {
+      _useTallSurface(tester);
       await _openDialog(tester, neuralUpscale: true);
       await tester.pumpAndSettle();
 
@@ -64,6 +78,7 @@ void main() {
       'picking a Classic level then applying resolves as '
       'ClassicDenoiseChoice',
       (tester) async {
+        _useTallSurface(tester);
         AiDenoiseChoice? result;
         await tester.pumpWidget(
           MaterialApp(
@@ -108,6 +123,7 @@ void main() {
       'NeuralEnhanceChoice(upscale: true), even though the dialog opened '
       'on Classic',
       (tester) async {
+        _useTallSurface(tester);
         AiDenoiseChoice? result;
         await tester.pumpWidget(
           MaterialApp(
@@ -156,6 +172,7 @@ void main() {
       'checking both Denoise and Upscale resolves as '
       'NeuralEnhanceChoice(denoise: true, upscale: true)',
       (tester) async {
+        _useTallSurface(tester);
         AiDenoiseChoice? result;
         await tester.pumpWidget(
           MaterialApp(
@@ -206,6 +223,7 @@ void main() {
       'ClassicDenoiseChoice(null) — the same "nothing selected" state '
       'either tab collapses to',
       (tester) async {
+        _useTallSurface(tester);
         AiDenoiseChoice? result;
         await tester.pumpWidget(
           MaterialApp(
@@ -247,6 +265,7 @@ void main() {
     );
 
     testWidgets('cancel resolves with null (no choice)', (tester) async {
+      _useTallSurface(tester);
       AiDenoiseChoice? result = const ClassicDenoiseChoice(
         AiDenoiseLevel.light,
       ); // seeded with a non-null sentinel so `null` below is meaningful
