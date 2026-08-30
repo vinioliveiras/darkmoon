@@ -622,7 +622,8 @@ class EditorScreen extends StatefulWidget {
   State<EditorScreen> createState() => _EditorScreenState();
 }
 
-class _EditorScreenState extends State<EditorScreen> {
+class _EditorScreenState extends State<EditorScreen>
+    with TickerProviderStateMixin {
   List<RawFile> _files = const [];
   int? _selectedIndex;
   bool _loading = false;
@@ -730,6 +731,36 @@ class _EditorScreenState extends State<EditorScreen> {
   final TransformationController _viewController = TransformationController();
   final GlobalKey _viewportKey = GlobalKey();
   double _zoomScale = 1.0;
+
+  /// Drives an eased transition of [_viewController]'s matrix for the
+  /// zoom +/-/Fit toolbar buttons — instant scroll-wheel/pinch zoom and
+  /// the double-click zoom stay a direct jump (already continuous/
+  /// immediate interactions in their own right), but a button click
+  /// benefits from an animated hop between zoom levels. See
+  /// [_animateViewMatrixTo].
+  late final AnimationController _zoomAnimController;
+  late final CurvedAnimation _zoomAnimCurve;
+  Matrix4Tween? _zoomAnimTween;
+
+  /// Eases [_viewController]'s matrix from wherever it is now to
+  /// [target] — an instant snap when Settings > animations is off (see
+  /// [AnimationsConfig]). Re-targeting mid-flight (e.g. mashing the
+  /// zoom-in button) just restarts the animation from the matrix that's
+  /// currently on screen, not the previous target.
+  void _animateViewMatrixTo(Matrix4 target) {
+    final duration = AnimationsConfig.duration(
+      context,
+      const Duration(milliseconds: 220),
+    );
+    if (duration == Duration.zero) {
+      _viewController.value = target;
+      return;
+    }
+    _zoomAnimTween = Matrix4Tween(begin: _viewController.value, end: target);
+    _zoomAnimController
+      ..duration = duration
+      ..forward(from: 0);
+  }
 
   /// Current slider values for whichever photo is selected — either that
   /// photo's saved edits from [_edits], or defaults if it has none yet.
@@ -1089,6 +1120,16 @@ class _EditorScreenState extends State<EditorScreen> {
   @override
   void initState() {
     super.initState();
+    _zoomAnimController = AnimationController(vsync: this);
+    _zoomAnimCurve = CurvedAnimation(
+      parent: _zoomAnimController,
+      curve: Curves.easeOutCubic,
+    )..addListener(() {
+      final tween = _zoomAnimTween;
+      if (tween != null) {
+        _viewController.value = tween.evaluate(_zoomAnimCurve);
+      }
+    });
     unawaited(_loadEdits());
     unawaited(_loadPhotoCurves());
     unawaited(_loadPhotoMasks());
@@ -1785,6 +1826,8 @@ class _EditorScreenState extends State<EditorScreen> {
     _transientStatusTimer?.cancel();
     _completeVisibleThumbnailsReady();
     _viewController.dispose();
+    _zoomAnimCurve.dispose();
+    _zoomAnimController.dispose();
     _lifecycleListener.dispose();
     _shortcutsFocusNode.dispose();
     super.dispose();
@@ -3910,16 +3953,32 @@ class _EditorScreenState extends State<EditorScreen> {
     _scheduleCatalogSave();
   }
 
+  /// Instant — used for "the view just needs to be Fit again" resets
+  /// (switching photos, opening the Crop overlay) that aren't really a
+  /// user-initiated zoom gesture, so animating them would just be a
+  /// distracting flourish on top of an unrelated action.
   void _resetZoom() {
     _viewController.value = Matrix4.identity();
     setState(() => _zoomScale = 1.0);
   }
 
-  void _zoomBy(double factor, {Offset? anchor}) {
+  /// The animated counterpart, for the toolbar's Fit button specifically.
+  void _resetZoomAnimated() {
+    _animateViewMatrixTo(Matrix4.identity());
+    setState(() => _zoomScale = 1.0);
+  }
+
+  /// The matrix/scale a zoom by [factor] (centered on [anchor], or the
+  /// viewport's own center) would land on, or null if [factor] wouldn't
+  /// move [_zoomScale] at all (already at the min/max clamp).
+  ({Matrix4 matrix, double scale})? _computeZoomTarget(
+    double factor, {
+    Offset? anchor,
+  }) {
     final newScale = (_zoomScale * factor).clamp(_minZoom, _maxZoom);
     final effectiveFactor = newScale / _zoomScale;
     if (effectiveFactor == 1.0) {
-      return;
+      return null;
     }
     final box = _viewportKey.currentContext?.findRenderObject() as RenderBox?;
     final center =
@@ -3928,15 +3987,38 @@ class _EditorScreenState extends State<EditorScreen> {
       ..translateByDouble(center.dx, center.dy, 0, 1)
       ..scaleByDouble(effectiveFactor, effectiveFactor, effectiveFactor, 1)
       ..translateByDouble(-center.dx, -center.dy, 0, 1);
-    _viewController.value = matrix;
-    setState(() => _zoomScale = newScale);
+    return (matrix: matrix, scale: newScale);
+  }
+
+  /// Instant zoom — used for continuous gestures (Ctrl+scroll-wheel,
+  /// double-click) that already have their own immediate feel; animating
+  /// every tiny wheel tick would fight the gesture instead of following
+  /// it.
+  void _zoomBy(double factor, {Offset? anchor}) {
+    final target = _computeZoomTarget(factor, anchor: anchor);
+    if (target == null) {
+      return;
+    }
+    _viewController.value = target.matrix;
+    setState(() => _zoomScale = target.scale);
     // Zoom no longer triggers any render — full-quality mode renders at a
     // fixed working resolution (see [_fullQualityWorkingRes]).
   }
 
-  void _zoomIn() => _zoomBy(_zoomStep);
+  /// The animated counterpart, for the toolbar's +/- buttons — a single
+  /// discrete click benefits from an eased hop between zoom levels.
+  void _zoomByAnimated(double factor) {
+    final target = _computeZoomTarget(factor);
+    if (target == null) {
+      return;
+    }
+    _animateViewMatrixTo(target.matrix);
+    setState(() => _zoomScale = target.scale);
+  }
 
-  void _zoomOut() => _zoomBy(1 / _zoomStep);
+  void _zoomIn() => _zoomByAnimated(_zoomStep);
+
+  void _zoomOut() => _zoomByAnimated(1 / _zoomStep);
 
   /// Fit-relative zoom level a double-click jumps to (item 25) — matches
   /// `_zoomScale`'s own "1.0 = Fit" convention (see `_ViewerToolbar`'s
@@ -5227,7 +5309,7 @@ class _EditorScreenState extends State<EditorScreen> {
                                   viewportKey: _viewportKey,
                                   zoomScale: _zoomScale,
                                   onPointerSignal: _handlePointerSignal,
-                                  onResetZoom: _resetZoom,
+                                  onResetZoom: _resetZoomAnimated,
                                   onDoubleTapZoom: _onDoubleTapZoom,
                                   editingMask:
                                       (_beforeAfterMode || selected == null)
@@ -5405,7 +5487,7 @@ class _EditorScreenState extends State<EditorScreen> {
                       beforeAfterEnabled: selected != null,
                       onZoomIn: _zoomIn,
                       onZoomOut: _zoomOut,
-                      onZoomFit: _resetZoom,
+                      onZoomFit: _resetZoomAnimated,
                       onToggleBeforeAfter: selected == null
                           ? null
                           : _toggleBeforeAfter,
