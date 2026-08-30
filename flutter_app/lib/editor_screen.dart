@@ -6836,86 +6836,70 @@ class _SectionHeader extends StatelessWidget {
   final bool? enabled;
   final ValueChanged<bool>? onEnabledChanged;
 
+  /// Bolder, larger, sentence-scale label — replaces the old tiny
+  /// tight-tracked all-caps style with something closer to Photomator's
+  /// plain bold section titles (no boxed background/border bar to match).
+  static const _labelStyle = TextStyle(
+    fontSize: 13,
+    fontWeight: FontWeight.w600,
+    color: DarkmoonColors.textPrimary,
+  );
+
   @override
   Widget build(BuildContext context) {
     return Padding(
       // Spacing lives here, outside the InkWell, so hovering/clicking the
-      // gap above and below the header box doesn't register as a tap on
-      // it — only the visible rectangle itself should react. The larger
-      // bottom gap keeps the first slider/editor from sitting flush
-      // against the header bar.
-      padding: const EdgeInsets.only(top: 10, bottom: 10),
-      // The controls column insets its scrolling content by
-      // [_controlsPanelInset] on each side; an OverflowBox lets this bar
-      // grow back out to the full column width so it bleeds edge-to-edge
-      // (no rounded corners, no side border). The inset is then re-added
-      // as inner padding so the label/switch stay aligned with the
-      // sliders. Centering a full-width child in the narrower slot cancels
-      // the symmetric inset exactly. IntrinsicHeight caps the OverflowBox
-      // to the header's own height — without it the box inherits the
-      // Column's unbounded vertical constraint and blows up to infinity.
-      child: IntrinsicHeight(
-        child: OverflowBox(
-          maxWidth: _controlsPanelWidth,
-          child: Material(
-            color: Colors.transparent,
-            child: InkWell(
-              onTap: onTap,
-              child: Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: _controlsPanelInset,
-                  vertical: 8,
-                ),
-                decoration: const BoxDecoration(
-                  color: DarkmoonColors.surfaceRaised,
-                  border: Border(
-                    top: BorderSide(color: DarkmoonColors.border),
-                    bottom: BorderSide(color: DarkmoonColors.border),
+      // gap above and below the header doesn't register as a tap on it —
+      // only the visible row itself should react. The larger bottom gap
+      // keeps the first slider/editor from sitting flush against it.
+      padding: const EdgeInsets.only(top: 14, bottom: 8),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: _labelStyle.copyWith(
+                      color: enabled == false ? DarkmoonColors.textMuted : null,
+                    ),
                   ),
                 ),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        label,
-                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                          color: enabled == false
-                              ? DarkmoonColors.textMuted
-                              : null,
-                        ),
+                if (enabled != null && onEnabledChanged != null) ...[
+                  // SizedBox+FittedBox (not Transform.scale) so the
+                  // switch's *layout* box shrinks along with its paint —
+                  // Transform.scale only shrinks what's drawn, leaving the
+                  // full-size unscaled switch still reserving space in the
+                  // Row and forcing the whole header taller than it looks
+                  // like it should be.
+                  SizedBox(
+                    width: 26,
+                    height: 16,
+                    child: FittedBox(
+                      child: Switch(
+                        value: enabled!,
+                        onChanged: onEnabledChanged,
+                        materialTapTargetSize:
+                            MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
-                    if (enabled != null && onEnabledChanged != null) ...[
-                      // SizedBox+FittedBox (not Transform.scale) so the
-                      // switch's *layout* box shrinks along with its paint —
-                      // Transform.scale only shrinks what's drawn, leaving the
-                      // full-size unscaled switch still reserving space in the
-                      // Row and forcing the whole header taller than it looks
-                      // like it should be.
-                      SizedBox(
-                        width: 26,
-                        height: 16,
-                        child: FittedBox(
-                          child: Switch(
-                            value: enabled!,
-                            onChanged: onEnabledChanged,
-                            materialTapTargetSize:
-                                MaterialTapTargetSize.shrinkWrap,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 4),
-                    ],
-                    Icon(
-                      collapsed
-                          ? CupertinoIcons.chevron_right
-                          : CupertinoIcons.chevron_down,
-                      size: 13,
-                      color: DarkmoonColors.textMuted,
-                    ),
-                  ],
+                  ),
+                  const SizedBox(width: 6),
+                ],
+                Icon(
+                  collapsed
+                      ? CupertinoIcons.chevron_right
+                      : CupertinoIcons.chevron_down,
+                  size: 13,
+                  color: DarkmoonColors.textMuted,
                 ),
-              ),
+              ],
             ),
           ),
         ),
@@ -8253,49 +8237,100 @@ class _GradeRangeTabs extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Row(
-      children: [
-        for (final range in _ranges)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: Material(
-                color: range == active
-                    ? DarkmoonColors.accent.withValues(alpha: 0.22)
-                    : Colors.transparent,
-                borderRadius: BorderRadius.circular(6),
-                child: InkWell(
-                  borderRadius: BorderRadius.circular(6),
-                  onTap: () => onSelect(range),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 6),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(
-                        color: range == active
-                            ? DarkmoonColors.accent
-                            : DarkmoonColors.border,
-                      ),
-                    ),
-                    alignment: Alignment.center,
-                    child: Text(
-                      _gradeRangeLabel(l10n, range),
-                      style: TextStyle(
-                        color: range == active
-                            ? DarkmoonColors.accent
-                            : DarkmoonColors.textSecondary,
-                        fontSize: 11,
-                        fontWeight: range == active
-                            ? FontWeight.w600
-                            : FontWeight.normal,
-                      ),
-                    ),
-                  ),
-                ),
+    return _SegmentedTabs<String>(
+      items: _ranges,
+      active: active,
+      onSelect: onSelect,
+      labelOf: (range) => _gradeRangeLabel(l10n, range),
+    );
+  }
+}
+
+/// A single rounded, bordered capsule holding equal-width segments, the
+/// active one highlighted by a borderless flat-fill pill rather than
+/// each segment carrying its own border — softer, Photomator-style
+/// segmented control shared by [_GradeRangeTabs] and [_ColorChannelTabs].
+class _SegmentedTabs<T> extends StatelessWidget {
+  const _SegmentedTabs({
+    required this.items,
+    required this.active,
+    required this.onSelect,
+    required this.labelOf,
+    this.colorOf,
+  });
+
+  final List<T> items;
+  final T active;
+  final ValueChanged<T> onSelect;
+  final String Function(T item) labelOf;
+
+  /// Per-segment highlight color when selected — defaults to the app's
+  /// monochrome accent everywhere except [_ColorChannelTabs], which
+  /// color-codes each channel to match the curve editor itself.
+  final Color Function(T item)? colorOf;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: DarkmoonColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: DarkmoonColors.border),
+      ),
+      child: Row(
+        children: [
+          for (final item in items)
+            Expanded(
+              child: _SegmentedTab(
+                label: labelOf(item),
+                selected: item == active,
+                color: colorOf?.call(item) ?? DarkmoonColors.accent,
+                onTap: () => onSelect(item),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SegmentedTab extends StatelessWidget {
+  const _SegmentedTab({
+    required this.label,
+    required this.selected,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final Color color;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? color.withValues(alpha: 0.22) : Colors.transparent,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(6),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 6),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            overflow: TextOverflow.ellipsis,
+            softWrap: false,
+            style: TextStyle(
+              color: selected ? color : DarkmoonColors.textSecondary,
+              fontSize: 11,
+              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+            ),
           ),
-      ],
+        ),
+      ),
     );
   }
 }
@@ -8312,76 +8347,27 @@ class _ColorChannelTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        for (final channel in _channels)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 3),
-              child: _ColorChannelTab(
-                channel: channel,
-                selected: channel == active,
-                onTap: () => onSelect(channel),
-              ),
-            ),
-          ),
-      ],
+    final l10n = AppLocalizations.of(context)!;
+    return _SegmentedTabs<String>(
+      items: _channels,
+      active: active,
+      onSelect: onSelect,
+      labelOf: (channel) => _colorChannelLabel(l10n, channel),
+      colorOf: _channelColor,
     );
   }
 }
 
-class _ColorChannelTab extends StatelessWidget {
-  const _ColorChannelTab({
-    required this.channel,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final String channel;
-  final bool selected;
-  final VoidCallback onTap;
-
-  String _label(AppLocalizations l10n) {
-    switch (channel) {
-      case 'red':
-        return l10n.colorChannelRed;
-      case 'green':
-        return l10n.colorChannelGreen;
-      case 'blue':
-        return l10n.colorChannelBlue;
-    }
-    throw ArgumentError.value(channel, 'channel');
+String _colorChannelLabel(AppLocalizations l10n, String channel) {
+  switch (channel) {
+    case 'red':
+      return l10n.colorChannelRed;
+    case 'green':
+      return l10n.colorChannelGreen;
+    case 'blue':
+      return l10n.colorChannelBlue;
   }
-
-  @override
-  Widget build(BuildContext context) {
-    final color = _channelColor(channel);
-    final l10n = AppLocalizations.of(context)!;
-    return Material(
-      color: selected ? color.withValues(alpha: 0.22) : Colors.transparent,
-      borderRadius: BorderRadius.circular(6),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(6),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 6),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(color: selected ? color : DarkmoonColors.border),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            _label(l10n),
-            style: TextStyle(
-              color: selected ? color : DarkmoonColors.textSecondary,
-              fontSize: 11,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
+  throw ArgumentError.value(channel, 'channel');
 }
 
 class _Filmstrip extends StatefulWidget {
