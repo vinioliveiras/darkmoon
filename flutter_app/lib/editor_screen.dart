@@ -688,6 +688,23 @@ class _EditorScreenState extends State<EditorScreen>
     return _renderedPreviews[path];
   }
 
+  /// Bumped once per *settled* (non-live) render that lands for the
+  /// currently-selected photo — an applied edit, preset, reset, undo, or
+  /// redo — and used to key the preview `Image` inside an
+  /// `AnimatedSwitcher` (see `_ImageArea._fadingImage`) so the change
+  /// fades in instead of popping. Never bumped for a live drag frame
+  /// (those already update instantly with no animation, by design — see
+  /// [_scheduleRender]), and deliberately not bumped for the very first
+  /// frame shown after selecting a *different* photo (see
+  /// [_suppressNextPreviewFade]), so switching photos stays an instant
+  /// swap rather than a crossfade.
+  int _previewFadeGeneration = 0;
+
+  /// Set alongside `_selectedIndex` whenever the selected photo changes;
+  /// consumed (and cleared) by the next render that lands for it,
+  /// regardless of whether that render is live or settled.
+  bool _suppressNextPreviewFade = false;
+
   /// Camera/lens/exposure info per photo (absolute path), shown below the
   /// histogram — loaded lazily on selection (cheap: no unpack/demosaic
   /// needed, see [extractRawMetadata]) rather than eagerly for the whole
@@ -2496,6 +2513,7 @@ class _EditorScreenState extends State<EditorScreen>
     setState(() {
       _files = files;
       _selectedIndex = selectedIndex;
+      _suppressNextPreviewFade = true;
       _thumbnailsTotal = files.length;
       _paramValues = selectedIndex == null
           ? _defaultParamValues()
@@ -2645,6 +2663,7 @@ class _EditorScreenState extends State<EditorScreen>
     _fullQualityScaled = null;
     setState(() {
       _selectedIndex = index;
+      _suppressNextPreviewFade = true;
       _paramValues = _paramValuesFor(path);
       _currentCurves = _curvesFor(path);
       _currentMasks = _masksFor(path);
@@ -3133,6 +3152,14 @@ class _EditorScreenState extends State<EditorScreen>
     setState(() {
       _isRenderingSlow = false;
       _renderedPreviews[path] = firstResult.jpegBytes;
+      // Fade in a settled render (applied edit/preset/reset/undo/redo) —
+      // never a live drag frame, and never the first frame shown right
+      // after switching to a different photo (see
+      // _suppressNextPreviewFade's doc).
+      if (!live && !_suppressNextPreviewFade) {
+        _previewFadeGeneration++;
+      }
+      _suppressNextPreviewFade = false;
       // This phase-1 render is newer than any full-quality one on file for
       // this photo — drop the stale full render so the canvas shows this
       // one until phase 2 (if any) replaces it.
@@ -5301,6 +5328,7 @@ class _EditorScreenState extends State<EditorScreen>
                                   preview: selected == null
                                       ? null
                                       : _displayPreview(selected.path),
+                                  previewFadeGeneration: _previewFadeGeneration,
                                   neutralPreview: selected == null
                                       ? null
                                       : _neutralPreviews[selected.path],
@@ -5663,6 +5691,7 @@ class _ImageArea extends StatelessWidget {
     required this.onCropTransformChangeEnd,
     required this.straighteningActive,
     required this.onSecondaryTapUp,
+    required this.previewFadeGeneration,
   });
 
   final RawFile? selected;
@@ -5755,12 +5784,42 @@ class _ImageArea extends StatelessWidget {
   /// Right-click on the image — opens the copy/paste-edits context menu.
   final void Function(Offset globalPosition) onSecondaryTapUp;
 
+  /// See [_EditorScreenState._previewFadeGeneration]'s doc — changes
+  /// only on a settled edit/preset/reset/undo/redo for the *same* photo,
+  /// used below to key [_fadingImage]'s `AnimatedSwitcher`.
+  final int previewFadeGeneration;
+
   /// Vertical breathing room around the fitted image — without this, a
   /// photo whose aspect ratio closely matches the viewport (most photos,
   /// since BoxFit.contain already maximizes it) sits flush against the
   /// top/bottom toolbar edges with zero margin, reading as cramped even
   /// though "Fit" is working exactly as designed.
   static const double _verticalBreathingRoom = 60;
+
+  /// The main preview `Image`, wrapped so a settled render fades in
+  /// (see [previewFadeGeneration]) instead of popping — a live drag
+  /// frame reuses the same key, so it updates in place with no
+  /// animation, same as before this existed. An instant swap (no
+  /// transition at all) when Settings > animations is off. A [Builder]
+  /// rather than threading a `BuildContext` down from `build()` through
+  /// several intermediate methods (`_zoomableImage`/`_fittedImage`/…) —
+  /// any descendant context works for [AnimationsConfig.of].
+  Widget _fadingImage(Uint8List bytes) {
+    return Builder(
+      builder: (context) => AnimatedSwitcher(
+        duration: AnimationsConfig.duration(
+          context,
+          const Duration(milliseconds: 220),
+        ),
+        child: Image.memory(
+          bytes,
+          key: ValueKey(previewFadeGeneration),
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+        ),
+      ),
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -5959,7 +6018,7 @@ class _ImageArea extends StatelessWidget {
             return Stack(
               fit: StackFit.expand,
               children: [
-                Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true),
+                _fadingImage(bytes),
                 WhiteBalanceEyedropperOverlay(
                   containerSize: Size(
                     constraints.maxWidth,
@@ -5993,7 +6052,7 @@ class _ImageArea extends StatelessWidget {
             return Stack(
               fit: StackFit.expand,
               children: [
-                Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true),
+                _fadingImage(bytes),
                 CropOverlay(
                   containerSize: containerSize,
                   imageWidth: frameWidth,
@@ -6013,7 +6072,7 @@ class _ImageArea extends StatelessWidget {
     final noOverlay = mask == null || source == null;
     return SizedBox.expand(
       child: noOverlay
-          ? Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true)
+          ? _fadingImage(bytes)
           : LayoutBuilder(
               builder: (context, constraints) {
                 final containerSize = Size(
