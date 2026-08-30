@@ -255,31 +255,70 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
           l10n.aiDenoiseEnhanceMessage,
           style: Theme.of(context).textTheme.bodyMedium,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 4),
         // Independent toggles, not a single on/off switch — denoising a
         // noisy JPEG without upscaling it, or upscaling an already-clean
         // photo without paying for denoise it doesn't need, are both
         // useful on their own, not just as a combined "Enhance" pass.
-        Row(
-          children: [
-            Expanded(
-              child: _LevelChip(
-                label: l10n.aiDenoiseEnhanceDenoiseLabel,
-                selected: _neuralDenoise,
-                onTap: () => _setNeuralDenoise(!_neuralDenoise),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _LevelChip(
-                label: l10n.aiDenoiseEnhanceUpscaleLabel,
-                selected: _neuralUpscale,
-                onTap: () => _setNeuralUpscale(!_neuralUpscale),
-              ),
-            ),
-          ],
+        // Stacked (not side by side) so each has room for a longer label.
+        // Plain Switch + Text rather than SwitchListTile — ListTile's own
+        // minimum height pushed the dialog past its available space by a
+        // few pixels (an overflow only a widget test surfaces; visually
+        // negligible on a real screen, but still real).
+        _ToggleRow(
+          label: l10n.aiDenoiseEnhanceDenoiseLabel,
+          value: _neuralDenoise,
+          onChanged: _setNeuralDenoise,
+        ),
+        _ToggleRow(
+          label: l10n.aiDenoiseEnhanceUpscaleLabel,
+          value: _neuralUpscale,
+          onChanged: _setNeuralUpscale,
         ),
       ],
+    );
+  }
+}
+
+class _ToggleRow extends StatelessWidget {
+  const _ToggleRow({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    // The whole row toggles on tap (not just the Switch itself), same
+    // "tap anywhere in the row" convention SwitchListTile gives elsewhere
+    // in this app (e.g. settings_dialog.dart) — GestureDetector here
+    // instead, since SwitchListTile's own minimum height overflowed this
+    // dialog by a few pixels (see _buildEnhanceTab's comment).
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: () => onChanged(!value),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12.5,
+                color: DarkmoonColors.textPrimary,
+              ),
+            ),
+          ),
+          Switch(
+            value: value,
+            onChanged: onChanged,
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+        ],
+      ),
     );
   }
 }
