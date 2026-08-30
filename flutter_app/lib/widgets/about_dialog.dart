@@ -6,7 +6,7 @@ import 'dialog_chrome.dart';
 
 /// Displayed app version — bump this alongside pubspec.yaml's `version:`
 /// and the git tag on each release.
-const String darkmoonAppVersion = 'v1.2.2';
+const String darkmoonAppVersion = 'v1.3.0';
 
 /// The "About" entry in the top menu bar — app name/version plus credits.
 /// Named [DarkmoonAboutDialog] to avoid colliding with Flutter's own
