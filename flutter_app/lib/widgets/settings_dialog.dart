@@ -1,6 +1,9 @@
+import 'dart:io' show Process;
+
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
+import '../diagnostics/dev_log.dart';
 import '../l10n/app_localizations.dart';
 import '../settings/app_settings.dart';
 import '../theme.dart';
@@ -420,6 +423,25 @@ class _SettingsDialogState extends State<SettingsDialog>
               l10n.confirmClearCatalogMessage,
               widget.onClearCatalog,
             ),
+          ),
+          const SizedBox(height: 4),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(l10n.settingsDevLoggingLabel, style: _labelStyle),
+            subtitle: Text(l10n.settingsDevLoggingHint, style: _hintStyle),
+            value: _settings.devLogging,
+            onChanged: (v) {
+              DevLog.setEnabled(v);
+              _update(_settings.copyWith(devLogging: v));
+            },
+          ),
+          _ClearDataRow(
+            label: l10n.settingsOpenLogFolderButton,
+            onPressed: () async {
+              final dir = await resolveDevLogDir();
+              await Process.run('explorer.exe', [dir.path]);
+            },
           ),
         ],
       ),

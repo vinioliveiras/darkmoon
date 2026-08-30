@@ -7,7 +7,8 @@ import 'package:image/image.dart' as img;
 import '../catalog/ai_enhance_cache.dart';
 import '../raw_files.dart' show isRawFile;
 import '../render/ai_enhance.dart';
-import '../render/ai_enhance_job.dart' show AiEnhanceProgress;
+import '../render/ai_enhance_job.dart'
+    show AiEnhanceCancellationToken, AiEnhanceModelInfo, AiEnhanceProgress;
 import '../native/onnx_runtime.dart';
 import 'common_image.dart';
 import 'edit_source.dart';
@@ -28,11 +29,13 @@ import 'libraw.dart';
 /// file stays a plain, ONNX-free decode module; only this one pulls in
 /// the neural pipeline's dependencies.
 ///
-/// Messages sent to [onStage] are either a [RawDecodeStage] (only while
-/// decoding a cache-missed RAW) or an [AiEnhanceProgress] (only while the
-/// model is actually running — skipped entirely on a cache hit) — same
-/// "send the typed event, let the caller `is`-check it" convention
-/// `decodeEditSourcesWithProgress` already uses.
+/// Messages sent to [onStage] are a [RawDecodeStage] (only while decoding
+/// a cache-missed RAW), an [AiEnhanceModelInfo] (once per model, right
+/// after each session loads — reports GPU/CPU before the wait starts), or
+/// an [AiEnhanceProgress] (while the model is actually running) — all
+/// three skipped entirely on a cache hit — same "send the typed event, let
+/// the caller `is`-check it" convention `decodeEditSourcesWithProgress`
+/// already uses.
 ///
 /// Designed to run via [decodeEditSourcesWithAiEnhance] (a dedicated
 /// isolate, since this can take from several seconds — a cache hit — to
@@ -64,7 +67,21 @@ Future<EditSourcePair?> _decodeAndEnhance(
     }
 
     final denoiseModel = OnnxModel.forSpec(denoiseModelSpec);
+    onStage(
+      AiEnhanceModelInfo(
+        denoiseModelSpec.fileName,
+        denoiseModel.usingGpu,
+        denoiseModel.directMlError,
+      ),
+    );
     final upscaleModel = OnnxModel.forSpec(upscaleModelSpec);
+    onStage(
+      AiEnhanceModelInfo(
+        upscaleModelSpec.fileName,
+        upscaleModel.usingGpu,
+        upscaleModel.directMlError,
+      ),
+    );
     final enhanced = enhanceImage(
       decoded.rgbBytes,
       decoded.width,
@@ -143,11 +160,19 @@ void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
 /// result — resolved once on the main isolate by the caller (the same
 /// `path_provider`-isn't-isolate-safe reasoning every other cache dir in
 /// this codebase follows) and passed in rather than resolved here.
+///
+/// [cancellationToken], if given and cancelled, makes this return `null`
+/// right away instead of waiting for the isolate to finish on its own —
+/// the `finally` block below still kills it immediately either way, same
+/// `Future.any` race `export_job.dart`'s `exportPhotoWithProgress` already
+/// uses for the same reason (a 30s-2min ONNX inference is exactly the kind
+/// of operation a user expects Cancel to actually stop).
 Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
   String path,
   String cacheDir,
   void Function(Object stage) onStage, {
   int previewMaxDimension = defaultPreviewMaxDimension,
+  AiEnhanceCancellationToken? cancellationToken,
 }) async {
   final receivePort = ReceivePort();
   final isolate = await Isolate.spawn(
@@ -160,14 +185,23 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
     ),
   );
   try {
-    await for (final message in receivePort) {
-      if (message is RawDecodeStage || message is AiEnhanceProgress) {
-        onStage(message);
-      } else {
-        return message as EditSourcePair?;
+    Future<EditSourcePair?> receiveResult() async {
+      await for (final message in receivePort) {
+        if (message is RawDecodeStage ||
+            message is AiEnhanceModelInfo ||
+            message is AiEnhanceProgress) {
+          onStage(message);
+        } else {
+          return message as EditSourcePair?;
+        }
       }
+      return null;
     }
-    return null;
+
+    final cancellation = cancellationToken == null
+        ? Completer<EditSourcePair?>().future
+        : cancellationToken.cancelled.then((_) => null);
+    return await Future.any([receiveResult(), cancellation]);
   } finally {
     receivePort.close();
     isolate.kill(priority: Isolate.immediate);

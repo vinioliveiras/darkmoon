@@ -176,7 +176,14 @@ void _check(Pointer<OrtStatus> status) {
 /// should keep one instance around rather than recreating it per tile —
 /// [OnnxModel.forSpec] caches one instance per model file for that reason.
 class OnnxModel {
-  OnnxModel._(this._spec, this._env, this._session, this._memoryInfo, this.usingGpu);
+  OnnxModel._(
+    this._spec,
+    this._env,
+    this._session,
+    this._memoryInfo,
+    this.usingGpu,
+    this.directMlError,
+  );
 
   // Never read directly, only kept alive: the env must outlive the
   // session for the process lifetime of this singleton (there's no
@@ -193,6 +200,13 @@ class OnnxModel {
   /// execution provider; false if it fell back to plain CPU.
   final bool usingGpu;
 
+  /// The `OrtException.message` from the DirectML attempt, if [usingGpu]
+  /// is false because that attempt failed (null if it never ran, or if it
+  /// succeeded). Surfaced through dev-mode logging so a "why did this fall
+  /// back to CPU" bug report carries the real reason (an unsupported op,
+  /// a driver issue, etc.) instead of just the fact that it happened.
+  final String? directMlError;
+
   static final Map<String, OnnxModel> _instances = {};
 
   /// Lazily creates (once per [spec]) and returns a shared model session.
@@ -205,17 +219,22 @@ class OnnxModel {
   static OnnxModel _create(OnnxModelSpec spec) {
     try {
       return _createSession(spec, useDirectMl: true);
-    } on OrtException {
+    } on OrtException catch (e) {
       // GPU path failed (no DX12-capable GPU, driver too old, or a node
       // DML can't run) — fall back to CPU rather than making the whole
       // feature unavailable. If this *also* throws, the real problem is
       // something more fundamental (missing/corrupt model file) and
-      // should propagate.
-      return _createSession(spec, useDirectMl: false);
+      // should propagate. Keep e.message: it's the only place the actual
+      // DirectML rejection reason is ever available.
+      return _createSession(spec, useDirectMl: false, directMlError: e.message);
     }
   }
 
-  static OnnxModel _createSession(OnnxModelSpec spec, {required bool useDirectMl}) {
+  static OnnxModel _createSession(
+    OnnxModelSpec spec, {
+    required bool useDirectMl,
+    String? directMlError,
+  }) {
     final api = _OrtLib.api;
 
     final envOut = calloc<Pointer<OrtEnv>>();
@@ -339,7 +358,14 @@ class OnnxModel {
         calloc.free(memInfoOut);
       }
 
-      return OnnxModel._(spec, env, session, memoryInfo, useDirectMl);
+      return OnnxModel._(
+        spec,
+        env,
+        session,
+        memoryInfo,
+        useDirectMl,
+        directMlError,
+      );
     } finally {
       api.ref.ReleaseSessionOptions
           .asFunction<void Function(Pointer<OrtSessionOptions>)>()(options);

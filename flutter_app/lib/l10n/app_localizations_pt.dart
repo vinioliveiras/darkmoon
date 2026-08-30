@@ -270,6 +270,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'O AI Enhance não conseguiu rodar nessa foto. Foi desligado de novo.';
 
   @override
+  String get aiDenoiseEnhanceCpuWarning =>
+      'Sua GPU ainda não é compatível com isso, então vai rodar na CPU — isso vai demorar bem mais.';
+
+  @override
   String get aiDenoiseEnhanceStartingMessage => 'Rodando AI Enhance...';
 
   @override
@@ -433,6 +437,16 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get settingsClearCatalogButton => 'Limpar catálogo (todas as edições)';
+
+  @override
+  String get settingsDevLoggingLabel => 'Modo desenvolvedor';
+
+  @override
+  String get settingsDevLoggingHint =>
+      'Grava um log detalhado em disco (erros, status GPU/CPU do AI Enhance, etc.) pra relatar bugs. Desligado por padrão.';
+
+  @override
+  String get settingsOpenLogFolderButton => 'Abrir pasta de logs';
 
   @override
   String get confirmClearTitle => 'Limpar dados?';

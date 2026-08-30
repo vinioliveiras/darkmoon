@@ -578,6 +578,12 @@ abstract class AppLocalizations {
   /// **'AI Enhance couldn\'t run on this photo. It\'s been turned back off.'**
   String get aiDenoiseEnhanceFailedMessage;
 
+  /// No description provided for @aiDenoiseEnhanceCpuWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Your GPU doesn\'t support this yet, so it\'s running on the CPU instead — this will take noticeably longer.'**
+  String get aiDenoiseEnhanceCpuWarning;
+
   /// No description provided for @aiDenoiseEnhanceStartingMessage.
   ///
   /// In en, this message translates to:
@@ -871,6 +877,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Clear catalog (all edits)'**
   String get settingsClearCatalogButton;
+
+  /// No description provided for @settingsDevLoggingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Developer mode'**
+  String get settingsDevLoggingLabel;
+
+  /// No description provided for @settingsDevLoggingHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Writes a detailed log to disk (errors, AI Enhance GPU/CPU status, etc.) for bug reports. Off by default.'**
+  String get settingsDevLoggingHint;
+
+  /// No description provided for @settingsOpenLogFolderButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Open log folder'**
+  String get settingsOpenLogFolderButton;
 
   /// No description provided for @confirmClearTitle.
   ///

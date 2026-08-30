@@ -45,6 +45,7 @@ class AppSettings {
     this.baseContrast = calBaseContrast,
     this.thumbnailConcurrency = 4,
     this.rawOnly = false,
+    this.devLogging = false,
     this.libraryFolders = const [],
     this.recentFiles = const [],
     this.lastActiveFolder,
@@ -110,6 +111,12 @@ class AppSettings {
   /// PNG, etc.) are filtered out of the library entirely.
   final bool rawOnly;
 
+  /// "Developer Mode" — when true, `DevLog` writes a timestamped diagnostic
+  /// log (crashes, AI Enhance stage/GPU-CPU info, etc. — see
+  /// `diagnostics/dev_log.dart`) to disk for bug reports. Off by default,
+  /// so normal use never writes anything.
+  final bool devLogging;
+
   /// Folders added to the sidebar's folder tree via File > Add Folder,
   /// persisted so they're still there next launch. Order is insertion
   /// order (most-recently-added last).
@@ -140,6 +147,7 @@ class AppSettings {
     double? baseContrast,
     int? thumbnailConcurrency,
     bool? rawOnly,
+    bool? devLogging,
     List<String>? libraryFolders,
     List<String>? recentFiles,
     String? lastActiveFolder,
@@ -157,6 +165,7 @@ class AppSettings {
     baseContrast: (baseContrast ?? this.baseContrast).clamp(0.0, 60.0),
     thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
     rawOnly: rawOnly ?? this.rawOnly,
+    devLogging: devLogging ?? this.devLogging,
     libraryFolders: libraryFolders ?? this.libraryFolders,
     recentFiles: recentFiles ?? this.recentFiles,
     lastActiveFolder: lastActiveFolder ?? this.lastActiveFolder,
@@ -212,6 +221,7 @@ Future<AppSettings> loadSettings() async {
       thumbnailConcurrency:
           (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
       rawOnly: raw['rawOnly'] as bool? ?? defaults.rawOnly,
+      devLogging: raw['devLogging'] as bool? ?? defaults.devLogging,
       libraryFolders:
           (raw['libraryFolders'] as List?)?.cast<String>() ??
           defaults.libraryFolders,
@@ -241,6 +251,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'baseContrast': settings.baseContrast,
       'thumbnailConcurrency': settings.thumbnailConcurrency,
       'rawOnly': settings.rawOnly,
+      'devLogging': settings.devLogging,
       'libraryFolders': settings.libraryFolders,
       'recentFiles': settings.recentFiles,
       'lastActiveFolder': settings.lastActiveFolder,

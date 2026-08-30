@@ -32,6 +32,25 @@ class AiEnhanceProgress {
   final int totalTiles;
 }
 
+/// Reports which execution provider `OnnxModel.forSpec` actually ended up
+/// using for one of the two models (DirectML tried first, CPU on
+/// fallback — see `OnnxModel`'s own doc) — sent once per model, right
+/// after its session is created and before any tile inference starts, so
+/// the caller can warn "this will be slower" *before* the wait, not after.
+/// Purely informational: never changes what runs, only what the UI shows
+/// and what dev-mode logging records.
+class AiEnhanceModelInfo {
+  const AiEnhanceModelInfo(this.modelName, this.usingGpu, this.directMlError);
+
+  final String modelName;
+  final bool usingGpu;
+
+  /// The DirectML failure reason, if [usingGpu] is false because that
+  /// attempt failed — null if it never ran or succeeded. See
+  /// `OnnxModel.directMlError`.
+  final String? directMlError;
+}
+
 /// Exceptions thrown inside a spawned [Isolate] don't carry back to the
 /// caller as the original exception object (same reasoning as
 /// `export_job.dart`'s `ExportResult`) — failures are reported as a plain
@@ -47,6 +66,26 @@ class AiEnhanceIsolateResult {
   final String? error;
 
   bool get success => error == null;
+}
+
+/// Lets a caller stop waiting on the AI Enhance isolate (see
+/// `edit_source_ai_enhance.dart`'s `decodeEditSourcesWithAiEnhance`)
+/// without the isolate itself needing to cooperate — same shape as
+/// `export_job.dart`'s `ExportCancellationToken` (duplicated rather than
+/// shared: both are a handful of lines, and export/AI-enhance are already
+/// separate, independently-evolving isolate wrappers in this codebase).
+class AiEnhanceCancellationToken {
+  final Completer<void> _completer = Completer<void>();
+
+  bool get isCancelled => _completer.isCompleted;
+
+  Future<void> get cancelled => _completer.future;
+
+  void cancel() {
+    if (!isCancelled) {
+      _completer.complete();
+    }
+  }
 }
 
 Future<AiEnhanceIsolateResult> _enhanceInternal(

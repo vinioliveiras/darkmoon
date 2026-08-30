@@ -20,6 +20,7 @@ import 'catalog/preview_cache_dir.dart';
 import 'catalog/ai_enhance_cache_dir.dart';
 import 'catalog/thumbnail_cache.dart';
 import 'catalog/thumbnail_cache_dir.dart';
+import 'diagnostics/dev_log.dart';
 import 'export/export_job.dart';
 import 'l10n/app_localizations.dart';
 import 'native/common_image_thumbnail.dart';
@@ -33,7 +34,8 @@ import 'presets/preset_xmp.dart';
 import 'presets/preset_zip.dart';
 import 'raw_files.dart';
 import 'render/ai_denoise.dart';
-import 'render/ai_enhance_job.dart' show AiEnhanceProgress;
+import 'render/ai_enhance_job.dart'
+    show AiEnhanceCancellationToken, AiEnhanceModelInfo, AiEnhanceProgress;
 import 'render/color_profile.dart';
 import 'render/histogram.dart';
 import 'render/lens_correction.dart';
@@ -498,6 +500,12 @@ class _EditorScreenState extends State<EditorScreen> {
   int? _selectedIndex;
   bool _loading = false;
   ExportCancellationToken? _exportCancellation;
+
+  /// Set while [_runNeuralEnhance] is awaiting the AI Enhance isolate, so
+  /// [_cancelLoading] (the overlay's Cancel button) can actually stop the
+  /// wait instead of just resetting the UI while the isolate keeps running
+  /// underneath it — same role as [_exportCancellation] for exports.
+  AiEnhanceCancellationToken? _aiEnhanceCancellation;
 
   /// Every loading operation now surfaces through the compact docked
   /// [_HiddenLoadingIndicator] rather than the dark modal [_LoadingOverlay]
@@ -1470,6 +1478,9 @@ class _EditorScreenState extends State<EditorScreen> {
           if (next.language != _settings.language) {
             widget.onLanguageChanged(next.language);
           }
+          if (next.devLogging != _settings.devLogging) {
+            DevLog.setEnabled(next.devLogging);
+          }
           // Every cached EditSourcePair was decoded at the old preview
           // resolution — drop them so each photo picks up the new setting
           // next time it's selected, and redecode the one on screen right
@@ -2229,11 +2240,14 @@ class _EditorScreenState extends State<EditorScreen> {
     _thumbnailUiFlushTimer = null;
     _completeVisibleThumbnailsReady();
     _exportCancellation?.cancel();
+    _aiEnhanceCancellation?.cancel();
     setState(() {
       _loading = false;
       _isDecodingPhoto = false;
       _isRenderingSlow = false;
       _isApplyingAiDenoise = false;
+      _isRunningNeuralEnhance = false;
+      _aiEnhanceProgress = null;
       _thumbnailsLoaded = 0;
       _thumbnailsTotal = 0;
     });
@@ -3225,34 +3239,69 @@ class _EditorScreenState extends State<EditorScreen> {
       _isRunningNeuralEnhance = true;
       _aiEnhanceProgress = null;
     });
+    // The overlay's Cancel button (_cancelLoading) calls .cancel() on this
+    // to actually stop waiting instead of just resetting the UI while the
+    // isolate keeps running the ONNX inference underneath it.
+    final cancellation = AiEnhanceCancellationToken();
+    _aiEnhanceCancellation = cancellation;
     final cacheDir = await resolveAiEnhanceCacheDir();
     if (!mounted) return false;
+    // Set the first time either model reports a CPU fallback, so the
+    // "this will be slower" warning below only ever shows once per run
+    // (there are two models, denoise then upscale) instead of twice.
+    var cpuWarningShown = false;
     final sources = await decodeEditSourcesWithAiEnhance(
       path,
       cacheDir,
       (stage) {
-        if (mounted && stage is AiEnhanceProgress) {
+        if (!mounted) return;
+        if (stage is AiEnhanceProgress) {
           setState(() => _aiEnhanceProgress = stage);
+        } else if (stage is AiEnhanceModelInfo) {
+          DevLog.log(
+            'AI Enhance model ${stage.modelName}: '
+            '${stage.usingGpu ? "GPU (DirectML)" : "CPU fallback"}'
+            '${stage.directMlError == null ? "" : " — DirectML error: ${stage.directMlError}"}',
+            tag: 'ai-enhance',
+          );
+          if (!stage.usingGpu && !cpuWarningShown) {
+            cpuWarningShown = true;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  AppLocalizations.of(context)!.aiDenoiseEnhanceCpuWarning,
+                ),
+              ),
+            );
+          }
         }
       },
       previewMaxDimension: _settings.previewResolution,
+      cancellationToken: cancellation,
     );
+    _aiEnhanceCancellation = null;
     if (!mounted) {
       return false;
     }
     if (sources == null) {
+      final wasCancelled = cancellation.isCancelled;
       setState(() {
         _paramValues = {..._paramValues, _neuralEnhanceKey: 0.0};
         _isRunningNeuralEnhance = false;
         _aiEnhanceProgress = null;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            AppLocalizations.of(context)!.aiDenoiseEnhanceFailedMessage,
+      // A deliberate Cancel already reset the overlay in _cancelLoading —
+      // showing "AI Enhance couldn't run" on top of that would misreport
+      // the user's own action as a failure.
+      if (!wasCancelled) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.aiDenoiseEnhanceFailedMessage,
+            ),
           ),
-        ),
-      );
+        );
+      }
       return false;
     }
     setState(() {

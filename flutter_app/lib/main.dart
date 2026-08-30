@@ -1,16 +1,43 @@
 import 'dart:async';
 import 'dart:io' show Platform;
+import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import 'diagnostics/dev_log.dart';
 import 'editor_screen.dart';
 import 'l10n/app_localizations.dart';
 import 'settings/app_settings.dart';
 import 'theme.dart';
 import 'widgets/splash_screen.dart';
 
+/// Loads Developer Mode's persisted value before the first frame and wires
+/// both of Flutter's global error hooks to `DevLog` — this is the only
+/// place uncaught crashes (as opposed to the errors already caught and
+/// handled locally elsewhere, like an AI Enhance failure) ever get logged,
+/// so it needs to run before anything else can throw. Errors are still
+/// forwarded to Flutter's normal handling afterward (the debug console /
+/// red screen behavior is unchanged) — this only adds a second listener,
+/// it doesn't replace anything.
+Future<void> _initDevLog() async {
+  final settings = await loadSettings();
+  DevLog.setEnabled(settings.devLogging);
+
+  final defaultOnError = FlutterError.onError;
+  FlutterError.onError = (details) {
+    DevLog.logError('FlutterError', details.exception, details.stack);
+    defaultOnError?.call(details);
+  };
+  PlatformDispatcher.instance.onError = (error, stack) {
+    DevLog.logError('Uncaught', error, stack);
+    return false; // Still let Flutter's own default handling occur.
+  };
+}
+
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
+  unawaited(_initDevLog());
   runApp(const DarkmoonApp());
 }
 

@@ -270,6 +270,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'AI Enhance couldn\'t run on this photo. It\'s been turned back off.';
 
   @override
+  String get aiDenoiseEnhanceCpuWarning =>
+      'Your GPU doesn\'t support this yet, so it\'s running on the CPU instead — this will take noticeably longer.';
+
+  @override
   String get aiDenoiseEnhanceStartingMessage => 'Running AI Enhance...';
 
   @override
@@ -429,6 +433,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsClearCatalogButton => 'Clear catalog (all edits)';
+
+  @override
+  String get settingsDevLoggingLabel => 'Developer mode';
+
+  @override
+  String get settingsDevLoggingHint =>
+      'Writes a detailed log to disk (errors, AI Enhance GPU/CPU status, etc.) for bug reports. Off by default.';
+
+  @override
+  String get settingsOpenLogFolderButton => 'Open log folder';
 
   @override
   String get confirmClearTitle => 'Clear data?';
