@@ -1845,13 +1845,22 @@ class _EditorScreenState extends State<EditorScreen>
     if (selected == null) {
       return;
     }
+    // Captured now, synchronously — not read back off _appliedPresetId
+    // after the awaits below. This function is fired via `unawaited()`
+    // (not a cancellable Timer like _scheduleCatalogSave), so if the user
+    // switches photos while the saves are still in flight, _appliedPresetId
+    // has already moved on to the *new* photo by the time this resumes —
+    // writing that stale value would silently corrupt the previous
+    // photo's applied-preset marker (a real bug: apply a preset, switch
+    // away fast, switch back — the preset no longer shows as applied).
+    final appliedPresetId = _appliedPresetId;
     _edits[selected.path] = _catalogParams();
     _photoCurves[selected.path] = _currentCurves;
     _photoMasks[selected.path] = _currentMasks;
     await saveCatalog(_edits);
     await savePhotoCurves(_photoCurves);
     await savePhotoMasks(_photoMasks);
-    _persistPhotoPreset(selected.path);
+    _persistPhotoPreset(selected.path, appliedPresetId);
   }
 
   /// [_paramValues] as persisted to the catalog: Temperature/Tint/mode are
@@ -1882,14 +1891,16 @@ class _EditorScreenState extends State<EditorScreen>
       unawaited(saveCatalog(_edits));
       unawaited(savePhotoCurves(_photoCurves));
       unawaited(savePhotoMasks(_photoMasks));
-      _persistPhotoPreset(selected.path);
+      _persistPhotoPreset(selected.path, _appliedPresetId);
     });
   }
 
-  /// Syncs [_photoPresets] for [path] to the current [_appliedPresetId]
-  /// (set it, or drop it when no preset is applied) and persists the file.
-  void _persistPhotoPreset(String path) {
-    final id = _appliedPresetId;
+  /// Syncs [_photoPresets] for [path] to [id] (set it, or drop it when
+  /// null — no preset applied) and persists the file. [id] must be
+  /// captured by the caller at the point [path] itself was captured, not
+  /// read live off [_appliedPresetId] — see [_flushCurrentEdits]'s doc
+  /// for the race that caused.
+  void _persistPhotoPreset(String path, String? id) {
     if (id == null) {
       if (_photoPresets.remove(path) == null) {
         return;
