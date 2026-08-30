@@ -18,20 +18,26 @@ class AiEnhanceResult {
   final int height;
 }
 
-/// The full AI Enhance pipeline (item 13's "denoise + super resolution",
-/// distinct from the classical `applyAiDenoise` render-pipeline stage):
-/// NAFNet-SIDD reconstructive denoise (removes noise *and* film grain,
-/// recovers texture the noise was masking) first, then Real-ESRGAN 2x
-/// super-resolution on the *denoised* result — denoising before upscaling,
-/// not after, so the model doesn't spend its upscaling capacity
-/// faithfully reproducing noise into more pixels.
+/// The AI Enhance pipeline (item 13, distinct from the classical
+/// `applyAiDenoise` render-pipeline stage): NAFNet-SIDD reconstructive
+/// denoise (removes noise *and* film grain, recovers texture the noise was
+/// masking) and/or Real-ESRGAN 2x super-resolution, run independently —
+/// [enableDenoise]/[enableUpscale] let a caller ask for either pass alone
+/// (denoise a noisy JPEG without changing its resolution, or upscale an
+/// already-clean photo without paying for a denoise pass it doesn't need)
+/// as well as both together. When both are on, denoise still runs first,
+/// on the *original* buffer, so the upscaler isn't asked to faithfully
+/// enlarge noise into more pixels.
 ///
 /// [denoise]/[upscale] are the two models' `OnnxModel.runTile` (or a fake,
 /// for testing the tiling/ordering/progress-forwarding logic here without
 /// touching real hardware — same dependency-injection shape
 /// `ai_denoise_tiling.dart`'s own `denoiseTiled` already uses) — this
-/// function itself has no FFI/native dependency, just orchestrates two
-/// [denoiseTiled] passes.
+/// function itself has no FFI/native dependency, just orchestrates up to
+/// two [denoiseTiled] passes. Always required even when the corresponding
+/// `enable*` flag is false, since callers already have both models loaded
+/// by the time they call this — simpler than making them nullable for a
+/// call shape that's only ever hit from one place.
 ///
 /// [rgbBytes] is packed, row-major, 3 bytes/pixel (0-255) — the same
 /// convention `render.dart`'s buffers use before their own internal
@@ -43,6 +49,8 @@ AiEnhanceResult enhanceImage(
   int height, {
   required Float32List Function(Float32List tile) denoise,
   required Float32List Function(Float32List tile) upscale,
+  bool enableDenoise = true,
+  bool enableUpscale = true,
   void Function(String stage, int tileIndex, int totalTiles)? onProgress,
 }) {
   final floatRgb = Float32List(rgbBytes.length);
@@ -50,30 +58,35 @@ AiEnhanceResult enhanceImage(
     floatRgb[i] = rgbBytes[i] / 255.0;
   }
 
-  final denoised = denoiseTiled(
-    floatRgb,
-    width,
-    height,
-    inputTileSize: denoiseModelSpec.inputTileSize,
-    overlap: denoiseModelSpec.inputTileSize ~/ 8,
-    scaleFactor: denoiseModelSpec.scaleFactor,
-    processTile: denoise,
-    onProgress: (i, total) => onProgress?.call('denoise', i, total),
-  );
+  final denoised = enableDenoise
+      ? denoiseTiled(
+          floatRgb,
+          width,
+          height,
+          inputTileSize: denoiseModelSpec.inputTileSize,
+          overlap: denoiseModelSpec.inputTileSize ~/ 8,
+          scaleFactor: denoiseModelSpec.scaleFactor,
+          processTile: denoise,
+          onProgress: (i, total) => onProgress?.call('denoise', i, total),
+        )
+      : floatRgb;
 
-  final upscaled = denoiseTiled(
-    denoised,
-    width,
-    height,
-    inputTileSize: upscaleModelSpec.inputTileSize,
-    overlap: upscaleModelSpec.inputTileSize ~/ 8,
-    scaleFactor: upscaleModelSpec.scaleFactor,
-    processTile: upscale,
-    onProgress: (i, total) => onProgress?.call('upscale', i, total),
-  );
+  final upscaled = enableUpscale
+      ? denoiseTiled(
+          denoised,
+          width,
+          height,
+          inputTileSize: upscaleModelSpec.inputTileSize,
+          overlap: upscaleModelSpec.inputTileSize ~/ 8,
+          scaleFactor: upscaleModelSpec.scaleFactor,
+          processTile: upscale,
+          onProgress: (i, total) => onProgress?.call('upscale', i, total),
+        )
+      : denoised;
 
-  final outWidth = width * upscaleModelSpec.scaleFactor;
-  final outHeight = height * upscaleModelSpec.scaleFactor;
+  final scaleFactor = enableUpscale ? upscaleModelSpec.scaleFactor : 1;
+  final outWidth = width * scaleFactor;
+  final outHeight = height * scaleFactor;
   final outBytes = Uint8List(upscaled.length);
   for (var i = 0; i < upscaled.length; i++) {
     outBytes[i] = (upscaled[i] * 255.0).clamp(0, 255).round();

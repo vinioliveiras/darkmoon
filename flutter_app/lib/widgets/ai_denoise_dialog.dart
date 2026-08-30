@@ -40,32 +40,38 @@ class ClassicDenoiseChoice extends AiDenoiseChoice {
   final AiDenoiseLevel? level;
 }
 
-/// The item-13 neural pipeline (NAFNet-SIDD denoise + Real-ESRGAN 2x
-/// super-resolution) — a one-shot pre-process that replaces the photo's
-/// edit source, not a per-render stage. [active] false means "turn it
-/// back off", listed as its own variant (not folded into a nullable
-/// field like [ClassicDenoiseChoice]) so callers can pattern-match
-/// exhaustively without a stray null case.
+/// The item-13 neural pipeline — a one-shot pre-process that replaces the
+/// photo's edit source, not a per-render stage. [denoise] (NAFNet-SIDD)
+/// and [upscale] (Real-ESRGAN 2x) are independent toggles rather than one
+/// combined on/off switch, since either is a useful result on its own
+/// (denoise a noisy JPEG without changing its resolution; upscale an
+/// already-clean photo without paying for denoise it doesn't need).
+/// [active] (both false) means "turn it back off" — checked by callers
+/// instead of a stray null case.
 class NeuralEnhanceChoice extends AiDenoiseChoice {
-  const NeuralEnhanceChoice(this.active);
+  const NeuralEnhanceChoice({required this.denoise, required this.upscale});
 
-  final bool active;
+  final bool denoise;
+  final bool upscale;
+
+  bool get active => denoise || upscale;
 }
 
 /// AI Denoise level/mode picker, opened from the toolbar's AI Denoise
 /// button — two tabs: **Classic** (the original single-choice strength
 /// picker: each level already tuned to a good noise/detail trade-off, so
 /// there's nothing else to set) and **Enhance** (item 13's neural
-/// denoise+upscale pipeline, a fundamentally different kind of operation
-/// — it changes the photo's resolution and has no strength levels, hence
-/// its own tab rather than a 5th chip alongside Classic's four). Resolves
-/// with an [AiDenoiseChoice], or with a plain `null` if the dialog was
-/// dismissed without a choice.
+/// pipeline, a fundamentally different kind of operation — it can change
+/// the photo's resolution and has independent Denoise/Upscale toggles
+/// instead of strength levels, hence its own tab rather than folded into
+/// Classic's four chips). Resolves with an [AiDenoiseChoice], or with a
+/// plain `null` if the dialog was dismissed without a choice.
 class AiDenoiseDialog extends StatefulWidget {
   const AiDenoiseDialog({
     super.key,
     required this.initialLevel,
-    required this.neuralEnhanceActive,
+    required this.neuralDenoise,
+    required this.neuralUpscale,
   });
 
   /// The classical level already applied to the current photo, if any —
@@ -73,9 +79,11 @@ class AiDenoiseDialog extends StatefulWidget {
   /// resetting to a default.
   final AiDenoiseLevel? initialLevel;
 
-  /// Whether the neural Enhance pipeline is already applied to the
-  /// current photo — same preselection reasoning as [initialLevel].
-  final bool neuralEnhanceActive;
+  /// Whether the neural pipeline's denoise/upscale passes are already
+  /// applied to the current photo — same preselection reasoning as
+  /// [initialLevel].
+  final bool neuralDenoise;
+  final bool neuralUpscale;
 
   @override
   State<AiDenoiseDialog> createState() => _AiDenoiseDialogState();
@@ -84,11 +92,12 @@ class AiDenoiseDialog extends StatefulWidget {
 class _AiDenoiseDialogState extends State<AiDenoiseDialog>
     with SingleTickerProviderStateMixin {
   late AiDenoiseLevel? _level = widget.initialLevel;
-  late bool _neuralActive = widget.neuralEnhanceActive;
+  late bool _neuralDenoise = widget.neuralDenoise;
+  late bool _neuralUpscale = widget.neuralUpscale;
   late final TabController _tabController = TabController(
     length: 2,
     vsync: this,
-    initialIndex: widget.neuralEnhanceActive ? 1 : 0,
+    initialIndex: (widget.neuralDenoise || widget.neuralUpscale) ? 1 : 0,
   );
 
   @override
@@ -107,27 +116,39 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
   }
 
   /// The two tabs are mutually exclusive — picking a Classic level turns
-  /// Enhance back off, and turning Enhance on resets the Classic level to
-  /// Off, so whichever tab the user isn't looking at always agrees with
-  /// what's about to actually be applied.
+  /// both Enhance toggles back off, and turning either Enhance toggle on
+  /// resets the Classic level to Off, so whichever tab the user isn't
+  /// looking at always agrees with what's about to actually be applied
+  /// (and the classic per-render denoise never stacks with the neural
+  /// pipeline on the same photo).
   void _pickClassic(AiDenoiseLevel? level) {
     setState(() {
       _level = level;
-      _neuralActive = false;
+      _neuralDenoise = false;
+      _neuralUpscale = false;
     });
   }
 
-  void _setNeuralActive(bool active) {
+  void _setNeuralDenoise(bool value) {
     setState(() {
-      _neuralActive = active;
-      if (active) {
+      _neuralDenoise = value;
+      if (value) {
         _level = null;
       }
     });
   }
 
-  AiDenoiseChoice get _currentChoice => _neuralActive
-      ? const NeuralEnhanceChoice(true)
+  void _setNeuralUpscale(bool value) {
+    setState(() {
+      _neuralUpscale = value;
+      if (value) {
+        _level = null;
+      }
+    });
+  }
+
+  AiDenoiseChoice get _currentChoice => (_neuralDenoise || _neuralUpscale)
+      ? NeuralEnhanceChoice(denoise: _neuralDenoise, upscale: _neuralUpscale)
       : ClassicDenoiseChoice(_level);
 
   @override
@@ -213,7 +234,8 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
               Expanded(
                 child: _LevelChip(
                   label: _levelLabel(l10n, choice),
-                  selected: !_neuralActive && _level == choice,
+                  selected:
+                      !_neuralDenoise && !_neuralUpscale && _level == choice,
                   onTap: () => _pickClassic(choice),
                 ),
               ),
@@ -234,21 +256,25 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
           style: Theme.of(context).textTheme.bodyMedium,
         ),
         const SizedBox(height: 16),
+        // Independent toggles, not a single on/off switch — denoising a
+        // noisy JPEG without upscaling it, or upscaling an already-clean
+        // photo without paying for denoise it doesn't need, are both
+        // useful on their own, not just as a combined "Enhance" pass.
         Row(
           children: [
             Expanded(
               child: _LevelChip(
-                label: l10n.aiDenoiseEnhanceOffLabel,
-                selected: !_neuralActive,
-                onTap: () => _setNeuralActive(false),
+                label: l10n.aiDenoiseEnhanceDenoiseLabel,
+                selected: _neuralDenoise,
+                onTap: () => _setNeuralDenoise(!_neuralDenoise),
               ),
             ),
             const SizedBox(width: 8),
             Expanded(
               child: _LevelChip(
-                label: l10n.aiDenoiseEnhanceOnLabel,
-                selected: _neuralActive,
-                onTap: () => _setNeuralActive(true),
+                label: l10n.aiDenoiseEnhanceUpscaleLabel,
+                selected: _neuralUpscale,
+                onTap: () => _setNeuralUpscale(!_neuralUpscale),
               ),
             ),
           ],

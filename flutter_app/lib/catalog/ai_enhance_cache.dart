@@ -13,12 +13,26 @@ import 'package:path/path.dart' as p;
 /// scoped to this cache instead.
 const int aiEnhanceCacheVersion = 1;
 
+/// [mode] folds which of denoise/upscale actually ran into the key — the
+/// same photo can be cached under up to three different results (denoise
+/// only, upscale only, or both), and without this a switch between them
+/// would incorrectly hit whichever one was cached first.
+String _modeTag(bool denoise, bool upscale) =>
+    'd${denoise ? 1 : 0}u${upscale ? 1 : 0}';
+
 /// `path_provider`-free by design (see `ai_enhance_cache_dir.dart`'s doc
 /// comment) — safe to call from a background isolate, unlike resolving
 /// the cache directory itself.
-String _entryKey(String path, DateTime modified, int size) {
+String _entryKey(
+  String path,
+  DateTime modified,
+  int size,
+  bool denoise,
+  bool upscale,
+) {
   final raw =
-      '$path|${modified.microsecondsSinceEpoch}|$size|v$aiEnhanceCacheVersion';
+      '$path|${modified.microsecondsSinceEpoch}|$size|'
+      '${_modeTag(denoise, upscale)}|v$aiEnhanceCacheVersion';
   return sha1.convert(utf8.encode(raw)).toString();
 }
 
@@ -28,12 +42,23 @@ String _entryFile(String cacheDir, String key) =>
 /// Looks up a previously-cached AI Enhance result for the photo at [path]
 /// (its current `mtime`/`size` must match what it was cached under — an
 /// edited/replaced file at the same path misses instead of returning
-/// something stale). Returns null on a miss or any read failure (best-
+/// something stale), specifically for this [denoise]/[upscale] combination
+/// — see [_modeTag]. Returns null on a miss or any read failure (best-
 /// effort cache, same discipline as `thumbnail_cache.dart`).
-Future<Uint8List?> lookupAiEnhanceCache(String cacheDir, String path) async {
+Future<Uint8List?> lookupAiEnhanceCache(
+  String cacheDir,
+  String path, {
+  required bool denoise,
+  required bool upscale,
+}) async {
   try {
     final stat = await File(path).stat();
-    final file = File(_entryFile(cacheDir, _entryKey(path, stat.modified, stat.size)));
+    final file = File(
+      _entryFile(
+        cacheDir,
+        _entryKey(path, stat.modified, stat.size, denoise, upscale),
+      ),
+    );
     if (!await file.exists()) {
       return null;
     }
@@ -46,16 +71,19 @@ Future<Uint8List?> lookupAiEnhanceCache(String cacheDir, String path) async {
 /// Stores [pngBytes] (the full-strength, un-blended neural output — PNG
 /// because this becomes the base every later edit/export builds on, so it
 /// must be lossless, same reasoning as `denoise_cache.dart`'s plan) as the
-/// cached AI Enhance result for [path]. tmp-then-rename write, same crash-
-/// safety discipline as `catalog_store.dart`/`thumbnail_cache.dart`.
+/// cached AI Enhance result for [path] under this [denoise]/[upscale]
+/// combination. tmp-then-rename write, same crash-safety discipline as
+/// `catalog_store.dart`/`thumbnail_cache.dart`.
 Future<void> storeAiEnhanceCache(
   String cacheDir,
   String path,
-  Uint8List pngBytes,
-) async {
+  Uint8List pngBytes, {
+  required bool denoise,
+  required bool upscale,
+}) async {
   try {
     final stat = await File(path).stat();
-    final key = _entryKey(path, stat.modified, stat.size);
+    final key = _entryKey(path, stat.modified, stat.size, denoise, upscale);
     final dest = File(_entryFile(cacheDir, key));
     final tmp = File('${dest.path}.tmp');
     await tmp.writeAsBytes(pngBytes, flush: true);

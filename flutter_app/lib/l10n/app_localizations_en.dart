@@ -260,10 +260,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Denoise, remove film grain, and double the resolution using a neural network — closer to what the shot\'s real detail looked like before noise and compression. Runs noticeably slower than Classic, especially without a compatible GPU.';
 
   @override
-  String get aiDenoiseEnhanceOffLabel => 'Off';
+  String get aiDenoiseEnhanceDenoiseLabel => 'Denoise';
 
   @override
-  String get aiDenoiseEnhanceOnLabel => 'Denoise + Upscale';
+  String get aiDenoiseEnhanceUpscaleLabel => 'Upscale 2x';
 
   @override
   String get aiDenoiseEnhanceFailedMessage =>

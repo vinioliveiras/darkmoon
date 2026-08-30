@@ -3129,15 +3129,16 @@ class _EditorScreenState extends State<EditorScreen> {
     );
   }
 
-  /// Per-photo marker for item 13's neural Enhance pipeline (denoise + 2x
-  /// super-resolution) — parallel to how `'AiDenoiseLevel'` already
-  /// persists the classical level, just not a slider value so it gets its
-  /// own key. `> 0` means active. Lives in `_paramValues` for the same
-  /// free per-photo persistence (catalog save/restore, undo/redo history)
-  /// every other param value already gets — see `_onParamChanged`'s doc
-  /// comment on why `_paramValues` is replaced wholesale, not mutated, for
-  /// history to track it correctly.
-  static const _neuralEnhanceKey = 'AiNeuralEnhance';
+  /// Per-photo markers for item 13's neural Enhance pipeline's two
+  /// independent passes (denoise, 2x super-resolution) — parallel to how
+  /// `'AiDenoiseLevel'` already persists the classical level, just not
+  /// slider values so they get their own keys. `> 0` means active. Live in
+  /// `_paramValues` for the same free per-photo persistence (catalog
+  /// save/restore, undo/redo history) every other param value already
+  /// gets — see `_onParamChanged`'s doc comment on why `_paramValues` is
+  /// replaced wholesale, not mutated, for history to track it correctly.
+  static const _neuralDenoiseKey = 'AiNeuralDenoise';
+  static const _neuralUpscaleKey = 'AiNeuralUpscale';
 
   /// Opens the AI Denoise dialog (Classic level picker / Enhance neural
   /// toggle — see `AiDenoiseDialog`) and, if the user confirms a choice,
@@ -3150,12 +3151,15 @@ class _EditorScreenState extends State<EditorScreen> {
       return;
     }
     final currentLevel = AiDenoiseParams.fromValues(_paramValues).level;
-    final neuralActive = (_paramValues[_neuralEnhanceKey] ?? 0.0) > 0;
+    final neuralDenoise = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
+    final neuralUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
+    final wasNeuralActive = neuralDenoise || neuralUpscale;
     final choice = await showAnimatedDialog<AiDenoiseChoice>(
       context: context,
       builder: (_) => AiDenoiseDialog(
         initialLevel: currentLevel,
-        neuralEnhanceActive: neuralActive,
+        neuralDenoise: neuralDenoise,
+        neuralUpscale: neuralUpscale,
       ),
     );
     if (choice == null || !mounted) {
@@ -3170,33 +3174,45 @@ class _EditorScreenState extends State<EditorScreen> {
             'AiDenoiseLevel': level == null
                 ? 0.0
                 : (AiDenoiseLevel.values.indexOf(level) + 1).toDouble(),
-            _neuralEnhanceKey: 0.0,
+            _neuralDenoiseKey: 0.0,
+            _neuralUpscaleKey: 0.0,
           };
         });
         // Switching away from a previously-enhanced source: _editSources
-        // currently holds the upscaled buffer, which the classical
+        // currently holds the neural-pipeline buffer, which the classical
         // per-render stage was never meant to run against.
-        if (neuralActive) {
+        if (wasNeuralActive) {
           await _revertToNormalEditSource(selected.path);
           if (!mounted) return;
         }
         await _applyAiDenoiseChoiceAndRender(selected.path);
-      case NeuralEnhanceChoice(active: true):
+      case NeuralEnhanceChoice(denoise: final wantDenoise, upscale: final wantUpscale)
+          when wantDenoise || wantUpscale:
         setState(() {
           _paramValues = {
             ..._paramValues,
-            _neuralEnhanceKey: 1.0,
+            _neuralDenoiseKey: wantDenoise ? 1.0 : 0.0,
+            _neuralUpscaleKey: wantUpscale ? 1.0 : 0.0,
             'AiDenoiseLevel': 0.0,
           };
         });
-        final ok = await _runNeuralEnhance(selected.path);
+        final ok = await _runNeuralEnhance(
+          selected.path,
+          denoise: wantDenoise,
+          upscale: wantUpscale,
+        );
         if (!mounted || !ok) {
           return;
         }
         await _applyAiDenoiseChoiceAndRender(selected.path);
-      case NeuralEnhanceChoice(active: false):
+      case NeuralEnhanceChoice():
+        // Both toggles off — equivalent to turning Enhance back off.
         setState(() {
-          _paramValues = {..._paramValues, _neuralEnhanceKey: 0.0};
+          _paramValues = {
+            ..._paramValues,
+            _neuralDenoiseKey: 0.0,
+            _neuralUpscaleKey: 0.0,
+          };
         });
         await _revertToNormalEditSource(selected.path);
         if (!mounted) return;
@@ -3220,21 +3236,25 @@ class _EditorScreenState extends State<EditorScreen> {
     }
   }
 
-  /// Runs item 13's neural Enhance pipeline (NAFNet-SIDD denoise +
-  /// Real-ESRGAN 2x upscale, disk-cached — see
+  /// Runs item 13's neural Enhance pipeline (NAFNet-SIDD [denoise] and/or
+  /// Real-ESRGAN 2x [upscale], disk-cached — see
   /// `native/edit_source_ai_enhance.dart`) for [path] and swaps the
   /// result into `_editSources`, so every later render/mask/export builds
   /// on the enhanced buffer instead of the plain decode. Returns false
-  /// (having already reverted the `_neuralEnhanceKey` marker and shown a
-  /// message) on failure, so the caller can skip rendering/history for a
-  /// change that didn't actually happen.
+  /// (having already reverted the `_neuralDenoiseKey`/`_neuralUpscaleKey`
+  /// markers and shown a message) on failure, so the caller can skip
+  /// rendering/history for a change that didn't actually happen.
   ///
   /// Owns [_isRunningNeuralEnhance]/[_aiEnhanceProgress] end-to-end (set
   /// on entry, cleared on every exit path) — this is the operation that
   /// can take 30s-2min, so without a loading overlay covering exactly
   /// this call the dialog just closes and appears to do nothing for that
   /// whole stretch.
-  Future<bool> _runNeuralEnhance(String path) async {
+  Future<bool> _runNeuralEnhance(
+    String path, {
+    required bool denoise,
+    required bool upscale,
+  }) async {
     setState(() {
       _isRunningNeuralEnhance = true;
       _aiEnhanceProgress = null;
@@ -3276,6 +3296,8 @@ class _EditorScreenState extends State<EditorScreen> {
           }
         }
       },
+      enableDenoise: denoise,
+      enableUpscale: upscale,
       previewMaxDimension: _settings.previewResolution,
       cancellationToken: cancellation,
     );
@@ -3286,7 +3308,11 @@ class _EditorScreenState extends State<EditorScreen> {
     if (sources == null) {
       final wasCancelled = cancellation.isCancelled;
       setState(() {
-        _paramValues = {..._paramValues, _neuralEnhanceKey: 0.0};
+        _paramValues = {
+          ..._paramValues,
+          _neuralDenoiseKey: 0.0,
+          _neuralUpscaleKey: 0.0,
+        };
         _isRunningNeuralEnhance = false;
         _aiEnhanceProgress = null;
       });
@@ -4671,7 +4697,9 @@ class _EditorScreenState extends State<EditorScreen> {
                       onRedo: _redo,
                       aiDenoiseActive:
                           AiDenoiseParams.fromValues(_paramValues).level !=
-                          null,
+                              null ||
+                          (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0 ||
+                          (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0,
                       onOpenAiDenoise: selected == null
                           ? null
                           : _openAiDenoiseDialog,

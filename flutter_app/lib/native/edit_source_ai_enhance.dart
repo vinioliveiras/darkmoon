@@ -41,17 +41,30 @@ import 'libraw.dart';
 /// isolate, since this can take from several seconds — a cache hit — to
 /// a minute or more — cold, CPU-fallback inference on a large photo, see
 /// the real timings in `tool/onnx_full_image_smoke_test.dart`).
+///
+/// [enableDenoise]/[enableUpscale] pick which of the two passes actually
+/// run (see `ai_enhance.dart`'s `enhanceImage`) — at least one must be
+/// true; callers that want neither should skip this function entirely and
+/// decode normally instead (`_revertToNormalEditSource` in
+/// `editor_screen.dart` does exactly that).
 Future<EditSourcePair?> _decodeAndEnhance(
   String path,
   String cacheDir,
   int previewMaxDimension,
+  bool enableDenoise,
+  bool enableUpscale,
   void Function(Object stage) onStage,
 ) async {
   int width;
   int height;
   Uint8List enhancedRgb;
 
-  final cachedPng = await lookupAiEnhanceCache(cacheDir, path);
+  final cachedPng = await lookupAiEnhanceCache(
+    cacheDir,
+    path,
+    denoise: enableDenoise,
+    upscale: enableUpscale,
+  );
   final cachedImage = cachedPng == null ? null : img.decodePng(cachedPng);
 
   if (cachedImage != null) {
@@ -66,28 +79,40 @@ Future<EditSourcePair?> _decodeAndEnhance(
       return null;
     }
 
-    final denoiseModel = OnnxModel.forSpec(denoiseModelSpec);
-    onStage(
-      AiEnhanceModelInfo(
-        denoiseModelSpec.fileName,
-        denoiseModel.usingGpu,
-        denoiseModel.directMlError,
-      ),
-    );
-    final upscaleModel = OnnxModel.forSpec(upscaleModelSpec);
-    onStage(
-      AiEnhanceModelInfo(
-        upscaleModelSpec.fileName,
-        upscaleModel.usingGpu,
-        upscaleModel.directMlError,
-      ),
-    );
+    // Only the model(s) this run actually needs pay the ~1-2s DirectML-
+    // probe-then-fallback session-creation cost — asking for denoise alone
+    // shouldn't also load the upscaler.
+    final denoiseModel = enableDenoise ? OnnxModel.forSpec(denoiseModelSpec) : null;
+    if (denoiseModel != null) {
+      onStage(
+        AiEnhanceModelInfo(
+          denoiseModelSpec.fileName,
+          denoiseModel.usingGpu,
+          denoiseModel.directMlError,
+        ),
+      );
+    }
+    final upscaleModel = enableUpscale ? OnnxModel.forSpec(upscaleModelSpec) : null;
+    if (upscaleModel != null) {
+      onStage(
+        AiEnhanceModelInfo(
+          upscaleModelSpec.fileName,
+          upscaleModel.usingGpu,
+          upscaleModel.directMlError,
+        ),
+      );
+    }
     final enhanced = enhanceImage(
       decoded.rgbBytes,
       decoded.width,
       decoded.height,
-      denoise: denoiseModel.runTile,
-      upscale: upscaleModel.runTile,
+      // enhanceImage never actually calls these when the matching
+      // enable* flag is false, so the null-asserts below are safe —
+      // there's simply no model loaded to call them on in that case.
+      denoise: (tile) => denoiseModel!.runTile(tile),
+      upscale: (tile) => upscaleModel!.runTile(tile),
+      enableDenoise: enableDenoise,
+      enableUpscale: enableUpscale,
       onProgress: (stage, i, total) =>
           onStage(AiEnhanceProgress(stage, i, total)),
     );
@@ -106,6 +131,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
       cacheDir,
       path,
       Uint8List.fromList(img.encodePng(enhancedImage)),
+      denoise: enableDenoise,
+      upscale: enableUpscale,
     );
   }
 
@@ -137,12 +164,16 @@ class _AiEnhanceDecodeIsolateArgs {
     this.path,
     this.cacheDir,
     this.previewMaxDimension,
+    this.enableDenoise,
+    this.enableUpscale,
     this.sendPort,
   );
 
   final String path;
   final String cacheDir;
   final int previewMaxDimension;
+  final bool enableDenoise;
+  final bool enableUpscale;
   final SendPort sendPort;
 }
 
@@ -151,6 +182,8 @@ void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
     args.path,
     args.cacheDir,
     args.previewMaxDimension,
+    args.enableDenoise,
+    args.enableUpscale,
     (stage) => args.sendPort.send(stage),
   );
   args.sendPort.send(result);
@@ -171,6 +204,8 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
   String path,
   String cacheDir,
   void Function(Object stage) onStage, {
+  required bool enableDenoise,
+  required bool enableUpscale,
   int previewMaxDimension = defaultPreviewMaxDimension,
   AiEnhanceCancellationToken? cancellationToken,
 }) async {
@@ -181,6 +216,8 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
       path,
       cacheDir,
       previewMaxDimension,
+      enableDenoise,
+      enableUpscale,
       receivePort.sendPort,
     ),
   );

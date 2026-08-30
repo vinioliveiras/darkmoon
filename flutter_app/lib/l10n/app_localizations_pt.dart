@@ -260,10 +260,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Remove ruído, elimina grão de filme e dobra a resolução usando uma rede neural — mais perto de como o detalhe real da foto era antes do ruído e da compressão. Roda bem mais devagar que o Clássico, principalmente sem uma GPU compatível.';
 
   @override
-  String get aiDenoiseEnhanceOffLabel => 'Desligado';
+  String get aiDenoiseEnhanceDenoiseLabel => 'Denoise';
 
   @override
-  String get aiDenoiseEnhanceOnLabel => 'Denoise + Upscale';
+  String get aiDenoiseEnhanceUpscaleLabel => 'Upscale 2x';
 
   @override
   String get aiDenoiseEnhanceFailedMessage =>

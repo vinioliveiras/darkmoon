@@ -560,17 +560,17 @@ abstract class AppLocalizations {
   /// **'Denoise, remove film grain, and double the resolution using a neural network — closer to what the shot\'s real detail looked like before noise and compression. Runs noticeably slower than Classic, especially without a compatible GPU.'**
   String get aiDenoiseEnhanceMessage;
 
-  /// No description provided for @aiDenoiseEnhanceOffLabel.
+  /// No description provided for @aiDenoiseEnhanceDenoiseLabel.
   ///
   /// In en, this message translates to:
-  /// **'Off'**
-  String get aiDenoiseEnhanceOffLabel;
+  /// **'Denoise'**
+  String get aiDenoiseEnhanceDenoiseLabel;
 
-  /// No description provided for @aiDenoiseEnhanceOnLabel.
+  /// No description provided for @aiDenoiseEnhanceUpscaleLabel.
   ///
   /// In en, this message translates to:
-  /// **'Denoise + Upscale'**
-  String get aiDenoiseEnhanceOnLabel;
+  /// **'Upscale 2x'**
+  String get aiDenoiseEnhanceUpscaleLabel;
 
   /// No description provided for @aiDenoiseEnhanceFailedMessage.
   ///
