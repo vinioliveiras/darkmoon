@@ -6882,8 +6882,8 @@ class _SectionHeader extends StatelessWidget {
                   // Row and forcing the whole header taller than it looks
                   // like it should be.
                   SizedBox(
-                    width: 26,
-                    height: 16,
+                    width: 34,
+                    height: 21,
                     child: FittedBox(
                       child: Switch(
                         value: enabled!,

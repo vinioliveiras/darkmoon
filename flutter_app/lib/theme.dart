@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 /// so the two versions stay visually consistent while this port is built out.
 class DarkmoonColors {
   static const background = Color(0xFF1E1E20);
-  static const panel = Color(0xFF161618);
+  static const panel = Color(0xFF121214);
   static const canvas = Color(0xFF141416);
   static const filmstrip = Color(0xFF19191B);
   static const surfaceRaised = Color(0xFF2C2C30);

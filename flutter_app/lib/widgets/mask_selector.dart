@@ -190,7 +190,9 @@ class MaskSelector extends StatelessWidget {
                         : l10n.maskEnableTooltip,
                     onPressed: onToggleEnabled,
                     icon: Icon(
-                      CupertinoIcons.power,
+                      active.enabled
+                          ? CupertinoIcons.checkmark_circle_fill
+                          : CupertinoIcons.circle,
                       size: 15,
                       color: active.enabled
                           ? DarkmoonColors.accent
