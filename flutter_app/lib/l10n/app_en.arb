@@ -104,6 +104,7 @@
   "aiDenoiseLevelStrong": "Strong",
   "aiDenoiseApplyButton": "Apply",
   "aiDenoiseApplyingMessage": "Applying AI Denoise...",
+  "aiDenoiseDisablingMessage": "Disabling AI Denoise...",
   "aiDenoiseTabClassic": "Classic",
   "aiDenoiseTabEnhance": "Enhance",
   "aiDenoiseTabCloud": "Cloud AI",

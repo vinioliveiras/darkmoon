@@ -209,7 +209,7 @@ class _RecentFileRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: isSelected
-          ? DarkmoonColors.accent.withValues(alpha: 0.22)
+          ? DarkmoonColors.accent.withValues(alpha: 0.10)
           : Colors.transparent,
       child: InkWell(
         onTap: onTap,
@@ -448,7 +448,7 @@ class _FolderNodeState extends State<_FolderNode> {
             ? row
             : Material(
                 color: isSelected
-                    ? DarkmoonColors.accent.withValues(alpha: 0.22)
+                    ? DarkmoonColors.accent.withValues(alpha: 0.10)
                     : Colors.transparent,
                 child: InkWell(
                   onTap: () => widget.onSelect(widget.path),

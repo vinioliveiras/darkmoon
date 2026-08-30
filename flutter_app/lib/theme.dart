@@ -9,10 +9,10 @@ import 'package:flutter/material.dart';
 // with a much wider spread read as "too blue". Keep new tokens on this
 // same restrained recipe instead of introducing pure neutrals.
 class DarkmoonColors {
-  static const background = Color(0xFF17191D);
-  static const panel = Color(0xFF080A0E);
-  static const canvas = Color(0xFF0F1115);
-  static const surfaceRaised = Color(0xFF26282C);
+  static const background = Color(0xFF18191B);
+  static const panel = Color(0xFF090A0C);
+  static const canvas = Color(0xFF101113);
+  static const surfaceRaised = Color(0xFF27282A);
 
   /// Standardized background for every modal window (Settings, About,
   /// Export, AI Denoise, the various confirm dialogs, …) — a very dark,
@@ -23,12 +23,12 @@ class DarkmoonColors {
   /// token rather than reusing `canvas` directly so "dialogs" and "the
   /// image viewport" stay independently adjustable even though they
   /// happen to match today.
-  static const dialogBackground = Color(0xFF0F1115);
+  static const dialogBackground = Color(0xFF101113);
 
   /// Fill for dropdown buttons/menus — darker than [surfaceRaised] but
   /// not as recessed as [dialogBackground] (that read as too dark once
   /// tried), sitting roughly between [panel] and [surfaceRaised].
-  static const dropdownBackground = Color(0xFF1A1C20);
+  static const dropdownBackground = Color(0xFF1B1C1E);
 
   /// Outline color for windows/dialogs and every boxed component
   /// (dropdowns, cards, tooltips, …) — darker/softer than earlier so the
@@ -36,24 +36,24 @@ class DarkmoonColors {
   /// reads as a gentle edge rather than a hard line, while staying
   /// visibly lighter than [panel]/[dialogBackground] so it's still an
   /// outline, not invisible.
-  static const border = Color(0xFF181A1E);
+  static const border = Color(0xFF191A1C);
 
   /// Fill for a [_SectionCard]-style grouped card — darker still than
   /// the first pass (which read as too light a gray), only a hair
   /// lighter than [panel] so the card reads as faintly raised rather
   /// than flush with the panel background.
-  static const sectionCardBackground = Color(0xFF101216);
-  static const divider = Color(0xFF2A2C30);
+  static const sectionCardBackground = Color(0xFF111214);
+  static const divider = Color(0xFF2B2C2E);
 
   /// A much darker divider variant — for a seam that should barely
   /// register (e.g. under the top File/Settings bar) rather than read
   /// as a visible rule the way [divider] does elsewhere.
-  static const dividerDark = Color(0xFF0A0B0D);
-  static const textPrimary = Color(0xFFE3E6EA);
-  static const textSecondary = Color(0xFFC5C8CC);
-  static const textMuted = Color(0xFF878A8E);
+  static const dividerDark = Color(0xFF0A0B0C);
+  static const textPrimary = Color(0xFFE5E6E8);
+  static const textSecondary = Color(0xFFC7C8CA);
+  static const textMuted = Color(0xFF898A8C);
   static const accent = Color(0xFFFFFFFF);
-  static const sliderTrack = Color(0xFFE4E7EB);
+  static const sliderTrack = Color(0xFFE6E7E9);
 
   /// A slider's *unfilled* rail — deliberately its own token rather than
   /// reusing [border] (that's what it did originally; several rounds of

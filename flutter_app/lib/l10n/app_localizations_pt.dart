@@ -250,6 +250,10 @@ class AppLocalizationsPt extends AppLocalizations {
   String get aiDenoiseApplyingMessage => 'Aplicando redução de ruído com IA...';
 
   @override
+  String get aiDenoiseDisablingMessage =>
+      'Desativando redução de ruído com IA...';
+
+  @override
   String get aiDenoiseTabClassic => 'Clássico';
 
   @override

@@ -253,6 +253,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'KI-Rauschunterdrückung wird angewendet...';
 
   @override
+  String get aiDenoiseDisablingMessage =>
+      'KI-Rauschunterdrückung wird deaktiviert...';
+
+  @override
   String get aiDenoiseTabClassic => 'Klassisch';
 
   @override

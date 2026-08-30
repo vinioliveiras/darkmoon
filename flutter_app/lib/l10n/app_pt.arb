@@ -80,6 +80,7 @@
   "aiDenoiseLevelStrong": "Forte",
   "aiDenoiseApplyButton": "Aplicar",
   "aiDenoiseApplyingMessage": "Aplicando redução de ruído com IA...",
+  "aiDenoiseDisablingMessage": "Desativando redução de ruído com IA...",
   "aiDenoiseTabClassic": "Clássico",
   "aiDenoiseTabEnhance": "Enhance",
   "aiDenoiseTabCloud": "IA na nuvem",

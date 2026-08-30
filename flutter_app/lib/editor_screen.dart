@@ -787,6 +787,12 @@ class _EditorScreenState extends State<EditorScreen> {
   /// incidental slow render.
   bool _isApplyingAiDenoise = false;
 
+  /// True when the in-flight [_isApplyingAiDenoise] render is turning AI
+  /// Denoise back *off* rather than applying/adjusting it — swaps the
+  /// overlay message from "Applying" to "Disabling" so the wording
+  /// matches what the user actually just did.
+  bool _aiDenoiseDisabling = false;
+
   /// True while item 13's neural Enhance pipeline itself is running
   /// (`_runNeuralEnhance`) — this is the slow step (denoise + upscale
   /// through the ONNX models, 30s-2min on a full photo, worse on CPU
@@ -3549,7 +3555,10 @@ class _EditorScreenState extends State<EditorScreen> {
           await _revertToNormalEditSource(selected.path);
           if (!mounted) return;
         }
-        await _applyAiDenoiseChoiceAndRender(selected.path);
+        await _applyAiDenoiseChoiceAndRender(
+          selected.path,
+          disabling: level == null,
+        );
       case NeuralEnhanceChoice(
             denoise: final wantDenoise,
             upscale: final wantUpscale,
@@ -3591,7 +3600,7 @@ class _EditorScreenState extends State<EditorScreen> {
         });
         await _revertToNormalEditSource(selected.path);
         if (!mounted) return;
-        await _applyAiDenoiseChoiceAndRender(selected.path);
+        await _applyAiDenoiseChoiceAndRender(selected.path, disabling: true);
       case CloudDenoiseChoice(
             provider: final wantProvider,
             apiKey: final wantApiKey,
@@ -3629,7 +3638,7 @@ class _EditorScreenState extends State<EditorScreen> {
           await _revertToNormalEditSource(selected.path);
           if (!mounted) return;
         }
-        await _applyAiDenoiseChoiceAndRender(selected.path);
+        await _applyAiDenoiseChoiceAndRender(selected.path, disabling: true);
     }
   }
 
@@ -3844,9 +3853,13 @@ class _EditorScreenState extends State<EditorScreen> {
   /// The loading-overlay/render/history/save sequence shared by every
   /// `_openAiDenoiseDialog` outcome, once `_paramValues`/`_editSources`
   /// already reflect the user's choice.
-  Future<void> _applyAiDenoiseChoiceAndRender(String path) async {
+  Future<void> _applyAiDenoiseChoiceAndRender(
+    String path, {
+    bool disabling = false,
+  }) async {
     setState(() {
       _isApplyingAiDenoise = true;
+      _aiDenoiseDisabling = disabling;
       _aiDenoiseRenderStage = null;
     });
     await _renderPreview(
@@ -5034,7 +5047,9 @@ class _EditorScreenState extends State<EditorScreen> {
     if (_isApplyingAiDenoise) {
       final stage = _aiDenoiseRenderStage;
       return _LoadingInfo(
-        message: l10n.aiDenoiseApplyingMessage,
+        message: _aiDenoiseDisabling
+            ? l10n.aiDenoiseDisablingMessage
+            : l10n.aiDenoiseApplyingMessage,
         progress: switch (stage) {
           null => 0.0,
           RenderStage.denoising => 0.15,
@@ -6431,8 +6446,10 @@ class _ViewerToolbar extends StatelessWidget {
                           // border token — Export is the toolbar's one
                           // primary action, so its outline gets a little
                           // more presence without going full accent/white.
+                          // Darker than textMuted (tried first, read as
+                          // too light).
                           side: const BorderSide(
-                            color: DarkmoonColors.textMuted,
+                            color: Color(0xFF45474A),
                             width: 1.0,
                           ),
                         ),
@@ -6837,11 +6854,17 @@ class _SectionHeader extends StatelessWidget {
     required this.onTap,
     this.enabled,
     this.onEnabledChanged,
+    this.onHoverChanged,
   });
 
   final String label;
   final bool collapsed;
   final VoidCallback onTap;
+
+  /// Reports hover enter/exit on just this header's own hit area, so the
+  /// enclosing [_SectionCard] can highlight the *whole* card while only
+  /// the header itself is actually hoverable/clickable.
+  final ValueChanged<bool>? onHoverChanged;
 
   /// When non-null (only for the sections in [_sections], which map
   /// straight onto sliders — Tone Curve/Color Mixer/etc. have their own
@@ -6869,52 +6892,59 @@ class _SectionHeader extends StatelessWidget {
       // only the visible row itself should react. The larger bottom gap
       // keeps the first slider/editor from sitting flush against it.
       padding: const EdgeInsets.only(top: 14, bottom: 8),
-      child: Material(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(6),
-        child: InkWell(
+      child: MouseRegion(
+        onEnter: (_) => onHoverChanged?.call(true),
+        onExit: (_) => onHoverChanged?.call(false),
+        child: Material(
+          color: Colors.transparent,
           borderRadius: BorderRadius.circular(6),
-          onTap: onTap,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    label,
-                    style: _labelStyle.copyWith(
-                      color: enabled == false ? DarkmoonColors.textMuted : null,
-                    ),
-                  ),
-                ),
-                if (enabled != null && onEnabledChanged != null) ...[
-                  // SizedBox+FittedBox (not Transform.scale) so the
-                  // switch's *layout* box shrinks along with its paint —
-                  // Transform.scale only shrinks what's drawn, leaving the
-                  // full-size unscaled switch still reserving space in the
-                  // Row and forcing the whole header taller than it looks
-                  // like it should be.
-                  SizedBox(
-                    width: 34,
-                    height: 21,
-                    child: FittedBox(
-                      child: Switch(
-                        value: enabled!,
-                        onChanged: onEnabledChanged,
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          child: InkWell(
+            borderRadius: BorderRadius.circular(6),
+            onTap: onTap,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: _labelStyle.copyWith(
+                        color: enabled == false
+                            ? DarkmoonColors.textMuted
+                            : null,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 6),
+                  if (enabled != null && onEnabledChanged != null) ...[
+                    // SizedBox+FittedBox (not Transform.scale) so the
+                    // switch's *layout* box shrinks along with its paint —
+                    // Transform.scale only shrinks what's drawn, leaving the
+                    // full-size unscaled switch still reserving space in the
+                    // Row and forcing the whole header taller than it looks
+                    // like it should be.
+                    SizedBox(
+                      width: 34,
+                      height: 21,
+                      child: FittedBox(
+                        child: Switch(
+                          value: enabled!,
+                          onChanged: onEnabledChanged,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                  ],
+                  Icon(
+                    collapsed
+                        ? CupertinoIcons.chevron_right
+                        : CupertinoIcons.chevron_down,
+                    size: 13,
+                    color: DarkmoonColors.textMuted,
+                  ),
                 ],
-                Icon(
-                  collapsed
-                      ? CupertinoIcons.chevron_right
-                      : CupertinoIcons.chevron_down,
-                  size: 13,
-                  color: DarkmoonColors.textMuted,
-                ),
-              ],
+              ),
             ),
           ),
         ),
@@ -6927,25 +6957,66 @@ class _SectionHeader extends StatelessWidget {
 /// rounded, bordered card sitting on the panel's own background —
 /// Photomator-style grouped section, replacing the old flat list of
 /// headers/sliders with no visual boundary between sections.
-class _SectionCard extends StatelessWidget {
-  const _SectionCard({required this.header, required this.body});
+///
+/// Builds [_SectionHeader] itself (rather than taking a pre-built header
+/// widget) so it can wire up [_SectionHeader.onHoverChanged] and use that
+/// to highlight the *whole* card on hover, even though only the header
+/// itself is the actual hoverable/clickable hit area — hovering a slider
+/// or curve editor in [body] must never trigger this.
+class _SectionCard extends StatefulWidget {
+  const _SectionCard({
+    required this.label,
+    required this.collapsed,
+    required this.onTap,
+    this.enabled,
+    this.onEnabledChanged,
+    required this.body,
+  });
 
-  final Widget header;
+  final String label;
+  final bool collapsed;
+  final VoidCallback onTap;
+  final bool? enabled;
+  final ValueChanged<bool>? onEnabledChanged;
   final Widget body;
 
   @override
+  State<_SectionCard> createState() => _SectionCardState();
+}
+
+class _SectionCardState extends State<_SectionCard> {
+  bool _headerHovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 120),
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
       decoration: BoxDecoration(
-        color: DarkmoonColors.sectionCardBackground,
+        color: _headerHovered
+            ? Color.alphaBlend(
+                Colors.white.withValues(alpha: 0.05),
+                DarkmoonColors.sectionCardBackground,
+              )
+            : DarkmoonColors.sectionCardBackground,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: DarkmoonColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [header, body],
+        children: [
+          _SectionHeader(
+            label: widget.label,
+            collapsed: widget.collapsed,
+            onTap: widget.onTap,
+            enabled: widget.enabled,
+            onEnabledChanged: widget.onEnabledChanged,
+            onHoverChanged: (hovered) =>
+                setState(() => _headerHovered = hovered),
+          ),
+          widget.body,
+        ],
       ),
     );
   }
@@ -7266,13 +7337,11 @@ class _ControlsPanelState extends State<_ControlsPanel> {
     required List<Widget> children,
   }) => [
     _SectionCard(
-      header: _SectionHeader(
-        label: label,
-        collapsed: _collapsed.contains(key),
-        onTap: () => _toggleSection(key),
-        enabled: enabled,
-        onEnabledChanged: onEnabledChanged,
-      ),
+      label: label,
+      collapsed: _collapsed.contains(key),
+      onTap: () => _toggleSection(key),
+      enabled: enabled,
+      onEnabledChanged: onEnabledChanged,
       body: _CollapsibleSection(
         collapsed: _collapsed.contains(key),
         child: Column(
@@ -8290,27 +8359,60 @@ class _SegmentedTabs<T> extends StatelessWidget {
   /// color-codes each channel to match the curve editor itself.
   final Color Function(T item)? colorOf;
 
+  static const _duration = Duration(milliseconds: 200);
+  static const _padding = 3.0;
+
   @override
   Widget build(BuildContext context) {
+    final activeIndex = items.indexOf(active);
     return Container(
-      padding: const EdgeInsets.all(3),
+      padding: const EdgeInsets.all(_padding),
       decoration: BoxDecoration(
         color: DarkmoonColors.surfaceRaised,
         borderRadius: BorderRadius.circular(9),
         border: Border.all(color: DarkmoonColors.border),
       ),
-      child: Row(
-        children: [
-          for (final item in items)
-            Expanded(
-              child: _SegmentedTab(
-                label: labelOf(item),
-                selected: item == active,
-                color: colorOf?.call(item) ?? DarkmoonColors.accent,
-                onTap: () => onSelect(item),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final segmentWidth =
+              (constraints.maxWidth - _padding * 2) / items.length;
+          return Stack(
+            children: [
+              // The sliding highlight — a single pill that animates its
+              // *position* between segments (not a per-segment fade),
+              // matching the standard segmented-control feel (iOS tab
+              // bars, Photomator's own range picker).
+              AnimatedPositioned(
+                duration: _duration,
+                curve: Curves.easeOut,
+                left: segmentWidth * activeIndex,
+                width: segmentWidth,
+                top: 0,
+                bottom: 0,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: (colorOf?.call(active) ?? DarkmoonColors.accent)
+                        .withValues(alpha: 0.22),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
               ),
-            ),
-        ],
+              Row(
+                children: [
+                  for (final item in items)
+                    Expanded(
+                      child: _SegmentedTab(
+                        label: labelOf(item),
+                        selected: item == active,
+                        color: colorOf?.call(item) ?? DarkmoonColors.accent,
+                        onTap: () => onSelect(item),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          );
+        },
       ),
     );
   }
@@ -8329,7 +8431,7 @@ class _SegmentedTab extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
-  static const _duration = Duration(milliseconds: 160);
+  static const _duration = Duration(milliseconds: 200);
 
   @override
   Widget build(BuildContext context) {
@@ -8339,31 +8441,24 @@ class _SegmentedTab extends StatelessWidget {
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
         onTap: onTap,
-        // The highlight fill/text color/weight all animate here (instead
-        // of snapping instantly) so switching segments — Shadows to
-        // Midtones, Mixer to HSL, etc. — reads as a transition rather
-        // than a hard cut.
-        child: AnimatedContainer(
-          duration: _duration,
-          curve: Curves.easeOut,
+        // The sliding highlight pill lives behind this in the parent
+        // Stack — only the text color/weight animates here.
+        child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 6),
-          decoration: BoxDecoration(
-            color: selected ? color.withValues(alpha: 0.22) : Colors.transparent,
-            borderRadius: BorderRadius.circular(6),
-          ),
-          alignment: Alignment.center,
-          child: AnimatedDefaultTextStyle(
-            duration: _duration,
-            curve: Curves.easeOut,
-            style: TextStyle(
-              color: selected ? color : DarkmoonColors.textSecondary,
-              fontSize: 11,
-              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-            ),
-            child: Text(
-              label,
-              overflow: TextOverflow.ellipsis,
-              softWrap: false,
+          child: Align(
+            child: AnimatedDefaultTextStyle(
+              duration: _duration,
+              curve: Curves.easeOut,
+              style: TextStyle(
+                color: selected ? color : DarkmoonColors.textSecondary,
+                fontSize: 11,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+              ),
+              child: Text(
+                label,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+              ),
             ),
           ),
         ),
@@ -8676,7 +8771,7 @@ class _FilmstripState extends State<_Filmstrip> {
                                 Container(
                                   width: double.infinity,
                                   height: double.infinity,
-                                  color: const Color(0xFF26262A),
+                                  color: DarkmoonColors.canvas,
                                   alignment: Alignment.center,
                                   child: thumbnail == null
                                       ? const SizedBox(

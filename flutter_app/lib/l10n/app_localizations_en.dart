@@ -250,6 +250,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiDenoiseApplyingMessage => 'Applying AI Denoise...';
 
   @override
+  String get aiDenoiseDisablingMessage => 'Disabling AI Denoise...';
+
+  @override
   String get aiDenoiseTabClassic => 'Classic';
 
   @override

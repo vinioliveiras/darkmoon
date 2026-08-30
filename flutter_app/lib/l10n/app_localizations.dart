@@ -544,6 +544,12 @@ abstract class AppLocalizations {
   /// **'Applying AI Denoise...'**
   String get aiDenoiseApplyingMessage;
 
+  /// No description provided for @aiDenoiseDisablingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabling AI Denoise...'**
+  String get aiDenoiseDisablingMessage;
+
   /// No description provided for @aiDenoiseTabClassic.
   ///
   /// In en, this message translates to:

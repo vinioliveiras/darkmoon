@@ -80,6 +80,7 @@
   "aiDenoiseLevelStrong": "Stark",
   "aiDenoiseApplyButton": "Anwenden",
   "aiDenoiseApplyingMessage": "KI-Rauschunterdrückung wird angewendet...",
+  "aiDenoiseDisablingMessage": "KI-Rauschunterdrückung wird deaktiviert...",
   "aiDenoiseTabClassic": "Klassisch",
   "aiDenoiseTabEnhance": "Enhance",
   "aiDenoiseTabCloud": "Cloud-KI",
