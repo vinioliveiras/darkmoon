@@ -36,17 +36,21 @@ String _entryKey(
   return sha1.convert(utf8.encode(raw)).toString();
 }
 
-// `.cache` (not `.png`) purely for naming consistency with every other
+// `.aicache` (not `.png`) purely for naming consistency with every other
 // on-disk cache in this app (thumbnail_cache.dart's month files,
-// native_source_cache.dart's blobs) — the bytes inside are still a plain
-// PNG encoding, just not advertised via the extension. Deliberately NOT
-// migrated to those caches' actual per-month-batched ThumbnailCacheManager
-// format: that class is main-isolate-only (it batches writes in memory,
-// unsafe from multiple isolates), while this cache's lookup/store must
-// run from the background isolate `decodeEditSourcesWithAiEnhance` spawns
-// — a real architectural mismatch, not just a naming one.
+// native_source_cache.dart's blobs use `.cache`) — the bytes inside are
+// still a plain PNG encoding, just not advertised via the extension. A
+// dedicated extension rather than reusing `.cache` verbatim, so nothing
+// (Explorer, this app's own folder scan, a future generic ".cache sweep")
+// mistakes one of these — tens of MB each — for a thumbnail/preview
+// blob or, worse, an actual image file. Deliberately NOT migrated to
+// those caches' actual per-month-batched ThumbnailCacheManager format:
+// that class is main-isolate-only (it batches writes in memory, unsafe
+// from multiple isolates), while this cache's lookup/store must run from
+// the background isolate `decodeEditSourcesWithAiEnhance` spawns — a
+// real architectural mismatch, not just a naming one.
 String _entryFile(String cacheDir, String key) =>
-    p.join(cacheDir, '$key.cache');
+    p.join(cacheDir, '$key.aicache');
 
 /// Looks up a previously-cached AI Enhance result for the photo at [path]
 /// (its current `mtime`/`size` must match what it was cached under — an
