@@ -6430,8 +6430,14 @@ class _ViewerToolbar extends StatelessWidget {
                         onPressed: exporting ? null : onExport,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
+                          backgroundColor: Colors.transparent,
+                          disabledBackgroundColor: Colors.transparent,
+                          // A step up from the standard (very subtle)
+                          // border token — Export is the toolbar's one
+                          // primary action, so its outline gets a little
+                          // more presence without going full accent/white.
                           side: const BorderSide(
-                            color: DarkmoonColors.border,
+                            color: DarkmoonColors.textMuted,
                             width: 1.0,
                           ),
                         ),
