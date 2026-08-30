@@ -2131,6 +2131,8 @@ class _EditorScreenState extends State<EditorScreen>
           enabled: _copiedEdits != null,
           child: Text(l10n.imageContextPasteEditsAction),
         ),
+        const PopupMenuDivider(),
+        PopupMenuItem(value: _resetActive, child: Text(l10n.resetTooltip)),
       ],
     );
     action?.call();
@@ -5308,6 +5310,9 @@ class _EditorScreenState extends State<EditorScreen>
                                   fileMissing:
                                       selected != null &&
                                       _missingFiles.contains(selected.path),
+                                  thumbnail: selected == null
+                                      ? null
+                                      : _thumbnails[selected.path],
                                   preview: selected == null
                                       ? null
                                       : _displayPreview(selected.path),
@@ -5643,6 +5648,7 @@ class _ImageArea extends StatelessWidget {
   const _ImageArea({
     required this.selected,
     required this.fileMissing,
+    required this.thumbnail,
     required this.preview,
     required this.neutralPreview,
     required this.beforeAfterMode,
@@ -5684,6 +5690,7 @@ class _ImageArea extends StatelessWidget {
   /// spin forever on a decode that will never finish.
   final bool fileMissing;
 
+  final Uint8List? thumbnail;
   final Uint8List? preview;
   final Uint8List? neutralPreview;
   final bool beforeAfterMode;
@@ -5883,12 +5890,11 @@ class _ImageArea extends StatelessWidget {
         style: const TextStyle(color: DarkmoonColors.textMuted),
       );
     }
-    // Deliberately not falling back to the filmstrip [thumbnail] while
-    // [preview] is still decoding — that produced a low-res, blurry
-    // frame that then visibly popped to the sharp real render a moment
-    // later. Simpler and calmer to just wait, then let the real preview
-    // fade in on its own (see _fadingImage/_FadingPreviewImage).
-    final bytes = preview;
+    // Prefer the full RAW decode; fall back to the fast embedded thumbnail
+    // while it's still decoding, so something appears immediately (the
+    // blurry-to-sharp jump this produces is now a fade, not a pop — see
+    // _fadingImage/_FadingPreviewImage).
+    final bytes = preview ?? thumbnail;
     if (bytes == null) {
       return Text(
         l10n.decodingPhoto(selected!.name),
