@@ -924,7 +924,6 @@ class _EditorScreenState extends State<EditorScreen> {
     MaskType.radialGradient: 0.00,
     MaskType.brush: 0.01,
     MaskType.colorRange: 0.20,
-    MaskType.wholeImage: 0.00,
     MaskType.luminance: 0.20,
     MaskType.flow: 0.01,
   };
@@ -4275,7 +4274,6 @@ class _EditorScreenState extends State<EditorScreen> {
       MaskType.radialGradient => l10n.maskRadialGradient,
       MaskType.brush => l10n.maskBrush,
       MaskType.colorRange => l10n.maskColorRange,
-      MaskType.wholeImage => l10n.maskWholeImage,
       MaskType.luminance => l10n.maskLuminance,
       MaskType.flow => l10n.maskFlow,
     };
@@ -5883,11 +5881,7 @@ class _ImageArea extends StatelessWidget {
         ),
       );
     }
-    // Whole Image has no geometry of its own (it's a full-coverage no-op
-    // mask) — nothing to draw a handle/overlay for, so it takes the same
-    // no-overlay path as the "Image" base layer.
-    final noOverlay = mask == null || source == null ||
-        mask.type == MaskType.wholeImage;
+    final noOverlay = mask == null || source == null;
     return SizedBox.expand(
       child: noOverlay
           ? Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true)

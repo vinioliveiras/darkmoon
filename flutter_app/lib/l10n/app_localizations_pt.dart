@@ -744,9 +744,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get colorRangeHint => 'Toque na imagem para escolher uma cor';
 
   @override
-  String get maskWholeImage => 'Imagem Inteira';
-
-  @override
   String get maskLuminance => 'Faixa de Luminância';
 
   @override

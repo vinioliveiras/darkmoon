@@ -5,40 +5,6 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:darkmoon/render/mask.dart';
 
 void main() {
-  group('MaskType.wholeImage', () {
-    test('covers every pixel at full alpha', () {
-      const mask = MaskLayer(id: 'm', name: 'Mask', type: MaskType.wholeImage);
-      final alpha = computeMaskAlpha(mask, 4, 4);
-      for (final v in alpha) {
-        expect(v, 1.0);
-      }
-    });
-
-    test('respects opacity and inversion like every other mask type', () {
-      const mask = MaskLayer(
-        id: 'm',
-        name: 'Mask',
-        type: MaskType.wholeImage,
-        opacity: 40,
-      );
-      final alpha = computeMaskAlpha(mask, 4, 4);
-      for (final v in alpha) {
-        expect(v, closeTo(0.4, 1e-6));
-      }
-
-      const inverted = MaskLayer(
-        id: 'm',
-        name: 'Mask',
-        type: MaskType.wholeImage,
-        inverted: true,
-      );
-      final invertedAlpha = computeMaskAlpha(inverted, 4, 4);
-      for (final v in invertedAlpha) {
-        expect(v, 0.0);
-      }
-    });
-  });
-
   group('MaskType.luminance', () {
     Float32List grayRgb(List<double> lumas) {
       final rgb = Float32List(lumas.length * 3);

@@ -72,7 +72,6 @@ class MaskSelector extends StatelessWidget {
     MaskType.radialGradient => CupertinoIcons.circle_fill,
     MaskType.brush => CupertinoIcons.paintbrush,
     MaskType.colorRange => CupertinoIcons.eyedropper,
-    MaskType.wholeImage => CupertinoIcons.photo,
     MaskType.luminance => CupertinoIcons.sun_max,
     MaskType.flow => CupertinoIcons.drop,
   };
@@ -153,11 +152,6 @@ class MaskSelector extends StatelessWidget {
                     value: MaskType.flow,
                     label: l10n.maskFlow,
                     icon: _typeIcon(MaskType.flow),
-                  ),
-                  StyledDropdownItem(
-                    value: MaskType.wholeImage,
-                    label: l10n.maskWholeImage,
-                    icon: _typeIcon(MaskType.wholeImage),
                   ),
                 ],
                 onChanged: onAdd,

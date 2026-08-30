@@ -752,9 +752,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get colorRangeHint => 'Auf das Bild tippen, um eine Farbe auszuwählen';
 
   @override
-  String get maskWholeImage => 'Ganzes Bild';
-
-  @override
   String get maskLuminance => 'Leuchtdichtebereich';
 
   @override

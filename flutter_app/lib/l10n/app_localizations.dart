@@ -1444,12 +1444,6 @@ abstract class AppLocalizations {
   /// **'Tap the image to pick a color'**
   String get colorRangeHint;
 
-  /// No description provided for @maskWholeImage.
-  ///
-  /// In en, this message translates to:
-  /// **'Whole Image'**
-  String get maskWholeImage;
-
   /// No description provided for @maskLuminance.
   ///
   /// In en, this message translates to:

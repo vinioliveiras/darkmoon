@@ -242,7 +242,6 @@
   "colorRangeToleranceLabel": "Tolerância",
   "colorRangeFeatherLabel": "Suavização",
   "colorRangeHint": "Toque na imagem para escolher uma cor",
-  "maskWholeImage": "Imagem Inteira",
   "maskLuminance": "Faixa de Luminância",
   "maskFlow": "Fluxo",
   "luminanceToleranceLabel": "Tolerância",

@@ -236,7 +236,6 @@
   "colorRangeToleranceLabel": "Toleranz",
   "colorRangeFeatherLabel": "Weichzeichnen",
   "colorRangeHint": "Auf das Bild tippen, um eine Farbe auszuwählen",
-  "maskWholeImage": "Ganzes Bild",
   "maskLuminance": "Leuchtdichtebereich",
   "maskFlow": "Fluss",
   "luminanceToleranceLabel": "Toleranz",
