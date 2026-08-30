@@ -4,8 +4,10 @@ import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 
 import 'diagnostics/dev_log.dart';
+import 'diagnostics/native_stderr_redirect.dart';
 import 'editor_screen.dart';
 import 'l10n/app_localizations.dart';
 import 'settings/app_settings.dart';
@@ -23,6 +25,17 @@ import 'widgets/splash_screen.dart';
 Future<void> _initDevLog() async {
   final settings = await loadSettings();
   DevLog.setEnabled(settings.devLogging);
+
+  if (settings.devLogging) {
+    // Best-effort experiment (see the function's own doc comment for the
+    // reasoning and why it's safe even if it captures nothing) — must run
+    // before onnxruntime.dll (or any other native library) is ever
+    // touched, which only happens later, from a background isolate.
+    final dir = await resolveDevLogDir();
+    redirectNativeStderrToFileForDevMode(
+      p.join(dir.path, 'native-stderr.log'),
+    );
+  }
 
   final defaultOnError = FlutterError.onError;
   FlutterError.onError = (details) {
