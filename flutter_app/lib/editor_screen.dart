@@ -6217,17 +6217,24 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
     if (!placeholder) {
       return Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true);
     }
-    // BoxFit.cover (not .contain) so the placeholder fills the box with no
-    // letterboxed margin — otherwise the blur kernel smears the photo's
-    // edge pixels out into that transparent margin, reading as a haze
-    // escaping the photo's own frame.
-    return ImageFiltered(
-      imageFilter: ImageFilter.blur(
-        sigmaX: 14,
-        sigmaY: 14,
-        tileMode: TileMode.decal,
+    // Blur the image at its own intrinsic size (letting it lay out
+    // unconstrained inside FittedBox) instead of stretched to the full
+    // box, then let FittedBox scale the already-blurred result down to
+    // fit — this keeps the photo's true aspect ratio (BoxFit.cover here
+    // would distort/crop it when the box's aspect doesn't match, e.g. a
+    // portrait photo in a wide viewport) while still keeping the blur
+    // kernel confined to the photo's own pixels, with no transparent
+    // margin around it for the blur to bleed into.
+    return FittedBox(
+      fit: BoxFit.contain,
+      child: ImageFiltered(
+        imageFilter: ImageFilter.blur(
+          sigmaX: 14,
+          sigmaY: 14,
+          tileMode: TileMode.decal,
+        ),
+        child: Image.memory(bytes, gaplessPlayback: true),
       ),
-      child: Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true),
     );
   }
 
