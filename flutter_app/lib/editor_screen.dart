@@ -6901,6 +6901,12 @@ class _SectionHeader extends StatelessWidget {
           child: InkWell(
             borderRadius: BorderRadius.circular(6),
             onTap: onTap,
+            // The enclosing MouseRegion already drives the whole
+            // _SectionCard's hover tint — this InkWell's own default
+            // hover/highlight overlay would otherwise paint a *second*,
+            // smaller one on just the header row on top of it.
+            hoverColor: Colors.transparent,
+            highlightColor: Colors.transparent,
             child: Padding(
               padding: const EdgeInsets.symmetric(vertical: 4),
               child: Row(
