@@ -19,13 +19,15 @@ A fast, native RAW and JPEG photo editor for Windows — built with Flutter, ins
 - **White Balance** — temperature (Kelvin) and tint, using the camera's own embedded color calibration for accurate, camera-aware color
 - **Tone** — exposure, brightness, contrast, highlights, shadows, whites, blacks
 - **Presence** — texture, clarity, dehaze, vibrance, saturation
-- **Detail** — manual sharpening (amount, radius, detail, masking) plus a one-shot AI-assisted noise reduction pass
+- **Detail** — manual sharpening (amount, radius, detail, masking) plus AI-assisted noise reduction: a classic per-render pass, an on-device neural Enhance (denoise + optional 2x upscale, including a raw-domain Bayer-sensor model), or a paid Cloud AI provider of your choice (Topaz Labs, OpenAI, Gemini)
+- **Lens Correction** — automatic distortion, vignette, and chromatic-aberration correction matched against a bundled Lensfun-style profile database
 - **Tone Curve & Color Curve** — full RGB and per-channel curve editors
 - **Color Mixer** — 8-band HSL adjustments
 - **Color Grading** — shadows/midtones/highlights/global color wheels
 - **Crop & Transform** — straighten, vertical/horizontal/aspect keystone correction, scale, 90° rotation, and a draggable crop overlay with aspect-ratio presets
-- **Masking** — Linear Gradient, Radial Gradient, Brush, and Color Range masks, each with independent adjustments, opacity, and an adjustable on-canvas overlay
+- **Masking** — Linear Gradient, Radial Gradient, Brush, Flow (pressure-style incremental brush), Color Range, and Luminance Range masks, each with independent adjustments, opacity, and an adjustable on-canvas overlay
 - **Vignette** — post-crop vignette with amount, midpoint, and feather
+- Optional GPU-accelerated rendering for the editing preview, with automatic CPU fallback
 - Undo/redo history, before/after comparison, and a live capture-info panel (camera, lens, ISO, shutter, aperture) read straight from each file's metadata
 
 ### Presets
@@ -45,7 +47,8 @@ A fast, native RAW and JPEG photo editor for Windows — built with Flutter, ins
 
 ### Other
 
-- English and Portuguese interface, following the system language by default
+- English, Portuguese, and German interface, following the system language by default
+- Interface animations (panel transitions, zoom, fade-in previews) — on by default, with a one-switch off in Settings
 
 ![Tone panel with EXIF metadata and histogram](.github/assets/screenshot-tone.png)
 
@@ -73,7 +76,8 @@ The built app lands in `flutter_app\build\windows\x64\runner\Release\`.
 - **Flutter** (Windows desktop) for the UI
 - **LibRaw** via Dart FFI for RAW decoding and metadata
 - **`package:image`** for common image format decoding and encoding
-- Custom Dart render pipeline for every color/tone adjustment, geometric transform, and mask
+- **ONNX Runtime** via Dart FFI for on-device AI denoise/upscale
+- Custom Dart render pipeline for every color/tone adjustment, geometric transform, and mask, with an optional GPU (fragment shader) path
 
 ## Website
 
