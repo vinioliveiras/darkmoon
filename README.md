@@ -50,7 +50,7 @@ A fast, native RAW and JPEG photo editor for Windows — built with Flutter, ins
 - English, Portuguese, and German interface, following the system language by default
 - Interface animations (panel transitions, zoom, fade-in previews) — on by default, with a one-switch off in Settings
 
-![Tone panel with EXIF metadata and histogram](.github/assets/screenshot-tone.png)
+![Color Mixer and Color Grading panels](.github/assets/screenshot-colormixer.png)
 
 ## Getting started
 
