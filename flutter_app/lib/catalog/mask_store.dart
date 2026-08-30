@@ -37,6 +37,7 @@ BrushGeometry _decodeBrush(List<dynamic>? raw) {
               .toDouble(),
           hardness: (strokeRaw['hardness'] as num).toDouble(),
           erase: strokeRaw['erase'] as bool? ?? false,
+          flow: (strokeRaw['flow'] as num?)?.toDouble() ?? 100,
           points: [
             for (final pointRaw in strokeRaw['points'] as List)
               BrushPoint(
@@ -88,6 +89,7 @@ List<Map<String, dynamic>> _encodeBrush(BrushGeometry brush) => [
       'radius': stroke.radius,
       'hardness': stroke.hardness,
       'erase': stroke.erase,
+      'flow': stroke.flow,
       'points': [
         for (final point in stroke.points) [point.x, point.y],
       ],
@@ -99,6 +101,7 @@ MaskLayer _decodeMask(Map<String, dynamic> raw) {
   final linearRaw = raw['linear'] as Map<String, dynamic>?;
   final radialRaw = raw['radial'] as Map<String, dynamic>?;
   final colorRangeRaw = raw['colorRange'] as Map<String, dynamic>?;
+  final luminanceRaw = raw['luminance'] as Map<String, dynamic>?;
   return MaskLayer(
     id: raw['id'] as String,
     name: raw['name'] as String,
@@ -136,6 +139,13 @@ MaskLayer _decodeMask(Map<String, dynamic> raw) {
             b: (colorRangeRaw['b'] as num).toDouble(),
             tolerance: (colorRangeRaw['tolerance'] as num).toDouble(),
             feather: (colorRangeRaw['feather'] as num).toDouble(),
+          ),
+    luminance: luminanceRaw == null
+        ? const LuminanceGeometry()
+        : LuminanceGeometry(
+            targetLuma: (luminanceRaw['targetLuma'] as num).toDouble(),
+            tolerance: (luminanceRaw['tolerance'] as num).toDouble(),
+            feather: (luminanceRaw['feather'] as num).toDouble(),
           ),
     values: {
       for (final entry in (raw['values'] as Map<String, dynamic>).entries)
@@ -175,6 +185,11 @@ Map<String, dynamic> _encodeMask(MaskLayer mask) => {
     'b': mask.colorRange.b,
     'tolerance': mask.colorRange.tolerance,
     'feather': mask.colorRange.feather,
+  },
+  'luminance': {
+    'targetLuma': mask.luminance.targetLuma,
+    'tolerance': mask.luminance.tolerance,
+    'feather': mask.luminance.feather,
   },
   'values': mask.values,
   'curves': _encodeCurves(mask.curves),

@@ -1444,6 +1444,48 @@ abstract class AppLocalizations {
   /// **'Tap the image to pick a color'**
   String get colorRangeHint;
 
+  /// No description provided for @maskWholeImage.
+  ///
+  /// In en, this message translates to:
+  /// **'Whole Image'**
+  String get maskWholeImage;
+
+  /// No description provided for @maskLuminance.
+  ///
+  /// In en, this message translates to:
+  /// **'Luminance Range'**
+  String get maskLuminance;
+
+  /// No description provided for @maskFlow.
+  ///
+  /// In en, this message translates to:
+  /// **'Flow'**
+  String get maskFlow;
+
+  /// No description provided for @luminanceToleranceLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Tolerance'**
+  String get luminanceToleranceLabel;
+
+  /// No description provided for @luminanceFeatherLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Feather'**
+  String get luminanceFeatherLabel;
+
+  /// No description provided for @luminanceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tap the image to pick a brightness'**
+  String get luminanceHint;
+
+  /// No description provided for @flowAmountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Flow'**
+  String get flowAmountLabel;
+
   /// No description provided for @colorChannelRed.
   ///
   /// In en, this message translates to:

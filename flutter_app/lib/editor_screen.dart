@@ -49,6 +49,7 @@ import 'render/ai_enhance_job.dart'
 import 'render/color_profile.dart';
 import 'render/histogram.dart';
 import 'render/lens_correction.dart';
+import 'render/luminance.dart' show luminanceRgb;
 import 'render/mask.dart';
 import 'render/gpu/gpu_capability.dart';
 import 'render/gpu/render_job_gpu.dart';
@@ -376,6 +377,10 @@ PhotoCurves _withCurveCategoriesApplied(
 /// does, 0-150, default 100 (no-op). See [_withGlobalEditAmountApplied]'s
 /// doc for what this actually does at render time.
 const _globalEditAmountKey = 'GlobalEditAmount';
+
+/// Default per-pass deposit rate for a new Flow-mask stroke — see
+/// [BrushStroke.flow]'s doc. Matches RapidRAW's own default.
+const defaultFlowAmount = 10.0;
 
 /// Scales every continuous slider's deviation from its own default by
 /// [_globalEditAmountKey]'s current value — the render-time-only
@@ -919,6 +924,9 @@ class _EditorScreenState extends State<EditorScreen> {
     MaskType.radialGradient: 0.00,
     MaskType.brush: 0.01,
     MaskType.colorRange: 0.20,
+    MaskType.wholeImage: 0.00,
+    MaskType.luminance: 0.20,
+    MaskType.flow: 0.01,
   };
 
   /// Edit-history stack for the currently selected photo — [_historyIndex]
@@ -941,6 +949,12 @@ class _EditorScreenState extends State<EditorScreen> {
   double _brushRadius = 0.05;
   double _brushHardness = 0.5;
   bool _brushErase = false;
+
+  /// Current Flow-mask tool setting — the per-pass deposit rate (0..100)
+  /// baked into each new stroke at draw time, mirroring how [_brushRadius]
+  /// etc. are live tool settings rather than derived from stored geometry.
+  /// Only meaningful while a [MaskType.flow] mask is active.
+  double _brushFlow = defaultFlowAmount;
 
   /// The user's saved preset library — not per-photo, applies to whatever
   /// photo is selected when the user picks one.
@@ -4261,6 +4275,9 @@ class _EditorScreenState extends State<EditorScreen> {
       MaskType.radialGradient => l10n.maskRadialGradient,
       MaskType.brush => l10n.maskBrush,
       MaskType.colorRange => l10n.maskColorRange,
+      MaskType.wholeImage => l10n.maskWholeImage,
+      MaskType.luminance => l10n.maskLuminance,
+      MaskType.flow => l10n.maskFlow,
     };
     final mask = MaskLayer(
       id: 'mask_${DateTime.now().microsecondsSinceEpoch}',
@@ -4389,6 +4406,10 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _brushErase = !_brushErase);
   }
 
+  void _setBrushFlow(double value) {
+    setState(() => _brushFlow = value);
+  }
+
   /// Drops the active brush mask's last stroke — the brush equivalent of
   /// undo, since strokes are kept as vector data rather than baked into a
   /// fixed bitmap.
@@ -4443,6 +4464,81 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _isAdjustingMaskValue = false);
     _updateActiveMask(
       (m) => m.copyWith(colorRange: m.colorRange.copyWith(feather: value)),
+    );
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  void _onLuminanceToleranceChanged(double value) {
+    if (!_isAdjustingMaskValue) {
+      setState(() => _isAdjustingMaskValue = true);
+    }
+    _updateActiveMask(
+      (m) => m.copyWith(luminance: m.luminance.copyWith(tolerance: value)),
+    );
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onLuminanceToleranceChangeEnd(double value) {
+    setState(() => _isAdjustingMaskValue = false);
+    _updateActiveMask(
+      (m) => m.copyWith(luminance: m.luminance.copyWith(tolerance: value)),
+    );
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  void _onLuminanceFeatherChanged(double value) {
+    if (!_isAdjustingMaskValue) {
+      setState(() => _isAdjustingMaskValue = true);
+    }
+    _updateActiveMask(
+      (m) => m.copyWith(luminance: m.luminance.copyWith(feather: value)),
+    );
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onLuminanceFeatherChangeEnd(double value) {
+    setState(() => _isAdjustingMaskValue = false);
+    _updateActiveMask(
+      (m) => m.copyWith(luminance: m.luminance.copyWith(feather: value)),
+    );
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  /// Samples the currently-rendered preview at normalized ([nx], [ny]) and
+  /// sets its luma as the active Luminance mask's target — mirrors
+  /// [_onSampleMaskColor] but reduces the sampled pixel to brightness.
+  void _onSampleMaskLuminance(double nx, double ny) {
+    final mask = _activeMask;
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (mask == null || mask.type != MaskType.luminance || selected == null) {
+      return;
+    }
+    final bytes = _displayPreview(selected.path);
+    if (bytes == null) {
+      return;
+    }
+    final decoded = img.decodeImage(bytes);
+    if (decoded == null) {
+      return;
+    }
+    final px = (nx * (decoded.width - 1)).round().clamp(0, decoded.width - 1);
+    final py = (ny * (decoded.height - 1)).round().clamp(0, decoded.height - 1);
+    final pixel = decoded.getPixel(px, py);
+    final luma = luminanceRgb(
+      pixel.r.toDouble(),
+      pixel.g.toDouble(),
+      pixel.b.toDouble(),
+    );
+    _updateActiveMask(
+      (m) => m.copyWith(
+        luminance: m.luminance.copyWith(targetLuma: luma),
+      ),
     );
     _pushHistory();
     _scheduleRender(live: false);
@@ -5089,7 +5185,9 @@ class _EditorScreenState extends State<EditorScreen> {
                                   brushRadius: _brushRadius,
                                   brushHardness: _brushHardness,
                                   brushErase: _brushErase,
+                                  brushFlow: _brushFlow,
                                   onSampleColor: _onSampleMaskColor,
+                                  onSampleLuminance: _onSampleMaskLuminance,
                                   wbEyedropperActive:
                                       _wbEyedropperActive && !_beforeAfterMode,
                                   onSampleWhiteBalance: _onSampleWhiteBalance,
@@ -5203,6 +5301,8 @@ class _EditorScreenState extends State<EditorScreen> {
                             onBrushHardnessChanged: _setBrushHardness,
                             onToggleBrushErase: _toggleBrushErase,
                             onUndoStroke: _undoLastStroke,
+                            brushFlow: _brushFlow,
+                            onBrushFlowChanged: _setBrushFlow,
                             onColorRangeToleranceChanged:
                                 _onColorRangeToleranceChanged,
                             onColorRangeToleranceChangeEnd:
@@ -5211,6 +5311,14 @@ class _EditorScreenState extends State<EditorScreen> {
                                 _onColorRangeFeatherChanged,
                             onColorRangeFeatherChangeEnd:
                                 _onColorRangeFeatherChangeEnd,
+                            onLuminanceToleranceChanged:
+                                _onLuminanceToleranceChanged,
+                            onLuminanceToleranceChangeEnd:
+                                _onLuminanceToleranceChangeEnd,
+                            onLuminanceFeatherChanged:
+                                _onLuminanceFeatherChanged,
+                            onLuminanceFeatherChangeEnd:
+                                _onLuminanceFeatherChangeEnd,
                             cropOverlayActive: _cropOverlayActive,
                             cropTransform: _cropTransform,
                             onCropTransformChanged: _onCropTransformChanged,
@@ -5408,7 +5516,9 @@ class _ImageArea extends StatelessWidget {
     required this.brushRadius,
     required this.brushHardness,
     required this.brushErase,
+    required this.brushFlow,
     required this.onSampleColor,
+    required this.onSampleLuminance,
     required this.wbEyedropperActive,
     required this.onSampleWhiteBalance,
     required this.maskOverlayVisible,
@@ -5466,14 +5576,23 @@ class _ImageArea extends StatelessWidget {
   final ValueChanged<MaskLayer> onMaskGeometryChanged;
   final ValueChanged<MaskLayer> onMaskGeometryChangeEnd;
 
-  /// Current brush tool settings, used when [editingMask] is a Brush mask.
+  /// Current brush tool settings, used when [editingMask] is a Brush or
+  /// Flow mask.
   final double brushRadius;
   final double brushHardness;
   final bool brushErase;
 
+  /// Per-pass deposit rate baked into new strokes — only meaningful when
+  /// [editingMask] is a Flow mask (see [BrushStroke.flow]'s doc).
+  final double brushFlow;
+
   /// Fires with normalized image coordinates when the user taps the image
   /// while a Color Range mask is active.
   final void Function(double nx, double ny) onSampleColor;
+
+  /// Fires with normalized image coordinates when the user taps the image
+  /// while a Luminance mask is active — mirrors [onSampleColor].
+  final void Function(double nx, double ny) onSampleLuminance;
 
   /// Whether the White Balance eyedropper is armed — shows a tap target
   /// over the whole image regardless of the active layer.
@@ -5764,8 +5883,13 @@ class _ImageArea extends StatelessWidget {
         ),
       );
     }
+    // Whole Image has no geometry of its own (it's a full-coverage no-op
+    // mask) — nothing to draw a handle/overlay for, so it takes the same
+    // no-overlay path as the "Image" base layer.
+    final noOverlay = mask == null || source == null ||
+        mask.type == MaskType.wholeImage;
     return SizedBox.expand(
-      child: mask == null || source == null
+      child: noOverlay
           ? Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true)
           : LayoutBuilder(
               builder: (context, constraints) {
@@ -5781,7 +5905,8 @@ class _ImageArea extends StatelessWidget {
                       fit: BoxFit.contain,
                       gaplessPlayback: true,
                     ),
-                    if (mask.type == MaskType.brush)
+                    if (mask.type == MaskType.brush ||
+                        mask.type == MaskType.flow)
                       BrushMaskOverlay(
                         containerSize: containerSize,
                         imageWidth: source.width,
@@ -5791,17 +5916,21 @@ class _ImageArea extends StatelessWidget {
                         brushRadius: brushRadius,
                         brushHardness: brushHardness,
                         brushErase: brushErase,
+                        brushFlow: brushFlow,
                         onChanged: onMaskGeometryChanged,
                         onChangeEnd: onMaskGeometryChangeEnd,
                         showOverlay: maskOverlayVisible,
                         overlayOpacity: maskOverlayOpacity[mask.type]!,
                       )
-                    else if (mask.type == MaskType.colorRange)
+                    else if (mask.type == MaskType.colorRange ||
+                        mask.type == MaskType.luminance)
                       ColorRangeOverlay(
                         containerSize: containerSize,
                         imageWidth: source.width,
                         imageHeight: source.height,
-                        onSample: onSampleColor,
+                        onSample: mask.type == MaskType.luminance
+                            ? onSampleLuminance
+                            : onSampleColor,
                         mask: mask,
                         previewJpegBytes: bytes,
                         showOverlay: maskOverlayVisible,
@@ -6872,6 +7001,12 @@ class _ControlsPanel extends StatefulWidget {
     required this.onColorRangeToleranceChangeEnd,
     required this.onColorRangeFeatherChanged,
     required this.onColorRangeFeatherChangeEnd,
+    required this.onLuminanceToleranceChanged,
+    required this.onLuminanceToleranceChangeEnd,
+    required this.onLuminanceFeatherChanged,
+    required this.onLuminanceFeatherChangeEnd,
+    required this.brushFlow,
+    required this.onBrushFlowChanged,
     required this.cropOverlayActive,
     required this.cropTransform,
     required this.onCropTransformChanged,
@@ -6938,10 +7073,20 @@ class _ControlsPanel extends StatefulWidget {
   final VoidCallback onToggleBrushErase;
   final VoidCallback onUndoStroke;
 
+  /// Flow mask's live per-pass deposit-rate tool setting — shares the
+  /// brush-drawing controls/state above, this is its one extra slider.
+  final double brushFlow;
+  final ValueChanged<double> onBrushFlowChanged;
+
   final ValueChanged<double> onColorRangeToleranceChanged;
   final ValueChanged<double> onColorRangeToleranceChangeEnd;
   final ValueChanged<double> onColorRangeFeatherChanged;
   final ValueChanged<double> onColorRangeFeatherChangeEnd;
+
+  final ValueChanged<double> onLuminanceToleranceChanged;
+  final ValueChanged<double> onLuminanceToleranceChangeEnd;
+  final ValueChanged<double> onLuminanceFeatherChanged;
+  final ValueChanged<double> onLuminanceFeatherChangeEnd;
 
   final bool cropOverlayActive;
   final CropTransformParams cropTransform;
@@ -7113,8 +7258,12 @@ class _ControlsPanelState extends State<_ControlsPanel> {
     final activeMask = widget.masks
         .where((m) => m.id == widget.activeMaskId)
         .firstOrNull;
-    final isBrushActive = activeMask?.type == MaskType.brush;
+    final isBrushActive =
+        activeMask?.type == MaskType.brush ||
+        activeMask?.type == MaskType.flow;
+    final isFlowActive = activeMask?.type == MaskType.flow;
     final isColorRangeActive = activeMask?.type == MaskType.colorRange;
+    final isLuminanceActive = activeMask?.type == MaskType.luminance;
     final l10n = AppLocalizations.of(context)!;
     return Container(
       width: _controlsPanelWidth,
@@ -7255,6 +7404,20 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                             ),
                           ],
                         ),
+                        if (isFlowActive)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 8),
+                            child: SliderRow(
+                              name: l10n.flowAmountLabel,
+                              min: 1,
+                              max: 100,
+                              value: widget.brushFlow,
+                              decimals: 0,
+                              defaultValue: defaultFlowAmount,
+                              onChanged: widget.onBrushFlowChanged,
+                              onChangeEnd: widget.onBrushFlowChanged,
+                            ),
+                          ),
                       ],
                       if (isColorRangeActive) ...[
                         const SizedBox(height: 8),
@@ -7314,6 +7477,70 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                             decimals: 0,
                             onChanged: widget.onColorRangeFeatherChanged,
                             onChangeEnd: widget.onColorRangeFeatherChangeEnd,
+                          ),
+                        ),
+                      ],
+                      if (isLuminanceActive) ...[
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                color: Color.fromARGB(
+                                  255,
+                                  activeMask!.luminance.targetLuma
+                                      .round()
+                                      .clamp(0, 255),
+                                  activeMask.luminance.targetLuma
+                                      .round()
+                                      .clamp(0, 255),
+                                  activeMask.luminance.targetLuma
+                                      .round()
+                                      .clamp(0, 255),
+                                ),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: DarkmoonColors.border,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                l10n.luminanceHint,
+                                style: const TextStyle(
+                                  color: DarkmoonColors.textMuted,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: SliderRow(
+                            name: l10n.luminanceToleranceLabel,
+                            min: 0,
+                            max: 100,
+                            value: activeMask.luminance.tolerance,
+                            decimals: 0,
+                            onChanged: widget.onLuminanceToleranceChanged,
+                            onChangeEnd: widget.onLuminanceToleranceChangeEnd,
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: SliderRow(
+                            name: l10n.luminanceFeatherLabel,
+                            min: 0,
+                            max: 100,
+                            value: activeMask.luminance.feather,
+                            decimals: 0,
+                            onChanged: widget.onLuminanceFeatherChanged,
+                            onChangeEnd: widget.onLuminanceFeatherChangeEnd,
                           ),
                         ),
                       ],

@@ -41,12 +41,12 @@ Future<Uint8List> renderRgbWithMasksGpu(
       continue;
     }
 
-    // Only a Color Range mask's alpha depends on pixel color at all —
-    // every other mask type ignores sourceForColorRange entirely, so the
-    // one CPU readback this loop needs is skipped unless it's actually
-    // used.
+    // Only Color Range and Luminance masks' alpha depends on pixel color/
+    // brightness at all — every other mask type ignores sourceForColorRange
+    // entirely, so the one CPU readback this loop needs is skipped unless
+    // it's actually used.
     Float32List? sourceForColorRange;
-    if (mask.type == MaskType.colorRange) {
+    if (mask.type == MaskType.colorRange || mask.type == MaskType.luminance) {
       final byteData = await current.toByteData(
         format: ui.ImageByteFormat.rawRgba,
       );

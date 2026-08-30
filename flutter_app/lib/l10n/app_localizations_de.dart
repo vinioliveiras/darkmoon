@@ -752,6 +752,28 @@ class AppLocalizationsDe extends AppLocalizations {
   String get colorRangeHint => 'Auf das Bild tippen, um eine Farbe auszuwählen';
 
   @override
+  String get maskWholeImage => 'Ganzes Bild';
+
+  @override
+  String get maskLuminance => 'Leuchtdichtebereich';
+
+  @override
+  String get maskFlow => 'Fluss';
+
+  @override
+  String get luminanceToleranceLabel => 'Toleranz';
+
+  @override
+  String get luminanceFeatherLabel => 'Weichzeichnen';
+
+  @override
+  String get luminanceHint =>
+      'Auf das Bild tippen, um eine Helligkeit auszuwählen';
+
+  @override
+  String get flowAmountLabel => 'Fluss';
+
+  @override
   String get colorChannelRed => 'Rot';
 
   @override

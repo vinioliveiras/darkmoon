@@ -34,6 +34,7 @@ class BrushMaskOverlay extends StatefulWidget {
     required this.brushErase,
     required this.onChanged,
     required this.onChangeEnd,
+    this.brushFlow = 100,
     this.zoomScale = 1.0,
     this.showOverlay = true,
     this.overlayOpacity = 0.4,
@@ -54,6 +55,11 @@ class BrushMaskOverlay extends StatefulWidget {
   final double brushRadius;
   final double brushHardness;
   final bool brushErase;
+
+  /// Per-pass deposit rate (0..100) baked into every new stroke — see
+  /// [BrushStroke.flow]'s doc. Only meaningful for [MaskType.flow] masks;
+  /// plain Brush masks ignore it (defaults to 100, i.e. full coverage).
+  final double brushFlow;
   final ValueChanged<MaskLayer> onChanged;
   final ValueChanged<MaskLayer> onChangeEnd;
 
@@ -106,6 +112,7 @@ class _BrushMaskOverlayState extends State<BrushMaskOverlay> {
         radius: widget.brushRadius,
         hardness: widget.brushHardness,
         erase: widget.brushErase,
+        flow: widget.brushFlow,
       );
 
   void _startStroke(Offset local) {

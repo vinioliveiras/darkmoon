@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'luminance.dart' show luminanceRgb;
 import 'tone_curve.dart';
 
 /// A linear gradient mask: full effect on the [startX]/[startY] side,
@@ -124,6 +125,36 @@ class ColorRangeGeometry {
   );
 }
 
+/// A luminance-similarity mask: covers pixels whose brightness is close to
+/// a sampled reference luma ([targetLuma], 0..255 — Rec.709-weighted, see
+/// `luminance.dart`'s `luminanceRgb`, the same convention this app's
+/// luminance-only adjustments already use), within [tolerance] (0..100),
+/// fading out over the next [feather] (0..100) of luma distance beyond
+/// that. Deliberately mirrors [ColorRangeGeometry] field-for-field (single
+/// luma value in place of r/g/b) — same eyedropper-then-tune workflow, one
+/// axis instead of three.
+class LuminanceGeometry {
+  const LuminanceGeometry({
+    this.targetLuma = 128,
+    this.tolerance = 30,
+    this.feather = 25,
+  });
+
+  final double targetLuma;
+  final double tolerance;
+  final double feather;
+
+  LuminanceGeometry copyWith({
+    double? targetLuma,
+    double? tolerance,
+    double? feather,
+  }) => LuminanceGeometry(
+    targetLuma: targetLuma ?? this.targetLuma,
+    tolerance: tolerance ?? this.tolerance,
+    feather: feather ?? this.feather,
+  );
+}
+
 /// One point along a brush stroke, normalized to the image's 0..1
 /// coordinate space (same convention as the gradient geometries).
 class BrushPoint {
@@ -139,18 +170,29 @@ class BrushPoint {
 /// controls). [radius] is normalized to the image's width, like the
 /// radial gradient's, so the brush stays the same relative size across
 /// preview/full-quality/export resolutions.
+///
+/// [flow] (0..100, default 100 — full deposit, matching every stroke's
+/// behavior before this field existed) only matters for
+/// [MaskType.flow] — see [_computeFlowAlpha]'s doc for what it changes.
+/// [MaskType.brush] ignores it entirely (always paints at full coverage
+/// in one pass, same as before); both mask types share this one geometry
+/// class/stroke list rather than duplicating it, since the only
+/// difference between Brush and Flow is how a stroke's coverage
+/// composites into the mask, not how the stroke itself is drawn/stored.
 class BrushStroke {
   const BrushStroke({
     required this.points,
     required this.radius,
     required this.hardness,
     required this.erase,
+    this.flow = 100,
   });
 
   final List<BrushPoint> points;
   final double radius;
   final double hardness;
   final bool erase;
+  final double flow;
 }
 
 /// A brush mask's full paint history — strokes are kept as vector data
@@ -166,7 +208,14 @@ class BrushGeometry {
       BrushGeometry(strokes: strokes ?? this.strokes);
 }
 
-enum MaskType { linearGradient, radialGradient, brush, colorRange }
+/// [wholeImage]: no geometry at all — every pixel at full weight (see
+/// [_computeWholeImageAlpha]). [luminance]: parametric brightness-range
+/// selection, same eyedropper-then-tune shape as [colorRange] (see
+/// [LuminanceGeometry]). [flow]: a Brush variant with a different
+/// per-stroke compositing rule — shares [MaskLayer.brush]'s
+/// [BrushGeometry]/stroke storage entirely rather than getting its own
+/// field (see [BrushStroke.flow]'s doc for why).
+enum MaskType { linearGradient, radialGradient, brush, colorRange, wholeImage, luminance, flow }
 
 /// One mask "layer": how its region is defined ([type] + geometry), its
 /// own independent slider values (same flat `{sliderName: value}` shape
@@ -181,6 +230,7 @@ class MaskLayer {
     this.radial = const RadialGradientGeometry(),
     this.brush = const BrushGeometry(),
     this.colorRange = const ColorRangeGeometry(),
+    this.luminance = const LuminanceGeometry(),
     this.enabled = true,
     this.inverted = false,
     this.opacity = 100,
@@ -193,8 +243,11 @@ class MaskLayer {
   final MaskType type;
   final LinearGradientGeometry linear;
   final RadialGradientGeometry radial;
+
+  /// Also [MaskType.flow]'s stroke storage — see [MaskType.flow]'s doc.
   final BrushGeometry brush;
   final ColorRangeGeometry colorRange;
+  final LuminanceGeometry luminance;
   final bool enabled;
   final bool inverted;
 
@@ -216,6 +269,7 @@ class MaskLayer {
     RadialGradientGeometry? radial,
     BrushGeometry? brush,
     ColorRangeGeometry? colorRange,
+    LuminanceGeometry? luminance,
     bool? enabled,
     bool? inverted,
     double? opacity,
@@ -229,6 +283,7 @@ class MaskLayer {
     radial: radial ?? this.radial,
     brush: brush ?? this.brush,
     colorRange: colorRange ?? this.colorRange,
+    luminance: luminance ?? this.luminance,
     enabled: enabled ?? this.enabled,
     inverted: inverted ?? this.inverted,
     opacity: opacity ?? this.opacity,
@@ -239,10 +294,13 @@ class MaskLayer {
 
 /// Computes [mask]'s per-pixel alpha (0..1) at [width]x[height] —
 /// isolate-transferable pure function, same convention as render.dart.
-/// [sourceForColorRange] is the packed RGB buffer a Color Range mask
-/// samples color distance from (the working buffer as it stands *before*
-/// this mask's own layer, matching what the eyedropper picked) — unused
-/// by every other mask type.
+/// [sourceForColorRange] is the packed RGB buffer a Color Range or
+/// Luminance mask samples color/brightness distance from (the working
+/// buffer as it stands *before* this mask's own layer, matching what the
+/// eyedropper picked) — unused by every other mask type. (Kept the
+/// Color-Range-specific parameter name rather than renaming to something
+/// generic like `sourceRgb` — renaming would touch every call site for
+/// a purely cosmetic reason.)
 Float32List computeMaskAlpha(
   MaskLayer mask,
   int width,
@@ -265,6 +323,18 @@ Float32List computeMaskAlpha(
         sourceForColorRange ?? Float32List(width * height * 3),
         mask.colorRange,
       );
+    case MaskType.wholeImage:
+      _computeWholeImageAlpha(alpha);
+    case MaskType.luminance:
+      _computeLuminanceAlpha(
+        alpha,
+        width,
+        height,
+        sourceForColorRange ?? Float32List(width * height * 3),
+        mask.luminance,
+      );
+    case MaskType.flow:
+      _computeFlowAlpha(alpha, width, height, mask.brush);
   }
   if (mask.inverted) {
     for (var i = 0; i < alpha.length; i++) {
@@ -435,6 +505,121 @@ void _computeColorRangeAlpha(
       alpha[i] = 0.0;
     } else {
       alpha[i] = 1.0 - (dist - core) / featherSpan;
+    }
+  }
+}
+
+/// No geometry, no reference — every pixel at full weight. The cheapest
+/// possible mask; only exists so "affects the whole image" is a real,
+/// selectable option alongside the shaped ones (e.g. to run a second,
+/// independently-adjustable pass over the entire photo without needing a
+/// gradient/brush/color-range shape to carry it).
+void _computeWholeImageAlpha(Float32List alpha) {
+  alpha.fillRange(0, alpha.length, 1.0);
+}
+
+/// Same proportional core/feather scale [_computeColorRangeAlpha] uses,
+/// rescaled from RGB's ~441 max Euclidean diagonal down to luma's 0..255
+/// range (300/441 and 150/441 of the diagonal, applied to 255 instead) —
+/// keeps the Tolerance/Feather sliders feeling the same between the two
+/// mask types despite the different distance metric.
+const _luminanceMaxCoreDistance = 173.0;
+const _luminanceMaxFeatherDistance = 87.0;
+
+void _computeLuminanceAlpha(
+  Float32List alpha,
+  int width,
+  int height,
+  Float32List rgb,
+  LuminanceGeometry g,
+) {
+  final core =
+      g.tolerance.clamp(0.0, 100.0) / 100.0 * _luminanceMaxCoreDistance;
+  final featherSpan =
+      g.feather.clamp(0.0, 100.0) / 100.0 * _luminanceMaxFeatherDistance;
+  var p = 0;
+  for (var i = 0; i < alpha.length; i++, p += 3) {
+    final luma = luminanceRgb(rgb[p], rgb[p + 1], rgb[p + 2]);
+    final dist = (luma - g.targetLuma).abs();
+    if (dist <= core) {
+      alpha[i] = 1.0;
+    } else if (featherSpan <= 0 || dist >= core + featherSpan) {
+      alpha[i] = 0.0;
+    } else {
+      alpha[i] = 1.0 - (dist - core) / featherSpan;
+    }
+  }
+}
+
+void _computeFlowAlpha(
+  Float32List alpha,
+  int width,
+  int height,
+  BrushGeometry g,
+) {
+  for (final stroke in g.strokes) {
+    _paintFlowStroke(alpha, width, height, stroke);
+  }
+}
+
+/// [MaskType.flow]'s counterpart to [_paintStroke] — same per-dab
+/// distance/feather footprint (`radiusPx`/`innerPx`/`coverage`), but a
+/// different final compositing rule: rather than [_paintStroke]'s direct
+/// "replace with this dab's coverage if it's stronger" (a single pass
+/// over the same pixel can't exceed that dab's own coverage), each dab
+/// only *deposits* `coverage * (stroke.flow/100)` of alpha via standard
+/// "over" compositing (`next = a + d - a*d`) — so a single continuous
+/// stroke only ever reaches `flow%` opacity in one pass, and repeated
+/// overlapping strokes are what build up to full coverage. This is the
+/// entire difference between Brush and Flow (see [BrushStroke.flow]'s
+/// doc) — everything else about how a stroke is drawn/stored is shared.
+/// Kept as a separate function rather than a shared one with a branch,
+/// since that branch would sit inside this loop's per-pixel hot path for
+/// no real reuse benefit (the two compositing formulas share no code).
+void _paintFlowStroke(
+  Float32List alpha,
+  int width,
+  int height,
+  BrushStroke stroke,
+) {
+  final radiusPx = stroke.radius * width;
+  if (radiusPx <= 0) {
+    return;
+  }
+  final innerPx = radiusPx * stroke.hardness.clamp(0.0, 1.0);
+  final span = radiusPx - innerPx;
+  final radiusSq = radiusPx * radiusPx;
+  final flowFraction = (stroke.flow / 100.0).clamp(0.0, 1.0);
+  for (final point in stroke.points) {
+    final cx = point.x * width;
+    final cy = point.y * height;
+    final minX = math.max(0, (cx - radiusPx).floor());
+    final maxX = math.min(width - 1, (cx + radiusPx).ceil());
+    final minY = math.max(0, (cy - radiusPx).floor());
+    final maxY = math.min(height - 1, (cy + radiusPx).ceil());
+    for (var y = minY; y <= maxY; y++) {
+      final dy = y - cy;
+      final rowOffset = y * width;
+      for (var x = minX; x <= maxX; x++) {
+        final dx = x - cx;
+        final distSq = dx * dx + dy * dy;
+        if (distSq > radiusSq) {
+          continue;
+        }
+        final dist = math.sqrt(distSq);
+        final coverage = dist <= innerPx
+            ? 1.0
+            : (span <= 0 ? 0.0 : 1.0 - (dist - innerPx) / span);
+        final deposit = coverage * flowFraction;
+        if (deposit <= 0) {
+          continue;
+        }
+        final idx = rowOffset + x;
+        final a = alpha[idx];
+        alpha[idx] = stroke.erase
+            ? (a * (1.0 - deposit)).clamp(0.0, 1.0)
+            : (a + deposit - a * deposit).clamp(0.0, 1.0);
+      }
     }
   }
 }
