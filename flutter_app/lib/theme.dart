@@ -5,14 +5,15 @@ import 'package:flutter/material.dart';
 // Every gray below is a deliberately blue-leaning neutral (R < G < B, not
 // R=G=B) rather than a true gray — a cool cast reads as more "premium
 // dark UI" than a flat neutral gray and matches Photomator's own palette.
-// Keep new tokens on this same recipe (R a couple points under G, B
-// several points over G) instead of introducing pure neutrals.
+// Kept very subtle (R/B a couple points off G, not more) — a first pass
+// with a much wider spread read as "too blue". Keep new tokens on this
+// same restrained recipe instead of introducing pure neutrals.
 class DarkmoonColors {
-  static const background = Color(0xFF1C1E26);
-  static const panel = Color(0xFF10121A);
-  static const canvas = Color(0xFF12141C);
-  static const filmstrip = Color(0xFF171921);
-  static const surfaceRaised = Color(0xFF2A2C36);
+  static const background = Color(0xFF1D1E20);
+  static const panel = Color(0xFF0C0D0F);
+  static const canvas = Color(0xFF131416);
+  static const filmstrip = Color(0xFF18191B);
+  static const surfaceRaised = Color(0xFF2B2C2E);
 
   /// Standardized background for every modal window (Settings, About,
   /// Export, AI Denoise, the various confirm dialogs, …) — a very dark,
@@ -23,12 +24,12 @@ class DarkmoonColors {
   /// token rather than reusing `canvas` directly so "dialogs" and "the
   /// image viewport" stay independently adjustable even though they
   /// happen to match today.
-  static const dialogBackground = Color(0xFF12141C);
+  static const dialogBackground = Color(0xFF131416);
 
   /// Fill for dropdown buttons/menus — darker than [surfaceRaised] but
   /// not as recessed as [dialogBackground] (that read as too dark once
   /// tried), sitting roughly between [panel] and [surfaceRaised].
-  static const dropdownBackground = Color(0xFF1E202C);
+  static const dropdownBackground = Color(0xFF1F2022);
 
   /// Outline color for windows/dialogs and every boxed component
   /// (dropdowns, cards, tooltips, …) — darker/softer than earlier so the
@@ -36,19 +37,19 @@ class DarkmoonColors {
   /// reads as a gentle edge rather than a hard line, while staying
   /// visibly lighter than [panel]/[dialogBackground] so it's still an
   /// outline, not invisible.
-  static const border = Color(0xFF1C1E29);
+  static const border = Color(0xFF1D1E20);
 
   /// Fill for a [_SectionCard]-style grouped card — darker still than
   /// the first pass (which read as too light a gray), only a hair
   /// lighter than [panel] so the card reads as faintly raised rather
   /// than flush with the panel background.
-  static const sectionCardBackground = Color(0xFF1B1D28);
-  static const divider = Color(0xFF2E303E);
-  static const textPrimary = Color(0xFFE4E6EC);
-  static const textSecondary = Color(0xFFC5C8D2);
-  static const textMuted = Color(0xFF858A98);
+  static const sectionCardBackground = Color(0xFF1C1D1F);
+  static const divider = Color(0xFF2F3032);
+  static const textPrimary = Color(0xFFE5E6E8);
+  static const textSecondary = Color(0xFFC7C8CA);
+  static const textMuted = Color(0xFF898A8C);
   static const accent = Color(0xFFFFFFFF);
-  static const sliderTrack = Color(0xFFE4E7EE);
+  static const sliderTrack = Color(0xFFE6E7E9);
 }
 
 ThemeData buildDarkmoonTheme() {

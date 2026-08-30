@@ -5642,10 +5642,7 @@ class _ImageArea extends StatelessWidget {
       children: [
         Container(
           key: viewportKey,
-          // Pure black, not DarkmoonColors.canvas — the letterboxed area
-          // around a photo that doesn't fill the viewport should read as
-          // "no image here" rather than a dark gray panel.
-          color: Colors.black,
+          color: DarkmoonColors.canvas,
           alignment: Alignment.center,
           padding: const EdgeInsets.symmetric(vertical: _verticalBreathingRoom),
           child: _buildContent(l10n),
