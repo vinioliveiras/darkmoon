@@ -5,6 +5,7 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
+import '../animations_config.dart';
 import '../l10n/app_localizations.dart';
 import '../theme.dart';
 
@@ -386,12 +387,22 @@ class _FolderNodeState extends State<_FolderNode> {
                     )
                   : _missing
                   ? null
-                  : Icon(
-                      _expanded
-                          ? CupertinoIcons.chevron_down
-                          : CupertinoIcons.chevron_right,
-                      size: 12,
-                      color: DarkmoonColors.textMuted,
+                  : AnimatedRotation(
+                      duration: AnimationsConfig.duration(
+                        context,
+                        const Duration(milliseconds: 160),
+                      ),
+                      curve: Curves.easeOutCubic,
+                      // chevron_right rotated a quarter turn *is*
+                      // chevron_down, so one icon smoothly rotates
+                      // between the two states instead of an instant
+                      // icon swap.
+                      turns: _expanded ? 0.25 : 0.0,
+                      child: const Icon(
+                        CupertinoIcons.chevron_right,
+                        size: 12,
+                        color: DarkmoonColors.textMuted,
+                      ),
                     ),
             ),
           ),
@@ -455,15 +466,57 @@ class _FolderNodeState extends State<_FolderNode> {
                   child: row,
                 ),
               ),
-        if (_expanded && _children != null)
-          for (final dir in _children!)
-            _FolderNode(
-              path: dir.path,
-              depth: widget.depth + 1,
-              selectedPath: widget.selectedPath,
-              onSelect: widget.onSelect,
-            ),
+        _AnimatedFolderExpand(
+          expanded: _expanded && _children != null,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              for (final dir in _children ?? const <Directory>[])
+                _FolderNode(
+                  path: dir.path,
+                  depth: widget.depth + 1,
+                  selectedPath: widget.selectedPath,
+                  onSelect: widget.onSelect,
+                ),
+            ],
+          ),
+        ),
       ],
+    );
+  }
+}
+
+/// Animates a folder row's children growing/shrinking in under it —
+/// [child] stays mounted the whole time (so a nested folder's own
+/// expanded state survives a collapse/expand of its parent), just laid
+/// out at zero height and fully transparent while [expanded] is false.
+/// `ClipRect` hides the part of [child] that doesn't fit during the
+/// animation.
+class _AnimatedFolderExpand extends StatelessWidget {
+  const _AnimatedFolderExpand({required this.expanded, required this.child});
+
+  final bool expanded;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = AnimationsConfig.duration(
+      context,
+      const Duration(milliseconds: 180),
+    );
+    return ClipRect(
+      child: AnimatedAlign(
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        alignment: Alignment.topCenter,
+        heightFactor: expanded ? 1.0 : 0.0,
+        child: AnimatedOpacity(
+          duration: duration,
+          curve: Curves.easeOutCubic,
+          opacity: expanded ? 1.0 : 0.0,
+          child: child,
+        ),
+      ),
     );
   }
 }

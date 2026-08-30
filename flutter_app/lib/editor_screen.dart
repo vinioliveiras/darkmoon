@@ -11,6 +11,7 @@ import 'package:flutter/services.dart';
 import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
+import 'animations_config.dart';
 import 'catalog/catalog_store.dart';
 import 'catalog/curve_store.dart';
 import 'catalog/mask_store.dart';
@@ -382,35 +383,6 @@ const _globalEditAmountKey = 'GlobalEditAmount';
 /// Default per-pass deposit rate for a new Flow-mask stroke — see
 /// [BrushStroke.flow]'s doc. Matches RapidRAW's own default.
 const defaultFlowAmount = 10.0;
-
-/// Broadcasts Settings > "Interface animations" down the whole editor
-/// tree, so any widget that plays a transition (section-card hover,
-/// segmented-tab slide, zoom, the preview's post-edit fade-in) can ask
-/// [AnimationsConfig.duration] for its actual duration instead of every
-/// one of those widgets needing its own `animationsEnabled` constructor
-/// parameter threaded down from `_EditorScreenState`.
-class AnimationsConfig extends InheritedWidget {
-  const AnimationsConfig({
-    super.key,
-    required this.enabled,
-    required super.child,
-  });
-
-  final bool enabled;
-
-  static bool of(BuildContext context) =>
-      context.dependOnInheritedWidgetOfExactType<AnimationsConfig>()?.enabled ??
-      true;
-
-  /// [base] when animations are on, [Duration.zero] (an instant snap)
-  /// when the user turned them off.
-  static Duration duration(BuildContext context, Duration base) =>
-      of(context) ? base : Duration.zero;
-
-  @override
-  bool updateShouldNotify(AnimationsConfig oldWidget) =>
-      enabled != oldWidget.enabled;
-}
 
 /// Scales every continuous slider's deviation from its own default by
 /// [_globalEditAmountKey]'s current value — the render-time-only
