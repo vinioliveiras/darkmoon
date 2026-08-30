@@ -17,6 +17,7 @@ import 'catalog/mask_store.dart';
 import 'catalog/native_source_cache.dart';
 import 'catalog/photo_preset_store.dart';
 import 'catalog/preview_cache_dir.dart';
+import 'catalog/ai_enhance_cache.dart';
 import 'catalog/ai_enhance_cache_dir.dart';
 import 'catalog/thumbnail_cache.dart';
 import 'catalog/thumbnail_cache_dir.dart';
@@ -2467,15 +2468,50 @@ class _EditorScreenState extends State<EditorScreen> {
         _missingFiles.remove(path);
       });
 
+      var fromCache = false;
+
+      // If AI Enhance is active for this photo (persisted in
+      // _paramValues, already swapped to this path's values by
+      // _selectIndex before this runs), its cache takes priority over the
+      // plain preview cache below — otherwise reselecting/reopening a
+      // photo would silently show the un-enhanced render while
+      // _paramValues still claims Enhance is active (the same class of
+      // bug that made export ignore Enhance entirely — see
+      // _loadEnhancedNativeSource's doc).
+      final wantDenoise = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
+      final wantUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
+      if (wantDenoise || wantUpscale) {
+        final cacheDir = await resolveAiEnhanceCacheDir();
+        if (mounted) {
+          final cachedPng = await lookupAiEnhanceCache(
+            cacheDir,
+            path,
+            denoise: wantDenoise,
+            upscale: wantUpscale,
+          );
+          if (cachedPng != null) {
+            sources = await compute(
+              decodeCachedAiEnhanceSources,
+              DecodeCachedAiEnhanceArgs(cachedPng, _settings.previewResolution),
+            );
+            fromCache = sources != null;
+          }
+        }
+      }
+
       // Cache lookup/decode happens here in the main isolate/from a
       // compute() call (same split as ThumbnailCacheManager's own usage,
       // see _loadThumbnails) — only a genuine cache miss falls through to
-      // the much more expensive RAW decode isolate below.
-      final cachedJpeg = await _previewCache?.lookup(path);
-      var fromCache = false;
-      if (cachedJpeg != null) {
-        sources = await compute(decodeEditSourcePairFromCachedJpeg, cachedJpeg);
-        fromCache = sources != null;
+      // the much more expensive RAW decode isolate below. Skipped
+      // entirely when Enhance was wanted and already resolved above —
+      // this plain cache holds the *pre*-enhance render for this path,
+      // never the enhanced one.
+      if (sources == null && !(wantDenoise || wantUpscale)) {
+        final cachedJpeg = await _previewCache?.lookup(path);
+        if (cachedJpeg != null) {
+          sources = await compute(decodeEditSourcePairFromCachedJpeg, cachedJpeg);
+          fromCache = sources != null;
+        }
       }
 
       // No per-stage progress consumer anymore (the small in-place spinner
@@ -2483,11 +2519,26 @@ class _EditorScreenState extends State<EditorScreen> {
       // decodeEditSourcesWithProgress's dedicated Isolate is still what we
       // want over decodeEditSources' compute() for a genuine miss: see its
       // doc comment.
-      sources ??= await decodeEditSourcesWithProgress(
-        path,
-        (_) {},
-        previewMaxDimension: _settings.previewResolution,
-      );
+      if (sources == null) {
+        sources = await decodeEditSourcesWithProgress(
+          path,
+          (_) {},
+          previewMaxDimension: _settings.previewResolution,
+        );
+        if ((wantDenoise || wantUpscale) && sources != null && mounted) {
+          // Enhance was wanted but its cache missed (evicted/cleared) and
+          // we just fell back to a plain decode — keep _paramValues
+          // honest about what's actually showing instead of leaving it
+          // claiming Enhance is active over un-enhanced pixels.
+          setState(() {
+            _paramValues = {
+              ..._paramValues,
+              _neuralDenoiseKey: 0.0,
+              _neuralUpscaleKey: 0.0,
+            };
+          });
+        }
+      }
 
       if (!mounted || generation != _folderGeneration) {
         return;
@@ -2987,6 +3038,52 @@ class _EditorScreenState extends State<EditorScreen> {
       );
     }
     return native;
+  }
+
+  /// Export's equivalent of [_loadNativeSource] for a photo with the AI
+  /// Enhance pipeline active — the full-resolution enhanced buffer
+  /// (already upscaled if [upscale] is true), not a plain RAW decode, so
+  /// the exported file actually reflects Enhance instead of silently
+  /// ignoring it (a real bug found via testing: exporting the same photo
+  /// with Enhance on vs. off produced byte-identical files, because
+  /// export always called [_loadNativeSource] regardless).
+  ///
+  /// Reuses [_runNeuralEnhance] on a cache miss — same progress/cancel/
+  /// CPU-warning UI already wired for the dialog flow, and it writes the
+  /// disk cache this then re-reads. The common case is a hit: this exact
+  /// combination was already written to disk the moment the user picked
+  /// it in the AI Denoise dialog. Returns null (caller falls back to
+  /// [_loadNativeSource]) if the pipeline isn't cached and re-running it
+  /// now also fails.
+  Future<EditSource?> _loadEnhancedNativeSource(
+    String path, {
+    required bool denoise,
+    required bool upscale,
+  }) async {
+    final cacheDir = await resolveAiEnhanceCacheDir();
+    if (!mounted) return null;
+    var cachedPng = await lookupAiEnhanceCache(
+      cacheDir,
+      path,
+      denoise: denoise,
+      upscale: upscale,
+    );
+    if (cachedPng == null) {
+      final ok = await _runNeuralEnhance(path, denoise: denoise, upscale: upscale);
+      if (!mounted || !ok) {
+        return null;
+      }
+      cachedPng = await lookupAiEnhanceCache(
+        cacheDir,
+        path,
+        denoise: denoise,
+        upscale: upscale,
+      );
+    }
+    if (cachedPng == null || !mounted) {
+      return null;
+    }
+    return compute(decodeAiEnhanceCacheEntry, cachedPng);
   }
 
   /// Decodes [path]'s native source and re-renders the settled view
@@ -4230,10 +4327,23 @@ class _EditorScreenState extends State<EditorScreen> {
     // full-quality source, the shared cache, or one fresh decode that then
     // warms the cache for next time. This is the dominant export cost,
     // especially for X-Trans.
+    //
+    // If AI Enhance is active for this photo, that "native source" must
+    // be the enhanced buffer, not a plain RAW decode — see
+    // _loadEnhancedNativeSource's doc for the bug this fixes.
+    final wantDenoise = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
+    final wantUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
     EditSource? nativeForExport;
     final srcSw = Stopwatch()..start();
     try {
-      nativeForExport = await _loadNativeSource(
+      if (wantDenoise || wantUpscale) {
+        nativeForExport = await _loadEnhancedNativeSource(
+          selected.path,
+          denoise: wantDenoise,
+          upscale: wantUpscale,
+        );
+      }
+      nativeForExport ??= await _loadNativeSource(
         selected.path,
         lowPriority: false,
       );

@@ -15,6 +15,59 @@ import 'edit_source.dart';
 import 'image_utils.dart';
 import 'libraw.dart';
 
+/// Reconstructs the *full* native-resolution [EditSource] from a PNG
+/// previously written by [_decodeAndEnhance] (via `storeAiEnhanceCache`)
+/// — needed by export, which wants the whole enhanced buffer at its real
+/// size, unlike [decodeEditSourcesWithAiEnhance]'s own return value
+/// (already downscaled to preview/live for on-screen editing). Runs via
+/// `compute()`. Returns null on a corrupt blob.
+EditSource? decodeAiEnhanceCacheEntry(Uint8List pngBytes) {
+  final decoded = img.decodePng(pngBytes);
+  if (decoded == null) {
+    return null;
+  }
+  return EditSource(
+    width: decoded.width,
+    height: decoded.height,
+    rgbBytes: decoded.getBytes(order: img.ChannelOrder.rgb),
+  );
+}
+
+/// [compute()] argument bundle for [decodeCachedAiEnhanceSources].
+class DecodeCachedAiEnhanceArgs {
+  const DecodeCachedAiEnhanceArgs(this.pngBytes, this.previewMaxDimension);
+
+  final Uint8List pngBytes;
+  final int previewMaxDimension;
+}
+
+/// Derives preview/live [EditSourcePair] from a previously-cached AI
+/// Enhance PNG — the fast path taken when reselecting (or reopening) a
+/// photo Enhance was already applied to, instead of either re-running the
+/// neural pipeline or (the bug this fixes) silently falling back to a
+/// plain decode while `_paramValues` still claims Enhance is active. Runs
+/// via `compute()`. Returns null on a corrupt blob.
+EditSourcePair? decodeCachedAiEnhanceSources(DecodeCachedAiEnhanceArgs args) {
+  final full = img.decodePng(args.pngBytes);
+  if (full == null) {
+    return null;
+  }
+  final previewImage = fitToMaxDimension(full, args.previewMaxDimension);
+  final liveImage = fitToMaxDimension(previewImage, livePreviewMaxDimension);
+  return EditSourcePair(
+    preview: EditSource(
+      width: previewImage.width,
+      height: previewImage.height,
+      rgbBytes: previewImage.getBytes(order: img.ChannelOrder.rgb),
+    ),
+    live: EditSource(
+      width: liveImage.width,
+      height: liveImage.height,
+      rgbBytes: liveImage.getBytes(order: img.ChannelOrder.rgb),
+    ),
+  );
+}
+
 /// Sibling to `edit_source.dart`'s `decodeEditSources`, for item 13's
 /// neural Enhance pipeline instead of a plain decode: full-resolution
 /// decode (cache permitting, skips straight to the cached result), then

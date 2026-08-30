@@ -279,32 +279,22 @@ class OnnxModel {
 
     try {
       if (useDirectMl) {
-        // Ask ORT to fail session creation outright if any graph node
-        // can't run on DML, rather than silently mixing in the CPU EP
-        // node-by-node — that "did it actually fully succeed on GPU"
-        // signal is exactly what decides whether _create falls back to
-        // a full CPU session below. Best-effort: some ORT builds/versions
-        // haven't fully enforced this for every op type, so a session
-        // that "succeeds" here is still only a strong signal, not an
-        // absolute guarantee, that zero CPU execution happened.
-        final key = 'session.disable_cpu_ep_fallback'.toNativeUtf8();
-        final value = '1'.toNativeUtf8();
-        try {
-          _check(
-            api.ref.AddSessionConfigEntry
-                .asFunction<
-                  Pointer<OrtStatus> Function(
-                    Pointer<OrtSessionOptions>,
-                    Pointer<Char>,
-                    Pointer<Char>,
-                  )
-                >()(options, key.cast(), value.cast()),
-          );
-        } finally {
-          calloc.free(key);
-          calloc.free(value);
-        }
-
+        // Deliberately NOT setting session.disable_cpu_ep_fallback here —
+        // tried that first (to get a hard "did GPU actually work" signal)
+        // and found via VERBOSE logging that it backfires: ORT's own
+        // GetCpuPreferredNodes optimization *routinely* force-places a
+        // handful of tiny, cheap ops (Gather/Unsqueeze/Sub/elementwise
+        // Mul, ~100 out of ~1865 nodes on NAFNet-SIDD) on CPU because
+        // dispatch overhead to any other EP would be slower for those
+        // specific ops — completely normal hybrid execution, not a real
+        // DirectML incompatibility. With disable_cpu_ep_fallback set,
+        // that benign heuristic placement made CreateSession fail
+        // outright, turning a session that would've run ~95% on the GPU
+        // into a full CPU fallback instead. Letting CPU fallback happen
+        // normally means a session that "succeeds" here is genuinely
+        // running on DirectML for the vast majority of its work; only a
+        // real failure (missing DirectML.dll, no DX12-capable GPU, a
+        // model this build truly can't place on DML at all) throws now.
         _check(
           _OrtLib.bindings.OrtSessionOptionsAppendExecutionProvider_DML(
             options,
