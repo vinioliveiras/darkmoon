@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:darkmoon/cloud_denoise/cloud_denoise_provider.dart';
 import 'package:darkmoon/l10n/app_localizations.dart';
 import 'package:darkmoon/render/ai_denoise.dart';
 import 'package:darkmoon/widgets/ai_denoise_dialog.dart';
@@ -64,15 +65,30 @@ void main() {
       expect(find.text('Medium'), findsOneWidget);
     });
 
-    testWidgets('opens on the Enhance tab when either toggle was already '
-        'active', (tester) async {
+    testWidgets('opens on the Enhance tab when denoise was already active', (
+      tester,
+    ) async {
       _useTallSurface(tester);
-      await _openDialog(tester, neuralUpscale: true);
+      await _openDialog(tester, neuralDenoise: true);
       await tester.pumpAndSettle();
 
       expect(find.text('Denoise'), findsOneWidget);
-      expect(find.text('Upscale 2x'), findsOneWidget);
     });
+
+    testWidgets(
+      'opens on the Enhance tab even for an old photo whose persisted '
+      'state still has upscale on (the Upscale toggle itself was removed '
+      'from the UI, but a pre-existing "on" value should still be honored '
+      'for tab preselection, not silently dropped)',
+      (tester) async {
+        _useTallSurface(tester);
+        await _openDialog(tester, neuralUpscale: true);
+        await tester.pumpAndSettle();
+
+        expect(find.text('Denoise'), findsOneWidget);
+        expect(find.text('Upscale 2x'), findsNothing);
+      },
+    );
 
     testWidgets(
       'picking a Classic level then applying resolves as '
@@ -119,8 +135,8 @@ void main() {
     );
 
     testWidgets(
-      'switching to Enhance and turning Upscale on resolves as '
-      'NeuralEnhanceChoice(upscale: true), even though the dialog opened '
+      'turning Denoise on from the Enhance tab resolves as '
+      'NeuralEnhanceChoice(denoise: true), even though the dialog opened '
       'on Classic',
       (tester) async {
         _useTallSurface(tester);
@@ -155,58 +171,7 @@ void main() {
 
         await tester.tap(find.text('Enhance'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Upscale 2x'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Apply'));
-        await tester.pumpAndSettle();
-
-        expect(result, isA<NeuralEnhanceChoice>());
-        final choice = result as NeuralEnhanceChoice;
-        expect(choice.denoise, isFalse);
-        expect(choice.upscale, isTrue);
-        expect(choice.active, isTrue);
-      },
-    );
-
-    testWidgets(
-      'checking both Denoise and Upscale resolves as '
-      'NeuralEnhanceChoice(denoise: true, upscale: true)',
-      (tester) async {
-        _useTallSurface(tester);
-        AiDenoiseChoice? result;
-        await tester.pumpWidget(
-          MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: Scaffold(
-              body: Builder(
-                builder: (context) => Center(
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      result = await showDialog<AiDenoiseChoice>(
-                        context: context,
-                        builder: (_) => const AiDenoiseDialog(
-                          initialLevel: null,
-                          neuralDenoise: false,
-                          neuralUpscale: false,
-                        ),
-                      );
-                    },
-                    child: const Text('open'),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-        await tester.tap(find.text('open'));
-        await tester.pumpAndSettle();
-
-        await tester.tap(find.text('Enhance'));
-        await tester.pumpAndSettle();
         await tester.tap(find.text('Denoise'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Upscale 2x'));
         await tester.pumpAndSettle();
         await tester.tap(find.text('Apply'));
         await tester.pumpAndSettle();
@@ -214,7 +179,7 @@ void main() {
         expect(result, isA<NeuralEnhanceChoice>());
         final choice = result as NeuralEnhanceChoice;
         expect(choice.denoise, isTrue);
-        expect(choice.upscale, isTrue);
+        expect(choice.active, isTrue);
       },
     );
 
@@ -261,6 +226,123 @@ void main() {
 
         expect(result, isA<ClassicDenoiseChoice>());
         expect((result as ClassicDenoiseChoice).level, isNull);
+      },
+    );
+
+    testWidgets(
+      'Cloud AI tab shows the provider dropdown defaulted to Off, and no '
+      'token field until a provider is picked',
+      (tester) async {
+        _useTallSurface(tester);
+        await _openDialog(tester);
+
+        await tester.tap(find.text('Cloud AI'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Off'), findsOneWidget);
+        expect(find.text('API key'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'picking Topaz on the Cloud AI tab shows the token field and the '
+      'always-on disclosure, but not the generative-risk warning (Topaz '
+      'is the one non-generative provider)',
+      (tester) async {
+        _useTallSurface(tester);
+        await _openDialog(tester);
+
+        await tester.tap(find.text('Cloud AI'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Off'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Topaz Labs (Denoise)'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('API key'), findsOneWidget);
+        expect(
+          find.textContaining('Stored only on this device'),
+          findsOneWidget,
+        );
+        expect(
+          find.textContaining('regenerates the image from a prompt'),
+          findsNothing,
+        );
+      },
+    );
+
+    testWidgets(
+      'picking a generative provider (OpenAI) shows the generative-risk '
+      'warning',
+      (tester) async {
+        _useTallSurface(tester);
+        await _openDialog(tester);
+
+        await tester.tap(find.text('Cloud AI'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Off'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('OpenAI (gpt-image-1)'));
+        await tester.pumpAndSettle();
+
+        expect(
+          find.textContaining('regenerates the image from a prompt'),
+          findsOneWidget,
+        );
+      },
+    );
+
+    testWidgets(
+      'picking Topaz, entering an API key, and applying resolves as '
+      'CloudDenoiseChoice — and switching to Cloud AI clears any Classic '
+      'level (all three tabs are mutually exclusive)',
+      (tester) async {
+        _useTallSurface(tester);
+        AiDenoiseChoice? result;
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => Center(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      result = await showDialog<AiDenoiseChoice>(
+                        context: context,
+                        builder: (_) => const AiDenoiseDialog(
+                          initialLevel: AiDenoiseLevel.medium,
+                          neuralDenoise: false,
+                          neuralUpscale: false,
+                        ),
+                      );
+                    },
+                    child: const Text('open'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Cloud AI'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Off'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Topaz Labs (Denoise)'));
+        await tester.pumpAndSettle();
+        await tester.enterText(find.byType(TextField), 'sk-test-token');
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Apply'));
+        await tester.pumpAndSettle();
+
+        expect(result, isA<CloudDenoiseChoice>());
+        final choice = result as CloudDenoiseChoice;
+        expect(choice.provider, CloudDenoiseProviderKind.topaz);
+        expect(choice.apiKey, 'sk-test-token');
+        expect(choice.active, isTrue);
       },
     );
 

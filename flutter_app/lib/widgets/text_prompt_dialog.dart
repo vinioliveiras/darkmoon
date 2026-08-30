@@ -17,7 +17,7 @@ Future<String?> showTextPromptDialog(
   final result = await showAnimatedDialog<String>(
     context: context,
     builder: (context) => AlertDialog(
-      backgroundColor: DarkmoonColors.surfaceRaised,
+      backgroundColor: DarkmoonColors.dialogBackground,
       title: Text(title),
       content: TextField(
         controller: controller,

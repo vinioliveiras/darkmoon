@@ -75,7 +75,7 @@ class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      backgroundColor: DarkmoonColors.surfaceRaised,
+      backgroundColor: DarkmoonColors.dialogBackground,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: DarkmoonColors.border),

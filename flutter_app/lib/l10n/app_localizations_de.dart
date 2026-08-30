@@ -259,6 +259,66 @@ class AppLocalizationsDe extends AppLocalizations {
   String get aiDenoiseTabEnhance => 'Enhance';
 
   @override
+  String get aiDenoiseTabCloud => 'Cloud-KI';
+
+  @override
+  String get aiDenoiseCloudMessage =>
+      'Sendet dieses Foto an einen Cloud-KI-Anbieter, bei dem du ein eigenes Konto und einen API-Schlüssel hast. Kostet echtes Geld pro Foto und lädt das Foto zu einem Drittanbieter hoch — der Enhance-Tab ist kostenlos und läuft nur auf deinem Gerät.';
+
+  @override
+  String get aiDenoiseCloudProviderLabel => 'Anbieter';
+
+  @override
+  String get aiDenoiseCloudProviderOff => 'Aus';
+
+  @override
+  String get aiDenoiseCloudProviderTopaz => 'Topaz Labs (Denoise)';
+
+  @override
+  String get aiDenoiseCloudProviderOpenAi => 'OpenAI (gpt-image-1)';
+
+  @override
+  String get aiDenoiseCloudProviderGemini => 'Google Gemini';
+
+  @override
+  String get aiDenoiseCloudTokenLabel => 'API-Schlüssel';
+
+  @override
+  String get aiDenoiseCloudTokenHint => 'API-Schlüssel einfügen';
+
+  @override
+  String get aiDenoiseCloudDisclosure =>
+      'Wird nur auf diesem Gerät gespeichert (Windows-Anmeldeinformationsverwaltung) und nur an den gewählten Anbieter gesendet. Jede Anwendung lädt das Foto in voller Auflösung hoch und wird über dein Anbieterkonto abgerechnet — Ergebnisse werden zwischengespeichert, damit erneutes Öffnen oder Exportieren desselben Fotos keinen erneuten Aufruf auslöst.';
+
+  @override
+  String get aiDenoiseCloudGenerativeWarning =>
+      'Dieser Anbieter erzeugt das Bild anhand eines Prompts neu, statt ein dediziertes Entrauschungsmodell zu verwenden — feine Details (Gesichter, Text, Textur) können sich dabei verändern, nicht nur das Rauschen wird entfernt.';
+
+  @override
+  String aiDenoiseCloudFailedMessage(String error) {
+    return 'Cloud-KI-Entrauschung fehlgeschlagen: $error';
+  }
+
+  @override
+  String get aiDenoiseCloudFailedStatus => 'Cloud-Entrauschung fehlgeschlagen';
+
+  @override
+  String get aiDenoiseCloudStartingMessage =>
+      'Cloud-Entrauschung wird gestartet…';
+
+  @override
+  String get aiDenoiseCloudStageUploading => 'Foto wird hochgeladen…';
+
+  @override
+  String get aiDenoiseCloudStageProcessing => 'Wird verarbeitet…';
+
+  @override
+  String get aiDenoiseCloudStageDownloading => 'Ergebnis wird heruntergeladen…';
+
+  @override
+  String get aiDenoiseCloudStageDecoding => 'Foto wird dekodiert…';
+
+  @override
   String get aiDenoiseEnhanceMessage =>
       'Entfernt Rauschen und Filmkorn und verdoppelt die Auflösung mit einem neuronalen Netz — näher an dem, wie die echten Details vor Rauschen und Kompression aussahen. Läuft spürbar langsamer als Klassisch, besonders ohne kompatible GPU.';
 

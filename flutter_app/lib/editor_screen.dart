@@ -19,14 +19,19 @@ import 'catalog/photo_preset_store.dart';
 import 'catalog/preview_cache_dir.dart';
 import 'catalog/ai_enhance_cache.dart';
 import 'catalog/ai_enhance_cache_dir.dart';
+import 'catalog/cloud_denoise_cache.dart';
+import 'catalog/cloud_denoise_cache_dir.dart';
 import 'catalog/thumbnail_cache.dart';
 import 'catalog/thumbnail_cache_dir.dart';
+import 'cloud_denoise/cloud_denoise_provider.dart';
+import 'cloud_denoise/cloud_denoise_token_store.dart';
 import 'diagnostics/dev_log.dart';
 import 'export/export_job.dart';
 import 'l10n/app_localizations.dart';
 import 'native/common_image_thumbnail.dart';
 import 'native/edit_source.dart';
 import 'native/edit_source_ai_enhance.dart';
+import 'native/edit_source_cloud_denoise.dart';
 import 'native/libraw.dart' show RawMetadata, extractRawMetadata;
 import 'native/thumbnail_loader.dart';
 import 'presets/preset.dart';
@@ -519,6 +524,11 @@ class _EditorScreenState extends State<EditorScreen> {
   /// underneath it — same role as [_exportCancellation] for exports.
   AiEnhanceCancellationToken? _aiEnhanceCancellation;
 
+  /// Same role as [_aiEnhanceCancellation], for [_runCloudDenoise] — a
+  /// cloud provider call can hang on the network for a while, and Cancel
+  /// should actually stop waiting on it.
+  CloudDenoiseCancellationToken? _cloudDenoiseCancellation;
+
   /// Every loading operation now surfaces through the compact docked
   /// [_HiddenLoadingIndicator] rather than the dark modal [_LoadingOverlay]
   /// — so this is effectively always true. The modal and its "Hide" path
@@ -711,6 +721,18 @@ class _EditorScreenState extends State<EditorScreen> {
   /// pipeline hasn't reported a tile yet (cache lookup / RAW decode still
   /// in progress) — the overlay shows an indeterminate message then.
   AiEnhanceProgress? _aiEnhanceProgress;
+
+  /// Same role as [_isRunningNeuralEnhance], for [_runCloudDenoise] — a
+  /// cloud provider call is its own slow step (network upload + provider
+  /// processing + download), distinct from [_isApplyingAiDenoise].
+  bool _isRunningCloudDenoise = false;
+
+  /// Coarse stage name ('uploading'/'processing'/'downloading', or a
+  /// provider-specific one — see each `CloudDenoiseProvider`'s own
+  /// `onStage` calls) for the loading overlay while [_isRunningCloudDenoise]
+  /// — there's no per-tile progress the way the ONNX pipeline has, just
+  /// this one linear HTTP flow.
+  String? _cloudDenoiseStage;
 
   /// Real progress for the loading overlay while a folder's thumbnails are
   /// being decoded — [_thumbnailsTotal] is 0 until the file list is known.
@@ -1320,7 +1342,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final confirmed = await showAnimatedDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: DarkmoonColors.surfaceRaised,
+        backgroundColor: DarkmoonColors.dialogBackground,
         title: Text(l10n.confirmClearTitle),
         content: Text(l10n.presetDeleteConfirmMessage(preset.name)),
         actions: [
@@ -1358,7 +1380,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final confirmed = await showAnimatedDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: DarkmoonColors.surfaceRaised,
+        backgroundColor: DarkmoonColors.dialogBackground,
         title: Text(l10n.confirmClearTitle),
         content: Text(l10n.presetDeleteManyConfirmMessage(presets.length)),
         actions: [
@@ -1900,7 +1922,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final confirmed = await showAnimatedDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: DarkmoonColors.surfaceRaised,
+        backgroundColor: DarkmoonColors.dialogBackground,
         title: Text(l10n.filmstripResetEditsConfirmTitle),
         content: Text(l10n.filmstripResetEditsConfirmMessage(file.name)),
         actions: [
@@ -2100,7 +2122,7 @@ class _EditorScreenState extends State<EditorScreen> {
     final confirmed = await showAnimatedDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: DarkmoonColors.surfaceRaised,
+        backgroundColor: DarkmoonColors.dialogBackground,
         title: Text(l10n.filmstripDeleteConfirmTitle),
         content: Text(l10n.filmstripDeleteConfirmMessage(file.name)),
         actions: [
@@ -2300,6 +2322,7 @@ class _EditorScreenState extends State<EditorScreen> {
     _completeVisibleThumbnailsReady();
     _exportCancellation?.cancel();
     _aiEnhanceCancellation?.cancel();
+    _cloudDenoiseCancellation?.cancel();
     setState(() {
       _loading = false;
       _isDecodingPhoto = false;
@@ -2307,6 +2330,8 @@ class _EditorScreenState extends State<EditorScreen> {
       _isApplyingAiDenoise = false;
       _isRunningNeuralEnhance = false;
       _aiEnhanceProgress = null;
+      _isRunningCloudDenoise = false;
+      _cloudDenoiseStage = null;
       _thumbnailsLoaded = 0;
       _thumbnailsTotal = 0;
     });
@@ -2563,14 +2588,46 @@ class _EditorScreenState extends State<EditorScreen> {
         }
       }
 
+      // Same reasoning as the AI Enhance cache-first check above, for the
+      // Cloud AI pipeline — otherwise reselecting/reopening a photo would
+      // either show un-denoised pixels while _paramValues still claims a
+      // provider is active, or (worse, since this one costs money) fall
+      // through to a fresh paid API call for a photo it was already run
+      // on. Mutually exclusive with wantAnyEnhance (see AiDenoiseDialog),
+      // so only one of the two cache lookups ever actually runs.
+      final wantCloudProvider = _cloudProviderFromIndex(
+        (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
+      );
+      if (wantCloudProvider != null) {
+        final cacheDir = await resolveCloudDenoiseCacheDir();
+        if (mounted) {
+          final cachedPng = await lookupCloudDenoiseCache(
+            cacheDir,
+            path,
+            wantCloudProvider,
+          );
+          if (cachedPng != null) {
+            sources = await compute(
+              decodeCachedCloudDenoiseSources,
+              DecodeCachedCloudDenoiseArgs(
+                cachedPng,
+                _settings.previewResolution,
+              ),
+            );
+            fromCache = sources != null;
+          }
+        }
+      }
+      final wantAnyPipeline = wantAnyEnhance || wantCloudProvider != null;
+
       // Cache lookup/decode happens here in the main isolate/from a
       // compute() call (same split as ThumbnailCacheManager's own usage,
       // see _loadThumbnails) — only a genuine cache miss falls through to
       // the much more expensive RAW decode isolate below. Skipped
-      // entirely when Enhance was wanted and already resolved above —
-      // this plain cache holds the *pre*-enhance render for this path,
-      // never the enhanced one.
-      if (sources == null && !wantAnyEnhance) {
+      // entirely when Enhance/Cloud was wanted and already resolved
+      // above — this plain cache holds the *pre*-pipeline render for this
+      // path, never the processed one.
+      if (sources == null && !wantAnyPipeline) {
         final cachedJpeg = await _previewCache?.lookup(path);
         if (cachedJpeg != null) {
           sources = await compute(decodeEditSourcePairFromCachedJpeg, cachedJpeg);
@@ -2583,23 +2640,31 @@ class _EditorScreenState extends State<EditorScreen> {
       // decodeEditSourcesWithProgress's dedicated Isolate is still what we
       // want over decodeEditSources' compute() for a genuine miss: see its
       // doc comment.
+      //
+      // Deliberately NOT re-running the Cloud AI call here on a cache miss
+      // (unlike the on-device Enhance pipeline, which does fall back to a
+      // fresh RAW decode + local re-run): re-visiting a photo should never
+      // silently trigger another paid API call — only the dialog's Apply
+      // button does that, on purpose.
       if (sources == null) {
         sources = await decodeEditSourcesWithProgress(
           path,
           (_) {},
           previewMaxDimension: _settings.previewResolution,
         );
-        if (wantAnyEnhance && sources != null && mounted) {
-          // Enhance was wanted but its cache missed (evicted/cleared) and
-          // we just fell back to a plain decode — keep _paramValues
-          // honest about what's actually showing instead of leaving it
-          // claiming Enhance is active over un-enhanced pixels.
+        if (wantAnyPipeline && sources != null && mounted) {
+          // Enhance/Cloud was wanted but its cache missed (evicted/
+          // cleared) and we just fell back to a plain decode — keep
+          // _paramValues honest about what's actually showing instead of
+          // leaving it claiming a pipeline is active over untouched
+          // pixels.
           setState(() {
             _paramValues = {
               ..._paramValues,
               _neuralDenoiseKey: 0.0,
               _neuralUpscaleKey: 0.0,
               _neuralRawDenoiseKey: 0.0,
+              _cloudDenoiseProviderKey: 0.0,
             };
           });
         }
@@ -3163,6 +3228,29 @@ class _EditorScreenState extends State<EditorScreen> {
     return compute(decodeAiEnhanceCacheEntry, cachedPng);
   }
 
+  /// Export's cloud-denoise equivalent of [_loadEnhancedNativeSource] —
+  /// deliberately cache-only, unlike that one: [_loadEnhancedNativeSource]
+  /// re-runs the on-device pipeline on a cache miss because that's free;
+  /// silently firing a second paid API call just because export happened
+  /// to run after the disk cache was cleared is not something this app
+  /// should ever do on its own. A miss here returns null, so the caller
+  /// falls back to [_loadNativeSource] (the plain, un-denoised source) —
+  /// same "export something correct rather than something surprising and
+  /// expensive" choice as the reselect cache-miss path in
+  /// `_loadEditSourceAndRender`.
+  Future<EditSource?> _loadCloudDenoisedNativeSource(
+    String path,
+    CloudDenoiseProviderKind provider,
+  ) async {
+    final cacheDir = await resolveCloudDenoiseCacheDir();
+    if (!mounted) return null;
+    final cachedPng = await lookupCloudDenoiseCache(cacheDir, path, provider);
+    if (cachedPng == null) {
+      return null;
+    }
+    return compute(decodeCloudDenoiseCacheEntry, cachedPng);
+  }
+
   /// Decodes [path]'s native source and re-renders the settled view
   /// against it — from then on [_fullQualityReadyFor] is true for this
   /// photo and settled renders stay at full quality until it changes.
@@ -3325,10 +3413,26 @@ class _EditorScreenState extends State<EditorScreen> {
   /// slider.
   static const _neuralDenoiseAmountKey = 'AiNeuralDenoiseAmount';
 
+  /// See `AiDenoiseDialog`'s `CloudDenoiseChoice.provider` — 0=off,
+  /// otherwise `CloudDenoiseProviderKind.values.indexOf(provider) + 1`.
+  /// Only the provider is persisted here; the API key itself is never
+  /// stored in `_paramValues`/the catalog (see `CloudDenoiseTokenStore`).
+  static const _cloudDenoiseProviderKey = 'AiCloudDenoiseProvider';
+
+  int _cloudProviderIndex(CloudDenoiseProviderKind? provider) =>
+      provider == null
+      ? 0
+      : CloudDenoiseProviderKind.values.indexOf(provider) + 1;
+
+  CloudDenoiseProviderKind? _cloudProviderFromIndex(int index) =>
+      index <= 0 || index > CloudDenoiseProviderKind.values.length
+      ? null
+      : CloudDenoiseProviderKind.values[index - 1];
+
   /// Opens the AI Denoise dialog (Classic level picker / Enhance neural
-  /// toggle — see `AiDenoiseDialog`) and, if the user confirms a choice,
-  /// applies it — a deliberate one-shot action (with its own loading
-  /// message) rather than a slider the user drags, matching the
+  /// toggle / Cloud AI — see `AiDenoiseDialog`) and, if the user confirms a
+  /// choice, applies it — a deliberate one-shot action (with its own
+  /// loading message) rather than a slider the user drags, matching the
   /// Lightroom/Photomator "pick a strength, apply" pattern.
   Future<void> _openAiDenoiseDialog() async {
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
@@ -3341,7 +3445,11 @@ class _EditorScreenState extends State<EditorScreen> {
     final neuralRawDenoise = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
     final neuralDenoiseAmount =
         (_paramValues[_neuralDenoiseAmountKey] ?? 100.0).round();
+    final cloudProvider = _cloudProviderFromIndex(
+      (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
+    );
     final wasNeuralActive = neuralDenoise || neuralUpscale || neuralRawDenoise;
+    final wasAnyPipelineActive = wasNeuralActive || cloudProvider != null;
     final rawDenoiseAvailable =
         isRawFile(selected.path) &&
         (_metadata[selected.path]?.isBayerCfa ?? false);
@@ -3354,6 +3462,7 @@ class _EditorScreenState extends State<EditorScreen> {
         neuralDenoiseAmount: neuralDenoiseAmount,
         neuralRawDenoise: neuralRawDenoise,
         rawDenoiseAvailable: rawDenoiseAvailable,
+        cloudProvider: cloudProvider,
       ),
     );
     if (choice == null || !mounted) {
@@ -3371,12 +3480,13 @@ class _EditorScreenState extends State<EditorScreen> {
             _neuralDenoiseKey: 0.0,
             _neuralUpscaleKey: 0.0,
             _neuralRawDenoiseKey: 0.0,
+            _cloudDenoiseProviderKey: 0.0,
           };
         });
         // Switching away from a previously-enhanced source: _editSources
-        // currently holds the neural-pipeline buffer, which the classical
-        // per-render stage was never meant to run against.
-        if (wasNeuralActive) {
+        // currently holds the neural-pipeline/cloud buffer, which the
+        // classical per-render stage was never meant to run against.
+        if (wasAnyPipelineActive) {
           await _revertToNormalEditSource(selected.path);
           if (!mounted) return;
         }
@@ -3395,6 +3505,7 @@ class _EditorScreenState extends State<EditorScreen> {
             _neuralUpscaleKey: wantUpscale ? 1.0 : 0.0,
             _neuralDenoiseAmountKey: wantDenoiseAmount.toDouble(),
             _neuralRawDenoiseKey: wantRawDenoise ? 1.0 : 0.0,
+            _cloudDenoiseProviderKey: 0.0,
             'AiDenoiseLevel': 0.0,
           };
         });
@@ -3421,6 +3532,44 @@ class _EditorScreenState extends State<EditorScreen> {
         });
         await _revertToNormalEditSource(selected.path);
         if (!mounted) return;
+        await _applyAiDenoiseChoiceAndRender(selected.path);
+      case CloudDenoiseChoice(
+            provider: final wantProvider,
+            apiKey: final wantApiKey,
+          )
+          when wantProvider != null && wantApiKey.isNotEmpty:
+        await CloudDenoiseTokenStore.write(wantProvider, wantApiKey);
+        if (!mounted) return;
+        setState(() {
+          _paramValues = {
+            ..._paramValues,
+            _neuralDenoiseKey: 0.0,
+            _neuralUpscaleKey: 0.0,
+            _neuralRawDenoiseKey: 0.0,
+            _cloudDenoiseProviderKey: _cloudProviderIndex(
+              wantProvider,
+            ).toDouble(),
+            'AiDenoiseLevel': 0.0,
+          };
+        });
+        final ok = await _runCloudDenoise(
+          selected.path,
+          provider: wantProvider,
+          apiKey: wantApiKey,
+        );
+        if (!mounted || !ok) {
+          return;
+        }
+        await _applyAiDenoiseChoiceAndRender(selected.path);
+      case CloudDenoiseChoice():
+        // No provider picked (or an empty key) — equivalent to off.
+        setState(() {
+          _paramValues = {..._paramValues, _cloudDenoiseProviderKey: 0.0};
+        });
+        if (wasAnyPipelineActive) {
+          await _revertToNormalEditSource(selected.path);
+          if (!mounted) return;
+        }
         await _applyAiDenoiseChoiceAndRender(selected.path);
     }
   }
@@ -3543,6 +3692,78 @@ class _EditorScreenState extends State<EditorScreen> {
       _aiEnhanceProgress = null;
     });
     return true;
+  }
+
+  /// Runs the Cloud AI denoise pipeline (`native/edit_source_cloud_denoise
+  /// .dart`, disk-cached — see `cloud_denoise_cache.dart` for why: this
+  /// costs real money per call) for [path] and swaps the result into
+  /// `_editSources`. Returns false (having already reverted
+  /// `_cloudDenoiseProviderKey` and shown the real failure reason — a bad
+  /// key, a provider error, a network failure — since unlike the local
+  /// pipeline these are worth surfacing individually) on failure.
+  ///
+  /// Owns [_isRunningCloudDenoise]/[_cloudDenoiseStage] end-to-end, same
+  /// role [_isRunningNeuralEnhance]/[_aiEnhanceProgress] play for the
+  /// on-device pipeline.
+  Future<bool> _runCloudDenoise(
+    String path, {
+    required CloudDenoiseProviderKind provider,
+    required String apiKey,
+  }) async {
+    setState(() {
+      _isRunningCloudDenoise = true;
+      _cloudDenoiseStage = null;
+    });
+    final cancellation = CloudDenoiseCancellationToken();
+    _cloudDenoiseCancellation = cancellation;
+    final cacheDir = await resolveCloudDenoiseCacheDir();
+    if (!mounted) return false;
+
+    final result = await decodeEditSourcesWithCloudDenoise(
+      path,
+      cacheDir,
+      (stage) {
+        if (mounted) setState(() => _cloudDenoiseStage = stage);
+      },
+      provider: provider,
+      apiKey: apiKey,
+      previewMaxDimension: _settings.previewResolution,
+      cancellationToken: cancellation,
+    );
+    _cloudDenoiseCancellation = null;
+    if (!mounted) {
+      return false;
+    }
+
+    switch (result) {
+      case CloudDenoiseSuccess(sources: final sources):
+        setState(() {
+          _editSources[path] = sources;
+          _isRunningCloudDenoise = false;
+          _cloudDenoiseStage = null;
+        });
+        return true;
+      case CloudDenoiseCancelled():
+        // A deliberate Cancel already reset the overlay in _cancelLoading.
+        setState(() {
+          _paramValues = {..._paramValues, _cloudDenoiseProviderKey: 0.0};
+          _isRunningCloudDenoise = false;
+          _cloudDenoiseStage = null;
+        });
+        return false;
+      case CloudDenoiseFailed(message: final message):
+        setState(() {
+          _paramValues = {..._paramValues, _cloudDenoiseProviderKey: 0.0};
+          _isRunningCloudDenoise = false;
+          _cloudDenoiseStage = null;
+        });
+        DevLog.log(message, tag: 'cloud-denoise');
+        _notify(
+          detail: AppLocalizations.of(context)!.aiDenoiseCloudFailedMessage(message),
+          status: AppLocalizations.of(context)!.aiDenoiseCloudFailedStatus,
+        );
+        return false;
+    }
   }
 
   /// The loading-overlay/render/history/save sequence shared by every
@@ -4446,6 +4667,9 @@ class _EditorScreenState extends State<EditorScreen> {
     final wantRawDenoise = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
     final wantDenoiseAmount =
         (_paramValues[_neuralDenoiseAmountKey] ?? 100.0).round();
+    final wantCloudProvider = _cloudProviderFromIndex(
+      (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
+    );
     EditSource? nativeForExport;
     final srcSw = Stopwatch()..start();
     try {
@@ -4456,6 +4680,11 @@ class _EditorScreenState extends State<EditorScreen> {
           upscale: wantUpscale,
           denoiseAmount: wantDenoiseAmount,
           rawDenoise: wantRawDenoise,
+        );
+      } else if (wantCloudProvider != null) {
+        nativeForExport = await _loadCloudDenoisedNativeSource(
+          selected.path,
+          wantCloudProvider,
         );
       }
       nativeForExport ??= await _loadNativeSource(
@@ -4602,6 +4831,16 @@ class _EditorScreenState extends State<EditorScreen> {
             ? null
             : progress.tileIndex / progress.totalTiles,
       );
+    }
+    if (_isRunningCloudDenoise) {
+      final stageMessage = switch (_cloudDenoiseStage) {
+        'uploading' => l10n.aiDenoiseCloudStageUploading,
+        'processing' => l10n.aiDenoiseCloudStageProcessing,
+        'downloading' => l10n.aiDenoiseCloudStageDownloading,
+        'decoding' => l10n.aiDenoiseCloudStageDecoding,
+        _ => l10n.aiDenoiseCloudStartingMessage,
+      };
+      return _LoadingInfo(message: stageMessage);
     }
     // Deliberately NOT handled here: _isDecodingPhoto (opening a single
     // photo) gets a small spinner centered over just the image area
@@ -4931,7 +5170,8 @@ class _EditorScreenState extends State<EditorScreen> {
                               null ||
                           (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0 ||
                           (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0 ||
-                          (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0,
+                          (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0 ||
+                          (_paramValues[_cloudDenoiseProviderKey] ?? 0.0) > 0,
                       onOpenAiDenoise: selected == null
                           ? null
                           : _openAiDenoiseDialog,

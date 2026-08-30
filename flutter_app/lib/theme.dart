@@ -8,6 +8,17 @@ class DarkmoonColors {
   static const canvas = Color(0xFF141416);
   static const filmstrip = Color(0xFF19191B);
   static const surfaceRaised = Color(0xFF2C2C30);
+
+  /// Standardized background for every modal window (Settings, About,
+  /// Export, AI Denoise, the various confirm dialogs, …) — a very dark,
+  /// near-black gray, deliberately darker than [surfaceRaised] so buttons/
+  /// controls sitting on top of a dialog (still [surfaceRaised]) read as
+  /// visibly raised above it instead of blending in. Same hex as [canvas]
+  /// (the RAW viewport's own near-black ground) — kept as its own named
+  /// token rather than reusing `canvas` directly so "dialogs" and "the
+  /// image viewport" stay independently adjustable even though they
+  /// happen to match today.
+  static const dialogBackground = Color(0xFF141416);
   static const border = Color(0xFF38383D);
   static const divider = Color(0xFF303034);
   static const textPrimary = Color(0xFFE6E6E8);

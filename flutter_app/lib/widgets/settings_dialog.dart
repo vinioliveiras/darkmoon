@@ -70,7 +70,7 @@ class _SettingsDialogState extends State<SettingsDialog>
     final confirmed = await showAnimatedDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: DarkmoonColors.surfaceRaised,
+        backgroundColor: DarkmoonColors.dialogBackground,
         title: Text(l10n.confirmClearTitle),
         content: Text(message),
         actions: [
@@ -105,7 +105,7 @@ class _SettingsDialogState extends State<SettingsDialog>
     final l10n = AppLocalizations.of(context)!;
 
     return AlertDialog(
-      backgroundColor: DarkmoonColors.surfaceRaised,
+      backgroundColor: DarkmoonColors.dialogBackground,
       title: DialogTitleRow(
         title: l10n.settingsDialogTitle,
         closeTooltip: l10n.closeButton,

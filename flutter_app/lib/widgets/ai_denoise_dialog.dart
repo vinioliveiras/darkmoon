@@ -3,10 +3,13 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
+import '../cloud_denoise/cloud_denoise_provider.dart';
+import '../cloud_denoise/cloud_denoise_token_store.dart';
 import '../l10n/app_localizations.dart';
 import '../native/onnx_gpu_probe.dart';
 import '../render/ai_denoise.dart';
 import '../theme.dart';
+import 'styled_dropdown.dart';
 
 /// Sparingly used, not part of the app's usual monochrome palette — a
 /// genuine caution color reads faster than another gray box for the one
@@ -91,14 +94,38 @@ class NeuralEnhanceChoice extends AiDenoiseChoice {
   bool get active => denoise || upscale || rawDenoise;
 }
 
+/// A paid, third-party cloud AI denoise call (the dialog's "Cloud AI" tab)
+/// — a fundamentally different category from [NeuralEnhanceChoice]: that
+/// pipeline runs on-device, for free, deterministically; this one uploads
+/// the photo to a provider the user has their own API key/account with and
+/// costs real money per call (see `cloud_denoise_cache.dart` for why the
+/// result is cached aggressively). [provider] null (or [apiKey] empty)
+/// means "off" — checked via [active], same pattern as
+/// `NeuralEnhanceChoice`.
+class CloudDenoiseChoice extends AiDenoiseChoice {
+  const CloudDenoiseChoice({required this.provider, required this.apiKey});
+
+  final CloudDenoiseProviderKind? provider;
+
+  /// Transient — never persisted in `_paramValues`/the catalog file. The
+  /// dialog reads this back out of `CloudDenoiseTokenStore` (secure
+  /// storage) next time it opens; `editor_screen.dart` only remembers
+  /// *which provider* was used, not the key itself.
+  final String apiKey;
+
+  bool get active => provider != null && apiKey.trim().isNotEmpty;
+}
+
 /// AI Denoise level/mode picker, opened from the toolbar's AI Denoise
-/// button — two tabs: **Classic** (the original single-choice strength
-/// picker: each level already tuned to a good noise/detail trade-off, so
-/// there's nothing else to set) and **Enhance** (item 13's neural
-/// pipeline, a fundamentally different kind of operation — it can change
-/// the photo's resolution and has independent Denoise/Upscale toggles
-/// instead of strength levels, hence its own tab rather than folded into
-/// Classic's four chips). Resolves with an [AiDenoiseChoice], or with a
+/// button — three tabs, all mutually exclusive: **Classic** (the original
+/// single-choice strength picker: each level already tuned to a good
+/// noise/detail trade-off, so there's nothing else to set), **Enhance**
+/// (item 13's on-device neural pipeline, a fundamentally different kind of
+/// operation — it can change the photo's resolution and has independent
+/// Denoise/Upscale toggles instead of strength levels, hence its own tab
+/// rather than folded into Classic's four chips), and **Cloud AI** (a
+/// paid, third-party call the user brings their own API key to — see
+/// [CloudDenoiseChoice]). Resolves with an [AiDenoiseChoice], or with a
 /// plain `null` if the dialog was dismissed without a choice.
 class AiDenoiseDialog extends StatefulWidget {
   const AiDenoiseDialog({
@@ -109,6 +136,7 @@ class AiDenoiseDialog extends StatefulWidget {
     this.neuralDenoiseAmount = 100,
     this.neuralRawDenoise = false,
     this.rawDenoiseAvailable = false,
+    this.cloudProvider,
   });
 
   /// The classical level already applied to the current photo, if any —
@@ -134,6 +162,13 @@ class AiDenoiseDialog extends StatefulWidget {
   /// non-RAW format at all (see `libraw.dart`'s `RawMetadata.isBayerCfa`).
   final bool rawDenoiseAvailable;
 
+  /// The cloud provider already applied to the current photo, if any —
+  /// same preselection reasoning as [initialLevel]. The API key itself is
+  /// never passed in here (see [CloudDenoiseChoice.apiKey]'s doc) — the
+  /// dialog reads it back from secure storage on its own once a provider
+  /// is selected.
+  final CloudDenoiseProviderKind? cloudProvider;
+
   @override
   State<AiDenoiseDialog> createState() => _AiDenoiseDialogState();
 }
@@ -145,11 +180,15 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
   late bool _neuralUpscale = widget.neuralUpscale;
   late bool _neuralRawDenoise = widget.neuralRawDenoise;
   late int _denoiseAmount = widget.neuralDenoiseAmount;
+  late CloudDenoiseProviderKind? _cloudProvider = widget.cloudProvider;
+  final _tokenController = TextEditingController();
+  bool _obscureToken = true;
   late final TabController _tabController = TabController(
-    length: 2,
+    length: 3,
     vsync: this,
-    initialIndex:
-        (widget.neuralDenoise || widget.neuralUpscale || widget.neuralRawDenoise)
+    initialIndex: widget.cloudProvider != null
+        ? 2
+        : (widget.neuralDenoise || widget.neuralUpscale || widget.neuralRawDenoise)
         ? 1
         : 0,
   );
@@ -167,6 +206,9 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
     // nothing else rebuilds this widget when a tab is tapped.
     _tabController.addListener(() => setState(() {}));
     unawaited(_probeGpu());
+    if (widget.cloudProvider != null) {
+      unawaited(_loadStoredToken(widget.cloudProvider!));
+    }
   }
 
   /// Cached after the first probe (see `probeAiEnhanceGpuSupport`'s own
@@ -179,24 +221,36 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
     }
   }
 
+  /// Prefills the token field from secure storage — never from
+  /// `_paramValues`/the catalog (see `CloudDenoiseChoice.apiKey`'s doc),
+  /// so switching providers in the dropdown re-reads whatever was last
+  /// saved for *that* provider, if anything.
+  Future<void> _loadStoredToken(CloudDenoiseProviderKind provider) async {
+    final token = await CloudDenoiseTokenStore.read(provider);
+    if (mounted && _cloudProvider == provider) {
+      _tokenController.text = token ?? '';
+    }
+  }
+
   @override
   void dispose() {
     _tabController.dispose();
+    _tokenController.dispose();
     super.dispose();
   }
 
-  /// The two tabs are mutually exclusive — picking a Classic level turns
-  /// both Enhance toggles back off, and turning either Enhance toggle on
-  /// resets the Classic level to Off, so whichever tab the user isn't
-  /// looking at always agrees with what's about to actually be applied
-  /// (and the classic per-render denoise never stacks with the neural
-  /// pipeline on the same photo).
+  /// The three tabs are mutually exclusive — picking a Classic level turns
+  /// off both the Enhance toggles and the cloud provider, and vice versa
+  /// for the other two, so whichever tab the user isn't looking at always
+  /// agrees with what's about to actually be applied (no denoise pipeline
+  /// ever stacks with another on the same photo).
   void _pickClassic(AiDenoiseLevel? level) {
     setState(() {
       _level = level;
       _neuralDenoise = false;
       _neuralUpscale = false;
       _neuralRawDenoise = false;
+      _cloudProvider = null;
     });
   }
 
@@ -208,15 +262,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         // Mutually exclusive with raw denoise — running both would just
         // re-smooth pixels PMRID already cleaned.
         _neuralRawDenoise = false;
-      }
-    });
-  }
-
-  void _setNeuralUpscale(bool value) {
-    setState(() {
-      _neuralUpscale = value;
-      if (value) {
-        _level = null;
+        _cloudProvider = null;
       }
     });
   }
@@ -227,25 +273,48 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
       if (value) {
         _level = null;
         _neuralDenoise = false;
+        _cloudProvider = null;
       }
     });
   }
 
-  AiDenoiseChoice get _currentChoice =>
-      (_neuralDenoise || _neuralUpscale || _neuralRawDenoise)
-      ? NeuralEnhanceChoice(
-          denoise: _neuralDenoise,
-          upscale: _neuralUpscale,
-          denoiseAmount: _denoiseAmount,
-          rawDenoise: _neuralRawDenoise,
-        )
-      : ClassicDenoiseChoice(_level);
+  void _setCloudProvider(CloudDenoiseProviderKind? provider) {
+    setState(() {
+      _cloudProvider = provider;
+      _tokenController.text = '';
+      if (provider != null) {
+        _level = null;
+        _neuralDenoise = false;
+        _neuralUpscale = false;
+        _neuralRawDenoise = false;
+        unawaited(_loadStoredToken(provider));
+      }
+    });
+  }
+
+  AiDenoiseChoice get _currentChoice {
+    if (_cloudProvider != null) {
+      return CloudDenoiseChoice(
+        provider: _cloudProvider,
+        apiKey: _tokenController.text.trim(),
+      );
+    }
+    if (_neuralDenoise || _neuralUpscale || _neuralRawDenoise) {
+      return NeuralEnhanceChoice(
+        denoise: _neuralDenoise,
+        upscale: _neuralUpscale,
+        denoiseAmount: _denoiseAmount,
+        rawDenoise: _neuralRawDenoise,
+      );
+    }
+    return ClassicDenoiseChoice(_level);
+  }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      backgroundColor: DarkmoonColors.surfaceRaised,
+      backgroundColor: DarkmoonColors.dialogBackground,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: const BorderSide(color: DarkmoonColors.border),
@@ -256,13 +325,19 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
       ),
       content: SizedBox(
         width: 360,
-        // No fixed height: Classic's and Enhance's messages are very
-        // different lengths, and a hard-coded height either overflows the
-        // shorter tab into a scroll it doesn't need or clips the taller one.
-        // An IndexedStack (not TabBarView — that needs a bounded height
-        // for its PageView, which is exactly what we're avoiding) sizes
-        // itself to its biggest child, so the dialog naturally grows to fit
-        // whichever tab is tallest and both tabs render at that same size.
+        // No fixed height: Classic's/Enhance's/Cloud AI's content are very
+        // different lengths (Cloud AI, once a generative provider's
+        // warning banner joins the always-on disclosure, is the tallest —
+        // tall enough to overflow a real dialog on a modest window height,
+        // confirmed by a widget test), and a hard-coded height either
+        // overflows the shorter tabs into a scroll they don't need or
+        // clips the taller one. An IndexedStack (not TabBarView — that
+        // needs a bounded height for its PageView, which is exactly what
+        // we're avoiding) sizes itself to its biggest child; wrapping it in
+        // Flexible+SingleChildScrollView lets the dialog grow to fit
+        // whichever tab is tallest UP TO whatever height AlertDialog
+        // actually has available, scrolling internally instead of
+        // overflowing beyond that.
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -283,13 +358,22 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
               tabs: [
                 Tab(text: l10n.aiDenoiseTabClassic),
                 Tab(text: l10n.aiDenoiseTabEnhance),
+                Tab(text: l10n.aiDenoiseTabCloud),
               ],
             ),
             const SizedBox(height: 14),
-            IndexedStack(
-              index: _tabController.index,
-              alignment: Alignment.topLeft,
-              children: [_buildClassicTab(l10n), _buildEnhanceTab(l10n)],
+            Flexible(
+              child: SingleChildScrollView(
+                child: IndexedStack(
+                  index: _tabController.index,
+                  alignment: Alignment.topLeft,
+                  children: [
+                    _buildClassicTab(l10n),
+                    _buildEnhanceTab(l10n),
+                    _buildCloudTab(l10n),
+                  ],
+                ),
+              ),
             ),
           ],
         ),
@@ -328,6 +412,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
                       !_neuralDenoise &&
                       !_neuralUpscale &&
                       !_neuralRawDenoise &&
+                      _cloudProvider == null &&
                       _level == choice,
                   onTap: () => _pickClassic(choice),
                 ),
@@ -441,12 +526,13 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
           ),
         ],
         const SizedBox(height: 4),
-        _ToggleRow(
-          label: l10n.aiDenoiseEnhanceUpscaleLabel,
-          value: _neuralUpscale,
-          onChanged: _setNeuralUpscale,
-        ),
-        const SizedBox(height: 4),
+        // Upscale (Real-ESRGAN 2x) toggle removed for now — results
+        // weren't good enough and it saw little real use. The underlying
+        // pipeline (ai_enhance.dart/onnx_runtime.dart's upscaleModelSpec,
+        // the cache's upscale flag, editor_screen.dart's plumbing) is
+        // deliberately left in place, not ripped out — `_neuralUpscale`
+        // just can no longer be set true from here, so re-adding a toggle
+        // row like the one above is the only step needed to bring it back.
         // Runs on the sensor's own Bayer data before demosaic (see
         // NeuralEnhanceChoice.rawDenoise's doc) — only possible for a
         // standard Bayer RAW, so the toggle is shown disabled with an
@@ -470,6 +556,164 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
           ),
         ],
       ],
+    );
+  }
+
+  Widget _buildCloudTab(AppLocalizations l10n) {
+    final provider = _cloudProvider;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          l10n.aiDenoiseCloudMessage,
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 12),
+        StyledDropdown<CloudDenoiseProviderKind?>(
+          label: l10n.aiDenoiseCloudProviderLabel,
+          value: provider,
+          items: [
+            StyledDropdownItem(
+              value: null,
+              label: l10n.aiDenoiseCloudProviderOff,
+            ),
+            StyledDropdownItem(
+              value: CloudDenoiseProviderKind.topaz,
+              label: l10n.aiDenoiseCloudProviderTopaz,
+            ),
+            StyledDropdownItem(
+              value: CloudDenoiseProviderKind.openai,
+              label: l10n.aiDenoiseCloudProviderOpenAi,
+            ),
+            StyledDropdownItem(
+              value: CloudDenoiseProviderKind.gemini,
+              label: l10n.aiDenoiseCloudProviderGemini,
+            ),
+          ],
+          onChanged: _setCloudProvider,
+        ),
+        if (provider != null) ...[
+          const SizedBox(height: 10),
+          Text(
+            l10n.aiDenoiseCloudTokenLabel,
+            style: const TextStyle(
+              fontSize: 12,
+              color: DarkmoonColors.textSecondary,
+            ),
+          ),
+          const SizedBox(height: 4),
+          TextField(
+            controller: _tokenController,
+            obscureText: _obscureToken,
+            style: const TextStyle(
+              color: DarkmoonColors.textPrimary,
+              fontSize: 12.5,
+            ),
+            decoration: InputDecoration(
+              isDense: true,
+              hintText: l10n.aiDenoiseCloudTokenHint,
+              hintStyle: const TextStyle(
+                color: DarkmoonColors.textMuted,
+                fontSize: 12,
+              ),
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 10,
+                vertical: 10,
+              ),
+              filled: true,
+              fillColor: DarkmoonColors.canvas,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: const BorderSide(color: DarkmoonColors.border),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: const BorderSide(color: DarkmoonColors.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: const BorderSide(color: DarkmoonColors.accent),
+              ),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscureToken
+                      ? CupertinoIcons.eye
+                      : CupertinoIcons.eye_slash,
+                  size: 16,
+                  color: DarkmoonColors.textMuted,
+                ),
+                onPressed: () =>
+                    setState(() => _obscureToken = !_obscureToken),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          // Cost/privacy disclosure — always shown once a provider is
+          // picked, not just for the generative ones below: every one of
+          // these uploads the photo to a third party and costs real money,
+          // Topaz included.
+          _CloudInfoBanner(
+            icon: CupertinoIcons.info_circle_fill,
+            color: DarkmoonColors.textMuted,
+            text: l10n.aiDenoiseCloudDisclosure,
+          ),
+          if (provider.isGenerative) ...[
+            const SizedBox(height: 8),
+            _CloudInfoBanner(
+              icon: CupertinoIcons.exclamationmark_triangle_fill,
+              color: _warningColor,
+              text: l10n.aiDenoiseCloudGenerativeWarning,
+            ),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+/// Small text-plus-icon banner used by the Cloud AI tab's disclosure/
+/// warning messages — same visual template as the Enhance tab's inline GPU
+/// warning, factored out here since the Cloud tab needs two of these
+/// (always-shown disclosure, conditional generative-risk warning) rather
+/// than that tab's single one-off case.
+class _CloudInfoBanner extends StatelessWidget {
+  const _CloudInfoBanner({
+    required this.icon,
+    required this.color,
+    required this.text,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: color.withValues(alpha: 0.5)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: const TextStyle(
+                fontSize: 11.5,
+                color: DarkmoonColors.textPrimary,
+                height: 1.35,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

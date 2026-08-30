@@ -556,6 +556,114 @@ abstract class AppLocalizations {
   /// **'Enhance'**
   String get aiDenoiseTabEnhance;
 
+  /// No description provided for @aiDenoiseTabCloud.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud AI'**
+  String get aiDenoiseTabCloud;
+
+  /// No description provided for @aiDenoiseCloudMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Send this photo to a cloud AI provider you have your own account and API key with. Costs real money per photo and uploads the photo to a third party — the on-device Enhance tab is free and stays on your machine.'**
+  String get aiDenoiseCloudMessage;
+
+  /// No description provided for @aiDenoiseCloudProviderLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Provider'**
+  String get aiDenoiseCloudProviderLabel;
+
+  /// No description provided for @aiDenoiseCloudProviderOff.
+  ///
+  /// In en, this message translates to:
+  /// **'Off'**
+  String get aiDenoiseCloudProviderOff;
+
+  /// No description provided for @aiDenoiseCloudProviderTopaz.
+  ///
+  /// In en, this message translates to:
+  /// **'Topaz Labs (Denoise)'**
+  String get aiDenoiseCloudProviderTopaz;
+
+  /// No description provided for @aiDenoiseCloudProviderOpenAi.
+  ///
+  /// In en, this message translates to:
+  /// **'OpenAI (gpt-image-1)'**
+  String get aiDenoiseCloudProviderOpenAi;
+
+  /// No description provided for @aiDenoiseCloudProviderGemini.
+  ///
+  /// In en, this message translates to:
+  /// **'Google Gemini'**
+  String get aiDenoiseCloudProviderGemini;
+
+  /// No description provided for @aiDenoiseCloudTokenLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'API key'**
+  String get aiDenoiseCloudTokenLabel;
+
+  /// No description provided for @aiDenoiseCloudTokenHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Paste your API key'**
+  String get aiDenoiseCloudTokenHint;
+
+  /// No description provided for @aiDenoiseCloudDisclosure.
+  ///
+  /// In en, this message translates to:
+  /// **'Stored only on this device (Windows Credential Manager), sent only to the selected provider. Each apply uploads the full-resolution photo and is billed by your provider account — results are cached so re-opening or exporting the same photo doesn\'t call it again.'**
+  String get aiDenoiseCloudDisclosure;
+
+  /// No description provided for @aiDenoiseCloudGenerativeWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'This provider regenerates the image from a prompt rather than running a dedicated denoise model — it may alter fine detail (faces, text, texture), not just remove noise.'**
+  String get aiDenoiseCloudGenerativeWarning;
+
+  /// No description provided for @aiDenoiseCloudFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud AI denoise failed: {error}'**
+  String aiDenoiseCloudFailedMessage(String error);
+
+  /// No description provided for @aiDenoiseCloudFailedStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Cloud denoise failed'**
+  String get aiDenoiseCloudFailedStatus;
+
+  /// No description provided for @aiDenoiseCloudStartingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Starting cloud denoise…'**
+  String get aiDenoiseCloudStartingMessage;
+
+  /// No description provided for @aiDenoiseCloudStageUploading.
+  ///
+  /// In en, this message translates to:
+  /// **'Uploading photo…'**
+  String get aiDenoiseCloudStageUploading;
+
+  /// No description provided for @aiDenoiseCloudStageProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Processing…'**
+  String get aiDenoiseCloudStageProcessing;
+
+  /// No description provided for @aiDenoiseCloudStageDownloading.
+  ///
+  /// In en, this message translates to:
+  /// **'Downloading result…'**
+  String get aiDenoiseCloudStageDownloading;
+
+  /// No description provided for @aiDenoiseCloudStageDecoding.
+  ///
+  /// In en, this message translates to:
+  /// **'Decoding photo…'**
+  String get aiDenoiseCloudStageDecoding;
+
   /// No description provided for @aiDenoiseEnhanceMessage.
   ///
   /// In en, this message translates to:

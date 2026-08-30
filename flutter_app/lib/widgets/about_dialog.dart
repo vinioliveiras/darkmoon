@@ -18,7 +18,7 @@ class DarkmoonAboutDialog extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return AlertDialog(
-      backgroundColor: DarkmoonColors.surfaceRaised,
+      backgroundColor: DarkmoonColors.dialogBackground,
       title: DialogTitleRow(
         title: l10n.aboutDialogTitle,
         closeTooltip: l10n.closeButton,

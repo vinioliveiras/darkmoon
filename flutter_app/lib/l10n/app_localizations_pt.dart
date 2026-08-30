@@ -256,6 +256,65 @@ class AppLocalizationsPt extends AppLocalizations {
   String get aiDenoiseTabEnhance => 'Enhance';
 
   @override
+  String get aiDenoiseTabCloud => 'IA na nuvem';
+
+  @override
+  String get aiDenoiseCloudMessage =>
+      'Manda essa foto pra um provedor de IA na nuvem que você já tem conta e chave de API. Custa dinheiro de verdade por foto e envia a foto pra um terceiro — a aba Enhance é grátis e roda só no seu computador.';
+
+  @override
+  String get aiDenoiseCloudProviderLabel => 'Provedor';
+
+  @override
+  String get aiDenoiseCloudProviderOff => 'Desligado';
+
+  @override
+  String get aiDenoiseCloudProviderTopaz => 'Topaz Labs (Denoise)';
+
+  @override
+  String get aiDenoiseCloudProviderOpenAi => 'OpenAI (gpt-image-1)';
+
+  @override
+  String get aiDenoiseCloudProviderGemini => 'Google Gemini';
+
+  @override
+  String get aiDenoiseCloudTokenLabel => 'Chave de API';
+
+  @override
+  String get aiDenoiseCloudTokenHint => 'Cole sua chave de API';
+
+  @override
+  String get aiDenoiseCloudDisclosure =>
+      'Guardada só neste computador (Windows Credential Manager), enviada só pro provedor escolhido. Cada aplicação envia a foto em resolução total e é cobrada pela sua conta no provedor — os resultados ficam em cache, então reabrir ou exportar a mesma foto não chama de novo.';
+
+  @override
+  String get aiDenoiseCloudGenerativeWarning =>
+      'Esse provedor recria a imagem a partir de um prompt em vez de rodar um modelo dedicado de denoise — pode alterar detalhes finos (rostos, texto, textura), não só remover ruído.';
+
+  @override
+  String aiDenoiseCloudFailedMessage(String error) {
+    return 'O denoise na nuvem falhou: $error';
+  }
+
+  @override
+  String get aiDenoiseCloudFailedStatus => 'Denoise na nuvem falhou';
+
+  @override
+  String get aiDenoiseCloudStartingMessage => 'Iniciando denoise na nuvem…';
+
+  @override
+  String get aiDenoiseCloudStageUploading => 'Enviando foto…';
+
+  @override
+  String get aiDenoiseCloudStageProcessing => 'Processando…';
+
+  @override
+  String get aiDenoiseCloudStageDownloading => 'Baixando resultado…';
+
+  @override
+  String get aiDenoiseCloudStageDecoding => 'Decodificando foto…';
+
+  @override
   String get aiDenoiseEnhanceMessage =>
       'Remove ruído, elimina grão de filme e dobra a resolução usando uma rede neural — mais perto de como o detalhe real da foto era antes do ruído e da compressão. Roda bem mais devagar que o Clássico, principalmente sem uma GPU compatível.';
 
