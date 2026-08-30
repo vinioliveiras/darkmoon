@@ -8313,25 +8313,41 @@ class _SegmentedTab extends StatelessWidget {
   final Color color;
   final VoidCallback onTap;
 
+  static const _duration = Duration(milliseconds: 160);
+
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: selected ? color.withValues(alpha: 0.22) : Colors.transparent,
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(6),
       child: InkWell(
         borderRadius: BorderRadius.circular(6),
         onTap: onTap,
-        child: Container(
+        // The highlight fill/text color/weight all animate here (instead
+        // of snapping instantly) so switching segments — Shadows to
+        // Midtones, Mixer to HSL, etc. — reads as a transition rather
+        // than a hard cut.
+        child: AnimatedContainer(
+          duration: _duration,
+          curve: Curves.easeOut,
           padding: const EdgeInsets.symmetric(vertical: 6),
+          decoration: BoxDecoration(
+            color: selected ? color.withValues(alpha: 0.22) : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+          ),
           alignment: Alignment.center,
-          child: Text(
-            label,
-            overflow: TextOverflow.ellipsis,
-            softWrap: false,
+          child: AnimatedDefaultTextStyle(
+            duration: _duration,
+            curve: Curves.easeOut,
             style: TextStyle(
               color: selected ? color : DarkmoonColors.textSecondary,
               fontSize: 11,
               fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+            ),
+            child: Text(
+              label,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
             ),
           ),
         ),
@@ -8590,7 +8606,7 @@ class _FilmstripState extends State<_Filmstrip> {
     if (files.isEmpty) {
       return Container(
         height: 114,
-        color: DarkmoonColors.filmstrip,
+        color: DarkmoonColors.canvas,
         alignment: Alignment.center,
         child: Text(
           AppLocalizations.of(context)!.noFolderOpen,
@@ -8600,7 +8616,7 @@ class _FilmstripState extends State<_Filmstrip> {
     }
     return Container(
       height: 114,
-      color: DarkmoonColors.filmstrip,
+      color: DarkmoonColors.canvas,
       child: Listener(
         onPointerSignal: _handleWheel,
         child: Scrollbar(

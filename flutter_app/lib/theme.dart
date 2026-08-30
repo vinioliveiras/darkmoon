@@ -9,11 +9,10 @@ import 'package:flutter/material.dart';
 // with a much wider spread read as "too blue". Keep new tokens on this
 // same restrained recipe instead of introducing pure neutrals.
 class DarkmoonColors {
-  static const background = Color(0xFF1C1E21);
-  static const panel = Color(0xFF0B0D10);
-  static const canvas = Color(0xFF121417);
-  static const filmstrip = Color(0xFF17191C);
-  static const surfaceRaised = Color(0xFF2A2C2F);
+  static const background = Color(0xFF17191D);
+  static const panel = Color(0xFF080A0E);
+  static const canvas = Color(0xFF0F1115);
+  static const surfaceRaised = Color(0xFF26282C);
 
   /// Standardized background for every modal window (Settings, About,
   /// Export, AI Denoise, the various confirm dialogs, …) — a very dark,
@@ -24,12 +23,12 @@ class DarkmoonColors {
   /// token rather than reusing `canvas` directly so "dialogs" and "the
   /// image viewport" stay independently adjustable even though they
   /// happen to match today.
-  static const dialogBackground = Color(0xFF121417);
+  static const dialogBackground = Color(0xFF0F1115);
 
   /// Fill for dropdown buttons/menus — darker than [surfaceRaised] but
   /// not as recessed as [dialogBackground] (that read as too dark once
   /// tried), sitting roughly between [panel] and [surfaceRaised].
-  static const dropdownBackground = Color(0xFF1E2023);
+  static const dropdownBackground = Color(0xFF1A1C20);
 
   /// Outline color for windows/dialogs and every boxed component
   /// (dropdowns, cards, tooltips, …) — darker/softer than earlier so the
@@ -37,19 +36,27 @@ class DarkmoonColors {
   /// reads as a gentle edge rather than a hard line, while staying
   /// visibly lighter than [panel]/[dialogBackground] so it's still an
   /// outline, not invisible.
-  static const border = Color(0xFF1C1E21);
+  static const border = Color(0xFF181A1E);
 
   /// Fill for a [_SectionCard]-style grouped card — darker still than
   /// the first pass (which read as too light a gray), only a hair
   /// lighter than [panel] so the card reads as faintly raised rather
   /// than flush with the panel background.
-  static const sectionCardBackground = Color(0xFF1B1D20);
-  static const divider = Color(0xFF2E3033);
-  static const textPrimary = Color(0xFFE4E6E9);
-  static const textSecondary = Color(0xFFC6C8CB);
-  static const textMuted = Color(0xFF888A8D);
+  static const sectionCardBackground = Color(0xFF17191D);
+  static const divider = Color(0xFF2A2C30);
+  static const textPrimary = Color(0xFFE3E6EA);
+  static const textSecondary = Color(0xFFC5C8CC);
+  static const textMuted = Color(0xFF878A8E);
   static const accent = Color(0xFFFFFFFF);
-  static const sliderTrack = Color(0xFFE5E7EA);
+  static const sliderTrack = Color(0xFFE4E7EB);
+
+  /// A slider's *unfilled* rail — deliberately its own token rather than
+  /// reusing [border] (that's what it did originally; several rounds of
+  /// darkening [border] for window/component outlines quietly made every
+  /// slider's empty track nearly invisible against the panel background
+  /// as a side effect). Kept clearly lighter than the background tones a
+  /// slider actually sits on, independent of how dark [border] gets.
+  static const sliderInactiveTrack = Color(0xFF3C3E43);
 }
 
 ThemeData buildDarkmoonTheme() {
@@ -77,7 +84,7 @@ ThemeData buildDarkmoonTheme() {
     sliderTheme: const SliderThemeData(
       trackHeight: 1,
       activeTrackColor: DarkmoonColors.sliderTrack,
-      inactiveTrackColor: DarkmoonColors.border,
+      inactiveTrackColor: DarkmoonColors.sliderInactiveTrack,
       thumbColor: Color(0xFFF2F2F2),
       overlayColor: Colors.transparent,
       thumbShape: RoundSliderThumbShape(enabledThumbRadius: 6.5),
