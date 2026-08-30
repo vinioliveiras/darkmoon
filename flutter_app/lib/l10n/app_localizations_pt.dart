@@ -501,6 +501,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Oculta JPEG, PNG e outros formatos comuns de imagem da biblioteca';
 
   @override
+  String get settingsAnimationsLabel => 'Animações da interface';
+
+  @override
+  String get settingsAnimationsHint =>
+      'Transições suaves nas seções do painel, troca de abas, zoom e no preview após uma edição';
+
+  @override
   String get settingsGpuRenderLabel =>
       'Usar renderização por GPU (experimental)';
 

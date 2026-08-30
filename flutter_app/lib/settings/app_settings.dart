@@ -51,6 +51,7 @@ class AppSettings {
     this.lastActiveFolder,
     this.lastActiveFile,
     this.customDenoiseModelPath,
+    this.animationsEnabled = true,
   });
 
   /// 'auto' (follow the system language), 'en', or 'pt'.
@@ -152,6 +153,13 @@ class AppSettings {
   /// see `edit_source_ai_enhance.dart`'s fallback-to-default handling.
   final String? customDenoiseModelPath;
 
+  /// Whether interface animations (section-card hover, segmented-tab
+  /// selection slide, zoom transitions, the preview's fade-in after a
+  /// committed edit) play at all. On by default; a plain instant
+  /// snap when off, for users who find motion distracting or are on a
+  /// slower machine where it reads as lag instead of polish.
+  final bool animationsEnabled;
+
   AppSettings copyWith({
     String? language,
     bool? fastPreview,
@@ -168,6 +176,7 @@ class AppSettings {
     String? lastActiveFolder,
     String? lastActiveFile,
     String? customDenoiseModelPath,
+    bool? animationsEnabled,
   }) => AppSettings(
     language: language ?? this.language,
     fastPreview: fastPreview ?? this.fastPreview,
@@ -188,6 +197,7 @@ class AppSettings {
     lastActiveFile: lastActiveFile ?? this.lastActiveFile,
     customDenoiseModelPath:
         customDenoiseModelPath ?? this.customDenoiseModelPath,
+    animationsEnabled: animationsEnabled ?? this.animationsEnabled,
   );
 
   /// [path] moved (or added) to the front of [recentFiles], deduplicated
@@ -222,6 +232,7 @@ class AppSettings {
     lastActiveFolder: lastActiveFolder,
     lastActiveFile: lastActiveFile,
     customDenoiseModelPath: null,
+    animationsEnabled: animationsEnabled,
   );
 }
 
@@ -275,6 +286,8 @@ Future<AppSettings> loadSettings() async {
       customDenoiseModelPath:
           raw['customDenoiseModelPath'] as String? ??
           defaults.customDenoiseModelPath,
+      animationsEnabled:
+          raw['animationsEnabled'] as bool? ?? defaults.animationsEnabled,
     );
   } catch (_) {
     return AppSettings(thumbnailConcurrency: defaultConcurrency);
@@ -301,6 +314,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'lastActiveFolder': settings.lastActiveFolder,
       'lastActiveFile': settings.lastActiveFile,
       'customDenoiseModelPath': settings.customDenoiseModelPath,
+      'animationsEnabled': settings.animationsEnabled,
     }),
   );
   await tmp.rename(file.path);

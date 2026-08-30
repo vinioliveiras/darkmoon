@@ -498,6 +498,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Hide JPEG, PNG and other common image formats from the library';
 
   @override
+  String get settingsAnimationsLabel => 'Interface animations';
+
+  @override
+  String get settingsAnimationsHint =>
+      'Smooth transitions for panel sections, tab switches, zoom, and the preview after an edit';
+
+  @override
   String get settingsGpuRenderLabel => 'Use GPU rendering (experimental)';
 
   @override

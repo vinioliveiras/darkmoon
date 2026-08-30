@@ -164,6 +164,8 @@
   "settingsPreviewResolutionHint": "Quanto menor, mais rápido para abrir e editar fotos; a exportação sempre usa a resolução total do sensor",
   "settingsRawOnlyLabel": "Somente arquivos RAW",
   "settingsRawOnlyHint": "Oculta JPEG, PNG e outros formatos comuns de imagem da biblioteca",
+  "settingsAnimationsLabel": "Animações da interface",
+  "settingsAnimationsHint": "Transições suaves nas seções do painel, troca de abas, zoom e no preview após uma edição",
   "settingsGpuRenderLabel": "Usar renderização por GPU (experimental)",
   "settingsGpuRenderHint": "Renderiza na placa de vídeo em vez da CPU; volta automaticamente para a CPU se não houver suporte",
   "settingsDynamicFullPreviewLabel": "Preview dinâmico em resolução total",

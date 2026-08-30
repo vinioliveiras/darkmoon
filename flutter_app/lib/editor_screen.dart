@@ -383,6 +383,35 @@ const _globalEditAmountKey = 'GlobalEditAmount';
 /// [BrushStroke.flow]'s doc. Matches RapidRAW's own default.
 const defaultFlowAmount = 10.0;
 
+/// Broadcasts Settings > "Interface animations" down the whole editor
+/// tree, so any widget that plays a transition (section-card hover,
+/// segmented-tab slide, zoom, the preview's post-edit fade-in) can ask
+/// [AnimationsConfig.duration] for its actual duration instead of every
+/// one of those widgets needing its own `animationsEnabled` constructor
+/// parameter threaded down from `_EditorScreenState`.
+class AnimationsConfig extends InheritedWidget {
+  const AnimationsConfig({
+    super.key,
+    required this.enabled,
+    required super.child,
+  });
+
+  final bool enabled;
+
+  static bool of(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AnimationsConfig>()?.enabled ??
+      true;
+
+  /// [base] when animations are on, [Duration.zero] (an instant snap)
+  /// when the user turned them off.
+  static Duration duration(BuildContext context, Duration base) =>
+      of(context) ? base : Duration.zero;
+
+  @override
+  bool updateShouldNotify(AnimationsConfig oldWidget) =>
+      enabled != oldWidget.enabled;
+}
+
 /// Scales every continuous slider's deviation from its own default by
 /// [_globalEditAmountKey]'s current value — the render-time-only
 /// mechanism behind the Amount slider. Applied once here, at the single
@@ -5089,6 +5118,13 @@ class _EditorScreenState extends State<EditorScreen> {
   }
 
   Widget _buildScaffold(RawFile? selected) {
+    return AnimationsConfig(
+      enabled: _settings.animationsEnabled,
+      child: _buildScaffoldContent(selected),
+    );
+  }
+
+  Widget _buildScaffoldContent(RawFile? selected) {
     return Scaffold(
       body: Column(
         children: [
@@ -7000,13 +7036,16 @@ class _SectionCardState extends State<_SectionCard> {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: const Duration(milliseconds: 120),
+      duration: AnimationsConfig.duration(
+        context,
+        const Duration(milliseconds: 120),
+      ),
       margin: const EdgeInsets.only(top: 10),
       padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
       decoration: BoxDecoration(
         color: _headerHovered
             ? Color.alphaBlend(
-                Colors.white.withValues(alpha: 0.05),
+                Colors.white.withValues(alpha: 0.03),
                 DarkmoonColors.sectionCardBackground,
               )
             : DarkmoonColors.sectionCardBackground,
@@ -7050,14 +7089,15 @@ class _CollapsibleSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final duration = AnimationsConfig.duration(context, _duration);
     return ClipRect(
       child: AnimatedAlign(
-        duration: _duration,
+        duration: duration,
         curve: Curves.easeOutCubic,
         alignment: Alignment.topCenter,
         heightFactor: collapsed ? 0.0 : 1.0,
         child: AnimatedOpacity(
-          duration: _duration,
+          duration: duration,
           curve: Curves.easeOutCubic,
           opacity: collapsed ? 0.0 : 1.0,
           child: child,
@@ -7226,6 +7266,39 @@ class _ControlsPanelState extends State<_ControlsPanel> {
   /// Section names the user has collapsed, Lightroom-style — every section
   /// starts expanded, matching the panel's previous (always-open) layout.
   final Set<String> _collapsed = {};
+
+  /// Drives the panel's own scroll position — used only to auto-scroll
+  /// back to the top when the Crop & Transform panel opens (it's inserted
+  /// at the very top of this list), since it would otherwise render
+  /// off-screen above whatever section the user had scrolled down to
+  /// (e.g. Effects), reading as "nothing happened" when Crop was tapped.
+  final _scrollController = ScrollController();
+
+  @override
+  void didUpdateWidget(_ControlsPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.cropOverlayActive && !oldWidget.cropOverlayActive) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_scrollController.hasClients) {
+          return;
+        }
+        _scrollController.animateTo(
+          0,
+          duration: AnimationsConfig.duration(
+            context,
+            const Duration(milliseconds: 260),
+          ),
+          curve: Curves.easeOutCubic,
+        );
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
 
   /// The camera as-shot White Balance for the current photo — the neutral
   /// reference the Temperature/Tint sliders default to.
@@ -7429,6 +7502,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
               ),
               Expanded(
                 child: SingleChildScrollView(
+                  controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(
                     _controlsPanelInset,
                     0,
@@ -8393,7 +8467,7 @@ class _SegmentedTabs<T> extends StatelessWidget {
               // matching the standard segmented-control feel (iOS tab
               // bars, Photomator's own range picker).
               AnimatedPositioned(
-                duration: _duration,
+                duration: AnimationsConfig.duration(context, _duration),
                 curve: Curves.easeOut,
                 left: segmentWidth * activeIndex,
                 width: segmentWidth,
@@ -8457,7 +8531,7 @@ class _SegmentedTab extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 6),
           child: Align(
             child: AnimatedDefaultTextStyle(
-              duration: _duration,
+              duration: AnimationsConfig.duration(context, _duration),
               curve: Curves.easeOut,
               style: TextStyle(
                 color: selected ? color : DarkmoonColors.textSecondary,

@@ -219,6 +219,14 @@ class _SettingsDialogState extends State<SettingsDialog>
             value: _settings.rawOnly,
             onChanged: (v) => _update(_settings.copyWith(rawOnly: v)),
           ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(l10n.settingsAnimationsLabel, style: _labelStyle),
+            subtitle: Text(l10n.settingsAnimationsHint, style: _hintStyle),
+            value: _settings.animationsEnabled,
+            onChanged: (v) => _update(_settings.copyWith(animationsEnabled: v)),
+          ),
         ],
       ),
     );

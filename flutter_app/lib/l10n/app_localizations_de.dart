@@ -505,6 +505,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'JPEG, PNG und andere gängige Bildformate aus der Bibliothek ausblenden';
 
   @override
+  String get settingsAnimationsLabel => 'Oberflächenanimationen';
+
+  @override
+  String get settingsAnimationsHint =>
+      'Sanfte Übergänge für Panelabschnitte, Tab-Wechsel, Zoom und die Vorschau nach einer Bearbeitung';
+
+  @override
   String get settingsGpuRenderLabel =>
       'GPU-Rendering verwenden (experimentell)';
 

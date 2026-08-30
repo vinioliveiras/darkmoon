@@ -994,6 +994,18 @@ abstract class AppLocalizations {
   /// **'Hide JPEG, PNG and other common image formats from the library'**
   String get settingsRawOnlyHint;
 
+  /// No description provided for @settingsAnimationsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Interface animations'**
+  String get settingsAnimationsLabel;
+
+  /// No description provided for @settingsAnimationsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Smooth transitions for panel sections, tab switches, zoom, and the preview after an edit'**
+  String get settingsAnimationsHint;
+
   /// No description provided for @settingsGpuRenderLabel.
   ///
   /// In en, this message translates to:
