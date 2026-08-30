@@ -111,6 +111,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
   int previewMaxDimension,
   bool enableDenoise,
   bool enableUpscale,
+  bool enableRawDenoise,
   int denoiseStrengthPercent,
   void Function(Object stage) onStage,
 ) async {
@@ -123,6 +124,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
     path,
     denoise: enableDenoise,
     upscale: enableUpscale,
+    rawDenoise: enableRawDenoise,
     denoiseStrengthPercent: denoiseStrengthPercent,
   );
   final cachedImage = cachedPng == null ? null : img.decodePng(cachedPng);
@@ -132,17 +134,55 @@ Future<EditSourcePair?> _decodeAndEnhance(
     height = cachedImage.height;
     enhancedRgb = cachedImage.getBytes(order: img.ChannelOrder.rgb);
   } else {
-    final decoded = isRawFile(path)
-        ? decodeRawImage(path, fastPreview: false, onStage: onStage)
-        : decodeCommonImage(path);
+    // Raw-domain denoise (PMRID) runs, when requested, as part of the RAW
+    // decode itself — before demosaic, unlike the sRGB pass below. Only
+    // possible for a standard Bayer RAW; a null result here (unsupported
+    // CFA, or any other decode failure) falls back to the plain decode
+    // path exactly like a normal RAW would, so a request for RAW denoise
+    // on a file that can't do it degrades to "no raw denoise", not "no
+    // photo at all".
+    RawImage? rawDenoised;
+    if (enableRawDenoise && isRawFile(path)) {
+      final rawDenoiseModel = OnnxModel.forSpec(pmridDenoiseModelSpec);
+      onStage(
+        AiEnhanceModelInfo(
+          pmridDenoiseModelSpec.fileName,
+          rawDenoiseModel.usingGpu,
+          rawDenoiseModel.directMlError,
+        ),
+      );
+      rawDenoised = decodeRawImageWithPmridDenoise(
+        path,
+        fastPreview: false,
+        onStage: onStage,
+        denoiseTile: rawDenoiseModel.runPackedTile,
+        onDenoiseProgress: (i, total) =>
+            onStage(AiEnhanceProgress('raw-denoise', i, total)),
+      );
+    }
+    final usedRawDenoise = rawDenoised != null;
+
+    final decoded =
+        rawDenoised ??
+        (isRawFile(path)
+            ? decodeRawImage(path, fastPreview: false, onStage: onStage)
+            : decodeCommonImage(path));
     if (decoded == null) {
       return null;
     }
 
+    // If raw-domain denoise already ran, the sRGB pass would just
+    // re-smooth pixels PMRID already cleaned — skip it regardless of what
+    // enableDenoise says (the cache key still reflects the caller's
+    // actual request, not this internal downgrade).
+    final effectiveEnableDenoise = enableDenoise && !usedRawDenoise;
+
     // Only the model(s) this run actually needs pay the ~1-2s DirectML-
     // probe-then-fallback session-creation cost — asking for denoise alone
     // shouldn't also load the upscaler.
-    final denoiseModel = enableDenoise ? OnnxModel.forSpec(denoiseModelSpec) : null;
+    final denoiseModel = effectiveEnableDenoise
+        ? OnnxModel.forSpec(denoiseModelSpec)
+        : null;
     if (denoiseModel != null) {
       onStage(
         AiEnhanceModelInfo(
@@ -171,7 +211,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
       // there's simply no model loaded to call them on in that case.
       denoise: (tile) => denoiseModel!.runTile(tile),
       upscale: (tile) => upscaleModel!.runTile(tile),
-      enableDenoise: enableDenoise,
+      enableDenoise: effectiveEnableDenoise,
       enableUpscale: enableUpscale,
       denoiseStrength: denoiseStrengthPercent / 100.0,
       onProgress: (stage, i, total) =>
@@ -194,6 +234,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
       Uint8List.fromList(img.encodePng(enhancedImage)),
       denoise: enableDenoise,
       upscale: enableUpscale,
+      rawDenoise: enableRawDenoise,
       denoiseStrengthPercent: denoiseStrengthPercent,
     );
   }
@@ -228,6 +269,7 @@ class _AiEnhanceDecodeIsolateArgs {
     this.previewMaxDimension,
     this.enableDenoise,
     this.enableUpscale,
+    this.enableRawDenoise,
     this.denoiseStrengthPercent,
     this.sendPort,
   );
@@ -237,6 +279,7 @@ class _AiEnhanceDecodeIsolateArgs {
   final int previewMaxDimension;
   final bool enableDenoise;
   final bool enableUpscale;
+  final bool enableRawDenoise;
   final int denoiseStrengthPercent;
   final SendPort sendPort;
 }
@@ -248,6 +291,7 @@ void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
     args.previewMaxDimension,
     args.enableDenoise,
     args.enableUpscale,
+    args.enableRawDenoise,
     args.denoiseStrengthPercent,
     (stage) => args.sendPort.send(stage),
   );
@@ -271,6 +315,7 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
   void Function(Object stage) onStage, {
   required bool enableDenoise,
   required bool enableUpscale,
+  bool enableRawDenoise = false,
   int denoiseStrengthPercent = 100,
   int previewMaxDimension = defaultPreviewMaxDimension,
   AiEnhanceCancellationToken? cancellationToken,
@@ -284,6 +329,7 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
       previewMaxDimension,
       enableDenoise,
       enableUpscale,
+      enableRawDenoise,
       denoiseStrengthPercent,
       receivePort.sendPort,
     ),

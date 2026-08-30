@@ -110,12 +110,15 @@
   "aiDenoiseEnhanceDenoiseLabel": "Denoise",
   "aiDenoiseEnhanceAmountLabel": "Amount",
   "aiDenoiseEnhanceUpscaleLabel": "Upscale 2x",
+  "aiDenoiseEnhanceRawDenoiseLabel": "RAW denoise (before demosaic)",
+  "aiDenoiseEnhanceRawDenoiseUnavailableCaption": "Only available for standard Bayer RAW files (not X-Trans, Foveon, or non-RAW formats).",
   "aiDenoiseEnhanceFailedMessage": "AI Enhance couldn't run on this photo. It's been turned back off.",
   "aiDenoiseEnhanceCpuWarning": "Your GPU doesn't support this yet, so it's running on the CPU instead — this will take noticeably longer.",
   "aiDenoiseEnhanceGpuIncompatibleWarning": "Your GPU isn't compatible with this yet, so it'll run on the CPU — expect this to take noticeably longer (up to a couple of minutes on a large photo).",
   "aiDenoiseEnhanceStartingMessage": "Running AI Enhance...",
   "aiDenoiseEnhanceStageDenoise": "Denoising",
   "aiDenoiseEnhanceStageUpscale": "Upscaling",
+  "aiDenoiseEnhanceStageRawDenoise": "Denoising (RAW)",
   "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
   "@aiDenoiseEnhanceTileProgress": {
     "placeholders": {

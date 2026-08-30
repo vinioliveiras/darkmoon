@@ -4,8 +4,10 @@ import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
+import '../render/pmrid_denoise.dart' show denoisePmridRggb;
 import '../render/white_balance.dart' show wbMultipliersToKelvinTint;
 import 'libraw_bindings.dart';
+import 'pmrid_raw.dart';
 
 /// LibRaw (this file) vs. RapidRAW's own decoder (Rawler, a pure-Rust RAW
 /// library) — investigated as part of trying to match RapidRAW's tonal
@@ -116,6 +118,7 @@ class RawMetadata {
     required this.height,
     this.asShotKelvin = 5500,
     this.asShotTint = 0,
+    this.cfaFilters = 0,
   });
 
   /// Manufacturer-normalized names (e.g. "Fujifilm" rather than a
@@ -158,6 +161,19 @@ class RawMetadata {
   /// untouched.
   final double asShotKelvin;
   final double asShotTint;
+
+  /// The sensor's raw CFA pattern bitmask (LibRaw's `idata.filters`) — 0
+  /// for Foveon/monochrome sensors (no CFA), 9 for Fujifilm X-Trans's 6x6
+  /// pattern, any other nonzero value for a standard 2x2 Bayer sensor.
+  /// Used to gate the raw-domain PMRID denoiser
+  /// (`decodeRawImageWithPmridDenoise`), which only understands ordinary
+  /// Bayer CFAs — see [isBayerCfa].
+  final int cfaFilters;
+
+  /// Whether [cfaFilters] describes a standard 2x2 Bayer sensor (as
+  /// opposed to X-Trans, Foveon, or monochrome) — i.e. whether
+  /// [decodeRawImageWithPmridDenoise] can run on this file at all.
+  bool get isBayerCfa => cfaFilters != 0 && cfaFilters != 9;
 }
 
 /// Reads a null-terminated `Array<Char>` field as a Dart string, stopping
@@ -219,6 +235,7 @@ RawMetadata? extractRawMetadata(String path) {
       height: sizes.iheight,
       asShotKelvin: asShot.kelvin,
       asShotTint: asShot.tint,
+      cfaFilters: idata.filters,
     );
   } finally {
     lib.libraw_close(lr);
@@ -531,6 +548,182 @@ RawImage? decodeRawImage(
         // own use_camera_wb + use_camera_matrix calibration (set when
         // opening the file, above) is the actual camera-profile-based
         // color science and needs no such nudge.
+        return RawImage(width: width, height: height, rgbBytes: rgbBytes);
+      } finally {
+        lib.libraw_dcraw_clear_mem(image);
+      }
+    } finally {
+      malloc.free(errPtr);
+    }
+  } finally {
+    lib.libraw_close(lr);
+  }
+}
+
+/// Like [decodeRawImage], but runs the PMRID raw-domain denoiser
+/// (`render/pmrid_denoise.dart`) on the sensor's own Bayer data between
+/// `libraw_unpack()` and the demosaic step (`libraw_dcraw_process()`) —
+/// so noise gets removed on linear, pre-demosaic, pre-white-balance sensor
+/// data (closer to how Lightroom's own raw noise reduction works) rather
+/// than on the already-demosaiced sRGB output the way the AI Enhance
+/// pipeline's NAFNet-SIDD pass (`edit_source_ai_enhance.dart`) does.
+///
+/// Only supported for a standard 2x2 Bayer sensor — check
+/// [RawMetadata.isBayerCfa] before calling; returns null for an
+/// unsupported CFA (X-Trans, Foveon/monochrome) as well as the usual
+/// open/unpack/decode failures [decodeRawImage] can also return null for.
+///
+/// [denoiseTile] is `OnnxModel.forSpec(pmridDenoiseModelSpec).runPackedTile`
+/// (or a fake, for testing) — see `pmrid_denoise.dart`'s `denoisePmridRggb`
+/// for the tiling/normalization this wraps.
+///
+/// Blocking native call — run on a background isolate, same convention as
+/// [decodeRawImage].
+RawImage? decodeRawImageWithPmridDenoise(
+  String path, {
+  required Float32List Function(Float32List packedRggbTile) denoiseTile,
+  bool fastPreview = true,
+  void Function(RawDecodeStage stage)? onStage,
+  void Function(int tileIndex, int totalTiles)? onDenoiseProgress,
+}) {
+  onStage?.call(RawDecodeStage.opening);
+  final lib = _Lib.instance;
+  final lr = _openRaw(lib, path);
+  if (lr == null) {
+    return null;
+  }
+  try {
+    onStage?.call(RawDecodeStage.unpacking);
+    if (lib.libraw_unpack(lr) != 0) {
+      return null;
+    }
+
+    final filters = lr.ref.idata.filters;
+    if (filters == 0 || filters == 9) {
+      // Not a standard Bayer sensor (Foveon/monochrome, or X-Trans) — the
+      // caller should have checked RawMetadata.isBayerCfa first; this is
+      // just a safety net against calling this function on the wrong file.
+      return null;
+    }
+
+    final sizes = lr.ref.rawdata.sizes;
+    final rawWidth = sizes.raw_width;
+    final rawHeight = sizes.raw_height;
+    final top = sizes.top_margin;
+    final left = sizes.left_margin;
+    // Even crop so every 2x2 CFA block packed below is complete.
+    final activeW = sizes.width - (sizes.width % 2);
+    final activeH = sizes.height - (sizes.height % 2);
+    if (activeW <= 0 || activeH <= 0) {
+      return null;
+    }
+
+    final rawImagePtr = lr.ref.rawdata.raw_image;
+    if (rawImagePtr == nullptr) {
+      return null;
+    }
+    // Zero-copy view over LibRaw's own buffer — reads AND writes below go
+    // straight to native memory, no separate "commit" call needed. Cast to
+    // Uint16 (an exact 16-bit type `asTypedList` supports) from `ushort`
+    // (`ffi.UnsignedShort`, only guaranteed >=16 bits in general — but
+    // always exactly 16 on Windows, the only platform this file targets).
+    final nativeView = rawImagePtr.cast<Uint16>().asTypedList(
+      rawWidth * rawHeight,
+    );
+
+    final bayer = Uint16List(activeW * activeH);
+    for (var row = 0; row < activeH; row++) {
+      final srcStart = (top + row) * rawWidth + left;
+      bayer.setRange(
+        row * activeW,
+        row * activeW + activeW,
+        nativeView,
+        srcStart,
+      );
+    }
+
+    final color = lr.ref.rawdata.color;
+    final cblack = [for (var i = 0; i < 4; i++) color.cblack[i]];
+    final blackBase = color.black;
+    final whiteLevel = color.maximum.toDouble();
+
+    final rggb = packBayerToRggb01(
+      bayer,
+      activeW,
+      activeH,
+      filters,
+      blackBase,
+      cblack,
+      whiteLevel,
+    );
+    final offset = rggbAlignmentOffset(filters);
+    final rggbW = (activeW - offset.col) ~/ 2;
+    final rggbH = (activeH - offset.row) ~/ 2;
+
+    final denoised = denoisePmridRggb(
+      rggb,
+      rggbW,
+      rggbH,
+      denoise: denoiseTile,
+      onProgress: onDenoiseProgress,
+    );
+
+    unpackRggbIntoBayer(
+      denoised,
+      rggbW,
+      rggbH,
+      bayer,
+      activeW,
+      filters,
+      blackBase,
+      cblack,
+      whiteLevel,
+    );
+
+    // Write the denoised pixels back into LibRaw's own buffer so the
+    // demosaic step below sees them instead of the original noisy data.
+    for (var row = 0; row < activeH; row++) {
+      final dstStart = (top + row) * rawWidth + left;
+      nativeView.setRange(dstStart, dstStart + activeW, bayer, row * activeW);
+    }
+
+    // From here on, identical to decodeRawImage's second half — see that
+    // function's own comments for why each param is set. X-Trans is
+    // already excluded above, so fastPreview's linear-interpolation path
+    // is always safe to take here (no isXTrans guard needed).
+    final params = lr.ref.params;
+    params.use_camera_wb = 1;
+    params.use_camera_matrix = 1;
+    params.output_bps = 8;
+    params.half_size = 0;
+    if (fastPreview) {
+      params.user_qual = 0;
+    }
+    params.gamm[0] = 1.0 / 2.4;
+    params.gamm[1] = 12.92;
+    params.highlight = 2;
+    params.user_flip = -1;
+
+    onStage?.call(RawDecodeStage.processing);
+    if (lib.libraw_dcraw_process(lr) != 0) {
+      return null;
+    }
+
+    onStage?.call(RawDecodeStage.extracting);
+    final errPtr = malloc<Int>();
+    try {
+      final image = lib.libraw_dcraw_make_mem_image(lr, errPtr);
+      if (image == nullptr) {
+        return null;
+      }
+      try {
+        if (image.ref.type != LibRaw_image_formats.LIBRAW_IMAGE_BITMAP ||
+            image.ref.colors != 3) {
+          return null;
+        }
+        final width = image.ref.width;
+        final height = image.ref.height;
+        final rgbBytes = _copyProcessedImageData(image);
         return RawImage(width: width, height: height, rgbBytes: rgbBytes);
       } finally {
         lib.libraw_dcraw_clear_mem(image);

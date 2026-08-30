@@ -64,10 +64,20 @@ class NeuralEnhanceChoice extends AiDenoiseChoice {
     required this.denoise,
     required this.upscale,
     this.denoiseAmount = 100,
+    this.rawDenoise = false,
   });
 
   final bool denoise;
   final bool upscale;
+
+  /// PMRID raw-domain denoise (`pmrid_denoise.dart`) — runs on the
+  /// sensor's own Bayer data before demosaic, unlike [denoise]
+  /// (NAFNet-SIDD, which runs after). Only ever true for a standard
+  /// Bayer-CFA RAW file (see `libraw.dart`'s `RawMetadata.isBayerCfa`);
+  /// mutually exclusive with [denoise] in the dialog UI (running both
+  /// would just re-smooth pixels PMRID already cleaned) — enforced there,
+  /// not here, so this class stays a plain data holder.
+  final bool rawDenoise;
 
   /// 0-100 blend between the original and NAFNet-SIDD's full-strength
   /// output (see `ai_enhance.dart`'s `enhanceImage` doc — the model has
@@ -78,7 +88,7 @@ class NeuralEnhanceChoice extends AiDenoiseChoice {
   /// matters when unused.
   final int denoiseAmount;
 
-  bool get active => denoise || upscale;
+  bool get active => denoise || upscale || rawDenoise;
 }
 
 /// AI Denoise level/mode picker, opened from the toolbar's AI Denoise
@@ -97,6 +107,8 @@ class AiDenoiseDialog extends StatefulWidget {
     required this.neuralDenoise,
     required this.neuralUpscale,
     this.neuralDenoiseAmount = 100,
+    this.neuralRawDenoise = false,
+    this.rawDenoiseAvailable = false,
   });
 
   /// The classical level already applied to the current photo, if any —
@@ -113,6 +125,15 @@ class AiDenoiseDialog extends StatefulWidget {
   /// See [NeuralEnhanceChoice.denoiseAmount].
   final int neuralDenoiseAmount;
 
+  /// See [NeuralEnhanceChoice.rawDenoise].
+  final bool neuralRawDenoise;
+
+  /// Whether the current photo is a standard Bayer-CFA RAW file — the raw
+  /// denoise toggle is shown disabled (with an explanatory caption) when
+  /// this is false, since PMRID can't process X-Trans/Foveon sensors or a
+  /// non-RAW format at all (see `libraw.dart`'s `RawMetadata.isBayerCfa`).
+  final bool rawDenoiseAvailable;
+
   @override
   State<AiDenoiseDialog> createState() => _AiDenoiseDialogState();
 }
@@ -122,11 +143,15 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
   late AiDenoiseLevel? _level = widget.initialLevel;
   late bool _neuralDenoise = widget.neuralDenoise;
   late bool _neuralUpscale = widget.neuralUpscale;
+  late bool _neuralRawDenoise = widget.neuralRawDenoise;
   late int _denoiseAmount = widget.neuralDenoiseAmount;
   late final TabController _tabController = TabController(
     length: 2,
     vsync: this,
-    initialIndex: (widget.neuralDenoise || widget.neuralUpscale) ? 1 : 0,
+    initialIndex:
+        (widget.neuralDenoise || widget.neuralUpscale || widget.neuralRawDenoise)
+        ? 1
+        : 0,
   );
 
   /// null while the probe hasn't resolved yet — the Enhance tab shows
@@ -171,6 +196,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
       _level = level;
       _neuralDenoise = false;
       _neuralUpscale = false;
+      _neuralRawDenoise = false;
     });
   }
 
@@ -179,6 +205,9 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
       _neuralDenoise = value;
       if (value) {
         _level = null;
+        // Mutually exclusive with raw denoise — running both would just
+        // re-smooth pixels PMRID already cleaned.
+        _neuralRawDenoise = false;
       }
     });
   }
@@ -192,11 +221,23 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
     });
   }
 
-  AiDenoiseChoice get _currentChoice => (_neuralDenoise || _neuralUpscale)
+  void _setNeuralRawDenoise(bool value) {
+    setState(() {
+      _neuralRawDenoise = value;
+      if (value) {
+        _level = null;
+        _neuralDenoise = false;
+      }
+    });
+  }
+
+  AiDenoiseChoice get _currentChoice =>
+      (_neuralDenoise || _neuralUpscale || _neuralRawDenoise)
       ? NeuralEnhanceChoice(
           denoise: _neuralDenoise,
           upscale: _neuralUpscale,
           denoiseAmount: _denoiseAmount,
+          rawDenoise: _neuralRawDenoise,
         )
       : ClassicDenoiseChoice(_level);
 
@@ -284,7 +325,10 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
                 child: _LevelChip(
                   label: _levelLabel(l10n, choice),
                   selected:
-                      !_neuralDenoise && !_neuralUpscale && _level == choice,
+                      !_neuralDenoise &&
+                      !_neuralUpscale &&
+                      !_neuralRawDenoise &&
+                      _level == choice,
                   onTap: () => _pickClassic(choice),
                 ),
               ),
@@ -402,6 +446,29 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
           value: _neuralUpscale,
           onChanged: _setNeuralUpscale,
         ),
+        const SizedBox(height: 4),
+        // Runs on the sensor's own Bayer data before demosaic (see
+        // NeuralEnhanceChoice.rawDenoise's doc) — only possible for a
+        // standard Bayer RAW, so the toggle is shown disabled with an
+        // explanatory caption rather than hidden outright when the current
+        // photo can't use it (X-Trans, Foveon/monochrome, or a non-RAW
+        // format), so the user learns why it's missing instead of just not
+        // finding it.
+        _ToggleRow(
+          label: l10n.aiDenoiseEnhanceRawDenoiseLabel,
+          value: _neuralRawDenoise,
+          onChanged: widget.rawDenoiseAvailable ? _setNeuralRawDenoise : null,
+        ),
+        if (!widget.rawDenoiseAvailable) ...[
+          const SizedBox(height: 2),
+          Text(
+            l10n.aiDenoiseEnhanceRawDenoiseUnavailableCaption,
+            style: const TextStyle(
+              fontSize: 11,
+              color: DarkmoonColors.textMuted,
+            ),
+          ),
+        ],
       ],
     );
   }
@@ -416,7 +483,12 @@ class _ToggleRow extends StatelessWidget {
 
   final String label;
   final bool value;
-  final ValueChanged<bool> onChanged;
+
+  /// Null disables the row entirely (used for a toggle the current photo
+  /// can't support at all, e.g. raw denoise on a non-Bayer file) — Switch
+  /// already renders a muted, non-interactive look for `onChanged: null`,
+  /// so this only needs to also stop the row's own tap-anywhere handler.
+  final ValueChanged<bool>? onChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -425,17 +497,20 @@ class _ToggleRow extends StatelessWidget {
     // in this app (e.g. settings_dialog.dart) — GestureDetector here
     // instead, since SwitchListTile's own minimum height overflowed this
     // dialog by a few pixels (see _buildEnhanceTab's comment).
+    final enabled = onChanged != null;
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
-      onTap: () => onChanged(!value),
+      onTap: enabled ? () => onChanged!(!value) : null,
       child: Row(
         children: [
           Expanded(
             child: Text(
               label,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12.5,
-                color: DarkmoonColors.textPrimary,
+                color: enabled
+                    ? DarkmoonColors.textPrimary
+                    : DarkmoonColors.textMuted,
               ),
             ),
           ),

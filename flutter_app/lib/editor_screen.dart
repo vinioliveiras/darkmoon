@@ -2538,9 +2538,11 @@ class _EditorScreenState extends State<EditorScreen> {
       // _loadEnhancedNativeSource's doc).
       final wantDenoise = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
       final wantUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
+      final wantRawDenoise = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
       final wantDenoiseAmount =
           (_paramValues[_neuralDenoiseAmountKey] ?? 100.0).round();
-      if (wantDenoise || wantUpscale) {
+      final wantAnyEnhance = wantDenoise || wantUpscale || wantRawDenoise;
+      if (wantAnyEnhance) {
         final cacheDir = await resolveAiEnhanceCacheDir();
         if (mounted) {
           final cachedPng = await lookupAiEnhanceCache(
@@ -2548,6 +2550,7 @@ class _EditorScreenState extends State<EditorScreen> {
             path,
             denoise: wantDenoise,
             upscale: wantUpscale,
+            rawDenoise: wantRawDenoise,
             denoiseStrengthPercent: wantDenoiseAmount,
           );
           if (cachedPng != null) {
@@ -2567,7 +2570,7 @@ class _EditorScreenState extends State<EditorScreen> {
       // entirely when Enhance was wanted and already resolved above —
       // this plain cache holds the *pre*-enhance render for this path,
       // never the enhanced one.
-      if (sources == null && !(wantDenoise || wantUpscale)) {
+      if (sources == null && !wantAnyEnhance) {
         final cachedJpeg = await _previewCache?.lookup(path);
         if (cachedJpeg != null) {
           sources = await compute(decodeEditSourcePairFromCachedJpeg, cachedJpeg);
@@ -2586,7 +2589,7 @@ class _EditorScreenState extends State<EditorScreen> {
           (_) {},
           previewMaxDimension: _settings.previewResolution,
         );
-        if ((wantDenoise || wantUpscale) && sources != null && mounted) {
+        if (wantAnyEnhance && sources != null && mounted) {
           // Enhance was wanted but its cache missed (evicted/cleared) and
           // we just fell back to a plain decode — keep _paramValues
           // honest about what's actually showing instead of leaving it
@@ -2596,6 +2599,7 @@ class _EditorScreenState extends State<EditorScreen> {
               ..._paramValues,
               _neuralDenoiseKey: 0.0,
               _neuralUpscaleKey: 0.0,
+              _neuralRawDenoiseKey: 0.0,
             };
           });
         }
@@ -3121,6 +3125,7 @@ class _EditorScreenState extends State<EditorScreen> {
     required bool denoise,
     required bool upscale,
     int denoiseAmount = 100,
+    bool rawDenoise = false,
   }) async {
     final cacheDir = await resolveAiEnhanceCacheDir();
     if (!mounted) return null;
@@ -3129,6 +3134,7 @@ class _EditorScreenState extends State<EditorScreen> {
       path,
       denoise: denoise,
       upscale: upscale,
+      rawDenoise: rawDenoise,
       denoiseStrengthPercent: denoiseAmount,
     );
     if (cachedPng == null) {
@@ -3137,6 +3143,7 @@ class _EditorScreenState extends State<EditorScreen> {
         denoise: denoise,
         upscale: upscale,
         denoiseAmount: denoiseAmount,
+        rawDenoise: rawDenoise,
       );
       if (!mounted || !ok) {
         return null;
@@ -3146,6 +3153,7 @@ class _EditorScreenState extends State<EditorScreen> {
         path,
         denoise: denoise,
         upscale: upscale,
+        rawDenoise: rawDenoise,
         denoiseStrengthPercent: denoiseAmount,
       );
     }
@@ -3306,6 +3314,10 @@ class _EditorScreenState extends State<EditorScreen> {
   static const _neuralDenoiseKey = 'AiNeuralDenoise';
   static const _neuralUpscaleKey = 'AiNeuralUpscale';
 
+  /// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.rawDenoise` — the PMRID
+  /// raw-domain pass, persisted the same way as the two flags above.
+  static const _neuralRawDenoiseKey = 'AiNeuralRawDenoise';
+
   /// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.denoiseAmount` — 0-100,
   /// persisted the same way as the two flags above. Defaults to 100 (the
   /// model's full-strength output) when absent, matching
@@ -3326,9 +3338,13 @@ class _EditorScreenState extends State<EditorScreen> {
     final currentLevel = AiDenoiseParams.fromValues(_paramValues).level;
     final neuralDenoise = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
     final neuralUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
+    final neuralRawDenoise = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
     final neuralDenoiseAmount =
         (_paramValues[_neuralDenoiseAmountKey] ?? 100.0).round();
-    final wasNeuralActive = neuralDenoise || neuralUpscale;
+    final wasNeuralActive = neuralDenoise || neuralUpscale || neuralRawDenoise;
+    final rawDenoiseAvailable =
+        isRawFile(selected.path) &&
+        (_metadata[selected.path]?.isBayerCfa ?? false);
     final choice = await showAnimatedDialog<AiDenoiseChoice>(
       context: context,
       builder: (_) => AiDenoiseDialog(
@@ -3336,6 +3352,8 @@ class _EditorScreenState extends State<EditorScreen> {
         neuralDenoise: neuralDenoise,
         neuralUpscale: neuralUpscale,
         neuralDenoiseAmount: neuralDenoiseAmount,
+        neuralRawDenoise: neuralRawDenoise,
+        rawDenoiseAvailable: rawDenoiseAvailable,
       ),
     );
     if (choice == null || !mounted) {
@@ -3352,6 +3370,7 @@ class _EditorScreenState extends State<EditorScreen> {
                 : (AiDenoiseLevel.values.indexOf(level) + 1).toDouble(),
             _neuralDenoiseKey: 0.0,
             _neuralUpscaleKey: 0.0,
+            _neuralRawDenoiseKey: 0.0,
           };
         });
         // Switching away from a previously-enhanced source: _editSources
@@ -3366,14 +3385,16 @@ class _EditorScreenState extends State<EditorScreen> {
             denoise: final wantDenoise,
             upscale: final wantUpscale,
             denoiseAmount: final wantDenoiseAmount,
+            rawDenoise: final wantRawDenoise,
           )
-          when wantDenoise || wantUpscale:
+          when wantDenoise || wantUpscale || wantRawDenoise:
         setState(() {
           _paramValues = {
             ..._paramValues,
             _neuralDenoiseKey: wantDenoise ? 1.0 : 0.0,
             _neuralUpscaleKey: wantUpscale ? 1.0 : 0.0,
             _neuralDenoiseAmountKey: wantDenoiseAmount.toDouble(),
+            _neuralRawDenoiseKey: wantRawDenoise ? 1.0 : 0.0,
             'AiDenoiseLevel': 0.0,
           };
         });
@@ -3382,18 +3403,20 @@ class _EditorScreenState extends State<EditorScreen> {
           denoise: wantDenoise,
           upscale: wantUpscale,
           denoiseAmount: wantDenoiseAmount,
+          rawDenoise: wantRawDenoise,
         );
         if (!mounted || !ok) {
           return;
         }
         await _applyAiDenoiseChoiceAndRender(selected.path);
       case NeuralEnhanceChoice():
-        // Both toggles off — equivalent to turning Enhance back off.
+        // All toggles off — equivalent to turning Enhance back off.
         setState(() {
           _paramValues = {
             ..._paramValues,
             _neuralDenoiseKey: 0.0,
             _neuralUpscaleKey: 0.0,
+            _neuralRawDenoiseKey: 0.0,
           };
         });
         await _revertToNormalEditSource(selected.path);
@@ -3437,6 +3460,7 @@ class _EditorScreenState extends State<EditorScreen> {
     required bool denoise,
     required bool upscale,
     int denoiseAmount = 100,
+    bool rawDenoise = false,
   }) async {
     setState(() {
       _isRunningNeuralEnhance = true;
@@ -3481,6 +3505,7 @@ class _EditorScreenState extends State<EditorScreen> {
       },
       enableDenoise: denoise,
       enableUpscale: upscale,
+      enableRawDenoise: rawDenoise,
       denoiseStrengthPercent: denoiseAmount,
       previewMaxDimension: _settings.previewResolution,
       cancellationToken: cancellation,
@@ -3496,6 +3521,7 @@ class _EditorScreenState extends State<EditorScreen> {
           ..._paramValues,
           _neuralDenoiseKey: 0.0,
           _neuralUpscaleKey: 0.0,
+          _neuralRawDenoiseKey: 0.0,
         };
         _isRunningNeuralEnhance = false;
         _aiEnhanceProgress = null;
@@ -4417,17 +4443,19 @@ class _EditorScreenState extends State<EditorScreen> {
     // _loadEnhancedNativeSource's doc for the bug this fixes.
     final wantDenoise = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
     final wantUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
+    final wantRawDenoise = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
     final wantDenoiseAmount =
         (_paramValues[_neuralDenoiseAmountKey] ?? 100.0).round();
     EditSource? nativeForExport;
     final srcSw = Stopwatch()..start();
     try {
-      if (wantDenoise || wantUpscale) {
+      if (wantDenoise || wantUpscale || wantRawDenoise) {
         nativeForExport = await _loadEnhancedNativeSource(
           selected.path,
           denoise: wantDenoise,
           upscale: wantUpscale,
           denoiseAmount: wantDenoiseAmount,
+          rawDenoise: wantRawDenoise,
         );
       }
       nativeForExport ??= await _loadNativeSource(
@@ -4557,9 +4585,11 @@ class _EditorScreenState extends State<EditorScreen> {
       if (progress == null) {
         return _LoadingInfo(message: l10n.aiDenoiseEnhanceStartingMessage);
       }
-      final stageLabel = progress.stage == 'upscale'
-          ? l10n.aiDenoiseEnhanceStageUpscale
-          : l10n.aiDenoiseEnhanceStageDenoise;
+      final stageLabel = switch (progress.stage) {
+        'upscale' => l10n.aiDenoiseEnhanceStageUpscale,
+        'raw-denoise' => l10n.aiDenoiseEnhanceStageRawDenoise,
+        _ => l10n.aiDenoiseEnhanceStageDenoise,
+      };
       // A raw tile count (hundreds, for a full-res photo tiled into small
       // 256px-ish squares) isn't a meaningful number to show — percentage
       // is what the rest of the app's progress messages use too.
@@ -4900,7 +4930,8 @@ class _EditorScreenState extends State<EditorScreen> {
                           AiDenoiseParams.fromValues(_paramValues).level !=
                               null ||
                           (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0 ||
-                          (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0,
+                          (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0 ||
+                          (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0,
                       onOpenAiDenoise: selected == null
                           ? null
                           : _openAiDenoiseDialog,

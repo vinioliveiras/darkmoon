@@ -269,6 +269,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiDenoiseEnhanceUpscaleLabel => 'Upscale 2x';
 
   @override
+  String get aiDenoiseEnhanceRawDenoiseLabel => 'RAW denoise (before demosaic)';
+
+  @override
+  String get aiDenoiseEnhanceRawDenoiseUnavailableCaption =>
+      'Only available for standard Bayer RAW files (not X-Trans, Foveon, or non-RAW formats).';
+
+  @override
   String get aiDenoiseEnhanceFailedMessage =>
       'AI Enhance couldn\'t run on this photo. It\'s been turned back off.';
 
@@ -288,6 +295,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiDenoiseEnhanceStageUpscale => 'Upscaling';
+
+  @override
+  String get aiDenoiseEnhanceStageRawDenoise => 'Denoising (RAW)';
 
   @override
   String aiDenoiseEnhanceTileProgress(String stage, int percent) {

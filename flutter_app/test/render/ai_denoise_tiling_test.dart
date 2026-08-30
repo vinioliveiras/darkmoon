@@ -168,6 +168,42 @@ void main() {
     );
   });
 
+  test(
+    'channels: 4 (PMRID\'s packed RGGB layout) round-trips identically to '
+    'the default 3-channel case — proves the generalization from a '
+    'hardcoded RGB assumption to an arbitrary channel count preserved the '
+    'exact same tiling/blend geometry',
+    () {
+      const width = 64;
+      const height = 48;
+      const channels = 4;
+      final image = Float32List(width * height * channels);
+      for (var i = 0; i < image.length; i++) {
+        image[i] = ((i * 41) % 256) / 255.0;
+      }
+
+      final result = denoiseTiled(
+        image,
+        width,
+        height,
+        inputTileSize: 32,
+        overlap: 8,
+        scaleFactor: 1,
+        channels: channels,
+        processTile: (tile) => tile,
+      );
+
+      expect(result.length, image.length);
+      for (var i = 0; i < image.length; i++) {
+        expect(
+          result[i],
+          closeTo(image[i], 1e-4),
+          reason: 'mismatch at index $i',
+        );
+      }
+    },
+  );
+
   test('reports progress once per tile', () {
     const width = 56;
     const height = 32;

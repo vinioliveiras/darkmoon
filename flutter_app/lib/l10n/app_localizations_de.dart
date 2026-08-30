@@ -272,6 +272,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get aiDenoiseEnhanceUpscaleLabel => '2x hochskalieren';
 
   @override
+  String get aiDenoiseEnhanceRawDenoiseLabel =>
+      'RAW-Entrauschen (vor dem Demosaicing)';
+
+  @override
+  String get aiDenoiseEnhanceRawDenoiseUnavailableCaption =>
+      'Nur für Standard-Bayer-RAW-Dateien verfügbar (nicht X-Trans, Foveon oder Nicht-RAW-Formate).';
+
+  @override
   String get aiDenoiseEnhanceFailedMessage =>
       'KI-Enhance konnte auf diesem Foto nicht ausgeführt werden. Wurde wieder deaktiviert.';
 
@@ -291,6 +299,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get aiDenoiseEnhanceStageUpscale => 'Hochskalierung';
+
+  @override
+  String get aiDenoiseEnhanceStageRawDenoise => 'Rauschunterdrückung (RAW)';
 
   @override
   String aiDenoiseEnhanceTileProgress(String stage, int percent) {

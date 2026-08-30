@@ -580,6 +580,18 @@ abstract class AppLocalizations {
   /// **'Upscale 2x'**
   String get aiDenoiseEnhanceUpscaleLabel;
 
+  /// No description provided for @aiDenoiseEnhanceRawDenoiseLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'RAW denoise (before demosaic)'**
+  String get aiDenoiseEnhanceRawDenoiseLabel;
+
+  /// No description provided for @aiDenoiseEnhanceRawDenoiseUnavailableCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Only available for standard Bayer RAW files (not X-Trans, Foveon, or non-RAW formats).'**
+  String get aiDenoiseEnhanceRawDenoiseUnavailableCaption;
+
   /// No description provided for @aiDenoiseEnhanceFailedMessage.
   ///
   /// In en, this message translates to:
@@ -615,6 +627,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Upscaling'**
   String get aiDenoiseEnhanceStageUpscale;
+
+  /// No description provided for @aiDenoiseEnhanceStageRawDenoise.
+  ///
+  /// In en, this message translates to:
+  /// **'Denoising (RAW)'**
+  String get aiDenoiseEnhanceStageRawDenoise;
 
   /// No description provided for @aiDenoiseEnhanceTileProgress.
   ///

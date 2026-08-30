@@ -23,11 +23,18 @@ class OnnxModelSpec {
     required this.fileName,
     required this.inputTileSize,
     required this.scaleFactor,
+    this.channels = 3,
   });
 
   final String fileName;
   final int inputTileSize;
   final int scaleFactor;
+
+  /// Floats/pixel the model's input and output tensors carry. 3 (RGB) for
+  /// every sRGB-domain model (NAFNet-SIDD, Real-ESRGAN); the raw-domain
+  /// PMRID denoiser (`pmridDenoiseModelSpec`) is the one caller that's 4
+  /// (packed RGGB Bayer planes) instead.
+  final int channels;
 
   int get outputTileSize => inputTileSize * scaleFactor;
 }
@@ -54,6 +61,21 @@ const upscaleModelSpec = OnnxModelSpec(
   fileName: 'Real-ESRGAN_x2plus.onnx',
   inputTileSize: 64,
   scaleFactor: 2,
+);
+
+/// PMRID (Apache-2.0, MegEngine/PMRID, ECCV20 "Practical Deep Raw Image
+/// Denoising on Mobile Devices") — raw-domain denoise, run on the packed
+/// RGGB Bayer buffer *before* demosaic (`pmrid_denoise.dart`), unlike
+/// NAFNet-SIDD/Real-ESRGAN above which both run after. 4 input/output
+/// channels (R, G, G2, B planes), residual output added back to the input
+/// by the network itself. Exported with dynamic spatial dims; 256 chosen
+/// for the same tile-count/overhead balance as [denoiseModelSpec], and
+/// must stay a multiple of 32 (the network's total downsample factor).
+const pmridDenoiseModelSpec = OnnxModelSpec(
+  fileName: 'PMRID.onnx',
+  inputTileSize: 256,
+  scaleFactor: 1,
+  channels: 4,
 );
 
 /// Thrown when an ONNX Runtime C API call returns a non-null `OrtStatus*`.
@@ -373,15 +395,24 @@ class OnnxModel {
   ///
   /// Blocking native call — run on a background isolate, same convention
   /// as `libraw.dart`'s decode functions.
-  Float32List runTile(Float32List rgbTile) {
+  Float32List runTile(Float32List rgbTile) => _runTile(rgbTile, 3);
+
+  /// Generalization of [runTile] for a model whose [OnnxModelSpec.channels]
+  /// isn't 3 — currently just [pmridDenoiseModelSpec] (4: packed RGGB Bayer
+  /// planes). [packedTile] is packed, row-major, [OnnxModelSpec.channels]
+  /// floats/pixel, same normalization convention as [runTile].
+  Float32List runPackedTile(Float32List packedTile) =>
+      _runTile(packedTile, _spec.channels);
+
+  Float32List _runTile(Float32List tile, int channels) {
     final inSize = _spec.inputTileSize;
     final outSize = _spec.outputTileSize;
-    final expectedInLength = inSize * inSize * 3;
-    final expectedOutLength = outSize * outSize * 3;
-    if (rgbTile.length != expectedInLength) {
+    final expectedInLength = inSize * inSize * channels;
+    final expectedOutLength = outSize * outSize * channels;
+    if (tile.length != expectedInLength) {
       throw ArgumentError(
-        'rgbTile must have $expectedInLength floats '
-        '($inSize x $inSize x 3), got ${rgbTile.length}',
+        'tile must have $expectedInLength floats '
+        '($inSize x $inSize x $channels), got ${tile.length}',
       );
     }
     final api = _OrtLib.api;
@@ -389,12 +420,17 @@ class OnnxModel {
     // NCHW layout, matching the export's expected input shape.
     final shape = calloc<Int64>(4);
     shape[0] = 1;
-    shape[1] = 3;
+    shape[1] = channels;
     shape[2] = inSize;
     shape[3] = inSize;
 
     final inputData = calloc<Float>(expectedInLength);
-    _packChwFromRgb(rgbTile, inputData.asTypedList(expectedInLength), inSize);
+    _packChw(
+      tile,
+      inputData.asTypedList(expectedInLength),
+      inSize,
+      channels,
+    );
 
     final inputValueOut = calloc<Pointer<OrtValue>>();
     final outputValue = calloc<Pointer<OrtValue>>();
@@ -474,9 +510,9 @@ class OnnxModel {
       }
 
       final chwOut = outData.cast<Float>().asTypedList(expectedOutLength);
-      final rgbOut = Float32List(expectedOutLength);
-      _unpackRgbFromChw(chwOut, rgbOut, outSize);
-      return rgbOut;
+      final packedOut = Float32List(expectedOutLength);
+      _unpackChw(chwOut, packedOut, outSize, channels);
+      return packedOut;
     } finally {
       if (outputValue.value != nullptr) {
         api.ref.ReleaseValue.asFunction<void Function(Pointer<OrtValue>)>()(
@@ -500,27 +536,38 @@ class OnnxModel {
   }
 }
 
-/// Rearranges packed-RGB (`[r,g,b,r,g,b,...]`) into planar NCHW
-/// (`[r,r,r,...,g,g,g,...,b,b,b,...]`), the layout ONNX image models
-/// conventionally expect.
-void _packChwFromRgb(Float32List rgb, Float32List chwOut, int tileSize) {
+/// Rearranges packed-per-pixel data (`[c0,c1,c2,...,c0,c1,c2,...]`) into
+/// planar NCHW (`[c0,c0,...,c1,c1,...,c2,c2,...]`), the layout ONNX image
+/// models conventionally expect. `channels` is 3 (RGB) for every
+/// sRGB-domain model, 4 (packed RGGB Bayer planes) for [pmridDenoiseModelSpec].
+void _packChw(
+  Float32List packed,
+  Float32List chwOut,
+  int tileSize,
+  int channels,
+) {
   final pixelCount = tileSize * tileSize;
   for (var p = 0; p < pixelCount; p++) {
-    final i = p * 3;
-    chwOut[p] = rgb[i];
-    chwOut[pixelCount + p] = rgb[i + 1];
-    chwOut[pixelCount * 2 + p] = rgb[i + 2];
+    final i = p * channels;
+    for (var c = 0; c < channels; c++) {
+      chwOut[pixelCount * c + p] = packed[i + c];
+    }
   }
 }
 
-/// Inverse of [_packChwFromRgb].
-void _unpackRgbFromChw(Float32List chw, Float32List rgbOut, int tileSize) {
+/// Inverse of [_packChw].
+void _unpackChw(
+  Float32List chw,
+  Float32List packedOut,
+  int tileSize,
+  int channels,
+) {
   final pixelCount = tileSize * tileSize;
   for (var p = 0; p < pixelCount; p++) {
-    final i = p * 3;
-    rgbOut[i] = chw[p];
-    rgbOut[i + 1] = chw[pixelCount + p];
-    rgbOut[i + 2] = chw[pixelCount * 2 + p];
+    final i = p * channels;
+    for (var c = 0; c < channels; c++) {
+      packedOut[i + c] = chw[pixelCount * c + p];
+    }
   }
 }
 

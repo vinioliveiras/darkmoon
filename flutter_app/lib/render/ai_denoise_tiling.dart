@@ -10,9 +10,12 @@ import 'dart:typed_data';
 /// NAFNet-SIDD denoiser) and upscalers ([scaleFactor] 2+, e.g. Real-ESRGAN)
 /// — the returned buffer is `width*scaleFactor` x `height*scaleFactor`.
 ///
-/// [rgb] is packed, row-major, 3 floats/pixel, normalized to [0,1] (the
-/// convention `lib/native/onnx_runtime.dart`'s models expect — see
-/// `tool/onnx_denoise_smoke_test.dart`'s validation notes).
+/// [image] is packed, row-major, [channels] floats/pixel, normalized to
+/// [0,1] (the convention `lib/native/onnx_runtime.dart`'s models expect —
+/// see `tool/onnx_denoise_smoke_test.dart`'s validation notes). [channels]
+/// defaults to 3 (RGB, the NAFNet-SIDD/Real-ESRGAN convention); the
+/// raw-domain PMRID denoiser (`pmrid_denoise.dart`) is the one caller that
+/// passes 4 (packed RGGB Bayer planes) instead.
 ///
 /// Every tile fed to [processTile] is exactly [inputTileSize] x
 /// `inputTileSize` — both vendored models require a fixed tile size (one
@@ -30,13 +33,14 @@ import 'dart:typed_data';
 /// use), and that padding is cropped back off the stitched result at the
 /// end — callers never see it.
 Float32List denoiseTiled(
-  Float32List rgb,
+  Float32List image,
   int width,
   int height, {
   required Float32List Function(Float32List tile) processTile,
   required int inputTileSize,
   required int scaleFactor,
   int overlap = 16,
+  int channels = 3,
   void Function(int tileIndex, int totalTiles)? onProgress,
 }) {
   if (overlap >= inputTileSize) {
@@ -54,12 +58,19 @@ Float32List denoiseTiled(
   final paddedWidth = (tilesX - 1) * step + inputTileSize;
   final paddedHeight = (tilesY - 1) * step + inputTileSize;
 
-  final padded = _edgeClampPad(rgb, width, height, paddedWidth, paddedHeight);
+  final padded = _edgeClampPad(
+    image,
+    width,
+    height,
+    paddedWidth,
+    paddedHeight,
+    channels,
+  );
 
   final outputTileSize = inputTileSize * scaleFactor;
   final outPaddedWidth = paddedWidth * scaleFactor;
   final outPaddedHeight = paddedHeight * scaleFactor;
-  final accum = Float32List(outPaddedWidth * outPaddedHeight * 3);
+  final accum = Float32List(outPaddedWidth * outPaddedHeight * channels);
   final weightSum = Float32List(outPaddedWidth * outPaddedHeight);
 
   // A 1D ramp (0->1->0 shaped, flat 1 in the middle) applied separably on
@@ -83,13 +94,14 @@ Float32List denoiseTiled(
         x0,
         y0,
         inputTileSize,
+        channels,
       );
       final outputTile = processTile(inputTile);
-      if (outputTile.length != outputTileSize * outputTileSize * 3) {
+      if (outputTile.length != outputTileSize * outputTileSize * channels) {
         throw StateError(
           'processTile returned ${outputTile.length} floats, expected '
-          '${outputTileSize * outputTileSize * 3} '
-          '($outputTileSize x $outputTileSize x 3)',
+          '${outputTileSize * outputTileSize * channels} '
+          '($outputTileSize x $outputTileSize x $channels)',
         );
       }
       final ramp = _tileWeightRamp(
@@ -110,24 +122,25 @@ Float32List denoiseTiled(
         x0 * scaleFactor,
         y0 * scaleFactor,
         outputTileSize,
+        channels,
       );
       tileIndex++;
       onProgress?.call(tileIndex, totalTiles);
     }
   }
 
-  final stitched = Float32List(outPaddedWidth * outPaddedHeight * 3);
+  final stitched = Float32List(outPaddedWidth * outPaddedHeight * channels);
   for (var p = 0; p < outPaddedWidth * outPaddedHeight; p++) {
     final w = weightSum[p];
-    final i = p * 3;
     if (w <= 0) {
       // Only possible if a caller passes an inconsistent tile grid — every
       // real pixel is covered by at least one tile by construction.
       continue;
     }
-    stitched[i] = accum[i] / w;
-    stitched[i + 1] = accum[i + 1] / w;
-    stitched[i + 2] = accum[i + 2] / w;
+    final i = p * channels;
+    for (var c = 0; c < channels; c++) {
+      stitched[i + c] = accum[i + c] / w;
+    }
   }
 
   if (paddedWidth == width && paddedHeight == height) {
@@ -138,29 +151,31 @@ Float32List denoiseTiled(
     outPaddedWidth,
     width * scaleFactor,
     height * scaleFactor,
+    channels,
   );
 }
 
 Float32List _edgeClampPad(
-  Float32List rgb,
+  Float32List image,
   int width,
   int height,
   int paddedWidth,
   int paddedHeight,
+  int channels,
 ) {
   if (paddedWidth == width && paddedHeight == height) {
-    return rgb;
+    return image;
   }
-  final out = Float32List(paddedWidth * paddedHeight * 3);
+  final out = Float32List(paddedWidth * paddedHeight * channels);
   for (var y = 0; y < paddedHeight; y++) {
     final sy = y < height ? y : height - 1;
     for (var x = 0; x < paddedWidth; x++) {
       final sx = x < width ? x : width - 1;
-      final si = (sy * width + sx) * 3;
-      final di = (y * paddedWidth + x) * 3;
-      out[di] = rgb[si];
-      out[di + 1] = rgb[si + 1];
-      out[di + 2] = rgb[si + 2];
+      final si = (sy * width + sx) * channels;
+      final di = (y * paddedWidth + x) * channels;
+      for (var c = 0; c < channels; c++) {
+        out[di + c] = image[si + c];
+      }
     }
   }
   return out;
@@ -172,14 +187,15 @@ Float32List _extractTile(
   int x0,
   int y0,
   int tileSize,
+  int channels,
 ) {
-  final tile = Float32List(tileSize * tileSize * 3);
+  final tile = Float32List(tileSize * tileSize * channels);
   for (var y = 0; y < tileSize; y++) {
-    final srcRowStart = ((y0 + y) * paddedWidth + x0) * 3;
-    final dstRowStart = y * tileSize * 3;
+    final srcRowStart = ((y0 + y) * paddedWidth + x0) * channels;
+    final dstRowStart = y * tileSize * channels;
     tile.setRange(
       dstRowStart,
-      dstRowStart + tileSize * 3,
+      dstRowStart + tileSize * channels,
       padded,
       srcRowStart,
     );
@@ -253,6 +269,7 @@ void _accumulateTile(
   int dstX0,
   int dstY0,
   int tileSize,
+  int channels,
 ) {
   for (var y = 0; y < tileSize; y++) {
     final dstY = dstY0 + y;
@@ -260,24 +277,30 @@ void _accumulateTile(
       final dstX = dstX0 + x;
       final w = weight[y * tileSize + x];
       final dstP = dstY * accumWidth + dstX;
-      final srcI = (y * tileSize + x) * 3;
-      final dstI = dstP * 3;
-      accum[dstI] += tile[srcI] * w;
-      accum[dstI + 1] += tile[srcI + 1] * w;
-      accum[dstI + 2] += tile[srcI + 2] * w;
+      final srcI = (y * tileSize + x) * channels;
+      final dstI = dstP * channels;
+      for (var c = 0; c < channels; c++) {
+        accum[dstI + c] += tile[srcI + c] * w;
+      }
       weightSum[dstP] += w;
     }
   }
 }
 
-Float32List _crop(Float32List src, int srcWidth, int outWidth, int outHeight) {
-  final out = Float32List(outWidth * outHeight * 3);
+Float32List _crop(
+  Float32List src,
+  int srcWidth,
+  int outWidth,
+  int outHeight,
+  int channels,
+) {
+  final out = Float32List(outWidth * outHeight * channels);
   for (var y = 0; y < outHeight; y++) {
-    final srcRowStart = (y * srcWidth) * 3;
-    final dstRowStart = (y * outWidth) * 3;
+    final srcRowStart = (y * srcWidth) * channels;
+    final dstRowStart = (y * outWidth) * channels;
     out.setRange(
       dstRowStart,
-      dstRowStart + outWidth * 3,
+      dstRowStart + outWidth * channels,
       src,
       srcRowStart,
     );

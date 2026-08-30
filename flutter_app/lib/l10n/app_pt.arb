@@ -86,12 +86,15 @@
   "aiDenoiseEnhanceDenoiseLabel": "Denoise",
   "aiDenoiseEnhanceAmountLabel": "Intensidade",
   "aiDenoiseEnhanceUpscaleLabel": "Upscale 2x",
+  "aiDenoiseEnhanceRawDenoiseLabel": "Denoise em RAW (antes do demosaic)",
+  "aiDenoiseEnhanceRawDenoiseUnavailableCaption": "Só disponível para arquivos RAW com sensor Bayer padrão (não X-Trans, Foveon, ou formatos que não são RAW).",
   "aiDenoiseEnhanceFailedMessage": "O AI Enhance não conseguiu rodar nessa foto. Foi desligado de novo.",
   "aiDenoiseEnhanceCpuWarning": "Sua GPU ainda não é compatível com isso, então vai rodar na CPU — isso vai demorar bem mais.",
   "aiDenoiseEnhanceGpuIncompatibleWarning": "Sua GPU ainda não é compatível com isso, então vai rodar na CPU — espere que isso demore bem mais (até alguns minutos numa foto grande).",
   "aiDenoiseEnhanceStartingMessage": "Rodando AI Enhance...",
   "aiDenoiseEnhanceStageDenoise": "Removendo ruído",
   "aiDenoiseEnhanceStageUpscale": "Ampliando",
+  "aiDenoiseEnhanceStageRawDenoise": "Removendo ruído (RAW)",
   "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
   "@aiDenoiseEnhanceTileProgress": {
     "placeholders": {

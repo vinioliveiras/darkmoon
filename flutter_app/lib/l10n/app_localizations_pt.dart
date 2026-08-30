@@ -269,6 +269,14 @@ class AppLocalizationsPt extends AppLocalizations {
   String get aiDenoiseEnhanceUpscaleLabel => 'Upscale 2x';
 
   @override
+  String get aiDenoiseEnhanceRawDenoiseLabel =>
+      'Denoise em RAW (antes do demosaic)';
+
+  @override
+  String get aiDenoiseEnhanceRawDenoiseUnavailableCaption =>
+      'Só disponível para arquivos RAW com sensor Bayer padrão (não X-Trans, Foveon, ou formatos que não são RAW).';
+
+  @override
   String get aiDenoiseEnhanceFailedMessage =>
       'O AI Enhance não conseguiu rodar nessa foto. Foi desligado de novo.';
 
@@ -288,6 +296,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get aiDenoiseEnhanceStageUpscale => 'Ampliando';
+
+  @override
+  String get aiDenoiseEnhanceStageRawDenoise => 'Removendo ruído (RAW)';
 
   @override
   String aiDenoiseEnhanceTileProgress(String stage, int percent) {
