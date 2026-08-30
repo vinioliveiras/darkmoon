@@ -271,7 +271,11 @@ class _PresetRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Material(
-      color: selected ? DarkmoonColors.panel : Colors.transparent,
+      color: selected
+          ? DarkmoonColors.panel
+          : (applied
+                ? DarkmoonColors.accent.withValues(alpha: 0.12)
+                : Colors.transparent),
       child: InkWell(
         onTap: selectionMode ? onToggleSelected : (enabled ? onApply : null),
         child: Padding(
