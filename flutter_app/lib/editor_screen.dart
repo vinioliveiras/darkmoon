@@ -5441,7 +5441,7 @@ class _TopMenuBar extends StatelessWidget {
       height: 32,
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: const BoxDecoration(
-        color: DarkmoonColors.background,
+        color: DarkmoonColors.panel,
         border: Border(bottom: BorderSide(color: DarkmoonColors.divider)),
       ),
       child: Row(
@@ -5677,12 +5677,8 @@ class _ImageArea extends StatelessWidget {
       right: 0,
       child: IgnorePointer(
         child: Center(
-          child: Container(
+          child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-            decoration: BoxDecoration(
-              color: Colors.black.withValues(alpha: 0.55),
-              borderRadius: BorderRadius.circular(6),
-            ),
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -6244,7 +6240,7 @@ class _ViewerToolbar extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     return Container(
       height: 64,
-      color: DarkmoonColors.background,
+      color: DarkmoonColors.panel,
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
@@ -6625,8 +6621,8 @@ class _CropTransformPanel extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
-        color: DarkmoonColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(8),
+        color: DarkmoonColors.sectionCardBackground,
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: DarkmoonColors.border),
       ),
       child: Column(

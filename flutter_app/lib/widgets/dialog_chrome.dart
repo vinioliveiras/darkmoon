@@ -37,7 +37,6 @@ class DialogCloseButton extends StatelessWidget {
         style: IconButton.styleFrom(
           backgroundColor: DarkmoonColors.dialogBackground,
           foregroundColor: DarkmoonColors.textSecondary,
-          side: const BorderSide(color: DarkmoonColors.border),
           shape: const CircleBorder(),
         ),
         icon: const Icon(CupertinoIcons.xmark),

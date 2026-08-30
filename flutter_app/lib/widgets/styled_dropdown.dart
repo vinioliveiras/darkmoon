@@ -46,6 +46,7 @@ class StyledDropdown<T> extends StatefulWidget {
     this.searchHintText,
     this.noMatchesText,
     this.maxMenuHeight = 320,
+    this.showBorder = true,
   });
 
   final T? value;
@@ -94,6 +95,11 @@ class StyledDropdown<T> extends StatefulWidget {
   /// long lists (the lens-profile picker); raise it for a short fixed
   /// list that should show every option at once.
   final double maxMenuHeight;
+
+  /// Whether the trigger button draws its own border — off for triggers
+  /// like the mask selector's "+" Add button, which reads better as a
+  /// bare icon than a boxed picker.
+  final bool showBorder;
 
   @override
   State<StyledDropdown<T>> createState() => _StyledDropdownState<T>();
@@ -235,9 +241,13 @@ class _StyledDropdownState<T> extends State<StyledDropdown<T>>
             decoration: BoxDecoration(
               color: DarkmoonColors.dropdownBackground,
               borderRadius: BorderRadius.circular(7),
-              border: Border.all(
-                color: _isOpen ? DarkmoonColors.accent : DarkmoonColors.border,
-              ),
+              border: widget.showBorder
+                  ? Border.all(
+                      color: _isOpen
+                          ? DarkmoonColors.accent
+                          : DarkmoonColors.border,
+                    )
+                  : null,
             ),
             child: iconOnly
                 ? Center(

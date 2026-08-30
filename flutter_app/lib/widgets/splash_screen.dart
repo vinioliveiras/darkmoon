@@ -35,10 +35,10 @@ class SplashScreen extends StatelessWidget {
       // larger than the card itself, so this is just the thin margin
       // between the card's shadow and the window edge, not a full-screen
       // backdrop.
-      color: DarkmoonColors.surfaceRaised,
+      color: DarkmoonColors.dialogBackground,
       child: Center(
         child: Material(
-          color: DarkmoonColors.surfaceRaised,
+          color: DarkmoonColors.dialogBackground,
           elevation: 24,
           borderRadius: BorderRadius.circular(10),
           clipBehavior: Clip.antiAlias,

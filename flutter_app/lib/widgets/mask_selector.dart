@@ -119,6 +119,7 @@ class MaskSelector extends StatelessWidget {
                 placeholder: '',
                 leadingIcon: CupertinoIcons.add,
                 showChevron: false,
+                showBorder: false,
                 width: 34,
                 menuWidth: 190,
                 menuAlignRight: true,
