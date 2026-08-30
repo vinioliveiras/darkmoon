@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Directory, File, Process;
-import 'dart:ui' show AppExitResponse;
+import 'dart:ui' show AppExitResponse, ImageFilter;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
@@ -5764,10 +5764,16 @@ class _ImageArea extends StatelessWidget {
   /// threading a `BuildContext` down from `build()` through several
   /// intermediate methods (`_zoomableImage`/`_fittedImage`/…) — any
   /// descendant context works for [AnimationsConfig.of].
-  Widget _fadingImage(Uint8List bytes) {
+  ///
+  /// [isPlaceholder] marks [bytes] as the small filmstrip thumbnail
+  /// standing in for [preview] while it's still decoding — blurred so it
+  /// visibly reads as "not the real thing yet" rather than a soft/
+  /// low-quality render.
+  Widget _fadingImage(Uint8List bytes, {required bool isPlaceholder}) {
     return Builder(
       builder: (context) => _FadingPreviewImage(
         bytes: bytes,
+        isPlaceholder: isPlaceholder,
         fadeGeneration: previewFadeGeneration,
         duration: AnimationsConfig.duration(
           context,
@@ -5969,6 +5975,9 @@ class _ImageArea extends StatelessWidget {
   Widget _fittedImage(Uint8List bytes) {
     final mask = editingMask;
     final source = editingSource;
+    // The real decoded preview isn't ready yet — [bytes] is standing in
+    // with the small filmstrip thumbnail (see _buildContent).
+    final isPlaceholder = preview == null;
     if (wbEyedropperActive && source != null) {
       return SizedBox.expand(
         child: LayoutBuilder(
@@ -5976,7 +5985,7 @@ class _ImageArea extends StatelessWidget {
             return Stack(
               fit: StackFit.expand,
               children: [
-                _fadingImage(bytes),
+                _fadingImage(bytes, isPlaceholder: isPlaceholder),
                 WhiteBalanceEyedropperOverlay(
                   containerSize: Size(
                     constraints.maxWidth,
@@ -6010,7 +6019,7 @@ class _ImageArea extends StatelessWidget {
             return Stack(
               fit: StackFit.expand,
               children: [
-                _fadingImage(bytes),
+                _fadingImage(bytes, isPlaceholder: isPlaceholder),
                 CropOverlay(
                   containerSize: containerSize,
                   imageWidth: frameWidth,
@@ -6030,7 +6039,7 @@ class _ImageArea extends StatelessWidget {
     final noOverlay = mask == null || source == null;
     return SizedBox.expand(
       child: noOverlay
-          ? _fadingImage(bytes)
+          ? _fadingImage(bytes, isPlaceholder: isPlaceholder)
           : LayoutBuilder(
               builder: (context, constraints) {
                 final containerSize = Size(
@@ -6107,11 +6116,16 @@ class _ImageArea extends StatelessWidget {
 class _FadingPreviewImage extends StatefulWidget {
   const _FadingPreviewImage({
     required this.bytes,
+    required this.isPlaceholder,
     required this.fadeGeneration,
     required this.duration,
   });
 
   final Uint8List bytes;
+
+  /// See `_ImageArea._fadingImage`'s doc — true while [bytes] is the
+  /// small filmstrip thumbnail standing in for the real preview.
+  final bool isPlaceholder;
   final int fadeGeneration;
   final Duration duration;
 
@@ -6123,11 +6137,13 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
-  /// The previous frame, kept as a fully-opaque base layer only while
+  /// The previous frame (+ whether it was itself a placeholder, so it
+  /// keeps its own blur), kept as a fully-opaque base layer only while
   /// [_controller] is actively fading the new one in on top of it —
   /// cleared once the fade completes (or immediately, for an instant/
   /// live-drag update) so a stale frame doesn't linger in the tree.
   Uint8List? _previousBytes;
+  bool _previousIsPlaceholder = false;
 
   bool get _shouldAnimate => widget.duration > Duration.zero;
 
@@ -6152,7 +6168,10 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
   void didUpdateWidget(_FadingPreviewImage old) {
     super.didUpdateWidget(old);
     if (widget.fadeGeneration != old.fadeGeneration && _shouldAnimate) {
-      setState(() => _previousBytes = old.bytes);
+      setState(() {
+        _previousBytes = old.bytes;
+        _previousIsPlaceholder = old.isPlaceholder;
+      });
       _controller
         ..duration = widget.duration
         ..forward(from: 0);
@@ -6171,21 +6190,33 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
     super.dispose();
   }
 
+  /// Blurred while [placeholder] — visibly reads as "not the real thing
+  /// yet" rather than just a soft/low-quality render.
+  Widget _layer(Uint8List bytes, bool placeholder) {
+    final image = Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true);
+    if (!placeholder) {
+      return image;
+    }
+    return ImageFiltered(
+      imageFilter: ImageFilter.blur(
+        sigmaX: 14,
+        sigmaY: 14,
+        tileMode: TileMode.decal,
+      ),
+      child: image,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final previous = _previousBytes;
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (previous != null)
-          Image.memory(previous, fit: BoxFit.contain, gaplessPlayback: true),
+        if (previous != null) _layer(previous, _previousIsPlaceholder),
         FadeTransition(
           opacity: _controller,
-          child: Image.memory(
-            widget.bytes,
-            fit: BoxFit.contain,
-            gaplessPlayback: true,
-          ),
+          child: _layer(widget.bytes, widget.isPlaceholder),
         ),
       ],
     );
