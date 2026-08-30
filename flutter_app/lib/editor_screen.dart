@@ -6170,6 +6170,16 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
       value: _shouldAnimate ? 0.0 : 1.0,
       duration: widget.duration,
     );
+    // Without this, _previousBytes stayed set forever after the very
+    // first fade — invisible while the new (sharp, opaque) layer fully
+    // covers it, but exposed as a lingering blurred halo wherever
+    // BoxFit.contain letterboxes the new layer without fully covering
+    // the old one's own footprint underneath.
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.completed && _previousBytes != null) {
+        setState(() => _previousBytes = null);
+      }
+    });
     if (_shouldAnimate) {
       _controller.forward();
     }
