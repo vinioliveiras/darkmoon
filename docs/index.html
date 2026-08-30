@@ -1,4 +1,8 @@
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>darkmoon</title>
+<link rel="icon" type="image/png" sizes="512x512" href="favicon.png">
+<link rel="apple-touch-icon" href="favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,340;0,9..144,480;0,9..144,600;1,9..144,440&family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -441,6 +445,31 @@
     .feature-grid { grid-template-columns: 1fr; }
     .nav-links { gap: 16px; }
     .nav-links a:not(.cta) { display: none; }
+    .showcase-cap { flex-direction: column; align-items: flex-start; gap: 6px; }
+    .closing-panel { padding: 48px 28px; }
+  }
+
+  /* Phones — the 880px pass above already collapses every grid to one
+     column; this pass just tightens spacing/type so the page doesn't
+     feel like a desktop layout squeezed into a narrow strip. */
+  @media (max-width: 480px) {
+    .wrap { padding: 0 18px; }
+    .hero { padding: 44px 0 64px; }
+    .hero .lede { max-width: none; }
+    .btn { padding: 12px 18px; font-size: 0.9rem; }
+    .moon-stage { min-height: 180px; }
+    .moon-glow { width: 220px; height: 220px; }
+    .moon-icon { width: 96px; height: 96px; border-radius: 26px; }
+    .showcase { padding: 8px 0 56px; }
+    .frame { padding: 6px; }
+    .features { padding: 4px 0 64px; }
+    .section-head { margin-bottom: 28px; }
+    .feature { padding: 22px 20px; }
+    .split-section { padding: 24px 0 56px; }
+    .closing { padding: 4px 0 64px; }
+    .closing-panel { padding: 36px 20px; }
+    .foot-row { flex-direction: column; align-items: flex-start; }
+    .foot-links { flex-wrap: wrap; gap: 14px 20px; }
   }
 </style>
 
