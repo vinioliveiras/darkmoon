@@ -8777,7 +8777,11 @@ class _FilmstripState extends State<_Filmstrip> {
                                 Container(
                                   width: double.infinity,
                                   height: double.infinity,
-                                  color: DarkmoonColors.canvas,
+                                  // A step lighter than the filmstrip's own
+                                  // canvas background — using canvas here
+                                  // too (tried first) made the thumbnail
+                                  // card invisible against the strip.
+                                  color: DarkmoonColors.dropdownBackground,
                                   alignment: Alignment.center,
                                   child: thumbnail == null
                                       ? const SizedBox(
