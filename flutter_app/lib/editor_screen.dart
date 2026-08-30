@@ -5442,7 +5442,7 @@ class _TopMenuBar extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 8),
       decoration: const BoxDecoration(
         color: DarkmoonColors.panel,
-        border: Border(bottom: BorderSide(color: DarkmoonColors.divider)),
+        border: Border(bottom: BorderSide(color: DarkmoonColors.dividerDark)),
       ),
       child: Row(
         children: [
@@ -6290,6 +6290,7 @@ class _ViewerToolbar extends StatelessWidget {
                   // actually save space.
                   _ToolbarPill(
                     height: _squareButtonSize,
+                    showChrome: false,
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.minus,
@@ -6313,6 +6314,7 @@ class _ViewerToolbar extends StatelessWidget {
                   const SizedBox(width: 6),
                   _ToolbarPill(
                     height: _squareButtonSize,
+                    showChrome: false,
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.arrow_up_left_arrow_down_right,
@@ -6332,6 +6334,7 @@ class _ViewerToolbar extends StatelessWidget {
                   // group.
                   _ToolbarPill(
                     height: _squareButtonSize,
+                    showChrome: false,
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.arrow_uturn_left,
@@ -6359,6 +6362,7 @@ class _ViewerToolbar extends StatelessWidget {
                   const Spacer(),
                   _ToolbarPill(
                     height: _squareButtonSize,
+                    showChrome: false,
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.crop,
@@ -6373,6 +6377,7 @@ class _ViewerToolbar extends StatelessWidget {
                   const SizedBox(width: 6),
                   _ToolbarPill(
                     height: _squareButtonSize,
+                    showChrome: false,
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.sparkles,
@@ -6387,6 +6392,7 @@ class _ViewerToolbar extends StatelessWidget {
                   const SizedBox(width: 6),
                   _ToolbarPill(
                     height: _squareButtonSize,
+                    showChrome: false,
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.square_split_2x1,
@@ -6465,7 +6471,11 @@ class _ViewerToolbar extends StatelessWidget {
 /// edge with hairline dividers between them, rather than each control
 /// being its own separately-chromed Material button.
 class _ToolbarPill extends StatelessWidget {
-  const _ToolbarPill({required this.children, this.height = 40});
+  const _ToolbarPill({
+    required this.children,
+    this.height = 40,
+    this.showChrome = true,
+  });
 
   final List<Widget> children;
 
@@ -6475,21 +6485,30 @@ class _ToolbarPill extends StatelessWidget {
   /// which are tapped far more often than the zoom +/- pair.
   final double height;
 
+  /// Whether the pill draws its background fill/border/segment dividers
+  /// at all — off for the viewer toolbar's experiment in bare, boxless
+  /// buttons. The shape (radius/clip) stays wired either way, so
+  /// flipping this back to true restores the old boxed look exactly.
+  final bool showChrome;
+
   @override
   Widget build(BuildContext context) {
     return Container(
       height: height,
-      decoration: BoxDecoration(
-        color: DarkmoonColors.surfaceRaised,
-        borderRadius: BorderRadius.circular(7),
-        border: Border.all(color: DarkmoonColors.border),
-      ),
+      decoration: showChrome
+          ? BoxDecoration(
+              color: DarkmoonColors.surfaceRaised,
+              borderRadius: BorderRadius.circular(7),
+              border: Border.all(color: DarkmoonColors.border),
+            )
+          : BoxDecoration(borderRadius: BorderRadius.circular(7)),
       clipBehavior: Clip.antiAlias,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           for (var i = 0; i < children.length; i++) ...[
-            if (i > 0) Container(width: 1, color: DarkmoonColors.border),
+            if (i > 0 && showChrome)
+              Container(width: 1, color: DarkmoonColors.border),
             // Each segment decides for itself whether it can afford to
             // shrink (see _ToolbarSegment) — a blanket Flexible here would
             // give every segment equal shrink priority regardless of

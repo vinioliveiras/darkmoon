@@ -47,6 +47,7 @@ class StyledDropdown<T> extends StatefulWidget {
     this.noMatchesText,
     this.maxMenuHeight = 320,
     this.showBorder = true,
+    this.showBackground = true,
   });
 
   final T? value;
@@ -100,6 +101,14 @@ class StyledDropdown<T> extends StatefulWidget {
   /// like the mask selector's "+" Add button, which reads better as a
   /// bare icon than a boxed picker.
   final bool showBorder;
+
+  /// Whether the trigger button fills with [DarkmoonColors.
+  /// dropdownBackground] while *closed*. True (the default) still only
+  /// fills once the menu is open — a resting dropdown reads as a bare
+  /// bordered outline, matching every other flattened control in the
+  /// panel. False keeps it transparent even while open, for a trigger
+  /// (the mask selector's "+" Add button) that shouldn't box at all.
+  final bool showBackground;
 
   @override
   State<StyledDropdown<T>> createState() => _StyledDropdownState<T>();
@@ -239,7 +248,9 @@ class _StyledDropdownState<T> extends State<StyledDropdown<T>>
             height: 34,
             padding: EdgeInsets.symmetric(horizontal: iconOnly ? 0 : 10),
             decoration: BoxDecoration(
-              color: DarkmoonColors.dropdownBackground,
+              color: widget.showBackground && _isOpen
+                  ? DarkmoonColors.dropdownBackground
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(7),
               border: widget.showBorder
                   ? Border.all(

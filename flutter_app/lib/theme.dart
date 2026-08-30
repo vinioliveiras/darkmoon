@@ -42,8 +42,13 @@ class DarkmoonColors {
   /// the first pass (which read as too light a gray), only a hair
   /// lighter than [panel] so the card reads as faintly raised rather
   /// than flush with the panel background.
-  static const sectionCardBackground = Color(0xFF17191D);
+  static const sectionCardBackground = Color(0xFF101216);
   static const divider = Color(0xFF2A2C30);
+
+  /// A much darker divider variant — for a seam that should barely
+  /// register (e.g. under the top File/Settings bar) rather than read
+  /// as a visible rule the way [divider] does elsewhere.
+  static const dividerDark = Color(0xFF0A0B0D);
   static const textPrimary = Color(0xFFE3E6EA);
   static const textSecondary = Color(0xFFC5C8CC);
   static const textMuted = Color(0xFF878A8E);
