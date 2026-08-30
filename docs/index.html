@@ -130,7 +130,14 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 26px 0;
+    /* Longhand, not `padding: 26px 0` — this element also carries
+       .wrap's class, and a shorthand here would silently zero out
+       .wrap's own left/right padding at every breakpoint (the nav row
+       sat flush against the viewport edge even on desktop until this
+       was caught). Only sets vertical padding, leaving .wrap's
+       horizontal padding (32/22/18px across the breakpoints) intact. */
+    padding-top: 26px;
+    padding-bottom: 26px;
   }
   .wordmark {
     display: flex;
