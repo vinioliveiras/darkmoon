@@ -689,21 +689,12 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   /// Bumped once per *settled* (non-live) render that lands for the
-  /// currently-selected photo — an applied edit, preset, reset, undo, or
-  /// redo — and used to key the preview `Image` inside an
-  /// `AnimatedSwitcher` (see `_ImageArea._fadingImage`) so the change
-  /// fades in instead of popping. Never bumped for a live drag frame
-  /// (those already update instantly with no animation, by design — see
-  /// [_scheduleRender]), and deliberately not bumped for the very first
-  /// frame shown after selecting a *different* photo (see
-  /// [_suppressNextPreviewFade]), so switching photos stays an instant
-  /// swap rather than a crossfade.
+  /// currently-selected photo — an applied edit, preset, reset, undo,
+  /// redo, or a freshly-decoded photo's first frame — telling
+  /// `_ImageArea._fadingImage` to fade the change in instead of popping.
+  /// Never bumped for a live drag frame (those already update instantly
+  /// with no animation, by design — see [_scheduleRender]).
   int _previewFadeGeneration = 0;
-
-  /// Set alongside `_selectedIndex` whenever the selected photo changes;
-  /// consumed (and cleared) by the next render that lands for it,
-  /// regardless of whether that render is live or settled.
-  bool _suppressNextPreviewFade = false;
 
   /// Camera/lens/exposure info per photo (absolute path), shown below the
   /// histogram — loaded lazily on selection (cheap: no unpack/demosaic
@@ -2513,7 +2504,6 @@ class _EditorScreenState extends State<EditorScreen>
     setState(() {
       _files = files;
       _selectedIndex = selectedIndex;
-      _suppressNextPreviewFade = true;
       _thumbnailsTotal = files.length;
       _paramValues = selectedIndex == null
           ? _defaultParamValues()
@@ -2663,7 +2653,6 @@ class _EditorScreenState extends State<EditorScreen>
     _fullQualityScaled = null;
     setState(() {
       _selectedIndex = index;
-      _suppressNextPreviewFade = true;
       _paramValues = _paramValuesFor(path);
       _currentCurves = _curvesFor(path);
       _currentMasks = _masksFor(path);
@@ -3152,14 +3141,11 @@ class _EditorScreenState extends State<EditorScreen>
     setState(() {
       _isRenderingSlow = false;
       _renderedPreviews[path] = firstResult.jpegBytes;
-      // Fade in a settled render (applied edit/preset/reset/undo/redo) —
-      // never a live drag frame, and never the first frame shown right
-      // after switching to a different photo (see
-      // _suppressNextPreviewFade's doc).
-      if (!live && !_suppressNextPreviewFade) {
+      // Fade in a settled render (applied edit/preset/reset/undo/redo, or
+      // a freshly-decoded photo's first frame) — never a live drag frame.
+      if (!live) {
         _previewFadeGeneration++;
       }
-      _suppressNextPreviewFade = false;
       // This phase-1 render is newer than any full-quality one on file for
       // this photo — drop the stale full render so the canvas shows this
       // one until phase 2 (if any) replaces it.
@@ -5322,9 +5308,6 @@ class _EditorScreenState extends State<EditorScreen>
                                   fileMissing:
                                       selected != null &&
                                       _missingFiles.contains(selected.path),
-                                  thumbnail: selected == null
-                                      ? null
-                                      : _thumbnails[selected.path],
                                   preview: selected == null
                                       ? null
                                       : _displayPreview(selected.path),
@@ -5660,7 +5643,6 @@ class _ImageArea extends StatelessWidget {
   const _ImageArea({
     required this.selected,
     required this.fileMissing,
-    required this.thumbnail,
     required this.preview,
     required this.neutralPreview,
     required this.beforeAfterMode,
@@ -5702,7 +5684,6 @@ class _ImageArea extends StatelessWidget {
   /// spin forever on a decode that will never finish.
   final bool fileMissing;
 
-  final Uint8List? thumbnail;
   final Uint8List? preview;
   final Uint8List? neutralPreview;
   final bool beforeAfterMode;
@@ -5786,7 +5767,7 @@ class _ImageArea extends StatelessWidget {
 
   /// See [_EditorScreenState._previewFadeGeneration]'s doc — changes
   /// only on a settled edit/preset/reset/undo/redo for the *same* photo,
-  /// used below to key [_fadingImage]'s `AnimatedSwitcher`.
+  /// telling [_fadingImage] when to actually play the fade.
   final int previewFadeGeneration;
 
   /// Vertical breathing room around the fitted image — without this, a
@@ -5798,24 +5779,20 @@ class _ImageArea extends StatelessWidget {
 
   /// The main preview `Image`, wrapped so a settled render fades in
   /// (see [previewFadeGeneration]) instead of popping — a live drag
-  /// frame reuses the same key, so it updates in place with no
-  /// animation, same as before this existed. An instant swap (no
-  /// transition at all) when Settings > animations is off. A [Builder]
-  /// rather than threading a `BuildContext` down from `build()` through
-  /// several intermediate methods (`_zoomableImage`/`_fittedImage`/…) —
-  /// any descendant context works for [AnimationsConfig.of].
+  /// frame doesn't bump the generation, so it updates in place with no
+  /// animation, same as before this existed. Instant (no transition at
+  /// all) when Settings > animations is off. A [Builder] rather than
+  /// threading a `BuildContext` down from `build()` through several
+  /// intermediate methods (`_zoomableImage`/`_fittedImage`/…) — any
+  /// descendant context works for [AnimationsConfig.of].
   Widget _fadingImage(Uint8List bytes) {
     return Builder(
-      builder: (context) => AnimatedSwitcher(
+      builder: (context) => _FadingPreviewImage(
+        bytes: bytes,
+        fadeGeneration: previewFadeGeneration,
         duration: AnimationsConfig.duration(
           context,
           const Duration(milliseconds: 220),
-        ),
-        child: Image.memory(
-          bytes,
-          key: ValueKey(previewFadeGeneration),
-          fit: BoxFit.contain,
-          gaplessPlayback: true,
         ),
       ),
     );
@@ -5906,9 +5883,12 @@ class _ImageArea extends StatelessWidget {
         style: const TextStyle(color: DarkmoonColors.textMuted),
       );
     }
-    // Prefer the full RAW decode; fall back to the fast embedded thumbnail
-    // while it's still decoding, so something appears immediately.
-    final bytes = preview ?? thumbnail;
+    // Deliberately not falling back to the filmstrip [thumbnail] while
+    // [preview] is still decoding — that produced a low-res, blurry
+    // frame that then visibly popped to the sharp real render a moment
+    // later. Simpler and calmer to just wait, then let the real preview
+    // fade in on its own (see _fadingImage/_FadingPreviewImage).
+    final bytes = preview;
     if (bytes == null) {
       return Text(
         l10n.decodingPhoto(selected!.name),
@@ -6134,6 +6114,102 @@ class _ImageArea extends StatelessWidget {
                 );
               },
             ),
+    );
+  }
+}
+
+/// Shows [bytes], fading it in whenever [fadeGeneration] changes (a
+/// settled edit/preset/reset/undo/redo — see `_ImageArea.previewFadeGeneration`'s
+/// doc) rather than the [AnimatedSwitcher] this replaced, which
+/// crossfaded the old and new image simultaneously — with both
+/// partially transparent at once, the dark canvas behind them showed
+/// through for a moment, reading as a "blink". Here the previous frame
+/// stays fully opaque as a base layer the whole time; only the new
+/// frame fades in on top of it, so the canvas is never exposed.
+class _FadingPreviewImage extends StatefulWidget {
+  const _FadingPreviewImage({
+    required this.bytes,
+    required this.fadeGeneration,
+    required this.duration,
+  });
+
+  final Uint8List bytes;
+  final int fadeGeneration;
+  final Duration duration;
+
+  @override
+  State<_FadingPreviewImage> createState() => _FadingPreviewImageState();
+}
+
+class _FadingPreviewImageState extends State<_FadingPreviewImage>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  /// The previous frame, kept as a fully-opaque base layer only while
+  /// [_controller] is actively fading the new one in on top of it —
+  /// cleared once the fade completes (or immediately, for an instant/
+  /// live-drag update) so a stale frame doesn't linger in the tree.
+  Uint8List? _previousBytes;
+
+  bool get _shouldAnimate => widget.duration > Duration.zero;
+
+  @override
+  void initState() {
+    super.initState();
+    // The very first frame shown for a freshly-opened photo fades in
+    // from nothing too (see _EditorScreenState._buildContent, which
+    // shows a "decoding…" placeholder — not a previous image — until
+    // this widget first mounts).
+    _controller = AnimationController(
+      vsync: this,
+      value: _shouldAnimate ? 0.0 : 1.0,
+      duration: widget.duration,
+    );
+    if (_shouldAnimate) {
+      _controller.forward();
+    }
+  }
+
+  @override
+  void didUpdateWidget(_FadingPreviewImage old) {
+    super.didUpdateWidget(old);
+    if (widget.fadeGeneration != old.fadeGeneration && _shouldAnimate) {
+      setState(() => _previousBytes = old.bytes);
+      _controller
+        ..duration = widget.duration
+        ..forward(from: 0);
+    } else {
+      // A live drag frame, or animations are off — swap instantly.
+      if (_previousBytes != null) {
+        setState(() => _previousBytes = null);
+      }
+      _controller.value = 1.0;
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final previous = _previousBytes;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (previous != null)
+          Image.memory(previous, fit: BoxFit.contain, gaplessPlayback: true),
+        FadeTransition(
+          opacity: _controller,
+          child: Image.memory(
+            widget.bytes,
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+          ),
+        ),
+      ],
     );
   }
 }
