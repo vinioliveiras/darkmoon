@@ -24,9 +24,9 @@ class DialogCloseButton extends StatelessWidget {
         padding: EdgeInsets.zero,
         iconSize: 15,
         style: IconButton.styleFrom(
-          backgroundColor: DarkmoonColors.border.withValues(alpha: 0.5),
+          backgroundColor: DarkmoonColors.dialogBackground,
           foregroundColor: DarkmoonColors.textSecondary,
-          side: BorderSide.none,
+          side: const BorderSide(color: DarkmoonColors.border),
           shape: const CircleBorder(),
         ),
         icon: const Icon(CupertinoIcons.xmark),
@@ -104,7 +104,7 @@ class SettingsGroup extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: DarkmoonColors.surfaceRaised,
+        color: DarkmoonColors.dialogBackground,
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: DarkmoonColors.border),
       ),
