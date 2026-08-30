@@ -18,6 +18,19 @@ import 'styled_dropdown.dart';
 /// speed).
 const _warningColor = Color(0xFFE8A33D);
 
+/// Default value for [NeuralEnhanceChoice.denoiseAmount]/the Amount
+/// slider — 50%, not the model's full-strength 100%. NAFNet-SIDD's raw
+/// output tends to look over-smoothed/"painted" on a lot of real photos
+/// (it has no strength control of its own — see [NeuralEnhanceChoice
+/// .denoiseAmount]'s own doc on why this is a post-hoc blend rather than
+/// a model input), and a half-strength blend is a safer starting point
+/// than full strength for a user who hasn't tuned it for their own
+/// photo yet. `editor_screen.dart` uses this same constant as the
+/// fallback for any photo whose `_paramValues` doesn't have an amount
+/// recorded yet (never turned Denoise on before, or predates this
+/// slider) — see its own `_neuralDenoiseAmountKey` doc.
+const defaultNeuralDenoiseAmount = 50;
+
 String _levelLabel(AppLocalizations l10n, AiDenoiseLevel? level) =>
     switch (level) {
       null => l10n.aiDenoiseLevelOff,
@@ -66,7 +79,7 @@ class NeuralEnhanceChoice extends AiDenoiseChoice {
   const NeuralEnhanceChoice({
     required this.denoise,
     required this.upscale,
-    this.denoiseAmount = 100,
+    this.denoiseAmount = defaultNeuralDenoiseAmount,
     this.rawDenoise = false,
   });
 
@@ -133,7 +146,7 @@ class AiDenoiseDialog extends StatefulWidget {
     required this.initialLevel,
     required this.neuralDenoise,
     required this.neuralUpscale,
-    this.neuralDenoiseAmount = 100,
+    this.neuralDenoiseAmount = defaultNeuralDenoiseAmount,
     this.neuralRawDenoise = false,
     this.rawDenoiseAvailable = false,
     this.cloudProvider,

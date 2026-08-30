@@ -2569,7 +2569,8 @@ class _EditorScreenState extends State<EditorScreen> {
       final wantUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
       final wantRawDenoise = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
       final wantDenoiseAmount =
-          (_paramValues[_neuralDenoiseAmountKey] ?? 100.0).round();
+          (_paramValues[_neuralDenoiseAmountKey] ?? defaultNeuralDenoiseAmount)
+              .round();
       final wantAnyEnhance = wantDenoise || wantUpscale || wantRawDenoise;
       if (wantAnyEnhance) {
         final cacheDir = await resolveAiEnhanceCacheDir();
@@ -3414,10 +3415,10 @@ class _EditorScreenState extends State<EditorScreen> {
   static const _neuralRawDenoiseKey = 'AiNeuralRawDenoise';
 
   /// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.denoiseAmount` — 0-100,
-  /// persisted the same way as the two flags above. Defaults to 100 (the
-  /// model's full-strength output) when absent, matching
-  /// `NeuralEnhanceChoice`'s own default for a photo that predates this
-  /// slider.
+  /// persisted the same way as the two flags above. Defaults to
+  /// [defaultNeuralDenoiseAmount] when absent (a photo that predates this
+  /// slider, or one that's never had Denoise turned on before), matching
+  /// `NeuralEnhanceChoice`'s own default.
   static const _neuralDenoiseAmountKey = 'AiNeuralDenoiseAmount';
 
   /// See `AiDenoiseDialog`'s `CloudDenoiseChoice.provider` — 0=off,
@@ -3451,7 +3452,8 @@ class _EditorScreenState extends State<EditorScreen> {
     final neuralUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
     final neuralRawDenoise = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
     final neuralDenoiseAmount =
-        (_paramValues[_neuralDenoiseAmountKey] ?? 100.0).round();
+        (_paramValues[_neuralDenoiseAmountKey] ?? defaultNeuralDenoiseAmount)
+            .round();
     final cloudProvider = _cloudProviderFromIndex(
       (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
     );
@@ -4687,7 +4689,8 @@ class _EditorScreenState extends State<EditorScreen> {
     final wantUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
     final wantRawDenoise = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
     final wantDenoiseAmount =
-        (_paramValues[_neuralDenoiseAmountKey] ?? 100.0).round();
+        (_paramValues[_neuralDenoiseAmountKey] ?? defaultNeuralDenoiseAmount)
+            .round();
     final wantCloudProvider = _cloudProviderFromIndex(
       (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
     );
