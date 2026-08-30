@@ -6237,9 +6237,14 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
           // pixels' own color past the boundary instead of transparent —
           // .decal fades the whole border toward see-through, reading as
           // a soft vignette instead of a crisp-edged rectangle.
+          // Blurred at the thumbnail's own native size (~200px, see
+          // thumbnailMaxDimension) then magnified several times over by
+          // the FittedBox above to fill the preview area — so this sigma
+          // reads much stronger on screen than the number suggests, and
+          // stays that way regardless of the actual photo's resolution.
           imageFilter: ImageFilter.blur(
-            sigmaX: 14,
-            sigmaY: 14,
+            sigmaX: 4,
+            sigmaY: 4,
             tileMode: TileMode.clamp,
           ),
           child: Image.memory(bytes, gaplessPlayback: true),
