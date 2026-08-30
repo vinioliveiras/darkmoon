@@ -371,6 +371,71 @@ PhotoCurves _withCurveCategoriesApplied(
   return result;
 }
 
+/// Storage key for the global Amount slider (below the preset list) —
+/// lives in the same flat `_paramValues` map every other per-photo value
+/// does, 0-150, default 100 (no-op). See [_withGlobalEditAmountApplied]'s
+/// doc for what this actually does at render time.
+const _globalEditAmountKey = 'GlobalEditAmount';
+
+/// Scales every continuous slider's deviation from its own default by
+/// [_globalEditAmountKey]'s current value — the render-time-only
+/// mechanism behind the Amount slider. Applied once here, at the single
+/// choke point every render (CPU preview, GPU preview, export) already
+/// reads `_paramValues` through — see `_EditorScreenState
+/// ._effectiveParamValues`'s doc — so neither renderer needs its own copy
+/// of this math and every consumer inherits it automatically, with zero
+/// GPU/CPU-parity risk (the renderers themselves never change; only the
+/// numbers fed into them do).
+///
+/// Deliberately NOT the same design as the old preset-only Amount: that
+/// one directly rewrote `_paramValues` (the values the sliders show) on
+/// every drag, which both looked like the sliders were being dragged out
+/// from under the user and silently discarded any manual tweaks made
+/// since the preset was applied, and stopped doing anything at all once
+/// a manual edit had cleared the "applied preset" tracking (Amount was
+/// only ever wired back to `_applyPreset`). This version never touches a
+/// single stored slider value — every slider always shows exactly what
+/// was set (by a preset or by hand), and Amount uniformly damps/amplifies
+/// how strongly *all* of it renders, so it keeps working no matter what's
+/// been manually adjusted since, and the user can always push a slider
+/// further in either direction on top of the current Amount setting (the
+/// "ponto base" — base point — the user asked for).
+///
+/// Global-layer only — masks (`_effectiveMasks`) intentionally don't get
+/// their own Amount control, so this is never applied to mask values.
+///
+/// Excludes Temperature/Tint, same reasoning `_applyPreset` used to
+/// exclude them from its own (now-removed) blend: Kelvin/tint aren't
+/// naturally 0-centered deltas the way Exposure/Contrast are, and scaling
+/// them toward some default at render time would conflict with the
+/// as-shot-relative math the White Balance model already does elsewhere.
+/// Also excludes anything not in [_defaultParamValues] — the per-section
+/// enable toggles, White Balance mode, preserve-brightness, Crop/
+/// Transform, [_globalEditAmountKey] itself — none of which are
+/// continuous "how much of an effect" sliders.
+Map<String, double> _withGlobalEditAmountApplied(Map<String, double> values) {
+  final amount = values[_globalEditAmountKey] ?? 100.0;
+  if (amount == 100.0) {
+    return values; // no-op fast path — the overwhelmingly common case.
+  }
+  final fraction = amount / 100.0;
+  final defaults = _defaultParamValues();
+  final scaleKeys = defaults.keys.toSet()
+    ..remove('Temperature')
+    ..remove('Tint')
+    ..remove(_globalEditAmountKey);
+  final scaled = <String, double>{...values};
+  for (final key in scaleKeys) {
+    final value = values[key];
+    if (value == null) {
+      continue;
+    }
+    final base = defaults[key] ?? 0;
+    scaled[key] = base + (value - base) * fraction;
+  }
+  return scaled;
+}
+
 const _sections = <String, List<_SliderSpec>>{
   'WHITE BALANCE': [
     _SliderSpec(
@@ -465,6 +530,12 @@ const _parametricCurveSliders = [
 
 Map<String, double> _defaultParamValues() {
   return {
+    // Not a real slider — a synthetic entry so Reset/first-open/photo-
+    // switch all naturally land on 100% (no-op) like everything else here,
+    // without a separate special case anywhere else in this file. Removed
+    // from [_withGlobalEditAmountApplied]'s own scaling set explicitly —
+    // it must never scale itself.
+    _globalEditAmountKey: 100.0,
     for (final specs in _sections.values)
       for (final spec in specs) spec.name: spec.defaultValue,
     // Vignette lives outside [_sections] (masks don't get Effects) but
@@ -850,11 +921,6 @@ class _EditorScreenState extends State<EditorScreen> {
     MaskType.colorRange: 0.20,
   };
 
-  /// How strongly the next-applied preset blends in, 0..150 — a
-  /// session-wide UI preference (not persisted), set via the fixed slider
-  /// under the preset list.
-  double _presetAmount = 100;
-
   /// Edit-history stack for the currently selected photo — [_historyIndex]
   /// points at the snapshot matching the live [_paramValues]/
   /// [_currentCurves]/[_currentMasks] right now. Reset to a single
@@ -881,34 +947,11 @@ class _EditorScreenState extends State<EditorScreen> {
   List<Preset> _presets = [];
 
   /// ID of the preset currently applied to the selected photo (if any).
-  /// Tracked separately from live values so the preset stays "active"
-  /// even after the user changes _presetAmount; it only clears when
-  /// the user makes a manual edit or switches photos.
+  /// Tracked separately from live values so the preset list keeps it
+  /// highlighted even after the user changes the global Amount slider
+  /// (see [_globalEditAmountKey]) — it only clears when the user makes a
+  /// manual edit or switches photos.
   String? _appliedPresetId;
-
-  /// The param values + curves as they were *before* the currently-applied
-  /// preset was blended in — the fixed base [_applyPreset] blends from, so
-  /// dragging the preset Amount slider re-blends live from a clean state
-  /// instead of stacking on top of the already-preset-ed values. Captured
-  /// the first time a preset is applied over an un-preset-ed photo, reused
-  /// while a preset stays applied (Amount changes, switching presets), and
-  /// harmlessly stale otherwise (only read when [_appliedPresetId] is set).
-  ({Map<String, double> values, PhotoCurves curves})? _presetBaseline;
-
-  /// The [Preset] object for [_appliedPresetId], or null if none is applied
-  /// (or it was since deleted from the library).
-  Preset? get _appliedPreset {
-    final id = _appliedPresetId;
-    if (id == null) {
-      return null;
-    }
-    for (final preset in _presets) {
-      if (preset.id == id) {
-        return preset;
-      }
-    }
-    return null;
-  }
 
   bool _exporting = false;
 
@@ -1180,51 +1223,49 @@ class _EditorScreenState extends State<EditorScreen> {
     setState(() => _presets = presets);
   }
 
-  /// Applies [preset]'s slider values and curves to the selected photo —
-  /// like every other adjustment, this only touches the global ("Image")
-  /// layer, never the active mask, matching how real Lightroom presets
-  /// don't carry local adjustments either. Blended in at [_presetAmount]
-  /// (Lightroom-style, 0-150%, set via the fixed slider under the preset
-  /// list) rather than always committing to the preset's full values.
-  /// [live] true is the preset Amount slider being *dragged* — re-blend and
-  /// fast-render, but skip the history push / catalog flush the settled
-  /// apply does (those happen once on drag end via [_applyPreset] with
-  /// [live] false).
-  void _applyPreset(Preset preset, {bool live = false}) {
+  /// Applies [preset]'s slider values and curves to the selected photo, at
+  /// their full stored strength — like every other adjustment, this only
+  /// touches the global ("Image") layer, never the active mask, matching
+  /// how real Lightroom presets don't carry local adjustments either.
+  ///
+  /// Unlike this app's previous design, applying a preset no longer blends
+  /// by the Amount slider under the preset list — [_globalEditAmountKey]
+  /// is now a separate, persistent render-time multiplier over the
+  /// *entire* current edit (this preset's values *and* whatever the
+  /// sliders get manually adjusted to afterward), rather than something
+  /// that rewrites `_paramValues` itself on every drag. See
+  /// [_withGlobalEditAmountApplied]'s doc for why: the old design made
+  /// dragging Amount visibly overwrite the right-hand sliders (confusing,
+  /// and silently discarded any manual tweaks made since the preset was
+  /// applied) and stopped doing anything at all once a manual edit had
+  /// cleared [_appliedPresetId]. The new design fixes both — Amount keeps
+  /// working regardless of what's been manually tweaked since, and never
+  /// mutates a single slider's stored value.
+  void _applyPreset(Preset preset) {
     if (_selectedIndex == null) {
       return;
     }
-    final fraction = _presetAmount / 100.0;
-    // Blend from the state *before* any preset — captured now if this is
-    // the first preset over an un-preset-ed photo, otherwise the base we
-    // already stored (so Amount drags and A->B preset switches both blend
-    // from a clean slate rather than compounding).
-    if (_appliedPresetId == null || _presetBaseline == null) {
-      _presetBaseline = (values: {..._paramValues}, curves: _currentCurves);
-    }
-    final baseValues = _presetBaseline!.values;
-    final baseCurves = _presetBaseline!.curves;
-    // Only the continuous slider keys get blended by [_presetAmount].
+    // Only the continuous slider keys get overridden by the preset.
     // Everything else in the flat map — the per-section enable toggles
-    // (_categoryEnabled_*), the White Balance mode, preserve-brightness —
-    // is a discrete flag: numerically lerping it against a missing key
-    // (treated as 0) silently turns it off. Those keys are taken from the
-    // preset when it sets them, otherwise left exactly as they were.
+    // (_categoryEnabled_*), the White Balance mode, preserve-brightness,
+    // [_globalEditAmountKey] itself — is a discrete/independent flag the
+    // preset doesn't touch unless it explicitly sets it.
     final defaults = _defaultParamValues();
     final sliderKeys = defaults.keys.toSet()
       ..remove('Temperature')
-      ..remove('Tint');
-    final blendedValues = <String, double>{...baseValues};
+      ..remove('Tint')
+      // Amount is a separate, persistent setting (see
+      // _withGlobalEditAmountApplied) — applying a preset never resets it.
+      ..remove(_globalEditAmountKey);
+    final newValues = <String, double>{..._paramValues};
     for (final key in sliderKeys) {
-      final base = baseValues[key] ?? 0;
-      final target = preset.values[key] ?? defaults[key] ?? 0;
-      blendedValues[key] = base + (target - base) * fraction;
+      newValues[key] = preset.values[key] ?? defaults[key] ?? 0;
     }
     for (final entry in preset.values.entries) {
       if (!sliderKeys.contains(entry.key) &&
           entry.key != 'Temperature' &&
           entry.key != 'Tint') {
-        blendedValues[entry.key] = entry.value;
+        newValues[entry.key] = entry.value;
       }
     }
     // White Balance:
@@ -1243,27 +1284,19 @@ class _EditorScreenState extends State<EditorScreen> {
         (presetTint != null && presetTint != wbDefaultTint) ||
         (presetMode != null && presetMode != WbMode.asShot.index.toDouble());
     if (presetDefinesWb) {
-      final baseTemp = baseValues['Temperature'] ?? asShot.kelvin;
-      final baseTint = baseValues['Tint'] ?? asShot.tint;
-      final tgtTemp = presetTemp ?? asShot.kelvin;
-      final tgtTint = presetTint ?? asShot.tint;
-      blendedValues['Temperature'] = baseTemp + (tgtTemp - baseTemp) * fraction;
-      blendedValues['Tint'] = baseTint + (tgtTint - baseTint) * fraction;
-      blendedValues[_wbModeKey] = presetMode ?? WbMode.custom.index.toDouble();
+      newValues['Temperature'] = presetTemp ?? asShot.kelvin;
+      newValues['Tint'] = presetTint ?? asShot.tint;
+      newValues[_wbModeKey] = presetMode ?? WbMode.custom.index.toDouble();
     } else {
-      blendedValues['Temperature'] = asShot.kelvin;
-      blendedValues['Tint'] = asShot.tint;
-      blendedValues[_wbModeKey] = WbMode.asShot.index.toDouble();
+      newValues['Temperature'] = asShot.kelvin;
+      newValues['Tint'] = asShot.tint;
+      newValues[_wbModeKey] = WbMode.asShot.index.toDouble();
     }
     setState(() {
-      _paramValues = blendedValues;
-      _currentCurves = lerpPhotoCurves(baseCurves, preset.curves, fraction);
+      _paramValues = newValues;
+      _currentCurves = preset.curves;
       _appliedPresetId = preset.id;
     });
-    if (live) {
-      _scheduleRender(live: true);
-      return;
-    }
     _pushHistory();
     _scheduleRender(live: false);
     unawaited(_flushCurrentEdits());
@@ -1276,8 +1309,9 @@ class _EditorScreenState extends State<EditorScreen> {
   /// Whether [preset] is the one currently applied to the selected photo.
   /// Tracked via [_appliedPresetId] which is set on apply and cleared on
   /// any manual edit, photo switch, reset, or file reload — so the preset
-  /// stays highlighted even when the user changes _presetAmount, and only
-  /// clears when they make a deliberate change.
+  /// stays highlighted even when the user changes the global Amount
+  /// slider (see [_globalEditAmountKey]), and only clears when they make
+  /// a deliberate change.
   bool _matchesAppliedPreset(Preset preset) {
     return _appliedPresetId == preset.id;
   }
@@ -2019,10 +2053,8 @@ class _EditorScreenState extends State<EditorScreen> {
       _currentCurves = copied.curves;
       _currentMasks = [...copied.masks];
       _activeMaskId = imageMaskId;
-      // A pasted edit isn't tied to the preset (if any) it came from —
-      // matches _applyPreset's own baseline-reset behaviour.
+      // A pasted edit isn't tied to the preset (if any) it came from.
       _appliedPresetId = null;
-      _presetBaseline = null;
     });
     _pushHistory();
     _scheduleRender(live: false);
@@ -2382,7 +2414,6 @@ class _EditorScreenState extends State<EditorScreen> {
       _appliedPresetId = selectedIndex == null
           ? null
           : _photoPresets[files[selectedIndex].path];
-      _presetBaseline = null;
     });
     _resetHistory();
     if (selectedIndex != null) {
@@ -2522,10 +2553,8 @@ class _EditorScreenState extends State<EditorScreen> {
       _currentCurves = _curvesFor(path);
       _currentMasks = _masksFor(path);
       _activeMaskId = imageMaskId;
-      // Restore the "applied preset" marker for this photo (persisted), and
-      // its blend baseline is unknown until the user drags Amount.
+      // Restore the "applied preset" marker for this photo (persisted).
       _appliedPresetId = _photoPresets[path];
-      _presetBaseline = null;
     });
     _resetHistory();
     unawaited(_saveLastActiveFile(path));
@@ -3908,18 +3937,48 @@ class _EditorScreenState extends State<EditorScreen> {
     _scheduleCatalogSave();
   }
 
+  /// The Amount slider under the preset list — see
+  /// [_globalEditAmountKey]/[_withGlobalEditAmountApplied]. Deliberately
+  /// NOT [_onParamChanged]/[_onParamChangeEnd]: those clear
+  /// [_appliedPresetId] on every change (a manual slider edit un-links
+  /// the preset), but Amount isn't a manual edit to any one slider — the
+  /// preset should stay highlighted in the list while its overall
+  /// strength is being tuned, exactly like the old design already
+  /// promised (see [_matchesAppliedPreset]'s doc).
+  void _onGlobalEditAmountChanged(double value) {
+    setState(() {
+      _paramValues = {..._paramValues, _globalEditAmountKey: value};
+    });
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onGlobalEditAmountChangeEnd(double value) {
+    setState(() {
+      _paramValues = {..._paramValues, _globalEditAmountKey: value};
+    });
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
   /// [_paramValues] with every disabled category's sliders swapped for
-  /// their defaults — used wherever the render pipeline reads the global
-  /// layer's param values. See [_withCategoriesApplied]'s doc comment.
+  /// their defaults, then the whole result scaled by the global Amount
+  /// slider — used wherever the render pipeline reads the global layer's
+  /// param values (CPU preview, GPU preview, and export all read through
+  /// this one function, so both get Amount applied automatically with no
+  /// separate wiring). See [_withCategoriesApplied]'s and
+  /// [_withGlobalEditAmountApplied]'s own doc comments.
   Map<String, double> _effectiveParamValues() {
     final path = _selectedIndex == null ? null : _files[_selectedIndex!].path;
     final asShot = path == null
         ? (kelvin: wbDefaultKelvin, tint: wbDefaultTint)
         : _asShotFor(path);
-    return _withCategoriesApplied(
-      _paramValues,
-      asShotKelvin: asShot.kelvin,
-      asShotTint: asShot.tint,
+    return _withGlobalEditAmountApplied(
+      _withCategoriesApplied(
+        _paramValues,
+        asShotKelvin: asShot.kelvin,
+        asShotTint: asShot.tint,
+      ),
     );
   }
 
@@ -5206,21 +5265,10 @@ class _EditorScreenState extends State<EditorScreen> {
                       onExport: selected == null ? null : _exportCurrent,
                       exporting: _exporting,
                       onReset: _resetActive,
-                      presetAmount: _presetAmount,
-                      onPresetAmountChanged: (v) {
-                        setState(() => _presetAmount = v);
-                        final preset = _appliedPreset;
-                        if (preset != null) {
-                          _applyPreset(preset, live: true);
-                        }
-                      },
-                      onPresetAmountChangeEnd: (v) {
-                        setState(() => _presetAmount = v);
-                        final preset = _appliedPreset;
-                        if (preset != null) {
-                          _applyPreset(preset);
-                        }
-                      },
+                      presetAmount:
+                          _paramValues[_globalEditAmountKey] ?? 100.0,
+                      onPresetAmountChanged: _onGlobalEditAmountChanged,
+                      onPresetAmountChangeEnd: _onGlobalEditAmountChangeEnd,
                     ),
                     _Filmstrip(
                       files: _files,
@@ -6052,11 +6100,13 @@ class _ViewerToolbar extends StatelessWidget {
   final bool exporting;
   final VoidCallback onReset;
 
-  /// How strongly the next-applied preset blends in, 0..150% — see
-  /// [_EditorScreenState._presetAmount]. Lives here (rather than in
-  /// `PresetPanel`) so it sits in the toolbar's left spacer, under the
-  /// preset list it affects, matching the width-alignment convention the
-  /// two reserved spacers already follow.
+  /// How strongly the *entire current edit* renders, 0..150% — see the
+  /// top-level `_globalEditAmountKey`/`_withGlobalEditAmountApplied`.
+  /// Lives here (rather than in `PresetPanel`) so it sits in the
+  /// toolbar's left spacer, under the preset list, matching the
+  /// width-alignment convention the two reserved spacers already follow
+  /// — a purely visual placement choice at this point, not a sign this
+  /// only affects presets.
   final double presetAmount;
   final ValueChanged<double> onPresetAmountChanged;
   final ValueChanged<double> onPresetAmountChangeEnd;

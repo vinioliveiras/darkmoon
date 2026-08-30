@@ -236,17 +236,25 @@ class _SettingsDialogState extends State<SettingsDialog>
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(l10n.settingsPreviewResolutionLabel, style: _labelStyle),
-              const SizedBox(height: 8),
-              StyledDropdown<int>(
-                value: _settings.previewResolution,
-                width: 170,
-                items: [
-                  for (final size in previewResolutionOptions)
-                    StyledDropdownItem(value: size, label: '$size px'),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.settingsPreviewResolutionLabel,
+                      style: _labelStyle,
+                    ),
+                  ),
+                  StyledDropdown<int>(
+                    value: _settings.previewResolution,
+                    width: 170,
+                    items: [
+                      for (final size in previewResolutionOptions)
+                        StyledDropdownItem(value: size, label: '$size px'),
+                    ],
+                    onChanged: (value) =>
+                        _update(_settings.copyWith(previewResolution: value)),
+                  ),
                 ],
-                onChanged: (value) =>
-                    _update(_settings.copyWith(previewResolution: value)),
               ),
               const SizedBox(height: 4),
               Text(l10n.settingsPreviewResolutionHint, style: _hintStyle),
