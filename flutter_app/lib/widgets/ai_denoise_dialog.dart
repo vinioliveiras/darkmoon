@@ -82,21 +82,24 @@ class NeuralEnhanceChoice extends AiDenoiseChoice {
     required this.upscale,
     this.denoiseAmount = defaultNeuralDenoiseAmount,
     this.rawDenoise = false,
-    this.upscaleMaxSharpness = false,
+    this.upscaleSharpnessAmount = 0,
   });
 
   final bool denoise;
   final bool upscale;
 
-  /// Which upscale model [upscale] runs (see `onnx_runtime.dart`'s
-  /// `realEsrganUpscaleModelSpec`) — `false` (default) is `upscaleModelSpec`
-  /// (DIS, fast, fidelity-first); `true` is the slower Real-ESRGAN model,
-  /// which synthesizes more plausible detail at the cost of ~3.5 minutes
-  /// per 24MP photo and the possibility of slightly altering very small
-  /// text/detail near the edge of resolution (found investigating item 35's
-  /// "papado" denoise complaint, 2026-08-31 — see PENDING.md). Ignored when
-  /// [upscale] is false.
-  final bool upscaleMaxSharpness;
+  /// 0-100 blend between [upscale]'s own output (`upscaleModelSpec`/DIS,
+  /// fast, fidelity-first) and Real-ESRGAN's (`realEsrganUpscaleModelSpec`
+  /// — synthesizes more plausible detail; found investigating item 35's
+  /// "papado" denoise complaint, 2026-08-31 — see PENDING.md). `0`
+  /// (default) never even loads Real-ESRGAN, so it costs nothing; **any**
+  /// value above 0 pays its full ~3.5-minutes-per-24MP-photo inference
+  /// cost regardless of how small — the slider controls the *blend ratio*
+  /// of an already-paid-for result, not a speed/quality gradient. Higher
+  /// values also increase the chance of it slightly altering (not just
+  /// sharpening) very small text/detail near the edge of resolution.
+  /// Ignored when [upscale] is false.
+  final int upscaleSharpnessAmount;
 
   /// PMRID raw-domain denoise (`pmrid_denoise.dart`) — runs on the
   /// sensor's own Bayer data before demosaic, unlike [denoise]
@@ -162,7 +165,7 @@ class AiDenoiseDialog extends StatefulWidget {
     this.neuralRawDenoise = false,
     this.rawDenoiseAvailable = false,
     this.cloudProvider,
-    this.upscaleMaxSharpness = false,
+    this.upscaleSharpnessAmount = 0,
   });
 
   /// The classical level already applied to the current photo, if any —
@@ -182,8 +185,8 @@ class AiDenoiseDialog extends StatefulWidget {
   /// See [NeuralEnhanceChoice.rawDenoise].
   final bool neuralRawDenoise;
 
-  /// See [NeuralEnhanceChoice.upscaleMaxSharpness].
-  final bool upscaleMaxSharpness;
+  /// See [NeuralEnhanceChoice.upscaleSharpnessAmount].
+  final int upscaleSharpnessAmount;
 
   /// Whether the current photo is a standard Bayer-CFA RAW file — the raw
   /// denoise toggle is shown disabled (with an explanatory caption) when
@@ -209,7 +212,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
   late bool _neuralUpscale = widget.neuralUpscale;
   late bool _neuralRawDenoise = widget.neuralRawDenoise;
   late int _denoiseAmount = widget.neuralDenoiseAmount;
-  late bool _upscaleMaxSharpness = widget.upscaleMaxSharpness;
+  late int _upscaleSharpnessAmount = widget.upscaleSharpnessAmount;
   late CloudDenoiseProviderKind? _cloudProvider = widget.cloudProvider;
   final _tokenController = TextEditingController();
   bool _obscureToken = true;
@@ -307,8 +310,8 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
     });
   }
 
-  void _setUpscaleMaxSharpness(bool value) {
-    setState(() => _upscaleMaxSharpness = value);
+  void _setUpscaleSharpnessAmount(int value) {
+    setState(() => _upscaleSharpnessAmount = value);
   }
 
   void _setNeuralRawDenoise(bool value) {
@@ -349,7 +352,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         upscale: _neuralUpscale,
         denoiseAmount: _denoiseAmount,
         rawDenoise: _neuralRawDenoise,
-        upscaleMaxSharpness: _upscaleMaxSharpness,
+        upscaleSharpnessAmount: _upscaleSharpnessAmount,
       );
     }
     return ClassicDenoiseChoice(_level);
@@ -572,41 +575,59 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         // model's results weren't good enough) — re-enabled once
         // upscaleModelSpec pointed at DIS 2x instead (see onnx_runtime.dart),
         // a much lighter/faster model. Real-ESRGAN itself is back too, now
-        // as an opt-in "max sharpness" quality choice below rather than the
-        // default (see NeuralEnhanceChoice.upscaleMaxSharpness's doc).
+        // blended in via the Sharpness slider below instead of being the
+        // default (see NeuralEnhanceChoice.upscaleSharpnessAmount's doc).
         _ToggleRow(
           label: l10n.aiDenoiseEnhanceUpscaleLabel,
           value: _neuralUpscale,
           onChanged: _setNeuralUpscale,
         ),
         // Only shown once Upscale is on, same reasoning as the denoise
-        // Amount slider above — which model runs is meaningless for a pass
-        // that isn't happening.
+        // Amount slider above — a blend ratio for a pass that isn't even
+        // running has nothing to control.
         if (_neuralUpscale) ...[
-          const SizedBox(height: 6),
+          const SizedBox(height: 2),
           Row(
             children: [
               Expanded(
-                child: _LevelChip(
-                  label: l10n.aiDenoiseEnhanceUpscaleQualityFastLabel,
-                  selected: !_upscaleMaxSharpness,
-                  onTap: () => _setUpscaleMaxSharpness(false),
+                child: Text(
+                  l10n.aiDenoiseEnhanceSharpnessLabel,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: DarkmoonColors.textSecondary,
+                  ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _LevelChip(
-                  label: l10n.aiDenoiseEnhanceUpscaleQualityMaxLabel,
-                  selected: _upscaleMaxSharpness,
-                  onTap: () => _setUpscaleMaxSharpness(true),
+              Text(
+                '$_upscaleSharpnessAmount%',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: DarkmoonColors.textMuted,
                 ),
               ),
             ],
           ),
-          if (_upscaleMaxSharpness) ...[
-            const SizedBox(height: 4),
+          SliderTheme(
+            data: SliderTheme.of(
+              context,
+            ).copyWith(trackShape: const RectangularSliderTrackShape()),
+            child: Slider(
+              min: 0,
+              max: 100,
+              divisions: 100,
+              value: _upscaleSharpnessAmount.toDouble(),
+              onChanged: (v) => _setUpscaleSharpnessAmount(v.round()),
+            ),
+          ),
+          // Not a speed gradient — see the slider's own field doc. Anything
+          // above 0% pays Real-ESRGAN's full ~3.5-min-per-24MP-photo cost,
+          // so the caption stays up front about that regardless of exactly
+          // how far the slider is dragged, not just once it crosses some
+          // threshold.
+          if (_upscaleSharpnessAmount > 0) ...[
+            const SizedBox(height: 2),
             Text(
-              l10n.aiDenoiseEnhanceUpscaleQualityMaxCaption,
+              l10n.aiDenoiseEnhanceSharpnessCaption,
               style: const TextStyle(
                 fontSize: 11,
                 color: DarkmoonColors.textMuted,

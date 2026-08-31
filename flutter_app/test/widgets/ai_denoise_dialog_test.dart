@@ -77,7 +77,7 @@ void main() {
 
     testWidgets(
       'opens on the Enhance tab for a photo whose persisted state has '
-      'upscale on, with the Upscale toggle and quality chips shown',
+      'upscale on, with the Upscale toggle and Sharpness slider shown',
       (tester) async {
         _useTallSurface(tester);
         await _openDialog(tester, neuralUpscale: true);
@@ -85,14 +85,15 @@ void main() {
 
         expect(find.text('Denoise'), findsOneWidget);
         expect(find.text('Upscale 2x'), findsOneWidget);
-        // Quality chips only appear once Upscale is on — defaults to Fast.
-        expect(find.text('Fast'), findsOneWidget);
-        expect(find.text('Max sharpness'), findsOneWidget);
+        // Sharpness slider only appears once Upscale is on — defaults to 0%.
+        expect(find.text('Sharpness'), findsOneWidget);
+        expect(find.text('0%'), findsOneWidget);
+        expect(find.byType(Slider), findsOneWidget);
       },
     );
 
     testWidgets(
-      'quality chips are hidden while Upscale is off',
+      'Sharpness slider is hidden while Upscale is off',
       (tester) async {
         _useTallSurface(tester);
         await _openDialog(tester);
@@ -100,14 +101,13 @@ void main() {
         await tester.tap(find.text('Enhance'));
         await tester.pumpAndSettle();
 
-        expect(find.text('Fast'), findsNothing);
-        expect(find.text('Max sharpness'), findsNothing);
+        expect(find.text('Sharpness'), findsNothing);
       },
     );
 
     testWidgets(
-      'turning Upscale on then picking Max sharpness and applying '
-      'resolves as NeuralEnhanceChoice(upscaleMaxSharpness: true)',
+      'turning Upscale on then dragging the Sharpness slider above 0 and '
+      'applying resolves as NeuralEnhanceChoice(upscaleSharpnessAmount > 0)',
       (tester) async {
         _useTallSurface(tester);
         AiDenoiseChoice? result;
@@ -143,15 +143,28 @@ void main() {
         await tester.pumpAndSettle();
         await tester.tap(find.text('Upscale 2x'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Max sharpness'));
+        // Only one Slider is visible here (Denoise, hence its own Amount
+        // slider, is off) — drag it roughly to its midpoint.
+        await tester.drag(find.byType(Slider), const Offset(200, 0));
         await tester.pumpAndSettle();
+        // The Sharpness-active caption only shows once the amount is > 0 —
+        // confirms the drag actually registered before Apply is tapped.
+        expect(
+          find.text(
+            'Blends in a slower, more detail-synthesizing model — any '
+            'amount above 0% costs ~3.5 minutes per 24MP photo instead of '
+            'a few seconds, and can slightly alter (not just sharpen) '
+            'very small text or detail.',
+          ),
+          findsOneWidget,
+        );
         await tester.tap(find.text('Apply'));
         await tester.pumpAndSettle();
 
         expect(result, isA<NeuralEnhanceChoice>());
         final choice = result as NeuralEnhanceChoice;
         expect(choice.upscale, isTrue);
-        expect(choice.upscaleMaxSharpness, isTrue);
+        expect(choice.upscaleSharpnessAmount, greaterThan(0));
       },
     );
 

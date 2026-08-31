@@ -11,7 +11,7 @@ import 'package:path/path.dart' as p;
 /// so old entries are simply never looked up again instead of serving a
 /// stale result. Mirrors `raw_decode_format_version.dart`'s exact role,
 /// scoped to this cache instead.
-const int aiEnhanceCacheVersion = 7;
+const int aiEnhanceCacheVersion = 8;
 
 /// [mode] folds which of denoise/upscale/raw-denoise actually ran (plus
 /// the denoise blend strength — see `ai_enhance.dart`'s `enhanceImage` doc
@@ -26,21 +26,21 @@ const int aiEnhanceCacheVersion = 7;
 /// denoise model produced this result (Settings' custom-model picker —
 /// null means the bundled default) so switching models is also treated
 /// as a distinct result, not a stale hit from whichever model ran first.
-/// [upscaleMaxSharpness] does the same for *which* upscale model ran (see
-/// `onnx_runtime.dart`'s `realEsrganUpscaleModelSpec`) — only meaningful
-/// when [upscale] is true, but always folded in regardless so toggling it
-/// back and forth on the same photo never collides with the other mode's
-/// entry.
+/// [upscaleSharpnessAmount] does the same for the Real-ESRGAN sharpness
+/// blend (see `ai_enhance.dart`'s `enhanceImage` `sharpnessAmount` doc) —
+/// only meaningful when [upscale] is true, but always folded in regardless
+/// so dragging the slider back and forth on the same photo never collides
+/// with a different amount's own entry.
 String _modeTag(
   bool denoise,
   bool upscale,
   bool rawDenoise,
   int denoiseStrengthPercent,
   String? denoiseModelPath,
-  bool upscaleMaxSharpness,
+  int upscaleSharpnessAmount,
 ) => 'd${denoise ? 1 : 0}s$denoiseStrengthPercent'
     'u${upscale ? 1 : 0}'
-    'q${upscaleMaxSharpness ? 1 : 0}'
+    'q$upscaleSharpnessAmount'
     'r${rawDenoise ? 1 : 0}'
     'm${denoiseModelPath ?? "default"}';
 
@@ -56,11 +56,11 @@ String _entryKey(
   bool rawDenoise,
   int denoiseStrengthPercent,
   String? denoiseModelPath,
-  bool upscaleMaxSharpness,
+  int upscaleSharpnessAmount,
 ) {
   final raw =
       '$path|${modified.microsecondsSinceEpoch}|$size|'
-      '${_modeTag(denoise, upscale, rawDenoise, denoiseStrengthPercent, denoiseModelPath, upscaleMaxSharpness)}|v$aiEnhanceCacheVersion';
+      '${_modeTag(denoise, upscale, rawDenoise, denoiseStrengthPercent, denoiseModelPath, upscaleSharpnessAmount)}|v$aiEnhanceCacheVersion';
   return sha1.convert(utf8.encode(raw)).toString();
 }
 
@@ -94,7 +94,7 @@ Future<Uint8List?> lookupAiEnhanceCache(
   bool rawDenoise = false,
   int denoiseStrengthPercent = 100,
   String? denoiseModelPath,
-  bool upscaleMaxSharpness = false,
+  int upscaleSharpnessAmount = 0,
 }) async {
   try {
     final stat = await File(path).stat();
@@ -110,7 +110,7 @@ Future<Uint8List?> lookupAiEnhanceCache(
           rawDenoise,
           denoiseStrengthPercent,
           denoiseModelPath,
-          upscaleMaxSharpness,
+          upscaleSharpnessAmount,
         ),
       ),
     );
@@ -138,7 +138,7 @@ Future<void> storeAiEnhanceCache(
   bool rawDenoise = false,
   int denoiseStrengthPercent = 100,
   String? denoiseModelPath,
-  bool upscaleMaxSharpness = false,
+  int upscaleSharpnessAmount = 0,
 }) async {
   try {
     final stat = await File(path).stat();
@@ -151,7 +151,7 @@ Future<void> storeAiEnhanceCache(
       rawDenoise,
       denoiseStrengthPercent,
       denoiseModelPath,
-      upscaleMaxSharpness,
+      upscaleSharpnessAmount,
     );
     final dest = File(_entryFile(cacheDir, key));
     final tmp = File('${dest.path}.tmp');

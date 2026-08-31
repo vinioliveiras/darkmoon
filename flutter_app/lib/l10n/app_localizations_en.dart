@@ -331,14 +331,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiDenoiseEnhanceUpscaleLabel => 'Upscale 2x';
 
   @override
-  String get aiDenoiseEnhanceUpscaleQualityFastLabel => 'Fast';
+  String get aiDenoiseEnhanceSharpnessLabel => 'Sharpness';
 
   @override
-  String get aiDenoiseEnhanceUpscaleQualityMaxLabel => 'Max sharpness';
-
-  @override
-  String get aiDenoiseEnhanceUpscaleQualityMaxCaption =>
-      'Synthesizes more detail than Fast, at the cost of ~3.5 minutes per 24MP photo instead of a few seconds — and it can slightly alter (not just sharpen) very small text or detail.';
+  String get aiDenoiseEnhanceSharpnessCaption =>
+      'Blends in a slower, more detail-synthesizing model — any amount above 0% costs ~3.5 minutes per 24MP photo instead of a few seconds, and can slightly alter (not just sharpen) very small text or detail.';
 
   @override
   String get aiDenoiseEnhanceRawDenoiseLabel => 'RAW denoise (before demosaic)';

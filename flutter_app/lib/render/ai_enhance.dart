@@ -41,10 +41,25 @@ class AiEnhanceResult {
 /// call shape that's only ever hit from one place.
 ///
 /// [upscaleSpec] picks the upscale pass's tile geometry (`upscaleModelSpec`
-/// — DIS, fast/fidelity-first — or `realEsrganUpscaleModelSpec` — slower,
-/// synthesizes more detail; see that constant's own doc) — the caller must
-/// pass whichever one [upscale] was actually bound to, so tiling matches
-/// the model. Ignored when [enableUpscale] is false.
+/// — DIS, fast/fidelity-first) — the caller must pass whichever one
+/// [upscale] was actually bound to, so tiling matches the model. Ignored
+/// when [enableUpscale] is false.
+///
+/// [sharpenUpscale]/[sharpenUpscaleSpec]/[sharpnessAmount] blend in a
+/// second, slower upscale model (`realEsrganUpscaleModelSpec` — GAN-
+/// trained, synthesizes more plausible high-frequency detail than DIS's
+/// fidelity-first result; see that constant's own doc) on top of
+/// [upscale]'s output — same "fixed model, blend afterward for strength"
+/// shape as [denoiseStrength] above, since Real-ESRGAN has no strength
+/// input of its own either. [sharpnessAmount] 0.0 (default) never runs
+/// [sharpenUpscale] at all, so a caller that leaves it off pays zero extra
+/// cost — this is a real, not gradual, cost cliff: any [sharpnessAmount]
+/// above 0.0 pays [sharpenUpscale]'s full inference cost (~3.5 min for a
+/// 24MP photo on a real GPU, vs. a few seconds for DIS alone), the *blend
+/// ratio* doesn't reduce that. 1.0 is [sharpenUpscale]'s raw output,
+/// unblended. Both [upscale] and [sharpenUpscale] must share the same
+/// [OnnxModelSpec.scaleFactor] (both bundled models are 2x) so their
+/// outputs are the same size to blend.
 ///
 /// [rgbBytes] is packed, row-major, 3 bytes/pixel (0-255) — the same
 /// convention `render.dart`'s buffers use before their own internal
@@ -70,6 +85,9 @@ AiEnhanceResult enhanceImage(
   // upscale in the first place — the upscaler should never see more
   // noise than the user actually asked to keep.
   double denoiseStrength = 1.0,
+  Float32List Function(Float32List tile)? sharpenUpscale,
+  OnnxModelSpec? sharpenUpscaleSpec,
+  double sharpnessAmount = 0.0,
   void Function(String stage, int tileIndex, int totalTiles)? onProgress,
 }) {
   final floatRgb = Float32List(rgbBytes.length);
@@ -99,7 +117,7 @@ AiEnhanceResult enhanceImage(
     denoised = floatRgb;
   }
 
-  final upscaled = enableUpscale
+  var upscaled = enableUpscale
       ? denoiseTiled(
           denoised,
           width,
@@ -111,6 +129,28 @@ AiEnhanceResult enhanceImage(
           onProgress: (i, total) => onProgress?.call('upscale', i, total),
         )
       : denoised;
+
+  final amount = sharpnessAmount.clamp(0.0, 1.0);
+  if (enableUpscale &&
+      amount > 0.0 &&
+      sharpenUpscale != null &&
+      sharpenUpscaleSpec != null) {
+    final sharpened = denoiseTiled(
+      denoised,
+      width,
+      height,
+      inputTileSize: sharpenUpscaleSpec.inputTileSize,
+      overlap: sharpenUpscaleSpec.inputTileSize ~/ 8,
+      scaleFactor: sharpenUpscaleSpec.scaleFactor,
+      processTile: sharpenUpscale,
+      onProgress: (i, total) => onProgress?.call('sharpen', i, total),
+    );
+    final blended = Float32List(upscaled.length);
+    for (var i = 0; i < upscaled.length; i++) {
+      blended[i] = upscaled[i] + (sharpened[i] - upscaled[i]) * amount;
+    }
+    upscaled = blended;
+  }
 
   final scaleFactor = enableUpscale ? upscaleSpec.scaleFactor : 1;
   final outWidth = width * scaleFactor;
