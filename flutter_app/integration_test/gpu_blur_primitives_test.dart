@@ -126,8 +126,8 @@ void main() {
     }
   });
 
-  testWidgets('downsample + nearest upsample matches downsampleChannel + '
-      'upsampleChannelNearest', (tester) async {
+  testWidgets('downsample + bilinear upsample matches downsampleChannel + '
+      'upsampleChannelBilinear', (tester) async {
     const factor = 4;
     final source = await decodeRgbImage(
       _singleChannelAsRgb(channel),
@@ -166,7 +166,7 @@ void main() {
     final gpuRgb = rgbaToRgb(byteData!.buffer.asUint8List());
 
     final cpuSmall = downsampleChannel(channel, width, height, factor);
-    final cpuUpsampled = upsampleChannelNearest(
+    final cpuUpsampled = upsampleChannelBilinear(
       cpuSmall.channel,
       cpuSmall.width,
       cpuSmall.height,

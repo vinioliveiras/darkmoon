@@ -129,7 +129,7 @@ Float32List _denoiseChromaChannel(
     sigma / _downsampleFactor,
     strength,
   );
-  return upsampleChannelNearest(
+  return upsampleChannelBilinear(
     denoisedSmall,
     small.width,
     small.height,

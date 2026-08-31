@@ -16,4 +16,4 @@
 /// No Flutter/ffi imports here on purpose — both the cache-dir resolvers
 /// (path_provider, main-isolate-only) and libraw.dart (dart:ffi) need to
 /// read this without pulling the other's dependencies in.
-const int rawDecodeFormatVersion = 3;
+const int rawDecodeFormatVersion = 5;

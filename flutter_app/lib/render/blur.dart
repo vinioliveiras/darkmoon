@@ -301,18 +301,27 @@ Float32List localVarianceFromResidualSq(
   return (channel: out, width: outWidth, height: outHeight);
 }
 
-/// Nearest-neighbor upsample of a single-channel buffer from `srcWidth x
+/// Bilinear upsample of a single-channel buffer from `srcWidth x
 /// srcHeight` back to `dstWidth x dstHeight`, for an exact integer
-/// [factor] — the cheap inverse of [downsampleChannel]: a single array
-/// read and no interpolation math per destination pixel. Safe for a
-/// subtle, low-strength effect (visible block edges would need both a
-/// hard color transition *and* strength high enough to notice blockiness,
-/// neither of which apply to baseline chroma smoothing).
+/// [factor] — the inverse of [downsampleChannel].
+///
+/// **Was nearest-neighbor** (2026-08-31, see `project_darkmoon_color_
+/// profile.md`'s live-test report) on the assumption that baseline chroma
+/// smoothing's own effect was too subtle for the resulting hard block
+/// edges to ever be visible. That assumption broke as soon as a much
+/// larger downstream brightness lift entered the picture (the "darkmoon
+/// Color" profile's tone curve, up to ~3x on near-black) — the same 4x4
+/// chroma block quantization that was invisible at normal brightness
+/// became an obvious grid of colour blocks once amplified. Bilinear
+/// interpolation between the 4 nearest downsampled blocks removes the
+/// hard edges entirely, at a modest per-destination-pixel cost (a few
+/// array reads and float multiplies instead of one) — cheap relative to
+/// the blur step this feeds into either way.
 ///
 /// [rowOffset] must be the exact same value passed to the
 /// [downsampleChannel] call that produced [src], so both agree on which
 /// absolute row each of [src]'s rows represents.
-Float32List upsampleChannelNearest(
+Float32List upsampleChannelBilinear(
   Float32List src,
   int srcWidth,
   int srcHeight,
@@ -322,14 +331,28 @@ Float32List upsampleChannelNearest(
   int rowOffset = 0,
 }) {
   final firstBlock = rowOffset ~/ factor;
+  final maxSy = (srcHeight - 1).toDouble();
+  final maxSx = (srcWidth - 1).toDouble();
   final out = Float32List(dstWidth * dstHeight);
   for (var y = 0; y < dstHeight; y++) {
-    final sy = ((rowOffset + y) ~/ factor - firstBlock).clamp(0, srcHeight - 1);
-    final srcRow = sy * srcWidth;
+    final fy = ((rowOffset + y + 0.5) / factor - firstBlock - 0.5).clamp(
+      0.0,
+      maxSy,
+    );
+    final sy0 = fy.floor();
+    final sy1 = (sy0 + 1).clamp(0, srcHeight - 1);
+    final wy = fy - sy0;
+    final row0 = sy0 * srcWidth;
+    final row1 = sy1 * srcWidth;
     final dstRow = y * dstWidth;
     for (var x = 0; x < dstWidth; x++) {
-      final sx = (x ~/ factor).clamp(0, srcWidth - 1);
-      out[dstRow + x] = src[srcRow + sx];
+      final fx = ((x + 0.5) / factor - 0.5).clamp(0.0, maxSx);
+      final sx0 = fx.floor();
+      final sx1 = (sx0 + 1).clamp(0, srcWidth - 1);
+      final wx = fx - sx0;
+      final top = src[row0 + sx0] * (1 - wx) + src[row0 + sx1] * wx;
+      final bottom = src[row1 + sx0] * (1 - wx) + src[row1 + sx1] * wx;
+      out[dstRow + x] = top * (1 - wy) + bottom * wy;
     }
   }
   return out;
