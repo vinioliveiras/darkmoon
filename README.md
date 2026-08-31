@@ -1,6 +1,6 @@
 # darkmoon
 
-A fast, native RAW and JPEG photo editor for Windows — built with Flutter, inspired by Lightroom and Photomator.
+A fast, native RAW and JPEG photo editor for Windows and Linux — built with Flutter, inspired by Lightroom and Photomator.
 
 ![darkmoon main editing view](.github/assets/screenshot-main.png)
 
@@ -23,7 +23,7 @@ A fast, native RAW and JPEG photo editor for Windows — built with Flutter, ins
 - **Lens Correction** — automatic distortion, vignette, and chromatic-aberration correction matched against a bundled Lensfun-style profile database
 - **Tone Curve & Color Curve** — full RGB and per-channel curve editors
 - **Color Mixer** — 8-band HSL adjustments
-- **Color Grading** — shadows/midtones/highlights/global color wheels
+- **Color Grading** — shadows/midtones/highlights/global color wheels, each with Hue/Saturation/Luminance sliders for precise input alongside the wheel
 - **Crop & Transform** — straighten, vertical/horizontal/aspect keystone correction, scale, 90° rotation, and a draggable crop overlay with aspect-ratio presets
 - **Masking** — Linear Gradient, Radial Gradient, Brush, Flow (pressure-style incremental brush), Color Range, and Luminance Range masks, each with independent adjustments, opacity, and an adjustable on-canvas overlay
 - **Vignette** — post-crop vignette with amount, midpoint, and feather
@@ -54,7 +54,9 @@ A fast, native RAW and JPEG photo editor for Windows — built with Flutter, ins
 
 ## Getting started
 
-Requires Windows with the Flutter SDK installed.
+### Windows
+
+Requires the Flutter SDK installed.
 
 ```powershell
 cd flutter_app
@@ -71,9 +73,32 @@ flutter build windows --release
 
 The built app lands in `flutter_app\build\windows\x64\runner\Release\`.
 
+### Linux
+
+Newer and less polished than Windows — no native splash screen yet, and
+Cloud AI (Topaz/OpenAI/Gemini) API tokens don't persist across launches.
+See the [v1.5.0 release notes](https://github.com/vinioliveiras/darkmoon/releases/tag/v1.5.0)
+for the current gaps.
+
+Unlike Windows, the native libraries aren't bundled in the repo — you'll
+need a `libraw_r.so` and `libonnxruntime.so`/
+`libonnxruntime_providers_shared.so` under `flutter_app/linux/native/`
+first. See that folder's [README](flutter_app/linux/native/README.md) for
+where to get them (LibRaw is built from source; ONNX Runtime is the
+official prebuilt release — neither is a big undertaking, just not a
+single command).
+
+```bash
+cd flutter_app
+flutter pub get
+flutter build linux --release
+```
+
+The built app lands in `flutter_app/build/linux/x64/release/bundle/`.
+
 ## Tech stack
 
-- **Flutter** (Windows desktop) for the UI
+- **Flutter** (Windows and Linux desktop) for the UI
 - **LibRaw** via Dart FFI for RAW decoding and metadata
 - **`package:image`** for common image format decoding and encoding
 - **ONNX Runtime** via Dart FFI for on-device AI denoise/upscale

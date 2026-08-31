@@ -8368,6 +8368,48 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 ),
                               ),
                               Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: SliderRow(
+                                  name: l10n.mixerHueLabel,
+                                  min: 0,
+                                  max: 360,
+                                  value:
+                                      values['Grade${_activeGradeRange}Hue'] ??
+                                      0,
+                                  decimals: 0,
+                                  defaultValue: 0,
+                                  onChanged: (v) => onChanged(
+                                    'Grade${_activeGradeRange}Hue',
+                                    v,
+                                  ),
+                                  onChangeEnd: (v) => onChangeEnd(
+                                    'Grade${_activeGradeRange}Hue',
+                                    v,
+                                  ),
+                                ),
+                              ),
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 8),
+                                child: SliderRow(
+                                  name: l10n.mixerSaturationLabel,
+                                  min: 0,
+                                  max: 100,
+                                  value:
+                                      values['Grade${_activeGradeRange}Saturation'] ??
+                                      0,
+                                  decimals: 0,
+                                  defaultValue: 0,
+                                  onChanged: (v) => onChanged(
+                                    'Grade${_activeGradeRange}Saturation',
+                                    v,
+                                  ),
+                                  onChangeEnd: (v) => onChangeEnd(
+                                    'Grade${_activeGradeRange}Saturation',
+                                    v,
+                                  ),
+                                ),
+                              ),
+                              Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: SliderRow(
                                   name: l10n.mixerLuminanceLabel,
