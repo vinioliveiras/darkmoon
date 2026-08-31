@@ -109,6 +109,26 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/libraw_r.so"
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# ONNX Runtime (CPU-only — no DirectML equivalent on Linux, see
+# onnx_runtime.dart's _create()) for the item-13 neural Enhance models.
+# The official Linux x64 release tarball's lib/*.so, same version family
+# as windows/native/onnxruntime.dll; see native/README.md.
+install(FILES
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/libonnxruntime.so"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/libonnxruntime_providers_shared.so"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
+# The .onnx model files themselves are platform-agnostic — reused directly
+# from windows/native/ instead of duplicating ~500MB of gitignored
+# binaries into a second native/ folder. onnx_runtime.dart's modelPath()
+# resolves them next to the executable (bundle/, not bundle/lib/), same
+# convention as Windows.
+file(GLOB DARKMOON_ONNX_MODELS "${CMAKE_CURRENT_SOURCE_DIR}/../windows/native/*.onnx")
+install(FILES ${DARKMOON_ONNX_MODELS}
+  DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)
+
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   install(FILES "${bundled_library}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

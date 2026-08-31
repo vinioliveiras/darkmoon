@@ -171,7 +171,16 @@ class _OrtLib {
       // as raw_r.dll.
       return DynamicLibrary.open('onnxruntime.dll');
     }
-    throw UnsupportedError('ONNX Runtime is only wired up for Windows so far.');
+    if (Platform.isLinux) {
+      final override = _nativeDirOverride;
+      if (override != null) {
+        return DynamicLibrary.open(p.join(override, 'libonnxruntime.so'));
+      }
+      // Installed into the bundle's lib/ dir (on the executable's rpath)
+      // by linux/CMakeLists.txt, same as libraw_r.so.
+      return DynamicLibrary.open('libonnxruntime.so');
+    }
+    throw UnsupportedError('ONNX Runtime is only wired up for Windows/Linux so far.');
   }
 
   /// Set only for standalone `dart run tool/*.dart` smoke tests (see
@@ -275,6 +284,14 @@ class OnnxModel {
       _instances[spec.cacheKey] ??= _create(spec);
 
   static OnnxModel _create(OnnxModelSpec spec) {
+    // DirectML has no Linux equivalent, and the symbol isn't even exported
+    // by libonnxruntime.so there — looking it up would throw an ArgumentError
+    // (from the FFI symbol lookup itself, not an OrtException), which the
+    // catch below wouldn't handle. Skip straight to CPU instead of
+    // attempting-and-catching.
+    if (!Platform.isWindows) {
+      return _createSession(spec, useDirectMl: false);
+    }
     try {
       return _createSession(spec, useDirectMl: true);
     } on OrtException catch (e) {
@@ -363,8 +380,19 @@ class OnnxModel {
       // useDirectMl == false: append nothing — ORT always registers its
       // own CPU execution provider by default, no explicit call needed.
 
-      final modelPathPtr = (spec.customAbsolutePath ?? _OrtLib.modelPath(spec.fileName))
-          .toNativeUtf16();
+      // ORT's CreateSession takes an ORTCHAR_T* — wchar_t on Windows, but
+      // plain (UTF-8) char on every other platform, matching ORT's own
+      // upstream header. The Dart-side Pointer<WChar> annotation below is
+      // only the Windows shape; on Linux this cast reinterprets a narrow
+      // UTF-8 buffer instead — the real libonnxruntime.so reads raw bytes,
+      // it doesn't care about dart:ffi's static typing. (Passing UTF-16
+      // bytes there silently truncated the path at its first embedded NUL
+      // byte, right after the first character.)
+      final resolvedModelPath =
+          spec.customAbsolutePath ?? _OrtLib.modelPath(spec.fileName);
+      final modelPathPtr = Platform.isWindows
+          ? resolvedModelPath.toNativeUtf16()
+          : resolvedModelPath.toNativeUtf8().cast<WChar>();
       final sessionOut = calloc<Pointer<OrtSession>>();
       final Pointer<OrtSession> session;
       try {
