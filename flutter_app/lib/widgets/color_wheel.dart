@@ -3,7 +3,6 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 
 import '../render/hsl.dart';
-import '../theme.dart';
 
 /// A Lightroom-style color-grading wheel: drag (or click) anywhere to set
 /// hue (angle) and saturation (distance from center) at once; double-tap
@@ -139,19 +138,23 @@ class _ColorWheelPainter extends CustomPainter {
           colors: hueColors,
         ).createShader(Rect.fromCircle(center: center, radius: radius)),
     );
+    // Apple's own color wheels (Final Cut, Photos) fade toward a neutral
+    // mid-gray at the center rather than white — 0 saturation means "no
+    // tint" (gray), not "lighter," so the wheel's own center should read
+    // as neutral instead of blown out.
     canvas.drawCircle(
       center,
       radius,
       Paint()
-        ..shader = RadialGradient(
-          colors: [Colors.white, Colors.white.withValues(alpha: 0)],
+        ..shader = const RadialGradient(
+          colors: [Color(0xFF8A8A8E), Color(0x008A8A8E)],
         ).createShader(Rect.fromCircle(center: center, radius: radius)),
     );
     canvas.drawCircle(
       center,
       radius,
       Paint()
-        ..color = DarkmoonColors.border
+        ..color = Colors.black.withValues(alpha: 0.18)
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1,
     );
@@ -160,15 +163,35 @@ class _ColorWheelPainter extends CustomPainter {
     final dist = (saturation / 100).clamp(0.0, 1.0) * radius;
     final puckCenter =
         center + Offset(math.cos(angleRad), math.sin(angleRad)) * dist;
-    canvas.drawCircle(puckCenter, 6, Paint()..color = Colors.black45);
-    canvas.drawCircle(puckCenter, 5, Paint()..color = Colors.white);
+
+    // A thin guide line from center to the puck — the vector itself
+    // (direction = hue, length = saturation) is legible at a glance, the
+    // same affordance Final Cut's wheels use.
+    if (dist > 0.5) {
+      canvas.drawLine(
+        center,
+        puckCenter,
+        Paint()
+          ..color = Colors.white.withValues(alpha: 0.5)
+          ..strokeWidth = 1.2,
+      );
+    }
+
     canvas.drawCircle(
       puckCenter,
-      5,
+      7,
       Paint()
-        ..color = Colors.black87
+        ..color = Colors.black.withValues(alpha: 0.35)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2),
+    );
+    canvas.drawCircle(puckCenter, 6, Paint()..color = Colors.white);
+    canvas.drawCircle(
+      puckCenter,
+      6,
+      Paint()
+        ..color = Colors.black.withValues(alpha: 0.35)
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.2,
+        ..strokeWidth = 1,
     );
   }
 
