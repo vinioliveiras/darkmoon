@@ -3729,7 +3729,7 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   /// Runs item 13's neural Enhance pipeline (NAFNet-SIDD [denoise] and/or
-  /// Real-ESRGAN 2x [upscale], disk-cached — see
+  /// DIS 2x [upscale], disk-cached — see
   /// `native/edit_source_ai_enhance.dart`) for [path] and swaps the
   /// result into `_editSources`, so every later render/mask/export builds
   /// on the enhanced buffer instead of the plain decode. Returns false
@@ -8678,7 +8678,7 @@ class _GradeRangeTabs extends StatelessWidget {
   final String active;
   final ValueChanged<String> onSelect;
 
-  static const _ranges = ['Shadows', 'Midtones', 'Highlights', 'Global'];
+  static const _ranges = ['Global', 'Shadows', 'Midtones', 'Highlights'];
 
   @override
   Widget build(BuildContext context) {

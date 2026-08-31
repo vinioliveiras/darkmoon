@@ -75,7 +75,7 @@ EditSourcePair? decodeCachedAiEnhanceSources(DecodeCachedAiEnhanceArgs args) {
 /// Sibling to `edit_source.dart`'s `decodeEditSources`, for item 13's
 /// neural Enhance pipeline instead of a plain decode: full-resolution
 /// decode (cache permitting, skips straight to the cached result), then
-/// NAFNet-SIDD denoise + Real-ESRGAN 2x upscale (`ai_enhance.dart`'s
+/// NAFNet-SIDD denoise + DIS 2x upscale (`ai_enhance.dart`'s
 /// `enhanceImage`), then derives `preview`/`live` from the *enhanced*
 /// buffer — so every later edit/mask/export builds on top of the
 /// denoised-and-upscaled image, the same "becomes the new base" model

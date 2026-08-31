@@ -76,17 +76,15 @@ void main() {
     });
 
     testWidgets(
-      'opens on the Enhance tab even for an old photo whose persisted '
-      'state still has upscale on (the Upscale toggle itself was removed '
-      'from the UI, but a pre-existing "on" value should still be honored '
-      'for tab preselection, not silently dropped)',
+      'opens on the Enhance tab for a photo whose persisted state has '
+      'upscale on, with the Upscale toggle shown',
       (tester) async {
         _useTallSurface(tester);
         await _openDialog(tester, neuralUpscale: true);
         await tester.pumpAndSettle();
 
         expect(find.text('Denoise'), findsOneWidget);
-        expect(find.text('Upscale 2x'), findsNothing);
+        expect(find.text('Upscale 2x'), findsOneWidget);
       },
     );
 

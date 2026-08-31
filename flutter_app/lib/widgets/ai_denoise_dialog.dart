@@ -70,7 +70,7 @@ class ClassicDenoiseChoice extends AiDenoiseChoice {
 
 /// The item-13 neural pipeline — a one-shot pre-process that replaces the
 /// photo's edit source, not a per-render stage. [denoise] (NAFNet-SIDD)
-/// and [upscale] (Real-ESRGAN 2x) are independent toggles rather than one
+/// and [upscale] (DIS 2x) are independent toggles rather than one
 /// combined on/off switch, since either is a useful result on its own
 /// (denoise a noisy JPEG without changing its resolution; upscale an
 /// already-clean photo without paying for denoise it doesn't need).
@@ -276,6 +276,16 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         // Mutually exclusive with raw denoise — running both would just
         // re-smooth pixels PMRID already cleaned.
         _neuralRawDenoise = false;
+        _cloudProvider = null;
+      }
+    });
+  }
+
+  void _setNeuralUpscale(bool value) {
+    setState(() {
+      _neuralUpscale = value;
+      if (value) {
+        _level = null;
         _cloudProvider = null;
       }
     });
@@ -537,13 +547,17 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
           ),
         ],
         const SizedBox(height: 4),
-        // Upscale (Real-ESRGAN 2x) toggle removed for now — results
-        // weren't good enough and it saw little real use. The underlying
-        // pipeline (ai_enhance.dart/onnx_runtime.dart's upscaleModelSpec,
-        // the cache's upscale flag, editor_screen.dart's plumbing) is
-        // deliberately left in place, not ripped out — `_neuralUpscale`
-        // just can no longer be set true from here, so re-adding a toggle
-        // row like the one above is the only step needed to bring it back.
+        // Upscale toggle: was hidden for a while (the previous Real-ESRGAN
+        // model's results weren't good enough) — re-enabled now that
+        // upscaleModelSpec points at DIS 2x instead (see
+        // onnx_runtime.dart), a much lighter/faster model worth letting
+        // users try again.
+        _ToggleRow(
+          label: l10n.aiDenoiseEnhanceUpscaleLabel,
+          value: _neuralUpscale,
+          onChanged: _setNeuralUpscale,
+        ),
+        const SizedBox(height: 4),
         // Runs on the sensor's own Bayer data before demosaic (see
         // NeuralEnhanceChoice.rawDenoise's doc) — only possible for a
         // standard Bayer RAW, so the toggle is shown disabled with an

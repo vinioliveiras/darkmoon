@@ -12,10 +12,10 @@ import 'onnxruntime_bindings.dart';
 /// copy of the tensor-marshaling logic per model.
 ///
 /// [inputTileSize]: every tile fed to the model must be exactly this many
-/// pixels on each side. NAFNet-SIDD's own export is fully dynamic
-/// (any width/height), but Real-ESRGAN's export is traced at a fixed
-/// 64x64 input — using one fixed tile size for both keeps [OnnxModel]
-/// itself model-agnostic rather than special-casing one of them.
+/// pixels on each side. Every bundled model's export happens to be fully
+/// dynamic (any width/height) — a fixed tile size is still required
+/// because [OnnxModel] itself is model-agnostic rather than special-casing
+/// per model.
 /// [scaleFactor]: 1 for same-resolution models (denoise), 2/4 for
 /// upscalers — the output tile is `inputTileSize * scaleFactor` per side.
 class OnnxModelSpec {
@@ -46,7 +46,7 @@ class OnnxModelSpec {
   final int scaleFactor;
 
   /// Floats/pixel the model's input and output tensors carry. 3 (RGB) for
-  /// every sRGB-domain model (NAFNet-SIDD, Real-ESRGAN); the raw-domain
+  /// every sRGB-domain model (NAFNet-SIDD, DIS); the raw-domain
   /// PMRID denoiser (`pmridDenoiseModelSpec`) is the one caller that's 4
   /// (packed RGGB Bayer planes) instead.
   final int channels;
@@ -87,22 +87,23 @@ const denoiseModelSpec = OnnxModelSpec(
   scaleFactor: 1,
 );
 
-/// Real-ESRGAN x2plus (BSD-3-Clause, xinntao/Real-ESRGAN) — 2x super-
-/// resolution / detail reconstruction. This particular export is traced
-/// at a *fixed* 64x64 input (not dynamic like NAFNet's) — see
-/// `third_party/onnxruntime_headers/README.md` for the provenance note
-/// and the perf implication (many more, smaller tiles than the denoise
-/// pass) this fixed size forces.
+/// DIS Fast 2x (Apache-2.0, Kim2091/DIS — "Direct Image Supersampling") —
+/// 2x super-resolution. Replaces the earlier Real-ESRGAN x2plus spec: a
+/// tiny (~195K-parameter), all-stride-1-conv architecture (no pooling/
+/// downsampling anywhere, so — unlike NAFNet/PMRID above — there's no tile
+/// size divisibility requirement at all), exported with fully dynamic
+/// spatial dims. 256 chosen for the same tile-count/overhead balance as
+/// [denoiseModelSpec].
 const upscaleModelSpec = OnnxModelSpec(
-  fileName: 'Real-ESRGAN_x2plus.onnx',
-  inputTileSize: 64,
+  fileName: 'DIS-Fast-2x.onnx',
+  inputTileSize: 256,
   scaleFactor: 2,
 );
 
 /// PMRID (Apache-2.0, MegEngine/PMRID, ECCV20 "Practical Deep Raw Image
 /// Denoising on Mobile Devices") — raw-domain denoise, run on the packed
 /// RGGB Bayer buffer *before* demosaic (`pmrid_denoise.dart`), unlike
-/// NAFNet-SIDD/Real-ESRGAN above which both run after. 4 input/output
+/// NAFNet-SIDD/DIS above which both run after. 4 input/output
 /// channels (R, G, G2, B planes), residual output added back to the input
 /// by the network itself. Exported with dynamic spatial dims; 256 chosen
 /// for the same tile-count/overhead balance as [denoiseModelSpec], and

@@ -21,7 +21,7 @@ class AiEnhanceResult {
 /// The AI Enhance pipeline (item 13, distinct from the classical
 /// `applyAiDenoise` render-pipeline stage): NAFNet-SIDD reconstructive
 /// denoise (removes noise *and* film grain, recovers texture the noise was
-/// masking) and/or Real-ESRGAN 2x super-resolution, run independently —
+/// masking) and/or DIS 2x super-resolution, run independently —
 /// [enableDenoise]/[enableUpscale] let a caller ask for either pass alone
 /// (denoise a noisy JPEG without changing its resolution, or upscale an
 /// already-clean photo without paying for a denoise pass it doesn't need)

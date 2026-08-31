@@ -11,7 +11,7 @@ import 'package:path/path.dart' as p;
 /// so old entries are simply never looked up again instead of serving a
 /// stale result. Mirrors `raw_decode_format_version.dart`'s exact role,
 /// scoped to this cache instead.
-const int aiEnhanceCacheVersion = 3;
+const int aiEnhanceCacheVersion = 4;
 
 /// [mode] folds which of denoise/upscale/raw-denoise actually ran (plus
 /// the denoise blend strength — see `ai_enhance.dart`'s `enhanceImage` doc
