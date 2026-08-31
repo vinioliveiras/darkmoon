@@ -144,9 +144,19 @@ void main(List<String> args) {
 
   // Tone curve: dm perceptual-luma -> mean lr perceptual-luma, over EVERY
   // lit pixel (grey included — the curve is the brightness/contrast match).
+  //
+  // Weighted *per pair*, not per pixel: a single very dark/night photo can
+  // have vastly more near-black pixels than the other 14 pairs combined,
+  // which — under flat per-pixel weighting — let that one photo's own
+  // "how much to lift near-black" answer dominate the fit for everyone.
+  // (Root cause of a real overedited/yellow-green result on exactly such
+  // a photo — see project_darkmoon_color_profile.md, 2026-08-31.) Each
+  // pair instead contributes its own per-bin mean once, so 15 pairs means
+  // ~15 equal votes per bin regardless of how many pixels each pair has.
   const toneBins = 48;
-  final toneLr = List<double>.filled(toneBins, 0);
-  final toneN = List<double>.filled(toneBins, 0);
+  final toneSum = List<double>.filled(toneBins, 0);
+  final tonePairCount = List<double>.filled(toneBins, 0);
+  const minPairPixelsPerBin = 30;
 
   // Per-hue-bin accumulators (saturated pixels only).
   final wSum = List<double>.filled(colorProfileBins, 0);
@@ -198,6 +208,8 @@ void main(List<String> args) {
     final refBytes = ref.getBytes(order: img.ChannelOrder.rgb);
 
     var used = 0;
+    final pairToneLr = List<double>.filled(toneBins, 0);
+    final pairToneN = List<double>.filled(toneBins, 0);
     for (var i = 0; i + 2 < dm.length && i + 2 < refBytes.length; i += 3) {
       final dr = srgbToLinear(dm[i] / 255.0);
       final dg = srgbToLinear(dm[i + 1] / 255.0);
@@ -210,10 +222,11 @@ void main(List<String> args) {
       final lP = perceptualEncode(math.max(_luma(lr, lg, lb), 1e-6));
       if (dP < 0.02 || dP > 0.99 || lP > 0.995) continue; // black / clipped
 
-      // Tone curve — every lit pixel.
+      // Tone curve — every lit pixel, accumulated *per pair* first (see
+      // toneSum's doc comment above for why).
       final tb = (dP * (toneBins - 1)).round().clamp(0, toneBins - 1);
-      toneLr[tb] += lP;
-      toneN[tb] += 1;
+      pairToneLr[tb] += lP;
+      pairToneN[tb] += 1;
 
       final (dHue, dSat, _) = rgbToHsv(dr, dg, db);
       final (lHue, lSat, _) = rgbToHsv(lr, lg, lb);
@@ -231,6 +244,14 @@ void main(List<String> args) {
       binLrP[bin] += lP * weight;
       used++;
     }
+    // Fold this pair's own per-bin mean into the cross-pair accumulator —
+    // one vote per pair per bin, regardless of how many of this pair's own
+    // pixels landed there.
+    for (var t = 0; t < toneBins; t++) {
+      if (pairToneN[t] < minPairPixelsPerBin) continue;
+      toneSum[t] += pairToneLr[t] / pairToneN[t];
+      tonePairCount[t] += 1;
+    }
     stdout.writeln('$used samples');
     firstDm ??= img.Image.fromBytes(
       width: src.width,
@@ -247,11 +268,11 @@ void main(List<String> args) {
 
   // ---- Tone curve ----
   // Per tone-bin mean lr perceptual-luma (identity where unsupported) and
-  // its sample-count weight — sparse bins get a weak identity prior
-  // instead of pretending to be real data.
+  // its pair-count weight — sparse bins get a weak identity prior instead
+  // of pretending to be real data.
   final toneRaw = <double>[
     for (var t = 0; t < toneBins; t++)
-      toneN[t] > 0 ? toneLr[t] / toneN[t] : t / (toneBins - 1),
+      tonePairCount[t] > 0 ? toneSum[t] / tonePairCount[t] : t / (toneBins - 1),
   ];
   // Light smoothing to cut per-bin noise, THEN a weighted isotonic
   // regression (not a naive floor-clamp — see its own doc comment) to
@@ -265,7 +286,7 @@ void main(List<String> args) {
     }
     toneS = next;
   }
-  toneS = _isotonicRegression(toneS, toneN);
+  toneS = _isotonicRegression(toneS, tonePairCount);
   // Resample to the profile's point count, damped toward identity, then
   // hard-capped so no bin — however it got there — can blow or crush past
   // a sane distance from identity.
