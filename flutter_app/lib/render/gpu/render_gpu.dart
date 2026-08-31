@@ -17,10 +17,10 @@ import 'sharpen_gpu.dart';
 /// GPU (fragment-shader) counterpart to `render.dart`'s
 /// `_applyAdjustmentSteps` — the full 18-stage pipeline, assembled in
 /// Phases 1-6 of `project_gpu_render_plan.md`. Reproduces
-/// `applyLocalAdjustmentSteps` (white balance through Clarity) followed by
-/// `applyGlobalAdjustmentSteps` (Dehaze, Saturation, Vibrance, Vignette,
-/// Grain) in the exact same order, each stage delegating to its own phase's
-/// module
+/// `applyExposureAndWhiteBalance` followed by `applyLocalAdjustmentSteps`
+/// (chroma smoothing through Clarity) followed by `applyGlobalAdjustmentSteps`
+/// (Dehaze, Saturation, Vibrance, Vignette, Grain) in the exact same order,
+/// each stage delegating to its own phase's module
 /// (`denoise_gpu.dart`, `sharpen_gpu.dart`, `local_contrast_gpu.dart`,
 /// `dehaze_gpu.dart`) rather than being reimplemented here.
 ///
@@ -54,17 +54,22 @@ Future<ui.Image> renderImageGpu(
   int height,
   RenderParams params,
 ) async {
-  // baseline chroma smoothing -> AI denoise -> Sharpen -> Texture ->
-  // Clarity -> Exposure -> White Balance -> Dehaze -> Tone. (RapidRAW's own
-  // order runs Dehaze before White Balance; moved here — see
-  // applyExposureWhiteBalanceAndDehaze's doc comment in render.dart for
-  // why: Dehaze estimates its own per-channel "haze color" from whatever
-  // buffer it's given, and got that estimate badly wrong on the camera's
-  // still-warm as-shot decode for a photo needing a large WB move,
-  // compounding into a strong, Lightroom-doesn't-do-this magenta cast.)
-  final afterPreDenoise = source;
+  // Exposure -> White Balance -> baseline chroma smoothing -> AI denoise ->
+  // Sharpen -> Texture -> Clarity -> Dehaze -> Tone. Exposure/White Balance
+  // run first (RapidRAW's own order runs them much later, after Clarity)
+  // so every later stage sees the pixel values the user's actual
+  // Temp/Tint/Exposure settings establish, not the camera's raw as-shot
+  // decode — see applyExposureAndWhiteBalance's doc comment in
+  // render.dart. This matters most for two stages: Dehaze, which
+  // estimates its own per-channel "haze color" from whatever buffer it's
+  // given (badly wrong on a still-warm as-shot decode, compounding into a
+  // magenta cast Lightroom never produces); and Clarity's "protect
+  // midtones" weight, which reads each pixel's current luminance and
+  // targets the wrong tonal range on a RAW that still needs a large
+  // Exposure correction.
+  final afterExposureAndWb = await _runPreDenoise(source, width, height, params);
   final afterChromaSmoothing = await runBaselineChromaSmoothingGpu(
-    afterPreDenoise,
+    afterExposureAndWb,
     width,
     height,
   );
@@ -113,15 +118,8 @@ Future<ui.Image> renderImageGpu(
     protectMidtones: true,
   );
 
-  final afterExposureAndWb = await _runPreDenoise(
-    afterClarity,
-    width,
-    height,
-    params,
-  );
-
   final afterDehaze = await runDehazeGpu(
-    afterExposureAndWb,
+    afterClarity,
     width,
     height,
     params.dehaze,
@@ -159,10 +157,8 @@ Future<ui.Image> _runPreDenoise(
   ui.Image source,
   int width,
   int height,
-  RenderParams params, {
-  bool applyWhiteBalance = true,
-  bool applyExposure = true,
-}) async {
+  RenderParams params,
+) async {
   final program = await _loadProgram(
     'shaders/point_ops_pre_denoise.frag',
     () => _preDenoiseProgram,
@@ -173,20 +169,16 @@ Future<ui.Image> _runPreDenoise(
   // Same Von Kries per-channel gain as render.dart's _applyWhiteBalance,
   // computed on the Dart side and handed to the shader as flat multipliers
   // (the shader is unchanged).
-  final wb = applyWhiteBalance
-      ? whiteBalanceGains(
-          params.temperature,
-          params.tint,
-          params.asShotKelvin,
-          params.asShotTint,
-        )
-      : (r: 1.0, g: 1.0, b: 1.0);
+  final wb = whiteBalanceGains(
+    params.temperature,
+    params.tint,
+    params.asShotKelvin,
+    params.asShotTint,
+  );
   final normalizedRGain = wb.r;
   final gGain = wb.g;
   final normalizedBGain = wb.b;
-  final exposureFactor = applyExposure
-      ? math.pow(2.0, params.exposure / 20.0).toDouble()
-      : 1.0;
+  final exposureFactor = math.pow(2.0, params.exposure / 20.0).toDouble();
 
   var i = 0;
   shader.setFloat(i++, width.toDouble());

@@ -183,11 +183,10 @@ int localAdjustmentHaloPx(RenderParams params) {
   return halo;
 }
 
-/// Halo (px) [applyExposureWhiteBalanceAndDehaze] needs when run on a
-/// horizontal band — the reach of Dehaze's sigma-40 "structure" Gaussian
-/// (3-pass box, ~4.5·sigma), 0 when Dehaze is off (then it's just the
-/// O(n) exposure/white-balance multiplies).
-int exposureDehazeHaloPx(RenderParams params) => params.dehaze != 0 ? 180 : 0;
+/// Halo (px) [applyDehazeStage] needs when run on a horizontal band — the
+/// reach of Dehaze's sigma-40 "structure" Gaussian (3-pass box, ~4.5·sigma),
+/// 0 when Dehaze is off.
+int dehazeHaloPx(RenderParams params) => params.dehaze != 0 ? 180 : 0;
 
 /// Halo (px) [applyGlobalPointOps] needs on a band — just the sigma-3.5
 /// tonal blur behind Shadows/Whites/Blacks.
@@ -201,10 +200,33 @@ void _applyAdjustmentSteps(
   RenderParams params, {
   void Function(RenderStage stage)? onStage,
 }) {
+  applyExposureAndWhiteBalance(buffer, params);
   onStage?.call(RenderStage.denoising);
   applyLocalAdjustmentSteps(buffer, width, height, params);
   onStage?.call(RenderStage.adjusting);
   applyGlobalAdjustmentSteps(buffer, width, height, params);
+}
+
+/// Exposure then White Balance — both a plain per-pixel multiply (no
+/// neighbor dependency, so no halo/banding concern), run *before* every
+/// other step so Denoise/Sharpen/Texture/Clarity and Dehaze all see the
+/// pixel values the user's actual Temp/Tint/Exposure settings establish,
+/// not the camera's raw as-shot decode. Matters most for
+/// [applyLocalAdjustmentSteps]'s Texture/Clarity: their "protect
+/// midtones" weight reads each pixel's *current* luminance, and a RAW
+/// needing a large Exposure correction would otherwise have that weight
+/// computed against the wrong tonal range (what's about to become a
+/// midtone still reads as a shadow/highlight before Exposure runs).
+void applyExposureAndWhiteBalance(Float32List buffer, RenderParams params) {
+  _applyExposure(buffer, params.exposure);
+  _applyWhiteBalance(
+    buffer,
+    params.temperature,
+    params.tint,
+    params.asShotKelvin,
+    params.asShotTint,
+    params.preserveTintBrightness,
+  );
 }
 
 /// Every step whose effect on a pixel only ever depends on pixels within a
@@ -347,20 +369,20 @@ void applyPostDenoisePointOps(
   mark('colorGrading');
 }
 
-/// Everything [applyLocalAdjustmentSteps] leaves out. Split into two:
+/// Everything [applyLocalAdjustmentSteps] leaves out, run after
+/// [applyExposureAndWhiteBalance] (see that function's doc comment for why
+/// Exposure/White Balance both run before this — including before
+/// [applyLocalAdjustmentSteps]). Split into two:
 ///
-/// - [applyExposureWhiteBalanceAndDehaze] — Exposure, then White Balance,
-///   then Dehaze (`dehaze.dart`). White Balance runs here (not in
-///   [applyGlobalPointOps] below, even though it's itself a per-pixel op
-///   with no blur) specifically so Dehaze sees the buffer *after* the
-///   user's Temp/Tint target, not the camera's raw as-shot decode — Dehaze
-///   estimates its own per-channel "haze color" from whatever buffer it's
-///   given, and a photo needing a large as-shot-to-target WB move (a warm
-///   as-shot far from a cool target, say) left that estimate badly wrong,
-///   compounding with Vibrance/Saturation into a strong magenta cast that
-///   never showed up in Lightroom (its own White Balance always runs
-///   before Dehaze). Dehaze's wide "regional" blur is why this whole
-///   group can't run on a naive per-band slice — kept whole-image.
+/// - [applyDehazeStage] — just `dehaze.dart`'s wide "regional" blur, which
+///   is why this can't run on a naive per-band slice — kept whole-image.
+///   Runs after White Balance specifically because Dehaze estimates its
+///   own per-channel "haze color" from whatever buffer it's given: on the
+///   camera's raw as-shot decode (before this pipeline moved White
+///   Balance earlier), a photo needing a large as-shot-to-target WB move
+///   left that estimate badly wrong, compounding with Vibrance/Saturation
+///   into a strong magenta cast that never showed up in Lightroom (its
+///   own White Balance always runs before Dehaze).
 /// - [applyGlobalPointOps] — the post-denoise point ops (brightness/
 ///   contrast/highlights/shadows/whites/blacks, tone + colour curves,
 ///   mixer, grading), Saturation, Vibrance, Vignette, Grain. All per-pixel
@@ -373,25 +395,16 @@ void applyGlobalAdjustmentSteps(
   int height,
   RenderParams params,
 ) {
-  applyExposureWhiteBalanceAndDehaze(buffer, width, height, params);
+  applyDehazeStage(buffer, width, height, params);
   applyGlobalPointOps(buffer, width, height, params);
 }
 
-void applyExposureWhiteBalanceAndDehaze(
+void applyDehazeStage(
   Float32List buffer,
   int width,
   int height,
   RenderParams params,
 ) {
-  _applyExposure(buffer, params.exposure);
-  _applyWhiteBalance(
-    buffer,
-    params.temperature,
-    params.tint,
-    params.asShotKelvin,
-    params.asShotTint,
-    params.preserveTintBrightness,
-  );
   applyDehaze(buffer, width, height, params.dehaze);
 }
 

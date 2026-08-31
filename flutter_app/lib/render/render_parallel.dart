@@ -22,13 +22,14 @@ const int _parallelPixelThreshold = 1500000;
 const int _minBandContentHeight = 64;
 
 /// The parallel counterpart to `renderRgb(...).call(applyLocalAdjustmentSteps)`
-/// — same pixel-for-pixel result, computed by splitting the image into
-/// independent horizontal bands (each padded with [localAdjustmentHaloPx]
-/// extra rows so blur-based steps near a seam still see the right
-/// neighboring pixels) and running [applyLocalAdjustmentSteps] on each in
-/// its own isolate, concurrently. [applyGlobalAdjustmentSteps] (Dehaze
-/// chief among them — see its doc comment) runs once afterward on the
-/// complete, stitched-back-together buffer, same as the serial path.
+/// — same pixel-for-pixel result. [applyExposureAndWhiteBalance] runs
+/// first, whole-image (a plain per-pixel multiply, no banding needed),
+/// then the image is split into independent horizontal bands (each padded
+/// with [localAdjustmentHaloPx] extra rows so blur-based steps near a seam
+/// still see the right neighboring pixels) and [applyLocalAdjustmentSteps]
+/// runs on each in its own isolate, concurrently. [applyGlobalAdjustmentSteps]
+/// (Dehaze chief among them — see its doc comment) runs once afterward on
+/// the complete, stitched-back-together buffer, same as the serial path.
 ///
 /// Falls back to running both steps serially, on the whole image at once
 /// (no bands, no isolates), below [_parallelPixelThreshold] or when the
@@ -52,6 +53,14 @@ Future<Uint8List> renderAdjustmentsParallel(
   for (var i = 0; i < sourceRgb.length; i++) {
     buffer[i] = sourceRgb[i].toDouble();
   }
+
+  // Whole-image, before any band splitting — a plain per-pixel multiply
+  // with no neighbor dependency, and every later stage (Denoise/Sharpen/
+  // Texture/Clarity in particular) needs to see the pixel values it
+  // establishes, not the camera's raw as-shot decode. See
+  // applyExposureAndWhiteBalance's doc comment in render.dart.
+  applyExposureAndWhiteBalance(buffer, params);
+  mark('exposure+whiteBalance');
 
   final pixelCount = width * height;
   final halo = localAdjustmentHaloPx(params);
@@ -124,11 +133,11 @@ Future<Uint8List> renderAdjustmentsParallel(
   }
   mark('local ($bandCount bands)');
 
-  // Exposure + Dehaze: whole-image is just an O(n) multiply when Dehaze is
-  // off; band it (Dehaze's sigma-40 blur needs a halo) when it's on.
-  final dehazeHalo = exposureDehazeHaloPx(params);
+  // Dehaze: whole-image is a no-op when it's off; band it (its sigma-40
+  // blur needs a halo) when it's on.
+  final dehazeHalo = dehazeHaloPx(params);
   if (dehazeHalo == 0 || bandCount <= 1) {
-    applyExposureWhiteBalanceAndDehaze(buffer, width, height, params);
+    applyDehazeStage(buffer, width, height, params);
   } else {
     await _bandPass(
       width,
@@ -136,11 +145,10 @@ Future<Uint8List> renderAdjustmentsParallel(
       buffer,
       bandCount,
       dehazeHalo,
-      (slice, w, h, top) =>
-          applyExposureWhiteBalanceAndDehaze(slice, w, h, params),
+      (slice, w, h, top) => applyDehazeStage(slice, w, h, params),
     );
   }
-  mark('exposure+dehaze');
+  mark('dehaze');
 
   // The point-op half — the pow()-heavy majority of a full-res render — in
   // bands, converting each band straight to bytes so there's no separate
