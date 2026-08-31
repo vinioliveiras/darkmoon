@@ -82,10 +82,21 @@ class NeuralEnhanceChoice extends AiDenoiseChoice {
     required this.upscale,
     this.denoiseAmount = defaultNeuralDenoiseAmount,
     this.rawDenoise = false,
+    this.upscaleMaxSharpness = false,
   });
 
   final bool denoise;
   final bool upscale;
+
+  /// Which upscale model [upscale] runs (see `onnx_runtime.dart`'s
+  /// `realEsrganUpscaleModelSpec`) — `false` (default) is `upscaleModelSpec`
+  /// (DIS, fast, fidelity-first); `true` is the slower Real-ESRGAN model,
+  /// which synthesizes more plausible detail at the cost of ~3.5 minutes
+  /// per 24MP photo and the possibility of slightly altering very small
+  /// text/detail near the edge of resolution (found investigating item 35's
+  /// "papado" denoise complaint, 2026-08-31 — see PENDING.md). Ignored when
+  /// [upscale] is false.
+  final bool upscaleMaxSharpness;
 
   /// PMRID raw-domain denoise (`pmrid_denoise.dart`) — runs on the
   /// sensor's own Bayer data before demosaic, unlike [denoise]
@@ -151,6 +162,7 @@ class AiDenoiseDialog extends StatefulWidget {
     this.neuralRawDenoise = false,
     this.rawDenoiseAvailable = false,
     this.cloudProvider,
+    this.upscaleMaxSharpness = false,
   });
 
   /// The classical level already applied to the current photo, if any —
@@ -169,6 +181,9 @@ class AiDenoiseDialog extends StatefulWidget {
 
   /// See [NeuralEnhanceChoice.rawDenoise].
   final bool neuralRawDenoise;
+
+  /// See [NeuralEnhanceChoice.upscaleMaxSharpness].
+  final bool upscaleMaxSharpness;
 
   /// Whether the current photo is a standard Bayer-CFA RAW file — the raw
   /// denoise toggle is shown disabled (with an explanatory caption) when
@@ -194,6 +209,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
   late bool _neuralUpscale = widget.neuralUpscale;
   late bool _neuralRawDenoise = widget.neuralRawDenoise;
   late int _denoiseAmount = widget.neuralDenoiseAmount;
+  late bool _upscaleMaxSharpness = widget.upscaleMaxSharpness;
   late CloudDenoiseProviderKind? _cloudProvider = widget.cloudProvider;
   final _tokenController = TextEditingController();
   bool _obscureToken = true;
@@ -291,6 +307,10 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
     });
   }
 
+  void _setUpscaleMaxSharpness(bool value) {
+    setState(() => _upscaleMaxSharpness = value);
+  }
+
   void _setNeuralRawDenoise(bool value) {
     setState(() {
       _neuralRawDenoise = value;
@@ -329,6 +349,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         upscale: _neuralUpscale,
         denoiseAmount: _denoiseAmount,
         rawDenoise: _neuralRawDenoise,
+        upscaleMaxSharpness: _upscaleMaxSharpness,
       );
     }
     return ClassicDenoiseChoice(_level);
@@ -548,15 +569,51 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         ],
         const SizedBox(height: 4),
         // Upscale toggle: was hidden for a while (the previous Real-ESRGAN
-        // model's results weren't good enough) — re-enabled now that
-        // upscaleModelSpec points at DIS 2x instead (see
-        // onnx_runtime.dart), a much lighter/faster model worth letting
-        // users try again.
+        // model's results weren't good enough) — re-enabled once
+        // upscaleModelSpec pointed at DIS 2x instead (see onnx_runtime.dart),
+        // a much lighter/faster model. Real-ESRGAN itself is back too, now
+        // as an opt-in "max sharpness" quality choice below rather than the
+        // default (see NeuralEnhanceChoice.upscaleMaxSharpness's doc).
         _ToggleRow(
           label: l10n.aiDenoiseEnhanceUpscaleLabel,
           value: _neuralUpscale,
           onChanged: _setNeuralUpscale,
         ),
+        // Only shown once Upscale is on, same reasoning as the denoise
+        // Amount slider above — which model runs is meaningless for a pass
+        // that isn't happening.
+        if (_neuralUpscale) ...[
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: _LevelChip(
+                  label: l10n.aiDenoiseEnhanceUpscaleQualityFastLabel,
+                  selected: !_upscaleMaxSharpness,
+                  onTap: () => _setUpscaleMaxSharpness(false),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: _LevelChip(
+                  label: l10n.aiDenoiseEnhanceUpscaleQualityMaxLabel,
+                  selected: _upscaleMaxSharpness,
+                  onTap: () => _setUpscaleMaxSharpness(true),
+                ),
+              ),
+            ],
+          ),
+          if (_upscaleMaxSharpness) ...[
+            const SizedBox(height: 4),
+            Text(
+              l10n.aiDenoiseEnhanceUpscaleQualityMaxCaption,
+              style: const TextStyle(
+                fontSize: 11,
+                color: DarkmoonColors.textMuted,
+              ),
+            ),
+          ],
+        ],
         const SizedBox(height: 4),
         // Runs on the sensor's own Bayer data before demosaic (see
         // NeuralEnhanceChoice.rawDenoise's doc) — only possible for a

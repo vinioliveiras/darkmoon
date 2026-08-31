@@ -2698,6 +2698,8 @@ class _EditorScreenState extends State<EditorScreen>
       final wantDenoiseAmount =
           (_paramValues[_neuralDenoiseAmountKey] ?? defaultNeuralDenoiseAmount)
               .round();
+      final wantUpscaleMaxSharpness =
+          (_paramValues[_upscaleMaxSharpnessKey] ?? 0.0) > 0;
       final wantAnyEnhance = wantDenoise || wantUpscale || wantRawDenoise;
       if (wantAnyEnhance) {
         final cacheDir = await resolveAiEnhanceCacheDir();
@@ -2710,6 +2712,7 @@ class _EditorScreenState extends State<EditorScreen>
             rawDenoise: wantRawDenoise,
             denoiseStrengthPercent: wantDenoiseAmount,
             denoiseModelPath: _settings.customDenoiseModelPath,
+            upscaleMaxSharpness: wantUpscaleMaxSharpness,
           );
           if (cachedPng != null) {
             sources = await compute(
@@ -3332,6 +3335,7 @@ class _EditorScreenState extends State<EditorScreen>
     required bool upscale,
     int denoiseAmount = 100,
     bool rawDenoise = false,
+    bool upscaleMaxSharpness = false,
   }) async {
     final cacheDir = await resolveAiEnhanceCacheDir();
     if (!mounted) return null;
@@ -3343,6 +3347,7 @@ class _EditorScreenState extends State<EditorScreen>
       rawDenoise: rawDenoise,
       denoiseStrengthPercent: denoiseAmount,
       denoiseModelPath: _settings.customDenoiseModelPath,
+      upscaleMaxSharpness: upscaleMaxSharpness,
     );
     if (cachedPng == null) {
       final ok = await _runNeuralEnhance(
@@ -3351,6 +3356,7 @@ class _EditorScreenState extends State<EditorScreen>
         upscale: upscale,
         denoiseAmount: denoiseAmount,
         rawDenoise: rawDenoise,
+        upscaleMaxSharpness: upscaleMaxSharpness,
       );
       if (!mounted || !ok) {
         return null;
@@ -3363,6 +3369,7 @@ class _EditorScreenState extends State<EditorScreen>
         rawDenoise: rawDenoise,
         denoiseStrengthPercent: denoiseAmount,
         denoiseModelPath: _settings.customDenoiseModelPath,
+        upscaleMaxSharpness: upscaleMaxSharpness,
       );
     }
     if (cachedPng == null || !mounted) {
@@ -3545,6 +3552,12 @@ class _EditorScreenState extends State<EditorScreen>
   static const _neuralDenoiseKey = 'AiNeuralDenoise';
   static const _neuralUpscaleKey = 'AiNeuralUpscale';
 
+  /// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.upscaleMaxSharpness` —
+  /// persisted the same way as the two flags above. Only meaningful when
+  /// [_neuralUpscaleKey] is on; defaults to `false` (DIS, fast) for any
+  /// photo that predates this toggle.
+  static const _upscaleMaxSharpnessKey = 'AiUpscaleMaxSharpness';
+
   /// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.rawDenoise` — the PMRID
   /// raw-domain pass, persisted the same way as the two flags above.
   static const _neuralRawDenoiseKey = 'AiNeuralRawDenoise';
@@ -3589,6 +3602,8 @@ class _EditorScreenState extends State<EditorScreen>
     final neuralDenoiseAmount =
         (_paramValues[_neuralDenoiseAmountKey] ?? defaultNeuralDenoiseAmount)
             .round();
+    final upscaleMaxSharpness =
+        (_paramValues[_upscaleMaxSharpnessKey] ?? 0.0) > 0;
     final cloudProvider = _cloudProviderFromIndex(
       (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
     );
@@ -3607,6 +3622,7 @@ class _EditorScreenState extends State<EditorScreen>
         neuralRawDenoise: neuralRawDenoise,
         rawDenoiseAvailable: rawDenoiseAvailable,
         cloudProvider: cloudProvider,
+        upscaleMaxSharpness: upscaleMaxSharpness,
       ),
     );
     if (choice == null || !mounted) {
@@ -3643,6 +3659,7 @@ class _EditorScreenState extends State<EditorScreen>
             upscale: final wantUpscale,
             denoiseAmount: final wantDenoiseAmount,
             rawDenoise: final wantRawDenoise,
+            upscaleMaxSharpness: final wantUpscaleMaxSharpness,
           )
           when wantDenoise || wantUpscale || wantRawDenoise:
         setState(() {
@@ -3652,6 +3669,7 @@ class _EditorScreenState extends State<EditorScreen>
             _neuralUpscaleKey: wantUpscale ? 1.0 : 0.0,
             _neuralDenoiseAmountKey: wantDenoiseAmount.toDouble(),
             _neuralRawDenoiseKey: wantRawDenoise ? 1.0 : 0.0,
+            _upscaleMaxSharpnessKey: wantUpscaleMaxSharpness ? 1.0 : 0.0,
             _cloudDenoiseProviderKey: 0.0,
             'AiDenoiseLevel': 0.0,
           };
@@ -3662,6 +3680,7 @@ class _EditorScreenState extends State<EditorScreen>
           upscale: wantUpscale,
           denoiseAmount: wantDenoiseAmount,
           rawDenoise: wantRawDenoise,
+          upscaleMaxSharpness: wantUpscaleMaxSharpness,
         );
         if (!mounted || !ok) {
           return;
@@ -3757,6 +3776,7 @@ class _EditorScreenState extends State<EditorScreen>
     required bool upscale,
     int denoiseAmount = 100,
     bool rawDenoise = false,
+    bool upscaleMaxSharpness = false,
   }) async {
     setState(() {
       _isRunningNeuralEnhance = true;
@@ -3819,6 +3839,7 @@ class _EditorScreenState extends State<EditorScreen>
       customDenoiseModelPath: _settings.customDenoiseModelPath,
       previewMaxDimension: _settings.previewResolution,
       cancellationToken: cancellation,
+      upscaleMaxSharpness: upscaleMaxSharpness,
     );
     _aiEnhanceCancellation = null;
     if (!mounted) {
@@ -4983,6 +5004,8 @@ class _EditorScreenState extends State<EditorScreen>
     final wantDenoiseAmount =
         (_paramValues[_neuralDenoiseAmountKey] ?? defaultNeuralDenoiseAmount)
             .round();
+    final wantUpscaleMaxSharpness =
+        (_paramValues[_upscaleMaxSharpnessKey] ?? 0.0) > 0;
     final wantCloudProvider = _cloudProviderFromIndex(
       (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
     );
@@ -4996,6 +5019,7 @@ class _EditorScreenState extends State<EditorScreen>
           upscale: wantUpscale,
           denoiseAmount: wantDenoiseAmount,
           rawDenoise: wantRawDenoise,
+          upscaleMaxSharpness: wantUpscaleMaxSharpness,
         );
       } else if (wantCloudProvider != null) {
         nativeForExport = await _loadCloudDenoisedNativeSource(

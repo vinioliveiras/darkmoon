@@ -77,7 +77,7 @@ void main() {
 
     testWidgets(
       'opens on the Enhance tab for a photo whose persisted state has '
-      'upscale on, with the Upscale toggle shown',
+      'upscale on, with the Upscale toggle and quality chips shown',
       (tester) async {
         _useTallSurface(tester);
         await _openDialog(tester, neuralUpscale: true);
@@ -85,6 +85,73 @@ void main() {
 
         expect(find.text('Denoise'), findsOneWidget);
         expect(find.text('Upscale 2x'), findsOneWidget);
+        // Quality chips only appear once Upscale is on — defaults to Fast.
+        expect(find.text('Fast'), findsOneWidget);
+        expect(find.text('Max sharpness'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'quality chips are hidden while Upscale is off',
+      (tester) async {
+        _useTallSurface(tester);
+        await _openDialog(tester);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Enhance'));
+        await tester.pumpAndSettle();
+
+        expect(find.text('Fast'), findsNothing);
+        expect(find.text('Max sharpness'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'turning Upscale on then picking Max sharpness and applying '
+      'resolves as NeuralEnhanceChoice(upscaleMaxSharpness: true)',
+      (tester) async {
+        _useTallSurface(tester);
+        AiDenoiseChoice? result;
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => Center(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      result = await showDialog<AiDenoiseChoice>(
+                        context: context,
+                        builder: (_) => const AiDenoiseDialog(
+                          initialLevel: null,
+                          neuralDenoise: false,
+                          neuralUpscale: false,
+                        ),
+                      );
+                    },
+                    child: const Text('open'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Enhance'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Upscale 2x'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Max sharpness'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Apply'));
+        await tester.pumpAndSettle();
+
+        expect(result, isA<NeuralEnhanceChoice>());
+        final choice = result as NeuralEnhanceChoice;
+        expect(choice.upscale, isTrue);
+        expect(choice.upscaleMaxSharpness, isTrue);
       },
     );
 

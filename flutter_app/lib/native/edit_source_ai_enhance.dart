@@ -118,6 +118,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
   bool enableRawDenoise,
   int denoiseStrengthPercent,
   String? customDenoiseModelPath,
+  bool upscaleMaxSharpness,
   void Function(Object stage) onStage,
 ) async {
   int width;
@@ -132,6 +133,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
     rawDenoise: enableRawDenoise,
     denoiseStrengthPercent: denoiseStrengthPercent,
     denoiseModelPath: customDenoiseModelPath,
+    upscaleMaxSharpness: upscaleMaxSharpness,
   );
   final cachedImage = cachedPng == null ? null : img.decodePng(cachedPng);
 
@@ -213,11 +215,16 @@ Future<EditSourcePair?> _decodeAndEnhance(
         ),
       );
     }
-    final upscaleModel = enableUpscale ? OnnxModel.forSpec(upscaleModelSpec) : null;
+    final usedUpscaleSpec = upscaleMaxSharpness
+        ? realEsrganUpscaleModelSpec
+        : upscaleModelSpec;
+    final upscaleModel = enableUpscale
+        ? OnnxModel.forSpec(usedUpscaleSpec)
+        : null;
     if (upscaleModel != null) {
       onStage(
         AiEnhanceModelInfo(
-          upscaleModelSpec.fileName,
+          usedUpscaleSpec.fileName,
           upscaleModel.usingGpu,
           upscaleModel.directMlError,
         ),
@@ -232,6 +239,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
       // there's simply no model loaded to call them on in that case.
       denoise: (tile) => denoiseModel!.runTile(tile),
       upscale: (tile) => upscaleModel!.runTile(tile),
+      upscaleSpec: usedUpscaleSpec,
       enableDenoise: effectiveEnableDenoise,
       enableUpscale: enableUpscale,
       denoiseStrength: denoiseStrengthPercent / 100.0,
@@ -258,6 +266,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
       rawDenoise: enableRawDenoise,
       denoiseStrengthPercent: denoiseStrengthPercent,
       denoiseModelPath: customDenoiseModelPath,
+      upscaleMaxSharpness: upscaleMaxSharpness,
     );
   }
 
@@ -294,6 +303,7 @@ class _AiEnhanceDecodeIsolateArgs {
     this.enableRawDenoise,
     this.denoiseStrengthPercent,
     this.customDenoiseModelPath,
+    this.upscaleMaxSharpness,
     this.sendPort,
   );
 
@@ -305,6 +315,7 @@ class _AiEnhanceDecodeIsolateArgs {
   final bool enableRawDenoise;
   final int denoiseStrengthPercent;
   final String? customDenoiseModelPath;
+  final bool upscaleMaxSharpness;
   final SendPort sendPort;
 }
 
@@ -318,6 +329,7 @@ void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
     args.enableRawDenoise,
     args.denoiseStrengthPercent,
     args.customDenoiseModelPath,
+    args.upscaleMaxSharpness,
     (stage) => args.sendPort.send(stage),
   );
   args.sendPort.send(result);
@@ -345,6 +357,11 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
   String? customDenoiseModelPath,
   int previewMaxDimension = defaultPreviewMaxDimension,
   AiEnhanceCancellationToken? cancellationToken,
+  // See onnx_runtime.dart's realEsrganUpscaleModelSpec doc — false (the
+  // default) uses upscaleModelSpec (DIS, fast); true swaps in the slower,
+  // more detail-synthesizing Real-ESRGAN model. Ignored when [enableUpscale]
+  // is false.
+  bool upscaleMaxSharpness = false,
 }) async {
   final receivePort = ReceivePort();
   final isolate = await Isolate.spawn(
@@ -358,6 +375,7 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
       enableRawDenoise,
       denoiseStrengthPercent,
       customDenoiseModelPath,
+      upscaleMaxSharpness,
       receivePort.sendPort,
     ),
   );

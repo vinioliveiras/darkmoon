@@ -694,6 +694,24 @@ abstract class AppLocalizations {
   /// **'Upscale 2x'**
   String get aiDenoiseEnhanceUpscaleLabel;
 
+  /// No description provided for @aiDenoiseEnhanceUpscaleQualityFastLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Fast'**
+  String get aiDenoiseEnhanceUpscaleQualityFastLabel;
+
+  /// No description provided for @aiDenoiseEnhanceUpscaleQualityMaxLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Max sharpness'**
+  String get aiDenoiseEnhanceUpscaleQualityMaxLabel;
+
+  /// No description provided for @aiDenoiseEnhanceUpscaleQualityMaxCaption.
+  ///
+  /// In en, this message translates to:
+  /// **'Synthesizes more detail than Fast, at the cost of ~3.5 minutes per 24MP photo instead of a few seconds — and it can slightly alter (not just sharpen) very small text or detail.'**
+  String get aiDenoiseEnhanceUpscaleQualityMaxCaption;
+
   /// No description provided for @aiDenoiseEnhanceRawDenoiseLabel.
   ///
   /// In en, this message translates to:

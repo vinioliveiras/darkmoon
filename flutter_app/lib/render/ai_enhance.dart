@@ -5,7 +5,8 @@ import '../native/onnx_runtime.dart';
 
 /// Result of [enhanceImage] — packed, row-major, 3 bytes/pixel (0-255)
 /// RGB, at the *upscaled* dimensions ([width]/[height] already reflect
-/// [upscaleModelSpec]'s scale factor, not the original decode size).
+/// [enhanceImage]'s own `upscaleSpec` argument's scale factor, not the
+/// original decode size).
 class AiEnhanceResult {
   const AiEnhanceResult({
     required this.rgbBytes,
@@ -21,7 +22,7 @@ class AiEnhanceResult {
 /// The AI Enhance pipeline (item 13, distinct from the classical
 /// `applyAiDenoise` render-pipeline stage): NAFNet-SIDD reconstructive
 /// denoise (removes noise *and* film grain, recovers texture the noise was
-/// masking) and/or DIS 2x super-resolution, run independently —
+/// masking) and/or 2x super-resolution, run independently —
 /// [enableDenoise]/[enableUpscale] let a caller ask for either pass alone
 /// (denoise a noisy JPEG without changing its resolution, or upscale an
 /// already-clean photo without paying for a denoise pass it doesn't need)
@@ -39,6 +40,12 @@ class AiEnhanceResult {
 /// by the time they call this — simpler than making them nullable for a
 /// call shape that's only ever hit from one place.
 ///
+/// [upscaleSpec] picks the upscale pass's tile geometry (`upscaleModelSpec`
+/// — DIS, fast/fidelity-first — or `realEsrganUpscaleModelSpec` — slower,
+/// synthesizes more detail; see that constant's own doc) — the caller must
+/// pass whichever one [upscale] was actually bound to, so tiling matches
+/// the model. Ignored when [enableUpscale] is false.
+///
 /// [rgbBytes] is packed, row-major, 3 bytes/pixel (0-255) — the same
 /// convention `render.dart`'s buffers use before their own internal
 /// 0..1-normalized processing. Blocking (runs potentially thousands of
@@ -49,6 +56,7 @@ AiEnhanceResult enhanceImage(
   int height, {
   required Float32List Function(Float32List tile) denoise,
   required Float32List Function(Float32List tile) upscale,
+  OnnxModelSpec upscaleSpec = upscaleModelSpec,
   bool enableDenoise = true,
   bool enableUpscale = true,
   // NAFNet-SIDD is a fixed, blind denoiser — it has no built-in strength
@@ -96,15 +104,15 @@ AiEnhanceResult enhanceImage(
           denoised,
           width,
           height,
-          inputTileSize: upscaleModelSpec.inputTileSize,
-          overlap: upscaleModelSpec.inputTileSize ~/ 8,
-          scaleFactor: upscaleModelSpec.scaleFactor,
+          inputTileSize: upscaleSpec.inputTileSize,
+          overlap: upscaleSpec.inputTileSize ~/ 8,
+          scaleFactor: upscaleSpec.scaleFactor,
           processTile: upscale,
           onProgress: (i, total) => onProgress?.call('upscale', i, total),
         )
       : denoised;
 
-  final scaleFactor = enableUpscale ? upscaleModelSpec.scaleFactor : 1;
+  final scaleFactor = enableUpscale ? upscaleSpec.scaleFactor : 1;
   final outWidth = width * scaleFactor;
   final outHeight = height * scaleFactor;
   final outBytes = Uint8List(upscaled.length);

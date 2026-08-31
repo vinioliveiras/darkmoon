@@ -332,6 +332,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get aiDenoiseEnhanceUpscaleLabel => 'Upscale 2x';
 
   @override
+  String get aiDenoiseEnhanceUpscaleQualityFastLabel => 'Rápido';
+
+  @override
+  String get aiDenoiseEnhanceUpscaleQualityMaxLabel => 'Nitidez máxima';
+
+  @override
+  String get aiDenoiseEnhanceUpscaleQualityMaxCaption =>
+      'Reconstrói mais detalhe que o Rápido, ao custo de ~3min30s por foto de 24MP em vez de poucos segundos — e pode alterar levemente (não só afiar) texto ou detalhes bem pequenos.';
+
+  @override
   String get aiDenoiseEnhanceRawDenoiseLabel =>
       'Denoise em RAW (antes do demosaic)';
 

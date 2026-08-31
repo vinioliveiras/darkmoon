@@ -336,6 +336,16 @@ class AppLocalizationsDe extends AppLocalizations {
   String get aiDenoiseEnhanceUpscaleLabel => '2x hochskalieren';
 
   @override
+  String get aiDenoiseEnhanceUpscaleQualityFastLabel => 'Schnell';
+
+  @override
+  String get aiDenoiseEnhanceUpscaleQualityMaxLabel => 'Maximale Schärfe';
+
+  @override
+  String get aiDenoiseEnhanceUpscaleQualityMaxCaption =>
+      'Rekonstruiert mehr Detail als Schnell, auf Kosten von ca. 3,5 Minuten pro 24-MP-Foto statt weniger Sekunden — und kann sehr kleinen Text oder Details leicht verändern (nicht nur schärfen).';
+
+  @override
   String get aiDenoiseEnhanceRawDenoiseLabel =>
       'RAW-Entrauschen (vor dem Demosaicing)';
 

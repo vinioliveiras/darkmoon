@@ -100,6 +100,35 @@ const upscaleModelSpec = OnnxModelSpec(
   scaleFactor: 2,
 );
 
+/// Real-ESRGAN x2plus (BSD-3-Clause, xinntao/Real-ESRGAN) — the model
+/// [upscaleModelSpec] above replaced for speed, still bundled and now
+/// re-offered as a deliberate slower/higher-quality alternative (item 35's
+/// "papado" denoise investigation, 2026-08-31 — see PENDING.md and
+/// project_darkmoon_color_profile.md's sibling item for the full trail).
+///
+/// The two models differ in *kind*, not just speed: [upscaleModelSpec]
+/// (DIS) is trained with a pixel-fidelity loss, so it never invents detail
+/// it isn't confident about — safe, but can look "papado"/over-smoothed on
+/// real sensor noise. This model is trained with an adversarial (GAN)
+/// loss, which rewards synthesizing plausible high-frequency texture even
+/// where the input is ambiguous — measurably closer to the crisp,
+/// reconstructed look of tools like Topaz's video/photo remasters, at a
+/// real cost: on a full 24MP photo this takes ~3.5 minutes end-to-end
+/// (denoise + upscale) versus a few seconds for DIS, and it can *alter*
+/// (not just sharpen) very small text/detail near the edge of resolution
+/// — confirmed on a real photo where small signage text came out
+/// perceptibly different, not just crisper. Offer this as an explicit,
+/// slower choice; never make it the default.
+///
+/// Fixed 64x64 input tile (unlike [upscaleModelSpec]'s dynamic sizing) —
+/// this specific export's own constraint, not a general property of
+/// Real-ESRGAN models.
+const realEsrganUpscaleModelSpec = OnnxModelSpec(
+  fileName: 'Real-ESRGAN_x2plus.onnx',
+  inputTileSize: 64,
+  scaleFactor: 2,
+);
+
 /// PMRID (Apache-2.0, MegEngine/PMRID, ECCV20 "Practical Deep Raw Image
 /// Denoising on Mobile Devices") — raw-domain denoise, run on the packed
 /// RGGB Bayer buffer *before* demosaic (`pmrid_denoise.dart`), unlike
