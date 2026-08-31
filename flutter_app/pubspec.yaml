@@ -47,6 +47,7 @@ dependencies:
   archive: ^4.0.9
   http: ^1.2.2
   win32: ^5.15.0
+  url_launcher: ^6.3.1
 
 dev_dependencies:
   flutter_test:
@@ -58,6 +59,13 @@ dev_dependencies:
   # real launched app instead. See project_gpu_render_plan.md.
   integration_test:
     sdk: flutter
+
+  # For mocking UrlLauncherPlatform.instance in
+  # test/widgets/settings_and_about_dialog_test.dart — the standard
+  # url_launcher testing pattern, so the About dialog's easter egg test
+  # doesn't actually try to open a browser.
+  plugin_platform_interface: ^2.1.8
+  url_launcher_platform_interface: ^2.3.2
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
