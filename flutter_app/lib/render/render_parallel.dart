@@ -133,6 +133,12 @@ Future<Uint8List> renderAdjustmentsParallel(
   }
   mark('local ($bandCount bands)');
 
+  // Whole-image, before Dehaze — see applyColorProfileStage's doc comment
+  // in render.dart for why (Dehaze must see the profile's post-lift
+  // buffer, not the pre-lift one).
+  applyColorProfileStage(buffer, params);
+  mark('colorProfile');
+
   // Dehaze: whole-image is a no-op when it's off; band it (its sigma-40
   // blur needs a halo) when it's on.
   final dehazeHalo = dehazeHaloPx(params);

@@ -320,19 +320,6 @@ void applyPostDenoisePointOps(
           3.5,
         );
   mark('tonalBlur');
-  // The "profile" contrast the Adobe Color base curve gives Lightroom for
-  // free — applied first, so every tone slider and curve below works on
-  // top of it, matching Lightroom's order (profile curve -> Basic panel).
-  _applyBaseContrast(buffer, params.baseContrast);
-  mark('baseContrast');
-  // ...then the per-hue "darkmoon Color" correction — the other half of
-  // what an Adobe profile bakes in (its HueSatMap). Still before any user
-  // adjustment, matching Lightroom's profile-then-Basic order.
-  final profile = params.colorProfile;
-  if (profile != null) {
-    applyColorProfile(buffer, profile, params.colorProfileStrength);
-  }
-  mark('colorProfile');
   _applyRapidBrightness(buffer, params.brightness);
   mark('brightness');
   _applyRapidWhites(buffer, pixelCount, params.whites);
@@ -372,8 +359,19 @@ void applyPostDenoisePointOps(
 /// Everything [applyLocalAdjustmentSteps] leaves out, run after
 /// [applyExposureAndWhiteBalance] (see that function's doc comment for why
 /// Exposure/White Balance both run before this — including before
-/// [applyLocalAdjustmentSteps]). Split into two:
+/// [applyLocalAdjustmentSteps]). Split into three:
 ///
+/// - [applyColorProfileStage] — the base-contrast/"darkmoon Color" profile
+///   correction, whole-image (a pure per-pixel op, same reasoning as
+///   [applyExposureAndWhiteBalance]). Runs *before* Dehaze for the exact
+///   same reason White Balance was moved earlier: Dehaze estimates its
+///   own haze/atmospheric-light color from whatever buffer it's given, and
+///   the profile's fitted tone curve does a large brightness lift (it's
+///   fit to compensate for `no_auto_bright`'s darker baseline) — Dehaze
+///   seeing the buffer *before* that lift added a haze cast that then got
+///   amplified by the lift into a strong grey wash. Confirmed by direct
+///   repro: Dehaze alone (no other slider) reproduced it; Texture/Clarity/
+///   Vibrance/Saturation alone did not.
 /// - [applyDehazeStage] — just `dehaze.dart`'s wide "regional" blur, which
 ///   is why this can't run on a naive per-band slice — kept whole-image.
 ///   Runs after White Balance specifically because Dehaze estimates its
@@ -395,8 +393,23 @@ void applyGlobalAdjustmentSteps(
   int height,
   RenderParams params,
 ) {
+  applyColorProfileStage(buffer, params);
   applyDehazeStage(buffer, width, height, params);
   applyGlobalPointOps(buffer, width, height, params);
+}
+
+void applyColorProfileStage(Float32List buffer, RenderParams params) {
+  // The "profile" contrast the Adobe Color base curve gives Lightroom for
+  // free — applied first, so every tone slider and curve below works on
+  // top of it, matching Lightroom's order (profile curve -> Basic panel).
+  _applyBaseContrast(buffer, params.baseContrast);
+  // ...then the per-hue "darkmoon Color" correction — the other half of
+  // what an Adobe profile bakes in (its HueSatMap). Still before any user
+  // adjustment, matching Lightroom's profile-then-Basic order.
+  final profile = params.colorProfile;
+  if (profile != null) {
+    applyColorProfile(buffer, profile, params.colorProfileStrength);
+  }
 }
 
 void applyDehazeStage(

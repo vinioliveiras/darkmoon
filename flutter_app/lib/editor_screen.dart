@@ -184,17 +184,25 @@ String _sectionLabel(AppLocalizations l10n, String key) {
 /// `timings` plumbing) once export is settled. See PENDING "Débitos".
 const bool _showExportTimings = false;
 
-/// Off again 2026-08-29: even after the isotonic-regression re-fit + the
-/// stale-cache fix, real-photo testing still came back overexposed on the
-/// backlit/hazy test photo — with a preset applied, which should have
-/// pulled it back down. Three rounds of "fixed it" that weren't, once
-/// tested live, is a sign the validation loop (my own eyeballing of a
-/// couple of pairs) isn't catching what real use does. Paused rather than
-/// spending a fourth round guessing — see
-/// project_darkmoon_color_profile.md for what's been tried and why each
-/// attempt fell short. The loader, RenderParams plumbing, GPU guard and
-/// _effectiveBaseContrast fallback all stay in place for whenever this
-/// gets picked back up with a better way to validate before shipping.
+/// Off again 2026-08-31: a real bug WAS found and fixed this round (Dehaze
+/// ran before this profile's tone-curve lift, same bug shape as the
+/// WB/Dehaze pipeline fix from earlier the same day — see
+/// applyColorProfileStage's doc comment in render.dart, which stays fixed
+/// regardless of this flag) and the re-fit profile measurably improved
+/// the *neutral* render (mean error across all 15 Lightroom-exported
+/// pairs dropped from ~55-115/255 to ~17-61/255, no regressions). But
+/// live-testing the exact preset+photo combo that broke before showed a
+/// new problem: the render reads visibly "overedited" — a yellow-green
+/// cast Lightroom's own render doesn't have. Lowering the per-hue
+/// lumMul ceiling from 1.4 to 1.15 (tool/build_color_profile.dart) barely
+/// changed it, which rules out the per-hue table as the main cause — the
+/// global tone curve itself (it roughly *triples* near-black input:
+/// 0.03 -> 0.10) is the likelier culprit for a scene this dark, but
+/// that's a real re-fit/methodology question (probably needs more
+/// dark-scene training pairs, or a fundamentally gentler shadow lift),
+/// not another parameter tweak to guess at. See
+/// project_darkmoon_color_profile.md for the full trail before touching
+/// this again.
 const bool _colorProfileEnabled = false;
 
 /// Zoom bounds and step, matching the Python app's MIN_ZOOM/MAX_ZOOM/ZOOM_STEP.

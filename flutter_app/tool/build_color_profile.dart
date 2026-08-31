@@ -330,7 +330,7 @@ void main(List<String> args) {
   // a sane range regardless of how it got there.
   final lumMul = [
     for (final v in smoothHue(rawLum, 1))
-      dead(1.0 + (v - 1.0) * damp, 1, 0.03).clamp(0.7, 1.4),
+      dead(1.0 + (v - 1.0) * damp, 1, 0.03).clamp(0.85, 1.15),
   ];
 
   final profile = ColorProfile(

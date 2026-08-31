@@ -530,7 +530,7 @@ RawImage? decodeRawImage(
     // clipped instead, closer to how RapidRAW/Vitrine and Lightroom-style
     // tools handle overexposed regions by default.
     params.highlight = 2;
-    // REVERTED (2nd time) 2026-08-29 — see the "_colorProfileEnabled off
+    // REVERTED (3rd time) 2026-08-31 — see the "_colorProfileEnabled off
     // again" note in editor_screen.dart and project_darkmoon_color_profile
     // .md. no_auto_bright = 1 only makes sense paired with a working
     // "darkmoon Color" tone curve (color_profile.dart) to bring the
