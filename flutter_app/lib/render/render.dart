@@ -819,13 +819,26 @@ void _applyRapidHighlights(Float32List img, int pixelCount, double highlights) {
 /// half-width since skin tones occupy a tighter hue range than a full
 /// Orange mixer band.
 ///
-/// RapidRAW's `apply_creative_color` does this math on scene-linear RGB
-/// (its whole pipeline stays linear until final display encode), so both
-/// the luminance mix and the saturation/hue readings driving the masks
-/// below must run on linear values too — computing them on gamma-encoded
-/// bytes (as this used to) systematically under-masks shadows and
-/// over-masks highlights relative to RapidRAW, since sRGB's gamma curve
-/// compresses the same linear-light saturation differently at each end.
+/// **Deliberately diverges from RapidRAW's `apply_creative_color` here**
+/// (2026-08-31 — see `project_darkmoon_color_profile.md`'s "8th round" for
+/// the full investigation). RapidRAW's technique — mix each channel toward
+/// scene-linear luminance by a factor, independently gamma-encoding R/G/B
+/// back afterward — is exactly hue-preserving *when hue is measured on
+/// those same linear values*, but that's not the hue a viewer perceives:
+/// gamma-encoding each channel independently distorts the ratios that
+/// define hue in the *displayed* (sRGB) image. For a strong boost on an
+/// already-separated warm colour (a proper red barrier, a lit wall —
+/// exactly what a corrected exposure exposes), that shows up as a real,
+/// measurable hue rotation toward yellow-green, confirmed by isolated
+/// reproduction against the real calibration constants. A pure HSV
+/// saturation multiply — hue and value held *exactly* fixed by
+/// construction, computed directly on the working buffer's own
+/// gamma-encoded values rather than round-tripping through scene-linear —
+/// has zero hue drift by definition, at the cost of anchoring on the
+/// max-channel *value* instead of a perceptually-weighted *luminance* (so
+/// this is not exactly luminance-preserving the way the old technique
+/// incidentally was — an acceptable trade for eliminating a real visible
+/// artifact). Mirrored on GPU in `shaders/post_dehaze.frag`.
 void _applyVibrance(Float32List img, int pixelCount, double amount) {
   if (amount == 0) {
     return;
@@ -833,17 +846,13 @@ void _applyVibrance(Float32List img, int pixelCount, double amount) {
   final normalizedAmount = amount / 100.0;
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
-    final r = srgbToLinear(img[i] / 255.0);
-    final g = srgbToLinear(img[i + 1] / 255.0);
-    final b = srgbToLinear(img[i + 2] / 255.0);
-    final luminance = _linearLuminance(r, g, b);
-    final maxC = math.max(r, math.max(g, b));
-    final minC = math.min(r, math.min(g, b));
-    if (maxC - minC < 0.02) {
+    final r = img[i] / 255.0;
+    final g = img[i + 1] / 255.0;
+    final b = img[i + 2] / 255.0;
+    final (hue, sat, val) = rgbToHsv(r, g, b);
+    if (val * sat < 0.02) {
       continue;
     }
-    final currentSaturation = (maxC - minC) / math.max(maxC, 0.001);
-    final (hue, _, _) = rgbToHsv(r, g, b);
     final hueDistance = math.min(
       (hue - 25.0).abs(),
       360.0 - (hue - 25.0).abs(),
@@ -853,15 +862,15 @@ void _applyVibrance(Float32List img, int pixelCount, double amount) {
     final factor = normalizedAmount >= 0
         ? 1.0 +
               normalizedAmount *
-                  (1.0 - _smoothstep(0.4, 0.9, currentSaturation)) *
+                  (1.0 - _smoothstep(0.4, 0.9, sat)) *
                   skinDampener *
                   calVibranceStrength
-        : 1.0 +
-              normalizedAmount *
-                  (1.0 - _smoothstep(0.2, 0.8, currentSaturation));
-    img[i] = linearToSrgb(luminance + (r - luminance) * factor) * 255.0;
-    img[i + 1] = linearToSrgb(luminance + (g - luminance) * factor) * 255.0;
-    img[i + 2] = linearToSrgb(luminance + (b - luminance) * factor) * 255.0;
+        : 1.0 + normalizedAmount * (1.0 - _smoothstep(0.2, 0.8, sat));
+    final newSat = (sat * factor).clamp(0.0, 1.0);
+    final (nr, ng, nb) = hsvToRgb(hue, newSat, val);
+    img[i] = nr * 255.0;
+    img[i + 1] = ng * 255.0;
+    img[i + 2] = nb * 255.0;
   }
 }
 
@@ -870,11 +879,11 @@ double _smoothstep(double edge0, double edge1, double value) {
   return t * t * (3.0 - 2.0 * t);
 }
 
-/// Flat saturation gain, same linear-light mix as [_applyVibrance] but
-/// without any saturation/hue-dependent masking — matches RapidRAW's
-/// `apply_creative_color`, which runs this step first (see the call order
-/// in [applyGlobalAdjustmentSteps]) so Vibrance's masks read the
-/// already-saturated color, not the original.
+/// Flat saturation gain — see [_applyVibrance]'s doc comment for why this
+/// is a direct HSV saturation multiply (hue/value held fixed by
+/// construction) rather than RapidRAW's linear-light luminance mix. Runs
+/// before Vibrance (see the call order in [applyGlobalAdjustmentSteps])
+/// so Vibrance's masks read the already-saturated color, not the original.
 void _applySaturation(Float32List img, int pixelCount, double amount) {
   if (amount == 0) {
     return;
@@ -882,12 +891,17 @@ void _applySaturation(Float32List img, int pixelCount, double amount) {
   final factor = 1.0 + amount / 100.0 * calSaturationStrength;
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
-    final r = srgbToLinear(img[i] / 255.0);
-    final g = srgbToLinear(img[i + 1] / 255.0);
-    final b = srgbToLinear(img[i + 2] / 255.0);
-    final luminance = _linearLuminance(r, g, b);
-    img[i] = linearToSrgb(luminance + (r - luminance) * factor) * 255.0;
-    img[i + 1] = linearToSrgb(luminance + (g - luminance) * factor) * 255.0;
-    img[i + 2] = linearToSrgb(luminance + (b - luminance) * factor) * 255.0;
+    final r = img[i] / 255.0;
+    final g = img[i + 1] / 255.0;
+    final b = img[i + 2] / 255.0;
+    final (hue, sat, val) = rgbToHsv(r, g, b);
+    if (sat < 1e-4) {
+      continue;
+    }
+    final newSat = (sat * factor).clamp(0.0, 1.0);
+    final (nr, ng, nb) = hsvToRgb(hue, newSat, val);
+    img[i] = nr * 255.0;
+    img[i + 1] = ng * 255.0;
+    img[i + 2] = nb * 255.0;
   }
 }
