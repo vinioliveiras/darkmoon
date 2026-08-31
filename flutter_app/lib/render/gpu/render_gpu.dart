@@ -54,8 +54,14 @@ Future<ui.Image> renderImageGpu(
   int height,
   RenderParams params,
 ) async {
-  // RapidRAW order: baseline chroma smoothing -> AI denoise -> Sharpen ->
-  // Texture -> Clarity -> Exposure -> Dehaze -> White Balance -> Tone.
+  // baseline chroma smoothing -> AI denoise -> Sharpen -> Texture ->
+  // Clarity -> Exposure -> White Balance -> Dehaze -> Tone. (RapidRAW's own
+  // order runs Dehaze before White Balance; moved here — see
+  // applyExposureWhiteBalanceAndDehaze's doc comment in render.dart for
+  // why: Dehaze estimates its own per-channel "haze color" from whatever
+  // buffer it's given, and got that estimate badly wrong on the camera's
+  // still-warm as-shot decode for a photo needing a large WB move,
+  // compounding into a strong, Lightroom-doesn't-do-this magenta cast.)
   final afterPreDenoise = source;
   final afterChromaSmoothing = await runBaselineChromaSmoothingGpu(
     afterPreDenoise,
@@ -107,29 +113,21 @@ Future<ui.Image> renderImageGpu(
     protectMidtones: true,
   );
 
-  final afterExposure = await _runPreDenoise(
+  final afterExposureAndWb = await _runPreDenoise(
     afterClarity,
     width,
     height,
     params,
-    applyWhiteBalance: false,
   );
 
   final afterDehaze = await runDehazeGpu(
-    afterExposure,
+    afterExposureAndWb,
     width,
     height,
     params.dehaze,
   );
-  final afterWhiteBalance = await _runPreDenoise(
-    afterDehaze,
-    width,
-    height,
-    params,
-    applyExposure: false,
-  );
   final afterTone = await _runPostDenoise(
-    afterWhiteBalance,
+    afterDehaze,
     lut,
     tonalBlur,
     width,

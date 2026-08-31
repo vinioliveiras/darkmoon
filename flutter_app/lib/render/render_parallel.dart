@@ -128,7 +128,7 @@ Future<Uint8List> renderAdjustmentsParallel(
   // off; band it (Dehaze's sigma-40 blur needs a halo) when it's on.
   final dehazeHalo = exposureDehazeHaloPx(params);
   if (dehazeHalo == 0 || bandCount <= 1) {
-    applyExposureAndDehaze(buffer, width, height, params);
+    applyExposureWhiteBalanceAndDehaze(buffer, width, height, params);
   } else {
     await _bandPass(
       width,
@@ -137,7 +137,7 @@ Future<Uint8List> renderAdjustmentsParallel(
       bandCount,
       dehazeHalo,
       (slice, w, h, top) =>
-          applyExposureAndDehaze(slice, w, h, params),
+          applyExposureWhiteBalanceAndDehaze(slice, w, h, params),
     );
   }
   mark('exposure+dehaze');

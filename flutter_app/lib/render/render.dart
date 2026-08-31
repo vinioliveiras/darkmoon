@@ -183,10 +183,10 @@ int localAdjustmentHaloPx(RenderParams params) {
   return halo;
 }
 
-/// Halo (px) [applyExposureAndDehaze] needs when run on a horizontal band
-/// — the reach of Dehaze's sigma-40 "structure" Gaussian (3-pass box,
-/// ~4.5·sigma), 0 when Dehaze is off (then it's just the O(n) exposure
-/// multiply).
+/// Halo (px) [applyExposureWhiteBalanceAndDehaze] needs when run on a
+/// horizontal band — the reach of Dehaze's sigma-40 "structure" Gaussian
+/// (3-pass box, ~4.5·sigma), 0 when Dehaze is off (then it's just the
+/// O(n) exposure/white-balance multiplies).
 int exposureDehazeHaloPx(RenderParams params) => params.dehaze != 0 ? 180 : 0;
 
 /// Halo (px) [applyGlobalPointOps] needs on a band — just the sigma-3.5
@@ -349,32 +349,49 @@ void applyPostDenoisePointOps(
 
 /// Everything [applyLocalAdjustmentSteps] leaves out. Split into two:
 ///
-/// - [applyExposureAndDehaze] — Exposure (a plain scale) then Dehaze
-///   (`dehaze.dart`), whose wide "regional" blur means it can't be run on
-///   a naive per-band slice; kept whole-image.
-/// - [applyGlobalPointOps] — White Balance, the post-denoise point ops
-///   (brightness/contrast/highlights/shadows/whites/blacks, tone + colour
-///   curves, mixer, grading), Saturation, Vibrance, Vignette, Grain. All
-///   per-pixel with no blur, so `render_parallel.dart` runs this half in
-///   bands too — it's where most of the `pow()` cost of a full-resolution
-///   render lives.
+/// - [applyExposureWhiteBalanceAndDehaze] — Exposure, then White Balance,
+///   then Dehaze (`dehaze.dart`). White Balance runs here (not in
+///   [applyGlobalPointOps] below, even though it's itself a per-pixel op
+///   with no blur) specifically so Dehaze sees the buffer *after* the
+///   user's Temp/Tint target, not the camera's raw as-shot decode — Dehaze
+///   estimates its own per-channel "haze color" from whatever buffer it's
+///   given, and a photo needing a large as-shot-to-target WB move (a warm
+///   as-shot far from a cool target, say) left that estimate badly wrong,
+///   compounding with Vibrance/Saturation into a strong magenta cast that
+///   never showed up in Lightroom (its own White Balance always runs
+///   before Dehaze). Dehaze's wide "regional" blur is why this whole
+///   group can't run on a naive per-band slice — kept whole-image.
+/// - [applyGlobalPointOps] — the post-denoise point ops (brightness/
+///   contrast/highlights/shadows/whites/blacks, tone + colour curves,
+///   mixer, grading), Saturation, Vibrance, Vignette, Grain. All per-pixel
+///   with no blur, so `render_parallel.dart` runs this half in bands too
+///   — it's where most of the `pow()` cost of a full-resolution render
+///   lives.
 void applyGlobalAdjustmentSteps(
   Float32List buffer,
   int width,
   int height,
   RenderParams params,
 ) {
-  applyExposureAndDehaze(buffer, width, height, params);
+  applyExposureWhiteBalanceAndDehaze(buffer, width, height, params);
   applyGlobalPointOps(buffer, width, height, params);
 }
 
-void applyExposureAndDehaze(
+void applyExposureWhiteBalanceAndDehaze(
   Float32List buffer,
   int width,
   int height,
   RenderParams params,
 ) {
   _applyExposure(buffer, params.exposure);
+  _applyWhiteBalance(
+    buffer,
+    params.temperature,
+    params.tint,
+    params.asShotKelvin,
+    params.asShotTint,
+    params.preserveTintBrightness,
+  );
   applyDehaze(buffer, width, height, params.dehaze);
 }
 
@@ -400,15 +417,6 @@ void applyGlobalPointOps(
   }
 
   final pixelCount = width * height;
-  _applyWhiteBalance(
-    buffer,
-    params.temperature,
-    params.tint,
-    params.asShotKelvin,
-    params.asShotTint,
-    params.preserveTintBrightness,
-  );
-  mark('whiteBalance');
   applyPostDenoisePointOps(
     buffer,
     width,
