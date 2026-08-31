@@ -34,6 +34,16 @@ const _warningColor = Color(0xFFE8A33D);
 /// or predates this slider) — see its own `_neuralDenoiseAmountKey` doc.
 const defaultNeuralDenoiseAmount = 100;
 
+/// Default value for [NeuralEnhanceChoice.restoreDetailAmount] — 50%, a
+/// balanced starting blend. Unlike [defaultNeuralDenoiseAmount]'s 100%
+/// (justified by the current denoise model specifically *not* needing a
+/// safety blend — see its own doc), this toggle has no such evidence yet
+/// for any user's specific photo, so it follows the plain "new toggle,
+/// balanced default" convention instead (2026-08-31, explicit user
+/// direction after testing GaterV3 restore+sharpen — PENDING.md item 35
+/// combo follow-up).
+const defaultRestoreDetailAmount = 50;
+
 String _levelLabel(AppLocalizations l10n, AiDenoiseLevel? level) =>
     switch (level) {
       null => l10n.aiDenoiseLevelOff,
@@ -85,10 +95,27 @@ class NeuralEnhanceChoice extends AiDenoiseChoice {
     this.denoiseAmount = defaultNeuralDenoiseAmount,
     this.rawDenoise = false,
     this.upscaleSharpnessAmount = 0,
+    this.restoreDetail = false,
+    this.restoreDetailAmount = defaultRestoreDetailAmount,
   });
 
   final bool denoise;
   final bool upscale;
+
+  /// GaterV3 restore-then-sharpen (`gaterV3RestoreModelSpec`/
+  /// `gaterV3SharpenModelSpec`) — a same-resolution detail pass,
+  /// independent of [upscale] (found investigating item 35's "make it
+  /// faster, no upscale needed" follow-up, 2026-08-31 — see PENDING.md).
+  /// Unlike [upscaleSharpnessAmount], this pair is cheap enough
+  /// (~2s combined on a 700x700 crop, faster than [denoise] itself) that
+  /// it always runs once toggled on — [restoreDetailAmount] only controls
+  /// the blend ratio, never whether the models load at all.
+  final bool restoreDetail;
+
+  /// 0-100 blend between [denoise]'s own output and the GaterV3 pair's
+  /// (see `ai_enhance.dart`'s `enhanceImage` `detailAmount` doc). Only
+  /// meaningful when [restoreDetail] is true.
+  final int restoreDetailAmount;
 
   /// 0-100 blend between [upscale]'s own output (`upscaleModelSpec`/DIS,
   /// fast, fidelity-first) and Real-ESRGAN's (`realEsrganUpscaleModelSpec`
@@ -121,7 +148,7 @@ class NeuralEnhanceChoice extends AiDenoiseChoice {
   /// matters when unused.
   final int denoiseAmount;
 
-  bool get active => denoise || upscale || rawDenoise;
+  bool get active => denoise || upscale || rawDenoise || restoreDetail;
 }
 
 /// A paid, third-party cloud AI denoise call (the dialog's "Cloud AI" tab)
@@ -168,6 +195,8 @@ class AiDenoiseDialog extends StatefulWidget {
     this.rawDenoiseAvailable = false,
     this.cloudProvider,
     this.upscaleSharpnessAmount = 0,
+    this.neuralRestoreDetail = false,
+    this.restoreDetailAmount = defaultRestoreDetailAmount,
   });
 
   /// The classical level already applied to the current photo, if any —
@@ -189,6 +218,12 @@ class AiDenoiseDialog extends StatefulWidget {
 
   /// See [NeuralEnhanceChoice.upscaleSharpnessAmount].
   final int upscaleSharpnessAmount;
+
+  /// See [NeuralEnhanceChoice.restoreDetail].
+  final bool neuralRestoreDetail;
+
+  /// See [NeuralEnhanceChoice.restoreDetailAmount].
+  final int restoreDetailAmount;
 
   /// Whether the current photo is a standard Bayer-CFA RAW file — the raw
   /// denoise toggle is shown disabled (with an explanatory caption) when
@@ -215,6 +250,8 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
   late bool _neuralRawDenoise = widget.neuralRawDenoise;
   late int _denoiseAmount = widget.neuralDenoiseAmount;
   late int _upscaleSharpnessAmount = widget.upscaleSharpnessAmount;
+  late bool _neuralRestoreDetail = widget.neuralRestoreDetail;
+  late int _restoreDetailAmount = widget.restoreDetailAmount;
   late CloudDenoiseProviderKind? _cloudProvider = widget.cloudProvider;
   final _tokenController = TextEditingController();
   bool _obscureToken = true;
@@ -225,7 +262,8 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         ? 2
         : (widget.neuralDenoise ||
               widget.neuralUpscale ||
-              widget.neuralRawDenoise)
+              widget.neuralRawDenoise ||
+              widget.neuralRestoreDetail)
         ? 1
         : 0,
   );
@@ -287,6 +325,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
       _neuralDenoise = false;
       _neuralUpscale = false;
       _neuralRawDenoise = false;
+      _neuralRestoreDetail = false;
       _cloudProvider = null;
     });
   }
@@ -318,6 +357,20 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
     setState(() => _upscaleSharpnessAmount = value);
   }
 
+  void _setNeuralRestoreDetail(bool value) {
+    setState(() {
+      _neuralRestoreDetail = value;
+      if (value) {
+        _level = null;
+        _cloudProvider = null;
+      }
+    });
+  }
+
+  void _setRestoreDetailAmount(int value) {
+    setState(() => _restoreDetailAmount = value);
+  }
+
   void _setNeuralRawDenoise(bool value) {
     setState(() {
       _neuralRawDenoise = value;
@@ -338,6 +391,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         _neuralDenoise = false;
         _neuralUpscale = false;
         _neuralRawDenoise = false;
+        _neuralRestoreDetail = false;
         unawaited(_loadStoredToken(provider));
       }
     });
@@ -350,13 +404,18 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         apiKey: _tokenController.text.trim(),
       );
     }
-    if (_neuralDenoise || _neuralUpscale || _neuralRawDenoise) {
+    if (_neuralDenoise ||
+        _neuralUpscale ||
+        _neuralRawDenoise ||
+        _neuralRestoreDetail) {
       return NeuralEnhanceChoice(
         denoise: _neuralDenoise,
         upscale: _neuralUpscale,
         denoiseAmount: _denoiseAmount,
         rawDenoise: _neuralRawDenoise,
         upscaleSharpnessAmount: _upscaleSharpnessAmount,
+        restoreDetail: _neuralRestoreDetail,
+        restoreDetailAmount: _restoreDetailAmount,
       );
     }
     return ClassicDenoiseChoice(_level);
@@ -571,6 +630,54 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
               divisions: 100,
               value: _denoiseAmount.toDouble(),
               onChanged: (v) => setState(() => _denoiseAmount = v.round()),
+            ),
+          ),
+        ],
+        const SizedBox(height: 4),
+        // GaterV3 restore+sharpen — independent of Upscale (unlike the
+        // Sharpness slider below, this stays same-resolution), found
+        // investigating item 35's "make it faster, no upscale needed"
+        // follow-up. Cheap enough to always run once toggled on — the
+        // Amount slider only controls blend ratio, defaulting to a
+        // balanced 50% since (unlike Denoise's 100%) there's no evidence
+        // yet that full strength is always the right call here.
+        _ToggleRow(
+          label: l10n.aiDenoiseEnhanceRestoreDetailLabel,
+          value: _neuralRestoreDetail,
+          onChanged: _setNeuralRestoreDetail,
+        ),
+        if (_neuralRestoreDetail) ...[
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.aiDenoiseEnhanceAmountLabel,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: DarkmoonColors.textSecondary,
+                  ),
+                ),
+              ),
+              Text(
+                '$_restoreDetailAmount%',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: DarkmoonColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+          SliderTheme(
+            data: SliderTheme.of(
+              context,
+            ).copyWith(trackShape: const RectangularSliderTrackShape()),
+            child: Slider(
+              min: 0,
+              max: 100,
+              divisions: 100,
+              value: _restoreDetailAmount.toDouble(),
+              onChanged: (v) => _setRestoreDetailAmount(v.round()),
             ),
           ),
         ],

@@ -119,6 +119,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
   int denoiseStrengthPercent,
   String? customDenoiseModelPath,
   int upscaleSharpnessAmount,
+  bool enableDetailRestore,
+  int detailRestoreAmount,
   void Function(Object stage) onStage,
 ) async {
   int width;
@@ -134,6 +136,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
     denoiseStrengthPercent: denoiseStrengthPercent,
     denoiseModelPath: customDenoiseModelPath,
     upscaleSharpnessAmount: upscaleSharpnessAmount,
+    detailRestore: enableDetailRestore,
+    detailRestoreAmount: detailRestoreAmount,
   );
   final cachedImage = cachedPng == null ? null : img.decodePng(cachedPng);
 
@@ -244,6 +248,25 @@ Future<EditSourcePair?> _decodeAndEnhance(
         ),
       );
     }
+    // GaterV3's pair is cheap (~2s combined on a crop, faster than the
+    // denoise model itself) — unlike Real-ESRGAN above, both load
+    // whenever the toggle is on regardless of amount (see
+    // enhanceImage's detailAmount doc for why 0% still runs them).
+    final detailRestoreModel = enableDetailRestore
+        ? OnnxModel.forSpec(gaterV3RestoreModelSpec)
+        : null;
+    final detailSharpenModel = enableDetailRestore
+        ? OnnxModel.forSpec(gaterV3SharpenModelSpec)
+        : null;
+    if (detailRestoreModel != null) {
+      onStage(
+        AiEnhanceModelInfo(
+          gaterV3RestoreModelSpec.fileName,
+          detailRestoreModel.usingGpu,
+          detailRestoreModel.directMlError,
+        ),
+      );
+    }
     final enhanced = enhanceImage(
       decoded.rgbBytes,
       decoded.width,
@@ -257,6 +280,14 @@ Future<EditSourcePair?> _decodeAndEnhance(
       enableDenoise: effectiveEnableDenoise,
       enableUpscale: enableUpscale,
       denoiseStrength: denoiseStrengthPercent / 100.0,
+      detailRestore: enableDetailRestore
+          ? (tile) => detailRestoreModel!.runTile(tile)
+          : null,
+      detailSharpen: enableDetailRestore
+          ? (tile) => detailSharpenModel!.runTile(tile)
+          : null,
+      detailSpec: enableDetailRestore ? gaterV3RestoreModelSpec : null,
+      detailAmount: detailRestoreAmount / 100.0,
       sharpenUpscale: wantSharpen
           ? (tile) => sharpenModel!.runTile(tile)
           : null,
@@ -286,6 +317,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
       denoiseStrengthPercent: denoiseStrengthPercent,
       denoiseModelPath: customDenoiseModelPath,
       upscaleSharpnessAmount: upscaleSharpnessAmount,
+      detailRestore: enableDetailRestore,
+      detailRestoreAmount: detailRestoreAmount,
     );
   }
 
@@ -323,6 +356,8 @@ class _AiEnhanceDecodeIsolateArgs {
     this.denoiseStrengthPercent,
     this.customDenoiseModelPath,
     this.upscaleSharpnessAmount,
+    this.enableDetailRestore,
+    this.detailRestoreAmount,
     this.sendPort,
   );
 
@@ -335,6 +370,8 @@ class _AiEnhanceDecodeIsolateArgs {
   final int denoiseStrengthPercent;
   final String? customDenoiseModelPath;
   final int upscaleSharpnessAmount;
+  final bool enableDetailRestore;
+  final int detailRestoreAmount;
   final SendPort sendPort;
 }
 
@@ -349,6 +386,8 @@ void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
     args.denoiseStrengthPercent,
     args.customDenoiseModelPath,
     args.upscaleSharpnessAmount,
+    args.enableDetailRestore,
+    args.detailRestoreAmount,
     (stage) => args.sendPort.send(stage),
   );
   args.sendPort.send(result);
@@ -382,6 +421,13 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
   // its full inference cost regardless of how small the ratio is. Ignored
   // when [enableUpscale] is false.
   int upscaleSharpnessAmount = 0,
+  // GaterV3 restore+sharpen, chained on top of the denoise pass — see
+  // enhanceImage's detailAmount doc for why (unlike upscaleSharpnessAmount
+  // above) this pair always runs when [enableDetailRestore] is true,
+  // regardless of [detailRestoreAmount]; it's cheap enough that gating it
+  // behind a nonzero amount wouldn't save anything worth the complexity.
+  bool enableDetailRestore = false,
+  int detailRestoreAmount = 50,
 }) async {
   final receivePort = ReceivePort();
   final isolate = await Isolate.spawn(
@@ -396,6 +442,8 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
       denoiseStrengthPercent,
       customDenoiseModelPath,
       upscaleSharpnessAmount,
+      enableDetailRestore,
+      detailRestoreAmount,
       receivePort.sendPort,
     ),
   );

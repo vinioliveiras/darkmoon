@@ -104,6 +104,7 @@
   "aiDenoiseEnhanceMessage": "Entfernt Rauschen und Filmkorn und verdoppelt die Auflösung mit einem neuronalen Netz — näher an dem, wie die echten Details vor Rauschen und Kompression aussahen. Läuft spürbar langsamer als Klassisch, besonders ohne kompatible GPU.",
   "aiDenoiseEnhanceDenoiseLabel": "Rauschunterdrückung",
   "aiDenoiseEnhanceAmountLabel": "Stärke",
+  "aiDenoiseEnhanceRestoreDetailLabel": "Details wiederherstellen",
   "aiDenoiseEnhanceUpscaleLabel": "2x hochskalieren",
   "aiDenoiseEnhanceSharpnessLabel": "Schärfe",
   "aiDenoiseEnhanceSharpnessCaption": "Mischt ein langsameres Modell ein, das mehr Detail rekonstruiert — jeder Wert über 0% kostet ca. 3,5 Minuten pro 24-MP-Foto statt weniger Sekunden und kann sehr kleinen Text oder Details leicht verändern (nicht nur schärfen).",

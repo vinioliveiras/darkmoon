@@ -328,6 +328,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiDenoiseEnhanceAmountLabel => 'Amount';
 
   @override
+  String get aiDenoiseEnhanceRestoreDetailLabel => 'Restore detail';
+
+  @override
   String get aiDenoiseEnhanceUpscaleLabel => 'Upscale 2x';
 
   @override

@@ -688,6 +688,12 @@ abstract class AppLocalizations {
   /// **'Amount'**
   String get aiDenoiseEnhanceAmountLabel;
 
+  /// No description provided for @aiDenoiseEnhanceRestoreDetailLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Restore detail'**
+  String get aiDenoiseEnhanceRestoreDetailLabel;
+
   /// No description provided for @aiDenoiseEnhanceUpscaleLabel.
   ///
   /// In en, this message translates to:

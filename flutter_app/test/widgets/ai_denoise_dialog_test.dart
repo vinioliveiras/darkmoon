@@ -92,18 +92,17 @@ void main() {
       },
     );
 
-    testWidgets(
-      'Sharpness slider is hidden while Upscale is off',
-      (tester) async {
-        _useTallSurface(tester);
-        await _openDialog(tester);
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Enhance'));
-        await tester.pumpAndSettle();
+    testWidgets('Sharpness slider is hidden while Upscale is off', (
+      tester,
+    ) async {
+      _useTallSurface(tester);
+      await _openDialog(tester);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Enhance'));
+      await tester.pumpAndSettle();
 
-        expect(find.text('Sharpness'), findsNothing);
-      },
-    );
+      expect(find.text('Sharpness'), findsNothing);
+    });
 
     testWidgets(
       'turning Upscale on then dragging the Sharpness slider above 0 and '
@@ -169,8 +168,9 @@ void main() {
     );
 
     testWidgets(
-      'picking a Classic level then applying resolves as '
-      'ClassicDenoiseChoice',
+      'turning Restore detail on (without Denoise or Upscale) defaults '
+      'its Amount slider to 50% and resolves as NeuralEnhanceChoice('
+      'restoreDetail: true)',
       (tester) async {
         _useTallSurface(tester);
         AiDenoiseChoice? result;
@@ -187,51 +187,6 @@ void main() {
                         context: context,
                         builder: (_) => const AiDenoiseDialog(
                           initialLevel: null,
-                          neuralDenoise: false,
-                          neuralUpscale: false,
-                        ),
-                      );
-                    },
-                    child: const Text('open'),
-                  ),
-                ),
-              ),
-            ),
-          ),
-        );
-        await tester.tap(find.text('open'));
-        await tester.pumpAndSettle();
-
-        await tester.tap(find.text('Strong'));
-        await tester.pump();
-        await tester.tap(find.text('Apply'));
-        await tester.pumpAndSettle();
-
-        expect(result, isA<ClassicDenoiseChoice>());
-        expect((result as ClassicDenoiseChoice).level, AiDenoiseLevel.strong);
-      },
-    );
-
-    testWidgets(
-      'turning Denoise on from the Enhance tab resolves as '
-      'NeuralEnhanceChoice(denoise: true), even though the dialog opened '
-      'on Classic',
-      (tester) async {
-        _useTallSurface(tester);
-        AiDenoiseChoice? result;
-        await tester.pumpWidget(
-          MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: Scaffold(
-              body: Builder(
-                builder: (context) => Center(
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      result = await showDialog<AiDenoiseChoice>(
-                        context: context,
-                        builder: (_) => const AiDenoiseDialog(
-                          initialLevel: AiDenoiseLevel.light,
                           neuralDenoise: false,
                           neuralUpscale: false,
                         ),
@@ -249,63 +204,155 @@ void main() {
 
         await tester.tap(find.text('Enhance'));
         await tester.pumpAndSettle();
-        await tester.tap(find.text('Denoise'));
+        await tester.tap(find.text('Restore detail'));
         await tester.pumpAndSettle();
+
+        // Balanced default, per the toggle-always-has-an-amount convention
+        // — unlike Sharpness (which defaults to 0%, a real cost cliff).
+        expect(find.text('50%'), findsOneWidget);
+
         await tester.tap(find.text('Apply'));
         await tester.pumpAndSettle();
 
         expect(result, isA<NeuralEnhanceChoice>());
         final choice = result as NeuralEnhanceChoice;
-        expect(choice.denoise, isTrue);
+        expect(choice.restoreDetail, isTrue);
+        expect(choice.restoreDetailAmount, 50);
+        expect(choice.denoise, isFalse);
+        expect(choice.upscale, isFalse);
         expect(choice.active, isTrue);
       },
     );
 
-    testWidgets(
-      'unchecking the only active Enhance toggle resolves as '
-      'ClassicDenoiseChoice(null) — the same "nothing selected" state '
-      'either tab collapses to',
-      (tester) async {
-        _useTallSurface(tester);
-        AiDenoiseChoice? result;
-        await tester.pumpWidget(
-          MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: Scaffold(
-              body: Builder(
-                builder: (context) => Center(
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      result = await showDialog<AiDenoiseChoice>(
-                        context: context,
-                        builder: (_) => const AiDenoiseDialog(
-                          initialLevel: null,
-                          neuralDenoise: true,
-                          neuralUpscale: false,
-                        ),
-                      );
-                    },
-                    child: const Text('open'),
-                  ),
+    testWidgets('picking a Classic level then applying resolves as '
+        'ClassicDenoiseChoice', (tester) async {
+      _useTallSurface(tester);
+      AiDenoiseChoice? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    result = await showDialog<AiDenoiseChoice>(
+                      context: context,
+                      builder: (_) => const AiDenoiseDialog(
+                        initialLevel: null,
+                        neuralDenoise: false,
+                        neuralUpscale: false,
+                      ),
+                    );
+                  },
+                  child: const Text('open'),
                 ),
               ),
             ),
           ),
-        );
-        await tester.tap(find.text('open'));
-        await tester.pumpAndSettle();
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
 
-        // Opens straight on the Enhance tab since a toggle was preselected.
-        await tester.tap(find.text('Denoise'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Apply'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('Strong'));
+      await tester.pump();
+      await tester.tap(find.text('Apply'));
+      await tester.pumpAndSettle();
 
-        expect(result, isA<ClassicDenoiseChoice>());
-        expect((result as ClassicDenoiseChoice).level, isNull);
-      },
-    );
+      expect(result, isA<ClassicDenoiseChoice>());
+      expect((result as ClassicDenoiseChoice).level, AiDenoiseLevel.strong);
+    });
+
+    testWidgets('turning Denoise on from the Enhance tab resolves as '
+        'NeuralEnhanceChoice(denoise: true), even though the dialog opened '
+        'on Classic', (tester) async {
+      _useTallSurface(tester);
+      AiDenoiseChoice? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    result = await showDialog<AiDenoiseChoice>(
+                      context: context,
+                      builder: (_) => const AiDenoiseDialog(
+                        initialLevel: AiDenoiseLevel.light,
+                        neuralDenoise: false,
+                        neuralUpscale: false,
+                      ),
+                    );
+                  },
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Enhance'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Denoise'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Apply'));
+      await tester.pumpAndSettle();
+
+      expect(result, isA<NeuralEnhanceChoice>());
+      final choice = result as NeuralEnhanceChoice;
+      expect(choice.denoise, isTrue);
+      expect(choice.active, isTrue);
+    });
+
+    testWidgets('unchecking the only active Enhance toggle resolves as '
+        'ClassicDenoiseChoice(null) — the same "nothing selected" state '
+        'either tab collapses to', (tester) async {
+      _useTallSurface(tester);
+      AiDenoiseChoice? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    result = await showDialog<AiDenoiseChoice>(
+                      context: context,
+                      builder: (_) => const AiDenoiseDialog(
+                        initialLevel: null,
+                        neuralDenoise: true,
+                        neuralUpscale: false,
+                      ),
+                    );
+                  },
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      // Opens straight on the Enhance tab since a toggle was preselected.
+      await tester.tap(find.text('Denoise'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Apply'));
+      await tester.pumpAndSettle();
+
+      expect(result, isA<ClassicDenoiseChoice>());
+      expect((result as ClassicDenoiseChoice).level, isNull);
+    });
 
     testWidgets(
       'Cloud AI tab shows the provider dropdown defaulted to Off, and no '
@@ -370,59 +417,56 @@ void main() {
       },
     );
 
-    testWidgets(
-      'picking Topaz, entering an API key, and applying resolves as '
-      'CloudDenoiseChoice — and switching to Cloud AI clears any Classic '
-      'level (all three tabs are mutually exclusive)',
-      (tester) async {
-        _useTallSurface(tester);
-        AiDenoiseChoice? result;
-        await tester.pumpWidget(
-          MaterialApp(
-            localizationsDelegates: AppLocalizations.localizationsDelegates,
-            supportedLocales: AppLocalizations.supportedLocales,
-            home: Scaffold(
-              body: Builder(
-                builder: (context) => Center(
-                  child: ElevatedButton(
-                    onPressed: () async {
-                      result = await showDialog<AiDenoiseChoice>(
-                        context: context,
-                        builder: (_) => const AiDenoiseDialog(
-                          initialLevel: AiDenoiseLevel.medium,
-                          neuralDenoise: false,
-                          neuralUpscale: false,
-                        ),
-                      );
-                    },
-                    child: const Text('open'),
-                  ),
+    testWidgets('picking Topaz, entering an API key, and applying resolves as '
+        'CloudDenoiseChoice — and switching to Cloud AI clears any Classic '
+        'level (all three tabs are mutually exclusive)', (tester) async {
+      _useTallSurface(tester);
+      AiDenoiseChoice? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    result = await showDialog<AiDenoiseChoice>(
+                      context: context,
+                      builder: (_) => const AiDenoiseDialog(
+                        initialLevel: AiDenoiseLevel.medium,
+                        neuralDenoise: false,
+                        neuralUpscale: false,
+                      ),
+                    );
+                  },
+                  child: const Text('open'),
                 ),
               ),
             ),
           ),
-        );
-        await tester.tap(find.text('open'));
-        await tester.pumpAndSettle();
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
 
-        await tester.tap(find.text('Cloud AI'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Off'));
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Topaz Labs (Denoise)'));
-        await tester.pumpAndSettle();
-        await tester.enterText(find.byType(TextField), 'sk-test-token');
-        await tester.pumpAndSettle();
-        await tester.tap(find.text('Apply'));
-        await tester.pumpAndSettle();
+      await tester.tap(find.text('Cloud AI'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Off'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Topaz Labs (Denoise)'));
+      await tester.pumpAndSettle();
+      await tester.enterText(find.byType(TextField), 'sk-test-token');
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Apply'));
+      await tester.pumpAndSettle();
 
-        expect(result, isA<CloudDenoiseChoice>());
-        final choice = result as CloudDenoiseChoice;
-        expect(choice.provider, CloudDenoiseProviderKind.topaz);
-        expect(choice.apiKey, 'sk-test-token');
-        expect(choice.active, isTrue);
-      },
-    );
+      expect(result, isA<CloudDenoiseChoice>());
+      final choice = result as CloudDenoiseChoice;
+      expect(choice.provider, CloudDenoiseProviderKind.topaz);
+      expect(choice.apiKey, 'sk-test-token');
+      expect(choice.active, isTrue);
+    });
 
     testWidgets('cancel resolves with null (no choice)', (tester) async {
       _useTallSurface(tester);

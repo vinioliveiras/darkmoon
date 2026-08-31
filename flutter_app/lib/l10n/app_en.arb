@@ -133,6 +133,7 @@
   "aiDenoiseEnhanceMessage": "Denoise, remove film grain, and double the resolution using a neural network — closer to what the shot's real detail looked like before noise and compression. Runs noticeably slower than Classic, especially without a compatible GPU.",
   "aiDenoiseEnhanceDenoiseLabel": "Denoise",
   "aiDenoiseEnhanceAmountLabel": "Amount",
+  "aiDenoiseEnhanceRestoreDetailLabel": "Restore detail",
   "aiDenoiseEnhanceUpscaleLabel": "Upscale 2x",
   "aiDenoiseEnhanceSharpnessLabel": "Sharpness",
   "aiDenoiseEnhanceSharpnessCaption": "Blends in a slower, more detail-synthesizing model — any amount above 0% costs ~3.5 minutes per 24MP photo instead of a few seconds, and can slightly alter (not just sharpen) very small text or detail.",

@@ -2699,7 +2699,12 @@ class _EditorScreenState extends State<EditorScreen>
               .round();
       final wantUpscaleSharpnessAmount =
           (_paramValues[_upscaleSharpnessAmountKey] ?? 0.0).round();
-      final wantAnyEnhance = wantDenoise || wantUpscale || wantRawDenoise;
+      final wantRestoreDetail = (_paramValues[_restoreDetailKey] ?? 0.0) > 0;
+      final wantRestoreDetailAmount =
+          (_paramValues[_restoreDetailAmountKey] ?? defaultRestoreDetailAmount)
+              .round();
+      final wantAnyEnhance =
+          wantDenoise || wantUpscale || wantRawDenoise || wantRestoreDetail;
       if (wantAnyEnhance) {
         final cacheDir = await resolveAiEnhanceCacheDir();
         if (mounted) {
@@ -2712,6 +2717,8 @@ class _EditorScreenState extends State<EditorScreen>
             denoiseStrengthPercent: wantDenoiseAmount,
             denoiseModelPath: _settings.customDenoiseModelPath,
             upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
+            detailRestore: wantRestoreDetail,
+            detailRestoreAmount: wantRestoreDetailAmount,
           );
           if (cachedPng != null) {
             sources = await compute(
@@ -2802,6 +2809,7 @@ class _EditorScreenState extends State<EditorScreen>
               _neuralDenoiseKey: 0.0,
               _neuralUpscaleKey: 0.0,
               _neuralRawDenoiseKey: 0.0,
+              _restoreDetailKey: 0.0,
               _cloudDenoiseProviderKey: 0.0,
             };
           });
@@ -3335,6 +3343,8 @@ class _EditorScreenState extends State<EditorScreen>
     int denoiseAmount = 100,
     bool rawDenoise = false,
     int upscaleSharpnessAmount = 0,
+    bool restoreDetail = false,
+    int restoreDetailAmount = defaultRestoreDetailAmount,
   }) async {
     final cacheDir = await resolveAiEnhanceCacheDir();
     if (!mounted) return null;
@@ -3347,6 +3357,8 @@ class _EditorScreenState extends State<EditorScreen>
       denoiseStrengthPercent: denoiseAmount,
       denoiseModelPath: _settings.customDenoiseModelPath,
       upscaleSharpnessAmount: upscaleSharpnessAmount,
+      detailRestore: restoreDetail,
+      detailRestoreAmount: restoreDetailAmount,
     );
     if (cachedPng == null) {
       final ok = await _runNeuralEnhance(
@@ -3356,6 +3368,8 @@ class _EditorScreenState extends State<EditorScreen>
         denoiseAmount: denoiseAmount,
         rawDenoise: rawDenoise,
         upscaleSharpnessAmount: upscaleSharpnessAmount,
+        restoreDetail: restoreDetail,
+        restoreDetailAmount: restoreDetailAmount,
       );
       if (!mounted || !ok) {
         return null;
@@ -3369,6 +3383,8 @@ class _EditorScreenState extends State<EditorScreen>
         denoiseStrengthPercent: denoiseAmount,
         denoiseModelPath: _settings.customDenoiseModelPath,
         upscaleSharpnessAmount: upscaleSharpnessAmount,
+        detailRestore: restoreDetail,
+        detailRestoreAmount: restoreDetailAmount,
       );
     }
     if (cachedPng == null || !mounted) {
@@ -3561,6 +3577,16 @@ class _EditorScreenState extends State<EditorScreen>
   /// raw-domain pass, persisted the same way as the two flags above.
   static const _neuralRawDenoiseKey = 'AiNeuralRawDenoise';
 
+  /// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.restoreDetail` — the
+  /// GaterV3 restore+sharpen pass, persisted the same way as the flags
+  /// above. `> 0` means active.
+  static const _restoreDetailKey = 'AiRestoreDetail';
+
+  /// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.restoreDetailAmount` —
+  /// 0-100, persisted the same way as [_upscaleSharpnessAmountKey].
+  /// Defaults to [defaultRestoreDetailAmount] when absent.
+  static const _restoreDetailAmountKey = 'AiRestoreDetailAmount';
+
   /// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.denoiseAmount` — 0-100,
   /// persisted the same way as the two flags above. Defaults to
   /// [defaultNeuralDenoiseAmount] when absent (a photo that predates this
@@ -3603,10 +3629,18 @@ class _EditorScreenState extends State<EditorScreen>
             .round();
     final upscaleSharpnessAmount =
         (_paramValues[_upscaleSharpnessAmountKey] ?? 0.0).round();
+    final neuralRestoreDetail = (_paramValues[_restoreDetailKey] ?? 0.0) > 0;
+    final restoreDetailAmount =
+        (_paramValues[_restoreDetailAmountKey] ?? defaultRestoreDetailAmount)
+            .round();
     final cloudProvider = _cloudProviderFromIndex(
       (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
     );
-    final wasNeuralActive = neuralDenoise || neuralUpscale || neuralRawDenoise;
+    final wasNeuralActive =
+        neuralDenoise ||
+        neuralUpscale ||
+        neuralRawDenoise ||
+        neuralRestoreDetail;
     final wasAnyPipelineActive = wasNeuralActive || cloudProvider != null;
     final rawDenoiseAvailable =
         isRawFile(selected.path) &&
@@ -3622,6 +3656,8 @@ class _EditorScreenState extends State<EditorScreen>
         rawDenoiseAvailable: rawDenoiseAvailable,
         cloudProvider: cloudProvider,
         upscaleSharpnessAmount: upscaleSharpnessAmount,
+        neuralRestoreDetail: neuralRestoreDetail,
+        restoreDetailAmount: restoreDetailAmount,
       ),
     );
     if (choice == null || !mounted) {
@@ -3639,6 +3675,7 @@ class _EditorScreenState extends State<EditorScreen>
             _neuralDenoiseKey: 0.0,
             _neuralUpscaleKey: 0.0,
             _neuralRawDenoiseKey: 0.0,
+            _restoreDetailKey: 0.0,
             _cloudDenoiseProviderKey: 0.0,
           };
         });
@@ -3659,8 +3696,13 @@ class _EditorScreenState extends State<EditorScreen>
             denoiseAmount: final wantDenoiseAmount,
             rawDenoise: final wantRawDenoise,
             upscaleSharpnessAmount: final wantUpscaleSharpnessAmount,
+            restoreDetail: final wantRestoreDetail,
+            restoreDetailAmount: final wantRestoreDetailAmount,
           )
-          when wantDenoise || wantUpscale || wantRawDenoise:
+          when wantDenoise ||
+              wantUpscale ||
+              wantRawDenoise ||
+              wantRestoreDetail:
         setState(() {
           _paramValues = {
             ..._paramValues,
@@ -3669,6 +3711,8 @@ class _EditorScreenState extends State<EditorScreen>
             _neuralDenoiseAmountKey: wantDenoiseAmount.toDouble(),
             _neuralRawDenoiseKey: wantRawDenoise ? 1.0 : 0.0,
             _upscaleSharpnessAmountKey: wantUpscaleSharpnessAmount.toDouble(),
+            _restoreDetailKey: wantRestoreDetail ? 1.0 : 0.0,
+            _restoreDetailAmountKey: wantRestoreDetailAmount.toDouble(),
             _cloudDenoiseProviderKey: 0.0,
             'AiDenoiseLevel': 0.0,
           };
@@ -3680,6 +3724,8 @@ class _EditorScreenState extends State<EditorScreen>
           denoiseAmount: wantDenoiseAmount,
           rawDenoise: wantRawDenoise,
           upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
+          restoreDetail: wantRestoreDetail,
+          restoreDetailAmount: wantRestoreDetailAmount,
         );
         if (!mounted || !ok) {
           return;
@@ -3693,6 +3739,7 @@ class _EditorScreenState extends State<EditorScreen>
             _neuralDenoiseKey: 0.0,
             _neuralUpscaleKey: 0.0,
             _neuralRawDenoiseKey: 0.0,
+            _restoreDetailKey: 0.0,
           };
         });
         await _revertToNormalEditSource(selected.path);
@@ -3776,6 +3823,8 @@ class _EditorScreenState extends State<EditorScreen>
     int denoiseAmount = 100,
     bool rawDenoise = false,
     int upscaleSharpnessAmount = 0,
+    bool restoreDetail = false,
+    int restoreDetailAmount = defaultRestoreDetailAmount,
   }) async {
     setState(() {
       _isRunningNeuralEnhance = true;
@@ -3839,6 +3888,8 @@ class _EditorScreenState extends State<EditorScreen>
       previewMaxDimension: _settings.previewResolution,
       cancellationToken: cancellation,
       upscaleSharpnessAmount: upscaleSharpnessAmount,
+      enableDetailRestore: restoreDetail,
+      detailRestoreAmount: restoreDetailAmount,
     );
     _aiEnhanceCancellation = null;
     if (!mounted) {
@@ -3852,6 +3903,7 @@ class _EditorScreenState extends State<EditorScreen>
           _neuralDenoiseKey: 0.0,
           _neuralUpscaleKey: 0.0,
           _neuralRawDenoiseKey: 0.0,
+          _restoreDetailKey: 0.0,
         };
         _isRunningNeuralEnhance = false;
         _aiEnhanceProgress = null;
@@ -5005,13 +5057,17 @@ class _EditorScreenState extends State<EditorScreen>
             .round();
     final wantUpscaleSharpnessAmount =
         (_paramValues[_upscaleSharpnessAmountKey] ?? 0.0).round();
+    final wantRestoreDetail = (_paramValues[_restoreDetailKey] ?? 0.0) > 0;
+    final wantRestoreDetailAmount =
+        (_paramValues[_restoreDetailAmountKey] ?? defaultRestoreDetailAmount)
+            .round();
     final wantCloudProvider = _cloudProviderFromIndex(
       (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
     );
     EditSource? nativeForExport;
     final srcSw = Stopwatch()..start();
     try {
-      if (wantDenoise || wantUpscale || wantRawDenoise) {
+      if (wantDenoise || wantUpscale || wantRawDenoise || wantRestoreDetail) {
         nativeForExport = await _loadEnhancedNativeSource(
           selected.path,
           denoise: wantDenoise,
@@ -5019,6 +5075,8 @@ class _EditorScreenState extends State<EditorScreen>
           denoiseAmount: wantDenoiseAmount,
           rawDenoise: wantRawDenoise,
           upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
+          restoreDetail: wantRestoreDetail,
+          restoreDetailAmount: wantRestoreDetailAmount,
         );
       } else if (wantCloudProvider != null) {
         nativeForExport = await _loadCloudDenoisedNativeSource(
@@ -5532,6 +5590,7 @@ class _EditorScreenState extends State<EditorScreen>
                           (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0 ||
                           (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0 ||
                           (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0 ||
+                          (_paramValues[_restoreDetailKey] ?? 0.0) > 0 ||
                           (_paramValues[_cloudDenoiseProviderKey] ?? 0.0) > 0,
                       onOpenAiDenoise: selected == null
                           ? null

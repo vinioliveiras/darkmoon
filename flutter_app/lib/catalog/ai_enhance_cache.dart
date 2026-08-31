@@ -11,7 +11,7 @@ import 'package:path/path.dart' as p;
 /// so old entries are simply never looked up again instead of serving a
 /// stale result. Mirrors `raw_decode_format_version.dart`'s exact role,
 /// scoped to this cache instead.
-const int aiEnhanceCacheVersion = 9;
+const int aiEnhanceCacheVersion = 10;
 
 /// [mode] folds which of denoise/upscale/raw-denoise actually ran (plus
 /// the denoise blend strength — see `ai_enhance.dart`'s `enhanceImage` doc
@@ -38,11 +38,14 @@ String _modeTag(
   int denoiseStrengthPercent,
   String? denoiseModelPath,
   int upscaleSharpnessAmount,
+  bool detailRestore,
+  int detailRestoreAmount,
 ) =>
     'd${denoise ? 1 : 0}s$denoiseStrengthPercent'
     'u${upscale ? 1 : 0}'
     'q$upscaleSharpnessAmount'
     'r${rawDenoise ? 1 : 0}'
+    'g${detailRestore ? 1 : 0}a$detailRestoreAmount'
     'm${denoiseModelPath ?? "default"}';
 
 /// `path_provider`-free by design (see `ai_enhance_cache_dir.dart`'s doc
@@ -58,10 +61,12 @@ String _entryKey(
   int denoiseStrengthPercent,
   String? denoiseModelPath,
   int upscaleSharpnessAmount,
+  bool detailRestore,
+  int detailRestoreAmount,
 ) {
   final raw =
       '$path|${modified.microsecondsSinceEpoch}|$size|'
-      '${_modeTag(denoise, upscale, rawDenoise, denoiseStrengthPercent, denoiseModelPath, upscaleSharpnessAmount)}|v$aiEnhanceCacheVersion';
+      '${_modeTag(denoise, upscale, rawDenoise, denoiseStrengthPercent, denoiseModelPath, upscaleSharpnessAmount, detailRestore, detailRestoreAmount)}|v$aiEnhanceCacheVersion';
   return sha1.convert(utf8.encode(raw)).toString();
 }
 
@@ -96,6 +101,8 @@ Future<Uint8List?> lookupAiEnhanceCache(
   int denoiseStrengthPercent = 100,
   String? denoiseModelPath,
   int upscaleSharpnessAmount = 0,
+  bool detailRestore = false,
+  int detailRestoreAmount = 50,
 }) async {
   try {
     final stat = await File(path).stat();
@@ -112,6 +119,8 @@ Future<Uint8List?> lookupAiEnhanceCache(
           denoiseStrengthPercent,
           denoiseModelPath,
           upscaleSharpnessAmount,
+          detailRestore,
+          detailRestoreAmount,
         ),
       ),
     );
@@ -140,6 +149,8 @@ Future<void> storeAiEnhanceCache(
   int denoiseStrengthPercent = 100,
   String? denoiseModelPath,
   int upscaleSharpnessAmount = 0,
+  bool detailRestore = false,
+  int detailRestoreAmount = 50,
 }) async {
   try {
     final stat = await File(path).stat();
@@ -153,6 +164,8 @@ Future<void> storeAiEnhanceCache(
       denoiseStrengthPercent,
       denoiseModelPath,
       upscaleSharpnessAmount,
+      detailRestore,
+      detailRestoreAmount,
     );
     final dest = File(_entryFile(cacheDir, key));
     final tmp = File('${dest.path}.tmp');

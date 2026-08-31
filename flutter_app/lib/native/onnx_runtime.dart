@@ -150,6 +150,42 @@ const pmridDenoiseModelSpec = OnnxModelSpec(
   channels: 4,
 );
 
+/// GaterV3 restore (CC-BY-4.0, github.com/Phhofm/models, "gaterv3_r"
+/// architecture) — same-resolution general restoration (noise/resize/
+/// JPEG/mild blur), meant to run *before* [gaterV3SharpenModelSpec] in
+/// the pair the author trained them as (2026-08-31, PENDING.md item 35
+/// combo follow-up — restoration-research report's Tier 1). Confirmed
+/// via `onnx.load(...)` (not guessed): fully dynamic input, "input"/
+/// "output" tensor names — this app's own default convention, no
+/// [OnnxModelSpec.inputName] override needed. Crop-tested on a real
+/// noisy 24MP photo: visibly sharper edges/detail than
+/// [denoiseModelSpec] alone, and much faster per tile (~1.3s vs ~4.4s
+/// on the same 700x700 crop) — worth the extra pass.
+const gaterV3RestoreModelSpec = OnnxModelSpec(
+  fileName: '1xgaterv3_r_restore_fp32_op17.onnx',
+  inputTileSize: 256,
+  scaleFactor: 1,
+);
+
+/// GaterV3 sharpen (CC-BY-4.0, same repo/author/architecture as
+/// [gaterV3RestoreModelSpec]) — the second half of the author's intended
+/// restore-then-sharpen pair. Same tile geometry and tensor-name
+/// convention.
+const gaterV3SharpenModelSpec = OnnxModelSpec(
+  fileName: '1xgaterv3_r_sharpen_fp32_op17.onnx',
+  inputTileSize: 256,
+  scaleFactor: 1,
+);
+
+// `1xDeJPG_OmniSR.onnx` (JPEG-artifact removal, same research round) was
+// tried and rejected, not just skipped: it crashes on DirectML (a
+// FusedMatMul/attention op the EP can't run — OmniSR is a transformer-
+// style architecture, unlike the pure-conv models above), and true CPU
+// execution is ~50x slower than GaterV3's GPU pass (62.7s for a 700x700
+// crop alone) — not viable at any tile count for a full photo. No spec
+// constant kept for it; re-fetch `huggingface.co/huggingworld/
+// onnx-image-models` if revisiting.
+
 /// Thrown when an ONNX Runtime C API call returns a non-null `OrtStatus*`.
 /// Carries the human-readable message `OrtApi::GetErrorMessage` returns,
 /// since the status pointer itself isn't meaningful to callers.

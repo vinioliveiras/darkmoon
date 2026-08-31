@@ -61,6 +61,19 @@ class AiEnhanceResult {
 /// [OnnxModelSpec.scaleFactor] (both bundled models are 2x) so their
 /// outputs are the same size to blend.
 ///
+/// [detailRestore]/[detailSharpen]/[detailSpec]/[detailAmount] chain a
+/// second same-resolution pair (GaterV3 restore-then-sharpen,
+/// `gaterV3RestoreModelSpec`/`gaterV3SharpenModelSpec` — found
+/// researching item 35's combo follow-up, 2026-08-31) on top of
+/// [denoise]'s output, before the optional upscale pass — same "toggle
+/// always pairs with an Amount blend, defaulting to a balanced middle
+/// value" convention as [denoiseStrength], per explicit user direction:
+/// unlike [sharpnessAmount] (a real cost-cliff, since Real-ESRGAN alone
+/// costs ~3.5 min/24MP-photo), GaterV3's pair is cheap (~2s combined on
+/// a 700x700 crop, faster than [denoise] itself) so there's no reason to
+/// gate it behind "0 = never runs" — [detailAmount] 0.0 still runs both
+/// models, just blends fully back to [denoise]'s own output.
+///
 /// [rgbBytes] is packed, row-major, 3 bytes/pixel (0-255) — the same
 /// convention `render.dart`'s buffers use before their own internal
 /// 0..1-normalized processing. Blocking (runs potentially thousands of
@@ -74,6 +87,10 @@ AiEnhanceResult enhanceImage(
   OnnxModelSpec upscaleSpec = upscaleModelSpec,
   bool enableDenoise = true,
   bool enableUpscale = true,
+  Float32List Function(Float32List tile)? detailRestore,
+  Float32List Function(Float32List tile)? detailSharpen,
+  OnnxModelSpec? detailSpec,
+  double detailAmount = 0.0,
   // The bundled denoise model is a fixed, blind denoiser — it has no built-in strength
   // knob (unlike e.g. FFDNet-style models that take a noise-level map as
   // an extra input channel), so "how strong" can only be controlled
@@ -115,6 +132,35 @@ AiEnhanceResult enhanceImage(
     }
   } else {
     denoised = floatRgb;
+  }
+
+  if (detailRestore != null && detailSharpen != null && detailSpec != null) {
+    final restored = denoiseTiled(
+      denoised,
+      width,
+      height,
+      inputTileSize: detailSpec.inputTileSize,
+      overlap: detailSpec.inputTileSize ~/ 8,
+      scaleFactor: detailSpec.scaleFactor,
+      processTile: detailRestore,
+      onProgress: (i, total) => onProgress?.call('detail-restore', i, total),
+    );
+    final detailed = denoiseTiled(
+      restored,
+      width,
+      height,
+      inputTileSize: detailSpec.inputTileSize,
+      overlap: detailSpec.inputTileSize ~/ 8,
+      scaleFactor: detailSpec.scaleFactor,
+      processTile: detailSharpen,
+      onProgress: (i, total) => onProgress?.call('detail-sharpen', i, total),
+    );
+    final amount = detailAmount.clamp(0.0, 1.0);
+    final blended = Float32List(denoised.length);
+    for (var i = 0; i < denoised.length; i++) {
+      blended[i] = denoised[i] + (detailed[i] - denoised[i]) * amount;
+    }
+    denoised = blended;
   }
 
   var upscaled = enableUpscale
