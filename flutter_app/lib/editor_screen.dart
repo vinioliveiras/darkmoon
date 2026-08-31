@@ -5214,6 +5214,9 @@ class _EditorScreenState extends State<EditorScreen>
       final stageLabel = switch (progress.stage) {
         'upscale' => l10n.aiDenoiseEnhanceStageUpscale,
         'raw-denoise' => l10n.aiDenoiseEnhanceStageRawDenoise,
+        'detail-restore' => l10n.aiDenoiseEnhanceStageDetailRestore,
+        'detail-sharpen' => l10n.aiDenoiseEnhanceStageDetailSharpen,
+        'sharpen' => l10n.aiDenoiseEnhanceStageSharpen,
         _ => l10n.aiDenoiseEnhanceStageDenoise,
       };
       // A raw tile count (hundreds, for a full-res photo tiled into small

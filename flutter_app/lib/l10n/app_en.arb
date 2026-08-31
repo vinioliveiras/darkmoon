@@ -153,6 +153,9 @@
   "aiDenoiseEnhanceStageDenoise": "Denoising",
   "aiDenoiseEnhanceStageUpscale": "Upscaling",
   "aiDenoiseEnhanceStageRawDenoise": "Denoising (RAW)",
+  "aiDenoiseEnhanceStageDetailRestore": "Restoring detail",
+  "aiDenoiseEnhanceStageDetailSharpen": "Sharpening detail",
+  "aiDenoiseEnhanceStageSharpen": "Sharpening",
   "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
   "@aiDenoiseEnhanceTileProgress": {
     "placeholders": {

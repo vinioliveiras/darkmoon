@@ -89,24 +89,30 @@ install(FILES
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
-# ONNX Runtime (+ DirectML EP) and the item-13 neural Enhance models —
-# `onnx_runtime.dart` resolves all of these next to the executable, same
-# convention as raw_r.dll above. The models themselves live in
-# `../native_models/` (2026-09-01, moved out of this Windows-specific
-# folder — `linux/CMakeLists.txt` globs the same directory, so a
-# platform-agnostic file living under a platform-specific folder was
-# confusing, not a hard requirement of anything). Gitignored (~270MB
+# ONNX Runtime (+ DirectML EP) — DLLs stay next to the executable (Windows
+# resolves DynamicLibrary.open('onnxruntime.dll') by searching the exe's
+# own directory automatically; a subfolder would break that lookup).
+install(FILES
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/onnxruntime.dll"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/DirectML.dll"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
+# The item-13 neural Enhance models — unlike the DLLs above, these are
+# resolved via an explicit Dart-computed path (`onnx_runtime.dart`'s
+# `modelPath()`), not OS DLL search rules, so they can (and now do, per
+# user request 2026-09-01) live in their own `models/` subfolder instead
+# of flat next to the executable. Source files live in `../native_models/`
+# (moved out of this Windows-specific folder earlier the same day —
+# `linux/CMakeLists.txt` globs the same directory). Gitignored (~270MB
 # combined), so this only produces a working build on a machine that
 # already has them — see PENDING.md item 13 for the still-open real
 # distribution question (first-run download? release asset?). Use GLOB
 # instead of naming the .onnx files directly so a future model swap
 # doesn't also require touching this file.
 file(GLOB DARKMOON_ONNX_MODELS "${CMAKE_CURRENT_SOURCE_DIR}/../native_models/*.onnx")
-install(FILES
-  "${CMAKE_CURRENT_SOURCE_DIR}/native/onnxruntime.dll"
-  "${CMAKE_CURRENT_SOURCE_DIR}/native/DirectML.dll"
-  ${DARKMOON_ONNX_MODELS}
-  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+install(FILES ${DARKMOON_ONNX_MODELS}
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}/models"
   COMPONENT Runtime)
 
 if(PLUGIN_BUNDLED_LIBRARIES)

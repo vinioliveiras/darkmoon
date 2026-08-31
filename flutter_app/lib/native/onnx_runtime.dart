@@ -274,8 +274,18 @@ class _OrtLib {
   /// resolution rather than pulling in path_provider (kept dependency-free
   /// here the same way thumbnail_cache.dart's cache logic is, so this file
   /// stays safe to use from a `compute()`/spawned isolate).
+  ///
+  /// Models live in their own `models/` subfolder next to the executable
+  /// (2026-09-01, user request) — unlike `onnxruntime.dll`/`raw_r.dll`,
+  /// which the OS itself resolves by searching the exe's own directory
+  /// (so those *can't* move into a subfolder without breaking
+  /// `DynamicLibrary.open`), model files are only ever reached through
+  /// this explicit path, so nothing stops them from being organized
+  /// separately. See `windows/CMakeLists.txt`/`linux/CMakeLists.txt`'s
+  /// matching `DESTINATION ".../models"` install rules.
   static String modelPath(String fileName) => p.join(
     _nativeDirOverride ?? p.dirname(Platform.resolvedExecutable),
+    'models',
     fileName,
   );
 }

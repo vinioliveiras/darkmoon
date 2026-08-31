@@ -383,6 +383,16 @@ class AppLocalizationsPt extends AppLocalizations {
   String get aiDenoiseEnhanceStageRawDenoise => 'Removendo ruído (RAW)';
 
   @override
+  String get aiDenoiseEnhanceStageDetailRestore => 'Restaurando detalhe';
+
+  @override
+  String get aiDenoiseEnhanceStageDetailSharpen =>
+      'Aplicando nitidez ao detalhe';
+
+  @override
+  String get aiDenoiseEnhanceStageSharpen => 'Aplicando nitidez';
+
+  @override
   String aiDenoiseEnhanceTileProgress(String stage, int percent) {
     return '$stage — $percent%';
   }

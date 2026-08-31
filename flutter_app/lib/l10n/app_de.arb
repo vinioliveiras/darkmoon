@@ -119,6 +119,9 @@
   "aiDenoiseEnhanceStageDenoise": "Rauschunterdrückung",
   "aiDenoiseEnhanceStageUpscale": "Hochskalierung",
   "aiDenoiseEnhanceStageRawDenoise": "Rauschunterdrückung (RAW)",
+  "aiDenoiseEnhanceStageDetailRestore": "Details werden wiederhergestellt",
+  "aiDenoiseEnhanceStageDetailSharpen": "Details werden geschärft",
+  "aiDenoiseEnhanceStageSharpen": "Schärfung",
   "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
 
   "exportPanelButton": "Exportieren",

@@ -381,6 +381,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiDenoiseEnhanceStageRawDenoise => 'Denoising (RAW)';
 
   @override
+  String get aiDenoiseEnhanceStageDetailRestore => 'Restoring detail';
+
+  @override
+  String get aiDenoiseEnhanceStageDetailSharpen => 'Sharpening detail';
+
+  @override
+  String get aiDenoiseEnhanceStageSharpen => 'Sharpening';
+
+  @override
   String aiDenoiseEnhanceTileProgress(String stage, int percent) {
     return '$stage — $percent%';
   }

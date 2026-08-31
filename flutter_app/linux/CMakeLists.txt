@@ -124,11 +124,15 @@ install(FILES
 # platform-agnostic file living under a platform-specific folder was
 # confusing, given this file already reached across to grab them) instead
 # of duplicating ~270MB of gitignored binaries into a second folder.
-# onnx_runtime.dart's modelPath() resolves them next to the executable
-# (bundle/, not bundle/lib/), same convention as Windows.
+# onnx_runtime.dart's modelPath() resolves them from a `models/`
+# subfolder next to the executable (bundle/models/, not bundle/lib/ —
+# same convention as Windows, and the same reasoning as that platform's
+# CMakeLists for why models get their own subfolder but the .so files
+# above don't: those are resolved via OS shared-library search rules
+# (rpath), models via an explicit Dart-computed path).
 file(GLOB DARKMOON_ONNX_MODELS "${CMAKE_CURRENT_SOURCE_DIR}/../native_models/*.onnx")
 install(FILES ${DARKMOON_ONNX_MODELS}
-  DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}/models"
   COMPONENT Runtime)
 
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})

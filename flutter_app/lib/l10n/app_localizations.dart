@@ -778,6 +778,24 @@ abstract class AppLocalizations {
   /// **'Denoising (RAW)'**
   String get aiDenoiseEnhanceStageRawDenoise;
 
+  /// No description provided for @aiDenoiseEnhanceStageDetailRestore.
+  ///
+  /// In en, this message translates to:
+  /// **'Restoring detail'**
+  String get aiDenoiseEnhanceStageDetailRestore;
+
+  /// No description provided for @aiDenoiseEnhanceStageDetailSharpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharpening detail'**
+  String get aiDenoiseEnhanceStageDetailSharpen;
+
+  /// No description provided for @aiDenoiseEnhanceStageSharpen.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharpening'**
+  String get aiDenoiseEnhanceStageSharpen;
+
   /// No description provided for @aiDenoiseEnhanceTileProgress.
   ///
   /// In en, this message translates to:
