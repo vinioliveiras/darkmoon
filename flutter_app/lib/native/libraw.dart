@@ -86,7 +86,12 @@ class _Lib {
       // Installed next to the executable by windows/CMakeLists.txt.
       return DynamicLibrary.open('raw_r.dll');
     }
-    throw UnsupportedError('LibRaw is only wired up for Windows so far.');
+    if (Platform.isLinux) {
+      // Installed into the bundle's lib/ dir (on the executable's rpath)
+      // by linux/CMakeLists.txt.
+      return DynamicLibrary.open('libraw_r.so');
+    }
+    throw UnsupportedError('LibRaw is only wired up for Windows/Linux so far.');
   }
 }
 
@@ -355,16 +360,32 @@ Pointer<libraw_data_t>? _openRaw(LibRawBindings lib, String path) {
   if (lr == nullptr) {
     return null;
   }
-  final pathPtr = path.toNativeUtf16();
-  try {
-    if (lib.libraw_open_wfile(lr, pathPtr.cast()) != 0) {
-      lib.libraw_close(lr);
-      return null;
+  if (!_openRawFile(lib, lr, path)) {
+    lib.libraw_close(lr);
+    return null;
+  }
+  return lr;
+}
+
+/// `libraw_open_wfile` (wide/UTF-16) is a Windows-only entry point — LibRaw
+/// only builds it under `#ifdef WIN32`, so it isn't even exported by the
+/// Linux `.so`. Elsewhere, `libraw_open_file` (narrow/UTF-8, the normal
+/// POSIX path convention) is the one that exists.
+bool _openRawFile(LibRawBindings lib, Pointer<libraw_data_t> lr, String path) {
+  if (Platform.isWindows) {
+    final pathPtr = path.toNativeUtf16();
+    try {
+      return lib.libraw_open_wfile(lr, pathPtr.cast()) == 0;
+    } finally {
+      malloc.free(pathPtr);
     }
+  }
+  final pathPtr = path.toNativeUtf8();
+  try {
+    return lib.libraw_open_file(lr, pathPtr.cast()) == 0;
   } finally {
     malloc.free(pathPtr);
   }
-  return lr;
 }
 
 /// Extracts the embedded preview/thumbnail JPEG bytes from a RAW file.

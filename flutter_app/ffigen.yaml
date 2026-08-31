@@ -24,6 +24,7 @@ functions:
   include:
     - 'libraw_init'
     - 'libraw_open_wfile'
+    - 'libraw_open_file'
     - 'libraw_unpack'
     - 'libraw_unpack_thumb'
     - 'libraw_dcraw_process'

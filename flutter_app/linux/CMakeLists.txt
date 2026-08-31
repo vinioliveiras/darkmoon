@@ -100,6 +100,15 @@ install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
+# LibRaw, used for RAW decoding/thumbnail extraction via Dart FFI — same
+# role as windows/native/raw_r.dll. Built from LibRaw 0.22.0 (matching
+# third_party/libraw_headers) via autotools; see native/README.md.
+# Dynamically linked against libjpeg/zlib/lcms2/libgomp, which are assumed
+# already present on the system rather than bundled here.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/libraw_r.so"
+  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
+  COMPONENT Runtime)
+
 foreach(bundled_library ${PLUGIN_BUNDLED_LIBRARIES})
   install(FILES "${bundled_library}"
     DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"

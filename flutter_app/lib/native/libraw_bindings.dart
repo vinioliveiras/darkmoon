@@ -51,6 +51,24 @@ class LibRawBindings {
         int Function(ffi.Pointer<libraw_data_t>, ffi.Pointer<ffi.WChar>)
       >();
 
+  int libraw_open_file(
+    ffi.Pointer<libraw_data_t> arg0,
+    ffi.Pointer<ffi.Char> arg1,
+  ) {
+    return _libraw_open_file(arg0, arg1);
+  }
+
+  late final _libraw_open_filePtr =
+      _lookup<
+        ffi.NativeFunction<
+          ffi.Int Function(ffi.Pointer<libraw_data_t>, ffi.Pointer<ffi.Char>)
+        >
+      >('libraw_open_file');
+  late final _libraw_open_file = _libraw_open_filePtr
+      .asFunction<
+        int Function(ffi.Pointer<libraw_data_t>, ffi.Pointer<ffi.Char>)
+      >();
+
   int libraw_unpack(ffi.Pointer<libraw_data_t> arg0) {
     return _libraw_unpack(arg0);
   }

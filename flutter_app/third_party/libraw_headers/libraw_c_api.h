@@ -17,6 +17,9 @@ extern "C" {
 
 DllDef libraw_data_t *libraw_init(unsigned int flags);
 DllDef int libraw_open_wfile(libraw_data_t *, const wchar_t *);
+// Narrow-string open, used on Linux (libraw_open_wfile isn't even exported
+// there — LibRaw only builds the wide-char entry point for WIN32).
+DllDef int libraw_open_file(libraw_data_t *, const char *);
 DllDef int libraw_unpack(libraw_data_t *);
 DllDef int libraw_unpack_thumb(libraw_data_t *);
 DllDef int libraw_dcraw_process(libraw_data_t *lr);
