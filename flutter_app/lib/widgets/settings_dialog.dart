@@ -68,7 +68,7 @@ class _SettingsDialogState extends State<SettingsDialog>
   }
 
   /// Lets the user pick a `.onnx` file to use in place of the bundled
-  /// NAFNet-SIDD-width64.onnx for the on-device Denoise pass — see
+  /// default denoise model for the on-device Denoise pass — see
   /// `AppSettings.customDenoiseModelPath`'s doc for the drop-in-
   /// replacement constraint this comes with (not a generic model loader).
   Future<void> _pickCustomDenoiseModel() async {
@@ -311,9 +311,9 @@ class _SettingsDialogState extends State<SettingsDialog>
                 ),
                 Builder(
                   builder: (context) => SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      trackShape: const RectangularSliderTrackShape(),
-                    ),
+                    data: SliderTheme.of(
+                      context,
+                    ).copyWith(trackShape: const RectangularSliderTrackShape()),
                     child: Slider(
                       min: 25,
                       max: 100,
@@ -396,10 +396,7 @@ class _SettingsDialogState extends State<SettingsDialog>
             children: [
               Text(l10n.settingsCustomDenoiseModelLabel, style: _labelStyle),
               const SizedBox(height: 4),
-              Text(
-                l10n.settingsCustomDenoiseModelHint,
-                style: _hintStyle,
-              ),
+              Text(l10n.settingsCustomDenoiseModelHint, style: _hintStyle),
               const SizedBox(height: 8),
               Row(
                 children: [

@@ -20,17 +20,19 @@ import 'styled_dropdown.dart';
 const _warningColor = Color(0xFFE8A33D);
 
 /// Default value for [NeuralEnhanceChoice.denoiseAmount]/the Amount
-/// slider — 50%, not the model's full-strength 100%. NAFNet-SIDD's raw
-/// output tends to look over-smoothed/"painted" on a lot of real photos
-/// (it has no strength control of its own — see [NeuralEnhanceChoice
-/// .denoiseAmount]'s own doc on why this is a post-hoc blend rather than
-/// a model input), and a half-strength blend is a safer starting point
-/// than full strength for a user who hasn't tuned it for their own
-/// photo yet. `editor_screen.dart` uses this same constant as the
-/// fallback for any photo whose `_paramValues` doesn't have an amount
-/// recorded yet (never turned Denoise on before, or predates this
-/// slider) — see its own `_neuralDenoiseAmountKey` doc.
-const defaultNeuralDenoiseAmount = 50;
+/// slider — 100%, the model's full-strength output. Was 50% under the
+/// previous denoise model (NAFNet-SIDD), whose raw output tended to look
+/// over-smoothed/"painted" on real photos; the model swap (2026-08-31,
+/// item 35 follow-up — see `onnx_runtime.dart`'s [denoiseModelSpec] doc)
+/// was specifically chosen for *not* having that problem in testing, so
+/// defaulting to a half-strength blend no longer serves a purpose (the
+/// model still has no strength control of its own — see
+/// [NeuralEnhanceChoice.denoiseAmount]'s own doc on why this is a
+/// post-hoc blend rather than a model input). `editor_screen.dart` uses
+/// this same constant as the fallback for any photo whose `_paramValues`
+/// doesn't have an amount recorded yet (never turned Denoise on before,
+/// or predates this slider) — see its own `_neuralDenoiseAmountKey` doc.
+const defaultNeuralDenoiseAmount = 100;
 
 String _levelLabel(AppLocalizations l10n, AiDenoiseLevel? level) =>
     switch (level) {
@@ -69,7 +71,7 @@ class ClassicDenoiseChoice extends AiDenoiseChoice {
 }
 
 /// The item-13 neural pipeline — a one-shot pre-process that replaces the
-/// photo's edit source, not a per-render stage. [denoise] (NAFNet-SIDD)
+/// photo's edit source, not a per-render stage. [denoise]
 /// and [upscale] (DIS 2x) are independent toggles rather than one
 /// combined on/off switch, since either is a useful result on its own
 /// (denoise a noisy JPEG without changing its resolution; upscale an
@@ -103,14 +105,14 @@ class NeuralEnhanceChoice extends AiDenoiseChoice {
 
   /// PMRID raw-domain denoise (`pmrid_denoise.dart`) — runs on the
   /// sensor's own Bayer data before demosaic, unlike [denoise]
-  /// (NAFNet-SIDD, which runs after). Only ever true for a standard
+  /// (which runs after). Only ever true for a standard
   /// Bayer-CFA RAW file (see `libraw.dart`'s `RawMetadata.isBayerCfa`);
   /// mutually exclusive with [denoise] in the dialog UI (running both
   /// would just re-smooth pixels PMRID already cleaned) — enforced there,
   /// not here, so this class stays a plain data holder.
   final bool rawDenoise;
 
-  /// 0-100 blend between the original and NAFNet-SIDD's full-strength
+  /// 0-100 blend between the original and the denoise model's full-strength
   /// output (see `ai_enhance.dart`'s `enhanceImage` doc — the model has
   /// no strength control of its own, so this is a linear blend applied
   /// afterward). Only meaningful when [denoise] is true; ignored
@@ -221,7 +223,9 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
     vsync: this,
     initialIndex: widget.cloudProvider != null
         ? 2
-        : (widget.neuralDenoise || widget.neuralUpscale || widget.neuralRawDenoise)
+        : (widget.neuralDenoise ||
+              widget.neuralUpscale ||
+              widget.neuralRawDenoise)
         ? 1
         : 0,
   );
@@ -532,7 +536,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
           onChanged: _setNeuralDenoise,
         ),
         // Only shown once Denoise is on — an amount for a pass that isn't
-        // even running has nothing to control. NAFNet-SIDD itself has no
+        // even running has nothing to control. The model itself has no
         // strength input (see NeuralEnhanceChoice.denoiseAmount's doc);
         // this blends its full-strength output back toward the original.
         if (_neuralDenoise) ...[
@@ -740,14 +744,11 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
               ),
               suffixIcon: IconButton(
                 icon: Icon(
-                  _obscureToken
-                      ? CupertinoIcons.eye
-                      : CupertinoIcons.eye_slash,
+                  _obscureToken ? CupertinoIcons.eye : CupertinoIcons.eye_slash,
                   size: 16,
                   color: DarkmoonColors.textMuted,
                 ),
-                onPressed: () =>
-                    setState(() => _obscureToken = !_obscureToken),
+                onPressed: () => setState(() => _obscureToken = !_obscureToken),
               ),
             ),
           ),

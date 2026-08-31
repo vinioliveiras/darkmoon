@@ -5,7 +5,7 @@ import '../native/onnx_runtime.dart' show pmridDenoiseModelSpec;
 
 /// Raw-domain denoise (PMRID, ECCV20 "Practical Deep Raw Image Denoising
 /// on Mobile Devices") — unlike the sRGB-domain AI Enhance pipeline
-/// (`ai_enhance.dart`'s NAFNet-SIDD pass, which runs *after* demosaic on
+/// (`ai_enhance.dart`'s denoise pass, which runs *after* demosaic on
 /// the final gamma-encoded RGB), this runs on the sensor's own Bayer data
 /// *before* demosaic — see `native/pmrid_raw.dart` for how the raw buffer
 /// is packed into/unpacked out of the 4-channel layout this function

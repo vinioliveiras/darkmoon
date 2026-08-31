@@ -11,7 +11,7 @@ import 'package:path/path.dart' as p;
 /// so old entries are simply never looked up again instead of serving a
 /// stale result. Mirrors `raw_decode_format_version.dart`'s exact role,
 /// scoped to this cache instead.
-const int aiEnhanceCacheVersion = 8;
+const int aiEnhanceCacheVersion = 9;
 
 /// [mode] folds which of denoise/upscale/raw-denoise actually ran (plus
 /// the denoise blend strength — see `ai_enhance.dart`'s `enhanceImage` doc
@@ -38,7 +38,8 @@ String _modeTag(
   int denoiseStrengthPercent,
   String? denoiseModelPath,
   int upscaleSharpnessAmount,
-) => 'd${denoise ? 1 : 0}s$denoiseStrengthPercent'
+) =>
+    'd${denoise ? 1 : 0}s$denoiseStrengthPercent'
     'u${upscale ? 1 : 0}'
     'q$upscaleSharpnessAmount'
     'r${rawDenoise ? 1 : 0}'

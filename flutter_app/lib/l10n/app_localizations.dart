@@ -1081,7 +1081,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsCustomDenoiseModelDefault.
   ///
   /// In en, this message translates to:
-  /// **'Default (NAFNet-SIDD)'**
+  /// **'Default (RealPLKSR)'**
   String get settingsCustomDenoiseModelDefault;
 
   /// No description provided for @settingsCustomDenoiseModelPickerTitle.

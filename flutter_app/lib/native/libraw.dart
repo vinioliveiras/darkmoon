@@ -587,7 +587,7 @@ RawImage? decodeRawImage(
 /// so noise gets removed on linear, pre-demosaic, pre-white-balance sensor
 /// data (closer to how Lightroom's own raw noise reduction works) rather
 /// than on the already-demosaiced sRGB output the way the AI Enhance
-/// pipeline's NAFNet-SIDD pass (`edit_source_ai_enhance.dart`) does.
+/// pipeline's denoise pass (`edit_source_ai_enhance.dart`) does.
 ///
 /// Only supported for a standard 2x2 Bayer sensor — check
 /// [RawMetadata.isBayerCfa] before calling; returns null for an

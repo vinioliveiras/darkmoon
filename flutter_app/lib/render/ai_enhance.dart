@@ -20,7 +20,7 @@ class AiEnhanceResult {
 }
 
 /// The AI Enhance pipeline (item 13, distinct from the classical
-/// `applyAiDenoise` render-pipeline stage): NAFNet-SIDD reconstructive
+/// `applyAiDenoise` render-pipeline stage): reconstructive
 /// denoise (removes noise *and* film grain, recovers texture the noise was
 /// masking) and/or 2x super-resolution, run independently —
 /// [enableDenoise]/[enableUpscale] let a caller ask for either pass alone
@@ -74,7 +74,7 @@ AiEnhanceResult enhanceImage(
   OnnxModelSpec upscaleSpec = upscaleModelSpec,
   bool enableDenoise = true,
   bool enableUpscale = true,
-  // NAFNet-SIDD is a fixed, blind denoiser — it has no built-in strength
+  // The bundled denoise model is a fixed, blind denoiser — it has no built-in strength
   // knob (unlike e.g. FFDNet-style models that take a noise-level map as
   // an extra input channel), so "how strong" can only be controlled
   // afterward: linearly blending its full-strength output back toward
@@ -160,5 +160,9 @@ AiEnhanceResult enhanceImage(
     outBytes[i] = (upscaled[i] * 255.0).clamp(0, 255).round();
   }
 
-  return AiEnhanceResult(rgbBytes: outBytes, width: outWidth, height: outHeight);
+  return AiEnhanceResult(
+    rgbBytes: outBytes,
+    width: outWidth,
+    height: outHeight,
+  );
 }

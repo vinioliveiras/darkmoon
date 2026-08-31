@@ -53,7 +53,7 @@ class AiEnhanceModelInfo {
 
 /// Sent when Settings' custom denoise model ([AppSettings
 /// .customDenoiseModelPath]) failed to load or run — the pipeline falls
-/// back to the bundled NAFNet-SIDD-width64.onnx transparently rather than
+/// back to the bundled default denoise model transparently rather than
 /// failing the whole Enhance pass outright, but the caller still needs to
 /// tell the user their custom model wasn't actually used this time.
 class CustomDenoiseModelFallback {

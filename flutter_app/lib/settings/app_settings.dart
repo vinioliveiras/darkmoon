@@ -141,9 +141,9 @@ class AppSettings {
 
   /// An absolute path to a user-supplied `.onnx` file to use for the AI
   /// Enhance dialog's on-device Denoise pass, in place of the bundled
-  /// NAFNet-SIDD-width64.onnx — null (the default) means use the bundled
+  /// default model — null (the default) means use the bundled
   /// model. Treated strictly as a drop-in replacement: the file must
-  /// already follow NAFNet-SIDD's own conventions (3-channel RGB,
+  /// already follow the bundled model's own conventions (3-channel RGB,
   /// same-resolution in/out, "input"/"output" tensor names, [0,1]-
   /// normalized) — see `onnx_runtime.dart`'s `OnnxModelSpec.customPath`
   /// doc for why this app can't safely auto-detect a different

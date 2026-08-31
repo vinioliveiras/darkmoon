@@ -46,7 +46,7 @@ class OnnxModelSpec {
   final int scaleFactor;
 
   /// Floats/pixel the model's input and output tensors carry. 3 (RGB) for
-  /// every sRGB-domain model (NAFNet-SIDD, DIS); the raw-domain
+  /// every sRGB-domain model (the default denoise model, DIS); the raw-domain
   /// PMRID denoiser (`pmridDenoiseModelSpec`) is the one caller that's 4
   /// (packed RGGB Bayer planes) instead.
   final int channels;
@@ -75,14 +75,20 @@ class OnnxModelSpec {
   String get cacheKey => customAbsolutePath ?? fileName;
 }
 
-/// NAFNet-SIDD-width64 (MIT, megvii-research/NAFNet, SIDD-trained —
-/// real sensor noise, not synthetic gaussian) — reconstructive denoise +
-/// film-grain removal. Exported with dynamic spatial dims; 256 is chosen
-/// here (divisible by 16, the network's downsample factor) to balance
-/// tile count against per-tile GPU overhead, same reasoning as the
-/// original plan.
+/// 1xDeNoise (MIT, RealPLKSR architecture, huggingface.co/huggingworld/
+/// onnx-image-models) — reconstructive denoise, same 3-channel/[0,1]/
+/// "input"-"output" convention as the NAFNet-SIDD model this replaced
+/// (2026-08-31, item 35 follow-up): NAFNet-SIDD's output was too smoothed
+/// ("papado") for the user's taste even after the earlier hue/artifact
+/// fixes; this model's crop tests showed real grain/noise reduction
+/// without washing out detail. The real cost: ~3.3x slower per tile than
+/// NAFNet-SIDD (2.4min vs ~40s on a 24MP photo) — accepted deliberately,
+/// quality over speed for the always-on default pass. 256 chosen for the
+/// same tile-count/overhead balance as the previous model; this
+/// architecture has no hard divisibility requirement discovered so far,
+/// but hasn't been stress-tested at other tile sizes.
 const denoiseModelSpec = OnnxModelSpec(
-  fileName: 'NAFNet-SIDD-width64.onnx',
+  fileName: '1xDeNoise_realplksr_otf_fp32.onnx',
   inputTileSize: 256,
   scaleFactor: 1,
 );
@@ -90,8 +96,8 @@ const denoiseModelSpec = OnnxModelSpec(
 /// DIS Fast 2x (Apache-2.0, Kim2091/DIS — "Direct Image Supersampling") —
 /// 2x super-resolution. Replaces the earlier Real-ESRGAN x2plus spec: a
 /// tiny (~195K-parameter), all-stride-1-conv architecture (no pooling/
-/// downsampling anywhere, so — unlike NAFNet/PMRID above — there's no tile
-/// size divisibility requirement at all), exported with fully dynamic
+/// downsampling anywhere, so — unlike [denoiseModelSpec]/PMRID above —
+/// there's no tile size divisibility requirement at all), exported with fully dynamic
 /// spatial dims. 256 chosen for the same tile-count/overhead balance as
 /// [denoiseModelSpec].
 const upscaleModelSpec = OnnxModelSpec(
@@ -132,7 +138,7 @@ const realEsrganUpscaleModelSpec = OnnxModelSpec(
 /// PMRID (Apache-2.0, MegEngine/PMRID, ECCV20 "Practical Deep Raw Image
 /// Denoising on Mobile Devices") — raw-domain denoise, run on the packed
 /// RGGB Bayer buffer *before* demosaic (`pmrid_denoise.dart`), unlike
-/// NAFNet-SIDD/DIS above which both run after. 4 input/output
+/// [denoiseModelSpec]/DIS above which both run after. 4 input/output
 /// channels (R, G, G2, B planes), residual output added back to the input
 /// by the network itself. Exported with dynamic spatial dims; 256 chosen
 /// for the same tile-count/overhead balance as [denoiseModelSpec], and
@@ -210,7 +216,9 @@ class _OrtLib {
       // by linux/CMakeLists.txt, same as libraw_r.so.
       return DynamicLibrary.open('libonnxruntime.so');
     }
-    throw UnsupportedError('ONNX Runtime is only wired up for Windows/Linux so far.');
+    throw UnsupportedError(
+      'ONNX Runtime is only wired up for Windows/Linux so far.',
+    );
   }
 
   /// Set only for standalone `dart run tool/*.dart` smoke tests (see
@@ -520,12 +528,7 @@ class OnnxModel {
     shape[3] = inSize;
 
     final inputData = calloc<Float>(expectedInLength);
-    _packChw(
-      tile,
-      inputData.asTypedList(expectedInLength),
-      inSize,
-      channels,
-    );
+    _packChw(tile, inputData.asTypedList(expectedInLength), inSize, channels);
 
     final inputValueOut = calloc<Pointer<OrtValue>>();
     final outputValue = calloc<Pointer<OrtValue>>();

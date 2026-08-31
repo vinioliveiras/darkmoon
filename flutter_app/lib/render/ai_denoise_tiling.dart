@@ -7,13 +7,13 @@ import 'dart:typed_data';
 /// overlap-add blend.
 ///
 /// Works uniformly for same-resolution models ([scaleFactor] 1, e.g. the
-/// NAFNet-SIDD denoiser) and upscalers ([scaleFactor] 2+, e.g. DIS)
+/// bundled denoiser) and upscalers ([scaleFactor] 2+, e.g. DIS)
 /// — the returned buffer is `width*scaleFactor` x `height*scaleFactor`.
 ///
 /// [image] is packed, row-major, [channels] floats/pixel, normalized to
 /// [0,1] (the convention `lib/native/onnx_runtime.dart`'s models expect —
 /// see `tool/onnx_denoise_smoke_test.dart`'s validation notes). [channels]
-/// defaults to 3 (RGB, the NAFNet-SIDD/DIS convention); the
+/// defaults to 3 (RGB, the default-denoise/DIS convention); the
 /// raw-domain PMRID denoiser (`pmrid_denoise.dart`) is the one caller that
 /// passes 4 (packed RGGB Bayer planes) instead.
 ///

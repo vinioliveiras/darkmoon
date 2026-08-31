@@ -221,7 +221,7 @@
   "settingsThumbnailThreadsLabel": "Thumbnail loading threads",
   "settingsCustomDenoiseModelLabel": "Custom denoise model",
   "settingsCustomDenoiseModelHint": "Replaces the on-device Denoise model in the AI Denoise dialog's Enhance tab. Must be a drop-in replacement: 3-channel RGB, same-resolution in/out, \"input\"/\"output\" tensor names, [0,1]-normalized — a model that doesn't match will error or produce visibly wrong output, not a clean failure.",
-  "settingsCustomDenoiseModelDefault": "Default (NAFNet-SIDD)",
+  "settingsCustomDenoiseModelDefault": "Default (RealPLKSR)",
   "settingsCustomDenoiseModelPickerTitle": "Choose a denoise model (.onnx)",
   "settingsCustomDenoiseModelChooseButton": "Choose file…",
   "settingsCustomDenoiseModelResetButton": "Reset",

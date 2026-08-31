@@ -4,7 +4,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 /// Resolves (creating if needed) the directory the AI Enhance (item 13 —
-/// NAFNet-SIDD denoise + DIS 2x upscale) result cache lives in:
+/// AI denoise + DIS 2x upscale) result cache lives in:
 /// `Documents/darkmoon/ai_enhance_cache`.
 ///
 /// One file per photo (not batched into month files like the thumbnail/

@@ -557,7 +557,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Ersetzt das On-Device-Denoise-Modell im Enhance-Tab des KI-Entrauschungsdialogs. Muss ein direkter Ersatz sein: 3-Kanal-RGB, gleiche Auflösung bei Ein-/Ausgabe, Tensor-Namen \"input\"/\"output\", [0,1]-normalisiert — ein Modell, das nicht passt, führt zu einem Fehler oder sichtbar falschem Ergebnis, nicht zu einem sauberen Fehlschlag.';
 
   @override
-  String get settingsCustomDenoiseModelDefault => 'Standard (NAFNet-SIDD)';
+  String get settingsCustomDenoiseModelDefault => 'Standard (RealPLKSR)';
 
   @override
   String get settingsCustomDenoiseModelPickerTitle =>

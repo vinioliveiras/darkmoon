@@ -552,7 +552,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'Substitui o modelo de Denoise on-device na aba Enhance do diálogo AI Denoise. Precisa ser um substituto direto: RGB 3 canais, mesma resolução de entrada/saída, nomes de tensor \"input\"/\"output\", valores normalizados [0,1] — um modelo que não seguir isso vai dar erro ou produzir um resultado visivelmente errado, não uma falha limpa.';
 
   @override
-  String get settingsCustomDenoiseModelDefault => 'Padrão (NAFNet-SIDD)';
+  String get settingsCustomDenoiseModelDefault => 'Padrão (RealPLKSR)';
 
   @override
   String get settingsCustomDenoiseModelPickerTitle =>

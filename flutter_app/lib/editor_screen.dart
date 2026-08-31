@@ -1110,15 +1110,14 @@ class _EditorScreenState extends State<EditorScreen>
   void initState() {
     super.initState();
     _zoomAnimController = AnimationController(vsync: this);
-    _zoomAnimCurve = CurvedAnimation(
-      parent: _zoomAnimController,
-      curve: Curves.easeOutCubic,
-    )..addListener(() {
-      final tween = _zoomAnimTween;
-      if (tween != null) {
-        _viewController.value = tween.evaluate(_zoomAnimCurve);
-      }
-    });
+    _zoomAnimCurve =
+        CurvedAnimation(parent: _zoomAnimController, curve: Curves.easeOutCubic)
+          ..addListener(() {
+            final tween = _zoomAnimTween;
+            if (tween != null) {
+              _viewController.value = tween.evaluate(_zoomAnimCurve);
+            }
+          });
     unawaited(_loadEdits());
     unawaited(_loadPhotoCurves());
     unawaited(_loadPhotoMasks());
@@ -3756,7 +3755,7 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
-  /// Runs item 13's neural Enhance pipeline (NAFNet-SIDD [denoise] and/or
+  /// Runs item 13's neural Enhance pipeline (AI denoise and/or
   /// DIS 2x [upscale], disk-cached — see
   /// `native/edit_source_ai_enhance.dart`) for [path] and swaps the
   /// result into `_editSources`, so every later render/mask/export builds

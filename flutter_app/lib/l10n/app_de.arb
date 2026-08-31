@@ -172,7 +172,7 @@
   "settingsThumbnailThreadsLabel": "Threads für das Laden von Miniaturansichten",
   "settingsCustomDenoiseModelLabel": "Benutzerdefiniertes Entrauschungsmodell",
   "settingsCustomDenoiseModelHint": "Ersetzt das On-Device-Denoise-Modell im Enhance-Tab des KI-Entrauschungsdialogs. Muss ein direkter Ersatz sein: 3-Kanal-RGB, gleiche Auflösung bei Ein-/Ausgabe, Tensor-Namen \"input\"/\"output\", [0,1]-normalisiert — ein Modell, das nicht passt, führt zu einem Fehler oder sichtbar falschem Ergebnis, nicht zu einem sauberen Fehlschlag.",
-  "settingsCustomDenoiseModelDefault": "Standard (NAFNet-SIDD)",
+  "settingsCustomDenoiseModelDefault": "Standard (RealPLKSR)",
   "settingsCustomDenoiseModelPickerTitle": "Entrauschungsmodell wählen (.onnx)",
   "settingsCustomDenoiseModelChooseButton": "Datei wählen…",
   "settingsCustomDenoiseModelResetButton": "Zurücksetzen",

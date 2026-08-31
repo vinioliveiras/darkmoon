@@ -178,7 +178,7 @@
   "settingsThumbnailThreadsLabel": "Threads de carregamento de miniaturas",
   "settingsCustomDenoiseModelLabel": "Modelo de denoise customizado",
   "settingsCustomDenoiseModelHint": "Substitui o modelo de Denoise on-device na aba Enhance do diálogo AI Denoise. Precisa ser um substituto direto: RGB 3 canais, mesma resolução de entrada/saída, nomes de tensor \"input\"/\"output\", valores normalizados [0,1] — um modelo que não seguir isso vai dar erro ou produzir um resultado visivelmente errado, não uma falha limpa.",
-  "settingsCustomDenoiseModelDefault": "Padrão (NAFNet-SIDD)",
+  "settingsCustomDenoiseModelDefault": "Padrão (RealPLKSR)",
   "settingsCustomDenoiseModelPickerTitle": "Escolha um modelo de denoise (.onnx)",
   "settingsCustomDenoiseModelChooseButton": "Escolher arquivo…",
   "settingsCustomDenoiseModelResetButton": "Redefinir",

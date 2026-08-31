@@ -8,7 +8,7 @@ import 'topaz_denoise_provider.dart';
 
 /// A cloud AI denoise provider the user can pick in the AI Denoise dialog's
 /// "Cloud AI" tab, paid for with their own API key — a fundamentally
-/// different category from the on-device NAFNet-SIDD/PMRID pipelines
+/// different category from the on-device AI-denoise/PMRID pipelines
 /// (`ai_enhance.dart`/`pmrid_denoise.dart`): those run locally, for free,
 /// deterministically; these upload the photo to a third party and cost
 /// real money per call, so every implementation here must be aggressively
