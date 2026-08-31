@@ -120,11 +120,13 @@ install(FILES
   COMPONENT Runtime)
 
 # The .onnx model files themselves are platform-agnostic — reused directly
-# from windows/native/ instead of duplicating ~500MB of gitignored
-# binaries into a second native/ folder. onnx_runtime.dart's modelPath()
-# resolves them next to the executable (bundle/, not bundle/lib/), same
-# convention as Windows.
-file(GLOB DARKMOON_ONNX_MODELS "${CMAKE_CURRENT_SOURCE_DIR}/../windows/native/*.onnx")
+# from ../native_models/ (2026-09-01, moved out of windows/native/ — a
+# platform-agnostic file living under a platform-specific folder was
+# confusing, given this file already reached across to grab them) instead
+# of duplicating ~270MB of gitignored binaries into a second folder.
+# onnx_runtime.dart's modelPath() resolves them next to the executable
+# (bundle/, not bundle/lib/), same convention as Windows.
+file(GLOB DARKMOON_ONNX_MODELS "${CMAKE_CURRENT_SOURCE_DIR}/../native_models/*.onnx")
 install(FILES ${DARKMOON_ONNX_MODELS}
   DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)

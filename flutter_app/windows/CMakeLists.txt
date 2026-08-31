@@ -89,16 +89,19 @@ install(FILES
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
-# ONNX Runtime (+ DirectML EP) and the item-13 neural Enhance models
-# (NAFNet-SIDD denoise, Real-ESRGAN 2x upscale) — `onnx_runtime.dart`
-# resolves all of these next to the executable, same convention as
-# raw_r.dll above. The two .onnx files are gitignored (~510MB combined),
-# so this only produces a working build on a machine that already has
-# them under windows/native/ — see PENDING.md item 13 for the still-open
-# real distribution question (first-run download? release asset?). Use
-# GLOB instead of naming the .onnx files directly so a future model swap
+# ONNX Runtime (+ DirectML EP) and the item-13 neural Enhance models —
+# `onnx_runtime.dart` resolves all of these next to the executable, same
+# convention as raw_r.dll above. The models themselves live in
+# `../native_models/` (2026-09-01, moved out of this Windows-specific
+# folder — `linux/CMakeLists.txt` globs the same directory, so a
+# platform-agnostic file living under a platform-specific folder was
+# confusing, not a hard requirement of anything). Gitignored (~270MB
+# combined), so this only produces a working build on a machine that
+# already has them — see PENDING.md item 13 for the still-open real
+# distribution question (first-run download? release asset?). Use GLOB
+# instead of naming the .onnx files directly so a future model swap
 # doesn't also require touching this file.
-file(GLOB DARKMOON_ONNX_MODELS "${CMAKE_CURRENT_SOURCE_DIR}/native/*.onnx")
+file(GLOB DARKMOON_ONNX_MODELS "${CMAKE_CURRENT_SOURCE_DIR}/../native_models/*.onnx")
 install(FILES
   "${CMAKE_CURRENT_SOURCE_DIR}/native/onnxruntime.dll"
   "${CMAKE_CURRENT_SOURCE_DIR}/native/DirectML.dll"
