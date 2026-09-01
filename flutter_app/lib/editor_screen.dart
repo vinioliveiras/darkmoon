@@ -3477,12 +3477,21 @@ class _EditorScreenState extends State<EditorScreen>
       return renderJobToJpegWithProgress(job, onStage);
     }
     // The GPU shader doesn't apply the "darkmoon Color" profile yet
-    // (Phase 3) — falling through to it while a profile with a real tone
-    // curve is active would render everything at LibRaw's dark baseline.
-    // Force CPU until the shader port lands.
+    // (Phase 3) — falling through to it while any correction (tone OR
+    // per-hue) is active would silently drop it, rendering as if no
+    // profile were applied at all. Force CPU until the shader port lands.
+    //
+    // Real bug fixed 2026-09-01: this used to check `!toneIsIdentity`
+    // only — correct for the old fitted profiles (always had a real tone
+    // curve), but the resumed per-hue-only Vivid profile has its tone
+    // curve forced to identity by design (see project_darkmoon_color
+    // _profile.md), so `toneIsIdentity` is always true for it and this
+    // guard never fired — GPU rendering silently dropped Vivid's entire
+    // per-hue correction with no error. `isIdentity` checks tone AND
+    // hueShift/satMul/lumMul, so it correctly catches a per-hue-only
+    // profile too.
     final profileActive =
-        job.params.colorProfile != null &&
-        !job.params.colorProfile!.toneIsIdentity;
+        job.params.colorProfile != null && !job.params.colorProfile!.isIdentity;
     if (allowGpu &&
         !profileActive &&
         _settings.useGpuRender &&
