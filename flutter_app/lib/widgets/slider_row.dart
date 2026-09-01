@@ -216,28 +216,25 @@ class _SliderRowState extends State<SliderRow> {
     widget.onChangeEnd?.call(reset);
   }
 
-  /// Click anywhere on the track -> jump to the value at that x. The
-  /// Material [Slider] insets its track by roughly the thumb radius each
-  /// side; approximate that so the ends still reach min/max.
-  static const _trackInset = 12.0;
-
   /// Double-click-to-reset is detected by hand (two [_onTrackTap] calls
-  /// close in time and position) instead of `GestureDetector.onDoubleTap`:
-  /// having a double-tap recognizer on the same detector as `onTapUp`
-  /// makes Flutter hold every *single* tap's resolution back by
-  /// `kDoubleTapTimeout` (~300ms) to see whether a second tap follows,
-  /// which — stacked on top of the render debounce — read as "clicking
-  /// the track doesn't update the preview" (it did, just ~300ms late,
-  /// vs. dragging's instant per-frame feedback). Tracking it ourselves
-  /// keeps a plain click-to-jump instant.
+  /// close in time and position) instead of `GestureDetector.onDoubleTap`
+  /// (same reasoning as before this was ever combined with click-to-jump:
+  /// a double-tap recognizer on the same detector as `onTapUp` would hold
+  /// every *single* tap's resolution back by `kDoubleTapTimeout` to see
+  /// whether a second tap follows).
+  ///
+  /// Click-to-jump-to-position (a plain single click landing anywhere on
+  /// the track) is intentionally NOT here — disabled 2026-09-01 (it kept
+  /// conflicting with double-click-to-reset; see git history for the
+  /// removed implementation) and, per explicit user request, only the
+  /// double-click-to-reset half of that interaction was brought back. A
+  /// single tap now does nothing at all; only a second tap landing close
+  /// in time and position to the first resets to [widget.defaultValue].
   static const _doubleTapTimeout = Duration(milliseconds: 300);
   static const _doubleTapSlopPx = 40.0;
   DateTime? _lastTapTime;
   double? _lastTapX;
 
-  // Not wired to onTapUp right now (see the GestureDetector below) — kept
-  // intact so re-enabling is a one-line change.
-  // ignore: unused_element
   void _onTrackTap(double localX, double boxWidth) {
     final now = DateTime.now();
     final isDoubleTap = widget.defaultValue != null &&
@@ -251,38 +248,9 @@ class _SliderRowState extends State<SliderRow> {
     _lastTapX = isDoubleTap ? null : localX;
 
     if (isDoubleTap) {
-      // The first tap of this pair already fired onChanged (below) and
-      // queued its onChangeEnd — cancel that queued commit so a double-
-      // click never pushes two undo-history entries (jump-to-click-
-      // position, then reset), just the one net reset.
-      _pendingClickCommitTimer?.cancel();
-      _pendingClickCommitTimer = null;
       _resetToDefault();
-      return;
     }
-
-    final usable = boxWidth - 2 * _trackInset;
-    if (usable <= 0) {
-      return;
-    }
-    final t = ((localX - _trackInset) / usable).clamp(0.0, 1.0);
-    final raw = widget.min + t * (widget.max - widget.min);
-    final f = math.pow(10, widget.decimals).toDouble();
-    final v = ((raw * f).roundToDouble() / f).clamp(widget.min, widget.max);
-    _propagateTimer?.cancel();
-    _propagateTimer = null;
-    setState(() => _dragValue = null);
-    widget.onChanged(v);
-    // onChangeEnd (history/catalog commit) is deferred by the same window
-    // used to detect a double-tap above, and cancelled entirely if one
-    // lands — a plain click still updates the value/live preview
-    // instantly via onChanged, it just doesn't commit to undo history
-    // until we're sure a second tap isn't about to reset it away.
-    _pendingClickCommitTimer?.cancel();
-    _pendingClickCommitTimer = Timer(_doubleTapTimeout, () {
-      _pendingClickCommitTimer = null;
-      widget.onChangeEnd?.call(v);
-    });
+    // A non-double single tap is a no-op — see this method's doc.
   }
 
   @override
@@ -321,16 +289,10 @@ class _SliderRowState extends State<SliderRow> {
                 _onDragUpdate(details.delta.dx),
             onHorizontalDragEnd: (_) => _onDragEnd(),
             onHorizontalDragCancel: _onDragEnd,
-            // Click-to-jump-to-position (and, built on top of it,
-            // double-click-to-reset via _onTrackTap) temporarily disabled
-            // (2026-09-01, explicit user request) — the double-click reset
-            // was misbehaving and this is the quickest way to stop it
-            // without leaving a half-working interaction live. Dragging and
-            // click-to-type-a-value (_buildValueLabel/_startEditing) are
-            // untouched. _onTrackTap itself is left intact to make
-            // re-enabling this a one-line change once revisited.
-            // onTapUp: (details) =>
-            //     _onTrackTap(details.localPosition.dx, constraints.maxWidth),
+            // Only double-click-to-reset is wired here — see _onTrackTap's
+            // doc for why plain click-to-jump-to-position stays disabled.
+            onTapUp: (details) =>
+                _onTrackTap(details.localPosition.dx, constraints.maxWidth),
             child: IgnorePointer(
               child: SliderTheme(
                 data: SliderTheme.of(context).copyWith(

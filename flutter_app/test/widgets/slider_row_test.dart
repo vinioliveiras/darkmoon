@@ -35,15 +35,9 @@ void main() {
     );
   }
 
-  // click-to-jump/double-click-to-reset temporarily disabled 2026-09-01
-  // (buggy double-click-reset, quickest fix was to turn off the whole
-  // track-tap interaction rather than ship a half-working one) —
-  // re-enable both tests below once _onTrackTap is wired back to onTapUp
-  // in slider_row.dart.
   testWidgets(
-    'a single click on the track jumps to that value immediately — '
-    'no waiting on the double-tap disambiguation window',
-    skip: true,
+    'a single click on the track does nothing — click-to-jump-to-position '
+    'is disabled (2026-09-01), only double-click-to-reset remains',
     (tester) async {
       final changed = <double>[];
       final changedEnd = <double>[];
@@ -56,32 +50,17 @@ void main() {
       );
 
       final trackRect = tester.getRect(find.byKey(const Key('sliderRowTrack')));
-      // Track usable width excludes _trackInset (12px) each side; the
-      // midpoint of the usable range lands at value 50.
       final mid = Offset(trackRect.center.dx, trackRect.center.dy);
       await tester.tapAt(mid);
-      // Exactly one pump — a regression of the double-tap-arena bug this
-      // guards against would require pumping past kDoubleTapTimeout
-      // (~300ms) before onTapUp fires at all. onChanged (the live value/
-      // preview) is unaffected by the onChangeEnd-deferral fix below —
-      // still instant.
-      await tester.pump();
-      expect(changed, [50.0]);
-      expect(changedEnd, isEmpty);
-
-      // onChangeEnd (the undo-history/catalog commit) is deliberately
-      // deferred past the same window used to detect a double-tap — see
-      // [_onTrackTap]'s doc — so a click's commit only lands once we're
-      // sure a second tap isn't about to turn it into a reset instead.
       await tester.pump(const Duration(milliseconds: 350));
-      expect(changedEnd, [50.0]);
+
+      expect(changed, isEmpty);
+      expect(changedEnd, isEmpty);
     },
   );
 
   testWidgets(
-    'two quick clicks near the same spot reset to defaultValue instead of '
-    'jumping twice',
-    skip: true,
+    'two quick clicks near the same spot reset to defaultValue',
     (tester) async {
       final changed = <double>[];
       final changedEnd = <double>[];
@@ -100,14 +79,9 @@ void main() {
       await tester.tapAt(tapPoint);
       await tester.pump();
 
-      // First tap's live value jumps to 50, second (within the window,
-      // same spot) resets to defaultValue instead of jumping to 50 again.
-      // Real bug fixed 2026-09-01: the first tap's onChangeEnd(50) used to
-      // fire unconditionally too, right alongside onChangeEnd(77) — a
-      // spurious extra undo-history/catalog-save commit for a value the
-      // user never actually meant to land on. It's now cancelled by the
-      // detected double-tap, so only the net reset ever commits.
-      expect(changed, [50.0, 77.0]);
+      // The first tap is a no-op (click-to-jump disabled); the second,
+      // within the window and same spot, resets to defaultValue.
+      expect(changed, [77.0]);
       expect(changedEnd, [77.0]);
     },
   );
