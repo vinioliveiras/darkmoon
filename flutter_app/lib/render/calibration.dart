@@ -31,6 +31,37 @@
 library;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  GLOBAL — Amount slider                                                   ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+
+/// Blanket damping applied to EVERY slider deviation and every curve point
+/// before it reaches the renderer — the actual mechanism behind the "Amount"
+/// slider under the preset list (`_globalEditAmountKey` in editor_screen.dart,
+/// `_withGlobalEditAmountApplied`/`_effectiveCurves`). Amount's own UI value
+/// (0-500, default 100) is multiplied by this constant to get the real blend
+/// fraction — so the *default* Amount (100%) no longer means "apply every
+/// slider/preset value exactly as authored," it means "apply it at this
+/// fraction of that." Full, un-dampened strength (fraction 1.0) now needs
+/// Amount ≈ 333%; the old 150% overshoot ceiling is preserved at Amount 500%.
+///
+/// Exists because, after individually calibrating one effect at a time
+/// (Vibrance/Saturation/Dehaze/Mixer — see their own `cal*Strength`
+/// constants above), the pattern kept repeating: nearly everything looked
+/// "too strong" at its literal authored value, and consistently looked right
+/// once manually damped to roughly the same fraction (empirically, ~30%,
+/// found via the Amount slider itself on "Filmatic Fuji 4" against a real
+/// photo). Rather than keep hunting for the next individually-uncalibrated
+/// slider, this bakes that empirical fraction in globally, on top of
+/// (not instead of) the per-effect constants already tuned — those still
+/// matter for relative balance between effects, this just scales the whole
+/// result down to the range that's looked right every time so far.
+///   ↑ higher = default Amount (100%) renders closer to the literal authored
+///     values
+///   ↓ lower  = default Amount (100%) renders gentler
+/// default: 0.3   (original/unset: 1.0 — Amount was a 1:1 pass-through)
+const double calGlobalAmountCompression = 0.3;
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  WHITE BALANCE (Temperature / Tint)                                       ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 

@@ -44,6 +44,7 @@ import 'presets/preset_xmp.dart';
 import 'presets/preset_zip.dart';
 import 'raw_files.dart';
 import 'render/ai_denoise.dart';
+import 'render/calibration.dart';
 import 'render/ai_enhance_job.dart'
     show
         AiEnhanceCancellationToken,
@@ -389,8 +390,10 @@ PhotoCurves _withCurveCategoriesApplied(
 
 /// Storage key for the global Amount slider (below the preset list) —
 /// lives in the same flat `_paramValues` map every other per-photo value
-/// does, 0-150, default 100 (no-op). See [_withGlobalEditAmountApplied]'s
-/// doc for what this actually does at render time.
+/// does, 0-500, default 100. Despite the default being the UI's "no-op"
+/// position, this is NOT render-neutral — see [calGlobalAmountCompression]
+/// and [_withGlobalEditAmountApplied]'s doc for what this actually does at
+/// render time.
 const _globalEditAmountKey = 'GlobalEditAmount';
 
 /// Default per-pass deposit rate for a new Flow-mask stroke — see
@@ -433,12 +436,14 @@ const defaultFlowAmount = 10.0;
 /// enable toggles, White Balance mode, preserve-brightness, Crop/
 /// Transform, [_globalEditAmountKey] itself — none of which are
 /// continuous "how much of an effect" sliders.
+///
+/// The blend fraction is the UI's 0-500 value scaled down by
+/// [calGlobalAmountCompression] — so the default Amount (100%, the "no-op"
+/// UI position) still damps everything to that fraction. There's no
+/// no-op fast path anymore: even the default state now scales every value.
 Map<String, double> _withGlobalEditAmountApplied(Map<String, double> values) {
   final amount = values[_globalEditAmountKey] ?? 100.0;
-  if (amount == 100.0) {
-    return values; // no-op fast path — the overwhelmingly common case.
-  }
-  final fraction = amount / 100.0;
+  final fraction = amount / 100.0 * calGlobalAmountCompression;
   final defaults = _defaultParamValues();
   final scaleKeys = defaults.keys.toSet()
     ..remove('Temperature')
@@ -4629,10 +4634,8 @@ class _EditorScreenState extends State<EditorScreen>
       _paramValues,
     );
     final amount = _paramValues[_globalEditAmountKey] ?? 100.0;
-    if (amount == 100.0) {
-      return categoryApplied;
-    }
-    return lerpPhotoCurves(identityPhotoCurves, categoryApplied, amount / 100.0);
+    final fraction = amount / 100.0 * calGlobalAmountCompression;
+    return lerpPhotoCurves(identityPhotoCurves, categoryApplied, fraction);
   }
 
   /// [_currentMasks] with every mask's own disabled categories (values
@@ -7177,7 +7180,7 @@ class _ViewerToolbar extends StatelessWidget {
                   child: SliderRow(
                     name: l10n.presetAmountLabel,
                     min: 0,
-                    max: 150,
+                    max: 500,
                     value: presetAmount,
                     decimals: 0,
                     valueSuffix: '%',
