@@ -4611,10 +4611,29 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   /// [_currentCurves] with Tone Curve/Color Curve reset to identity if
-  /// either is disabled — the curve equivalent of [_effectiveParamValues],
-  /// kept separate since curves don't live in the flat values map.
-  PhotoCurves get _effectiveCurves =>
-      _withCurveCategoriesApplied(_currentCurves, _paramValues);
+  /// either is disabled, then blended toward identity by the global Amount
+  /// slider — the curve equivalent of [_effectiveParamValues], kept
+  /// separate since curves don't live in the flat values map.
+  ///
+  /// Real bug (2026-09-01, user report): a preset that leans heavily on
+  /// its Tone/Color Curve (vs. flat sliders) barely responded to Amount at
+  /// all, while a slider-heavy preset responded strongly — because Amount
+  /// only ever scaled [_paramValues] ([_withGlobalEditAmountApplied]);
+  /// curves stayed at full strength regardless. `lerpPhotoCurves` already
+  /// existed for exactly this ("used for a preset's Amount slider", see
+  /// its own doc in tone_curve.dart) and already had test coverage — it
+  /// was just never actually wired in here.
+  PhotoCurves get _effectiveCurves {
+    final categoryApplied = _withCurveCategoriesApplied(
+      _currentCurves,
+      _paramValues,
+    );
+    final amount = _paramValues[_globalEditAmountKey] ?? 100.0;
+    if (amount == 100.0) {
+      return categoryApplied;
+    }
+    return lerpPhotoCurves(identityPhotoCurves, categoryApplied, amount / 100.0);
+  }
 
   /// [_currentMasks] with every mask's own disabled categories (values
   /// *and* curves) neutralized the same way the global layer's are —
