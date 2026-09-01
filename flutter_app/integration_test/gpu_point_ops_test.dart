@@ -21,7 +21,7 @@ import 'package:darkmoon/render/render_params.dart';
 import 'package:darkmoon/render/sharpen.dart';
 import 'package:darkmoon/render/tone_curve.dart';
 
-// SharpenParams' own default amount is 40 (not 0 — matches Lightroom's
+// SharpenParams' own default amount is 40 (not 0 — matches Meridian's
 // RAW-import default, see editor_screen.dart); zeroed throughout so this
 // file's diffs stay attributable to the point-ops params under test, not
 // Sharpen (which has its own dedicated gpu_sharpen_test.dart).

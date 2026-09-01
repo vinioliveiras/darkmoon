@@ -2,13 +2,13 @@
 #include <flutter/runtime_effect.glsl>
 
 // GPU port of dehaze.dart's applyDehaze — see that function's own doc
-// comment for the algorithm (a port of RapidRAW's apply_dehaze in
+// comment for the algorithm (a port of Solstice's apply_dehaze in
 // shader.wgsl). uBlurred is the sigma-40 Gaussian blur of uSource
 // (dehaze_gpu.dart's runGaussianBlurGpu call) — the "regional" dark-
-// channel source, matching RapidRAW's structure_blur_view. Both samplers
+// channel source, matching Solstice's structure_blur_view. Both samplers
 // hold gamma-encoded values (this pipeline's universal texture
 // convention); everything below runs in scene-linear light, same as
-// RapidRAW's own dehaze.
+// Solstice's own dehaze.
 
 uniform vec2 uSize;
 uniform float uStrength; // amount/100 (dehaze.dart's `strength`)
@@ -61,7 +61,7 @@ void main() {
     float spatialDark = mix(regionalDark, pixelDark, haloProtection);
     float safeDark = max(spatialDark - 0.02, 0.0);
     float mappedHaze = safeDark / (safeDark + 0.2);
-    // Lightroom-feel calibration (item 7) — these literals must match
+    // Meridian-feel calibration (item 7) — these literals must match
     // lib/render/calibration.dart's calDehazeTransmissionCoeff / Floor /
     // SatBoost / AddMix. CPU reads that file; this GPU shader has them
     // inline — tune both if you use the GPU path.

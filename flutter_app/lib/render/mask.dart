@@ -252,7 +252,7 @@ class MaskLayer {
 
   /// How strongly this mask's effect applies, 0..100 — scales the mask's
   /// own per-pixel alpha uniformly before compositing (see
-  /// [computeMaskAlpha]), the same "Opacity" a Lightroom/Photoshop mask
+  /// [computeMaskAlpha]), the same "Opacity" a Meridian/Photoshop mask
   /// layer has. 100 (the default) applies at full computed strength,
   /// matching every mask's behavior before this field existed.
   final double opacity;

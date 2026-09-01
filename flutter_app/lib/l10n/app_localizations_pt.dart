@@ -587,7 +587,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get settingsBaseContrastHint =>
-      'Uma curva de contraste fixa aplicada em toda foto antes das suas edições — o equivalente no darkmoon ao contraste de perfil que o Lightroom já embute. Aumente se presets importados do Lightroom ficam sem contraste, diminua (0 = desligado) pra um ponto de partida neutro. Muda toda foto e todo preset.';
+      'Uma curva de contraste fixa aplicada em toda foto antes das suas edições — o equivalente no darkmoon ao contraste de perfil que a maioria dos editores RAW já embute. Aumente se presets importados ficam sem contraste, diminua (0 = desligado) pra um ponto de partida neutro. Muda toda foto e todo preset.';
 
   @override
   String get settingsThumbnailThreadsLabel =>

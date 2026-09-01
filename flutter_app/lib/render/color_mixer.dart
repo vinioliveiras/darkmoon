@@ -18,7 +18,7 @@ class ChannelAdjust {
   bool get isIdentity => hue == 0 && saturation == 0 && luminance == 0;
 }
 
-/// The 8 HSL color bands Lightroom's Color Mixer / HSL panel exposes —
+/// The 8 HSL color bands Meridian's Color Mixer / HSL panel exposes —
 /// see [_hslRanges] for each band's actual hue center/width.
 class ColorMixerValues {
   const ColorMixerValues({
@@ -79,7 +79,7 @@ class ColorMixerValues {
 }
 
 /// One color band's hue center and half-influence width (degrees) — the
-/// exact values RapidRAW's `HSL_RANGES` uses in shader.wgsl. Notably not
+/// exact values Solstice's `HSL_RANGES` uses in shader.wgsl. Notably not
 /// evenly spaced (Red centers on 358°, not 0°; Green is the widest band
 /// at 90°) and not paired with a matching per-band width the way a naive
 /// "45° apart, 45° wide" model would assume.
@@ -102,7 +102,7 @@ const _hslRanges = [
 ];
 
 /// A band's raw (pre-normalization) influence on a pixel at [hue] —
-/// RapidRAW's `get_raw_hsl_influence`: a Gaussian falloff around [center],
+/// Solstice's `get_raw_hsl_influence`: a Gaussian falloff around [center],
 /// scaled by [width], rather than a hard cutoff — every band has *some*
 /// (if vanishingly small) influence on every hue, which is what makes the
 /// per-pixel normalization in [applyColorMixer] meaningful (all 8 raw
@@ -137,10 +137,10 @@ double _smoothstep(double edge0, double edge1, double value) {
 double _linearLuma(double r, double g, double b) =>
     0.2126 * r + 0.7152 * g + 0.0722 * b;
 
-/// Applies Lightroom-style selective HSL adjustments to packed RGB [img]
+/// Applies Meridian-style selective HSL adjustments to packed RGB [img]
 /// in place — a no-op when every channel is at its default.
 ///
-/// A faithful port of RapidRAW's `apply_hsl_panel` (shader.wgsl): works in
+/// A faithful port of Solstice's `apply_hsl_panel` (shader.wgsl): works in
 /// scene-linear light (not the gamma-encoded byte buffer directly), uses
 /// HSV rather than HSL (so brightness is tracked as luma and explicitly
 /// restored after the hue/saturation shift, rather than relying on HSL's
@@ -148,7 +148,7 @@ double _linearLuma(double r, double g, double b) =>
 /// weighs each of the 8 bands by a per-pixel-normalized Gaussian influence
 /// ([_rawHslInfluence]) instead of a linear cutoff. The whole adjustment is
 /// also gated by how saturated the source pixel already is
-/// ([_smoothstep]-based masks), same as RapidRAW: a Hue/Saturation shift on
+/// ([_smoothstep]-based masks), same as Solstice: a Hue/Saturation shift on
 /// a desaturated pixel has nothing to grab onto and is left alone.
 ///
 /// Luminance is included (re-enabled in editor_screen.dart's Mixer/HSL
@@ -156,7 +156,7 @@ double _linearLuma(double r, double g, double b) =>
 /// previously disabled after reports of it blowing out/pixelating pixels:
 /// that one relied on HSL lightness directly; this one tracks luma
 /// explicitly and restores it via a proportional rescale after the
-/// hue/saturation shift, same as RapidRAW.
+/// hue/saturation shift, same as Solstice.
 ///
 /// Designed to run via `compute()`: pure function over simple,
 /// isolate-transferable data (same as the rest of render.dart).
@@ -210,8 +210,8 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
       final hueSatInfluence = normalizedInfluence * saturationMask;
       final lumaInfluence = normalizedInfluence * luminanceWeight;
       // hueAmt/satAmt/lumAmt are precomputed per channel above: hue folds
-      // in `calMixerHueStrength` (was RapidRAW's 0.3 × the shader's ×2.0 =
-      // 0.6, raised toward the Lightroom Color Mixer — see calibration.dart),
+      // in `calMixerHueStrength` (was Solstice's 0.3 × the shader's ×2.0 =
+      // 0.6, raised toward the Meridian Color Mixer — see calibration.dart),
       // sat/lum are just /100.
       totalHueShift += hueAmt[c] * hueSatInfluence;
       totalSatMultiplier += satAmt[c] * hueSatInfluence;

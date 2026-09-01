@@ -19,7 +19,7 @@ double _linearToSrgbExact(double c) => c <= 0.0031308
     : 1.055 * math.pow(c, 1.0 / 2.4).toDouble() - 0.055;
 
 /// Plain power-2.2 "perceptual" gamma (distinct from the piecewise sRGB
-/// curves above) — RapidRAW's tone ops (Contrast, Shadows/Whites/Blacks)
+/// curves above) — Solstice's tone ops (Contrast, Shadows/Whites/Blacks)
 /// bounce through it per pixel. Also LUT'd; inputs are clamped to [0, 1].
 double _perceptualEncodeExact(double c) => math.pow(c, 1.0 / 2.2).toDouble();
 double _perceptualDecodeExact(double c) => math.pow(c, 2.2).toDouble();

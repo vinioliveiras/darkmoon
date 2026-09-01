@@ -3,7 +3,7 @@ import 'package:xml/xml.dart';
 import '../render/tone_curve.dart';
 import 'preset.dart';
 
-/// Reads/writes Lightroom-compatible `.xmp` Develop Preset files —
+/// Reads/writes Meridian-compatible `.xmp` Develop Preset files —
 /// specifically the `crs:` (Camera Raw Settings) attributes that have a
 /// real equivalent in this app's own adjustment set. Attributes this app
 /// doesn't support (lens corrections, crop, camera profile, camera
@@ -11,8 +11,8 @@ import 'preset.dart';
 /// and ignored on import, rather than erroring.
 ///
 /// This is *file-format* compatibility, not *rendering* compatibility —
-/// Lightroom's actual Camera Raw pipeline is proprietary, so a preset
-/// built here and opened in real Lightroom (or vice versa) will carry the
+/// Meridian's actual Camera Raw pipeline is proprietary, so a preset
+/// built here and opened in real Meridian (or vice versa) will carry the
 /// same slider values, but won't necessarily look pixel-identical, since
 /// the two apps process those values through different code entirely.
 const _crsNamespace = 'http://ns.adobe.com/camera-raw-settings/1.0/';
@@ -63,7 +63,7 @@ const _mixerChannels = [
   'Magenta',
 ];
 
-/// (our Color Grading range name, Lightroom's crs: range name).
+/// (our Color Grading range name, Meridian's crs: range name).
 const _gradeRanges = [
   ('Shadows', 'Shadow'),
   ('Midtones', 'Midtone'),
@@ -74,7 +74,7 @@ const _gradeRanges = [
 /// (our Color Grading range name, legacy Split Toning hue/saturation
 /// attribute names) — Split Toning predates the Color Grading wheels and
 /// only ever covered shadows/highlights (no midtone or global control).
-/// Many presets — especially ones ported forward from older Lightroom
+/// Many presets — especially ones ported forward from older Meridian
 /// versions — still carry these instead of (or alongside) the modern
 /// `ColorGrade*` attributes, so they're used as a fallback when the
 /// modern ones are absent, applied onto the very same Shadows/Highlights
@@ -87,17 +87,17 @@ const _splitToningFallback = [
 /// Just Ignore the next comment, its wrong!
 /// Our Exposure is scaled to +-3 stops of actual brightness change (see
 /// the `exposure / 100.0 * 3.0` factor in render.dart and render_gpu.dart)
-/// over a -100..100 slider; Lightroom's Exposure2012 is stops directly,
+/// over a -100..100 slider; Meridian's Exposure2012 is stops directly,
 /// -5..5. Converting through "stops" (rather than a direct 1:1 on the raw
 /// slider number) is what makes a round trip (export then re-import) land
 /// back on the same value, and is at least a defensible mapping for a real
-/// Lightroom preset's Exposure2012 too. This must stay in sync with the
+/// Meridian preset's Exposure2012 too. This must stay in sync with the
 /// `3.0` stops-at-max factor in the renderers, or an imported preset's
 /// Exposure2012 lands on the wrong slider value.
 const _exposureStopsAtMax = 100.0;
 
 /// `crs:` attributes that are structural/metadata rather than an actual
-/// develop setting — present on real Lightroom preset exports but with
+/// develop setting — present on real Meridian preset exports but with
 /// nothing for a user to see "not applied" about, so they're excluded
 /// from [Preset.unsupportedAttributes] even though we don't map them.
 const _structuralCrsAttributes = {
@@ -140,7 +140,7 @@ double _stopsToExposure(double stops) => stops / _exposureStopsAtMax * 100.0;
 String _presetIdFromName(String name) =>
     'preset_${DateTime.now().microsecondsSinceEpoch}_${name.hashCode}';
 
-/// The Camera Raw version string written into exported presets. Lightroom
+/// The Camera Raw version string written into exported presets. Meridian
 /// and Camera Raw treat a preset tagged with a plausibly-recent version as
 /// a first-class develop preset; an implausibly old one (the "1.0" this
 /// used to write) can make newer versions flag it as possibly-incompatible
@@ -148,10 +148,10 @@ String _presetIdFromName(String name) =>
 const _crsVersion = '16.5';
 
 /// A `crs:UUID` derived deterministically from the preset's own id, so
-/// exporting the same preset twice yields the same UUID and Lightroom
+/// exporting the same preset twice yields the same UUID and Meridian
 /// recognises the re-import as the *same* preset (updating it in place)
 /// rather than making a duplicate. FNV-1a over the seed, expanded to the
-/// 32 uppercase hex digits Lightroom writes.
+/// 32 uppercase hex digits Meridian writes.
 String _deterministicUuid(String seed) {
   final bytes = <int>[];
   var hash = 0x811c9dc5;
@@ -170,7 +170,7 @@ String _deterministicUuid(String seed) {
       .substring(0, 32);
 }
 
-/// Builds a Lightroom-compatible `.xmp` Develop Preset document for
+/// Builds a Meridian-compatible `.xmp` Develop Preset document for
 /// [preset].
 String xmpFromPreset(Preset preset) {
   final hasCurve =
@@ -203,7 +203,7 @@ String xmpFromPreset(Preset preset) {
               'crs:Cluster': '',
               'crs:UUID': _deterministicUuid(preset.id),
               // The "this preset supports ..." capability flags newer
-              // Lightroom / Camera Raw expect on a develop preset. Without
+              // Meridian / Camera Raw expect on a develop preset. Without
               // them the preset still imports but can show a
               // "may not be compatible" caution; with them it's treated
               // as a normal, fully-supported preset. `SupportsAmount` is
@@ -248,7 +248,7 @@ String xmpFromPreset(Preset preset) {
             nest: () {
               _writeLangAlt(builder, 'crs:Name', preset.name);
               // Files every darkmoon preset under one named group in the
-              // Lightroom preset browser instead of scattering them loose
+              // Meridian preset browser instead of scattering them loose
               // in "User Presets".
               _writeLangAlt(builder, 'crs:Group', 'darkmoon');
               _writeCurve(builder, 'crs:ToneCurvePV2012', preset.curves.tone);
@@ -271,7 +271,7 @@ String xmpFromPreset(Preset preset) {
   );
   final body = builder.buildDocument().toXmlString(pretty: true, indent: '  ');
   // The XMP packet wrapper Adobe writes around every `.xmp` it exports.
-  // Lightroom reads presets with or without it, but Camera Raw and a
+  // Meridian reads presets with or without it, but Camera Raw and a
   // number of third-party tools (Capture One, RawTherapee, ON1) expect a
   // well-formed packet, so wrapping it is the safer default for "import
   // anywhere".
@@ -281,7 +281,7 @@ String xmpFromPreset(Preset preset) {
 }
 
 /// Writes a `<tag><rdf:Alt><rdf:li xml:lang="x-default">value</rdf:li>` —
-/// the language-alternative structure Lightroom uses for a preset's Name
+/// the language-alternative structure Meridian uses for a preset's Name
 /// and Group.
 void _writeLangAlt(XmlBuilder builder, String tag, String value) {
   builder.element(
@@ -322,7 +322,7 @@ void _writeCurve(XmlBuilder builder, String tag, List<CurvePoint> points) {
   );
 }
 
-/// Parses a Lightroom `.xmp` Develop Preset. [fallbackName] is used when
+/// Parses a Meridian `.xmp` Develop Preset. [fallbackName] is used when
 /// the file has no `crs:Name`. Returns null if [xmlSource] isn't a
 /// recognizable Camera Raw settings document.
 Preset? presetFromXmp(String xmlSource, {required String fallbackName}) {
@@ -348,7 +348,7 @@ Preset? presetFromXmp(String xmlSource, {required String fallbackName}) {
   // fallback of 0 silently overwrote it with a wildly wrong value —
   // e.g. crushing white balance to 0K — the moment `_applyPreset` merged
   // `values` over `_defaultParamValues()`. Omitting the key instead lets
-  // that merge fall through to the real default, exactly like Lightroom
+  // that merge fall through to the real default, exactly like Meridian
   // leaves untouched settings alone.
   double? attr(String name) {
     final raw = description.attributes
@@ -419,7 +419,7 @@ Preset? presetFromXmp(String xmlSource, {required String fallbackName}) {
 /// Every `crs:` attribute present on [description] that this app has no
 /// mapping for and isn't purely structural/metadata — e.g. sharpening,
 /// lens corrections, crop, or camera profile settings from a real
-/// Lightroom export. Surfaced to the user so they know a preset didn't
+/// Meridian export. Surfaced to the user so they know a preset didn't
 /// carry over 1:1.
 List<String> _unsupportedAttributes(XmlElement description) {
   final supported = <String>{

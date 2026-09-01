@@ -1,6 +1,6 @@
 import 'dart:typed_data';
 
-/// Rec.709 luma weights — matches how Lightroom/ACR (and virtually every
+/// Rec.709 luma weights — matches how Meridian/ACR (and virtually every
 /// display pipeline) weighs channels when deriving luminance from
 /// gamma-encoded RGB, instead of the unweighted `(r+g+b)/3` average used
 /// throughout this file's older call sites. Green carries far more

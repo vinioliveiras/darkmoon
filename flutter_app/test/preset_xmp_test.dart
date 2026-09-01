@@ -61,7 +61,7 @@ void main() {
     expect(decoded.curves.red.length, original.curves.red.length);
   });
 
-  test('export carries the structural attributes Lightroom expects', () {
+  test('export carries the structural attributes Meridian expects', () {
     const preset = Preset(id: 'preset_abc', name: 'Warm', values: {'Contrast': 10});
     final xml = xmpFromPreset(preset);
 
@@ -74,7 +74,7 @@ void main() {
     expect(decoded, isNotNull);
     expect(decoded!.values['Contrast'], 10);
 
-    // Capability flags + identity so newer Lightroom treats it as a
+    // Capability flags + identity so newer Meridian treats it as a
     // fully-supported develop preset rather than flagging it.
     for (final attr in const [
       'crs:PresetType="Normal"',
@@ -116,7 +116,7 @@ void main() {
     expect(presetFromXmp('<html></html>', fallbackName: 'x'), isNull);
   });
 
-  test('attributes absent from a real (partial) Lightroom preset are omitted, '
+  test('attributes absent from a real (partial) Meridian preset are omitted, '
       'not defaulted to 0', () {
     // A real preset that only touches Contrast/Clarity — no Temperature,
     // no Exposure — mirroring how "Update to Preset" only writes the
@@ -160,7 +160,7 @@ void main() {
   });
 
   test(
-    'high-impact Lightroom attrs map onto sharpen, vignette and global grade',
+    'high-impact Meridian attrs map onto sharpen, vignette and global grade',
     () {
       const xml = '''
 <x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="Adobe XMP">

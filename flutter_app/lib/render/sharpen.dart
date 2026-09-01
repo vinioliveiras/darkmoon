@@ -4,14 +4,14 @@ import 'blur.dart';
 import 'calibration.dart';
 import 'luminance.dart';
 
-/// Mirrors Lightroom Classic's Detail panel Sharpening section — same four
+/// Mirrors Meridian Classic's Detail panel Sharpening section — same four
 /// sliders, same rough intent for each, as a classic unsharp-mask filter
-/// rather than Lightroom's proprietary deconvolution-based sharpener. See
+/// rather than Meridian's proprietary deconvolution-based sharpener. See
 /// [applySharpen] for how each one maps onto the actual math.
 class SharpenParams {
   const SharpenParams({
     // Matches editor_screen.dart's 'SharpenAmount' _SliderSpec default (40,
-    // Lightroom's own RAW-import default) — kept in sync so the Before/After
+    // Meridian's own RAW-import default) — kept in sync so the Before/After
     // "neutral params" preview (_loadNeutralPreview) shows the same
     // baseline sharpen as a freshly-opened, untouched photo.
     this.amount = 40,

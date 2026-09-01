@@ -179,7 +179,7 @@ Future<RenderResult> renderJobToJpeg(
   );
 }
 
-/// Lens distortion correction runs BEFORE [applyCropTransform] (Lightroom
+/// Lens distortion correction runs BEFORE [applyCropTransform] (Meridian
 /// applies profile geometric correction before the user's own manual
 /// Transform/Crop, so crop coordinates are defined against the corrected
 /// image, not the raw distorted one) — a no-op (returns [job.source]'s
@@ -241,7 +241,7 @@ GeometryResult applyResolvedLensChromaticAberration(
 /// (crop doesn't change the vignetting math — it's still measured from
 /// the *original* optical center, which [applyLensVignetteCorrection]
 /// recomputes as the buffer's own current center; a crop that's roughly
-/// centered is close enough, and Lightroom itself has the same
+/// centered is close enough, and Meridian itself has the same
 /// limitation for an off-center crop). Runs before the main tone/color
 /// pipeline and before mask compositing — see `RenderJob.lensCorrection`'s
 /// doc comment for why this lives here rather than in `render.dart`'s

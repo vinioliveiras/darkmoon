@@ -3,11 +3,11 @@ import 'dart:ui' as ui;
 import 'gpu_pass.dart';
 
 /// GPU port of `dehaze.dart`'s `applyDehaze` — see that function's own doc
-/// comment for the algorithm (a port of RapidRAW's `apply_dehaze`). Unlike
+/// comment for the algorithm (a port of Solstice's `apply_dehaze`). Unlike
 /// the previous atmospheric-light-estimation-based version, this needs no
-/// CPU readback at all: the atmospheric light RapidRAW uses is a fixed
+/// CPU readback at all: the atmospheric light Solstice uses is a fixed
 /// constant, so the whole effect is one wide Gaussian blur pass (the
-/// "regional" dark-channel source, matching RapidRAW's own
+/// "regional" dark-channel source, matching Solstice's own
 /// structure_blur_view) plus one per-pixel apply pass, both fully on GPU.
 ///
 /// **Must run on the main isolate** — see `render_gpu.dart`'s doc comment.

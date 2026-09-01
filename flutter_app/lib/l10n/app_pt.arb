@@ -189,7 +189,7 @@
   "settingsDynamicFullPreviewHint": "Um instante depois que a edição assenta, re-renderiza na resolução nativa do sensor pra imagem ampliada ficar nítida. As fontes decodificadas ficam em cache no disco.",
   "settingsFullQualityScaleLabel": "Resolução do preview",
   "settingsBaseContrastLabel": "Perfil darkmoon Color",
-  "settingsBaseContrastHint": "Uma curva de contraste fixa aplicada em toda foto antes das suas edições — o equivalente no darkmoon ao contraste de perfil que o Lightroom já embute. Aumente se presets importados do Lightroom ficam sem contraste, diminua (0 = desligado) pra um ponto de partida neutro. Muda toda foto e todo preset.",
+  "settingsBaseContrastHint": "Uma curva de contraste fixa aplicada em toda foto antes das suas edições — o equivalente no darkmoon ao contraste de perfil que a maioria dos editores RAW já embute. Aumente se presets importados ficam sem contraste, diminua (0 = desligado) pra um ponto de partida neutro. Muda toda foto e todo preset.",
   "settingsThumbnailThreadsLabel": "Threads de carregamento de miniaturas",
   "settingsCustomDenoiseModelLabel": "Modelo de denoise customizado",
   "settingsCustomDenoiseModelHint": "Substitui o modelo de Denoise on-device na aba Enhance do diálogo AI Denoise. Precisa ser um substituto direto: RGB 3 canais, mesma resolução de entrada/saída, nomes de tensor \"input\"/\"output\", valores normalizados [0,1] — um modelo que não seguir isso vai dar erro ou produzir um resultado visivelmente errado, não uma falha limpa.",

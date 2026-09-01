@@ -11,7 +11,7 @@ import 'luminance.dart';
 ///
 /// The adjustment is intentionally luminance-only: Texture/Clarity should not
 /// independently sharpen R, G and B channels, because that boosts chroma noise
-/// right alongside real fine detail. This mirrors Lightroom's behavior more
+/// right alongside real fine detail. This mirrors Meridian's behavior more
 /// closely while preserving color stability in noisy shadows.
 void applyLocalContrast(
   Float32List img,

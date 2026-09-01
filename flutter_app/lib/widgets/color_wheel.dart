@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../render/hsl.dart';
 
-/// A Lightroom-style color-grading wheel: drag (or click) anywhere to set
+/// A Meridian-style color-grading wheel: drag (or click) anywhere to set
 /// hue (angle) and saturation (distance from center) at once; double-tap
 /// snaps back to dead center (no tint), matching the sliders'
 /// double-tap-to-reset convention.

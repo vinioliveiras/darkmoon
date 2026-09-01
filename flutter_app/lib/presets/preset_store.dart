@@ -113,7 +113,7 @@ Future<Preset?> importPresetFromFile(String srcPath) async {
   }
 }
 
-/// Unpacks a Lightroom preset `.zip` — every `.xmp` entry is written into
+/// Unpacks a Meridian preset `.zip` — every `.xmp` entry is written into
 /// the presets folder (byte-for-byte) and parsed.
 Future<List<Preset>> importPresetsFromZipFile(String zipPath) async {
   final imported = <Preset>[];

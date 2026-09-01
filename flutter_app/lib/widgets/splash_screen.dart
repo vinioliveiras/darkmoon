@@ -4,19 +4,19 @@ import '../l10n/app_localizations.dart';
 import '../theme.dart';
 import 'about_dialog.dart' show darkmoonAppVersion;
 
-/// Card size, matching real Lightroom's splash proportions (a small
+/// Card size, matching real Meridian's splash proportions (a small
 /// floating panel, not a full-screen takeover) — see the reference
 /// screenshot this was built from.
 const double _cardWidth = 720;
 const double _cardHeight = 420;
 const double _photoWidth = 340;
 
-/// Lightroom-style launch screen — a small dark card (same palette as the
+/// Meridian-style launch screen — a small dark card (same palette as the
 /// rest of Darkmoon's dialogs, fitting for an app named "Darkmoon" rather
-/// than copying Lightroom's white one), split into a left text/branding
+/// than copying Meridian's white one), split into a left text/branding
 /// column and a right featured photo. The native window itself starts
 /// small and centered (see windows/runner/main.cpp) so the real desktop
-/// is visible around it, the same way Lightroom's own launch screen
+/// is visible around it, the same way Meridian's own launch screen
 /// works — this widget only fills that small window, not the whole
 /// screen. Shown for a fixed minimum duration (see `main.dart`'s
 /// `_splashMinDuration`) while [EditorScreen] loads underneath (settings,

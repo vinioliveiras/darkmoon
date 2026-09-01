@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../render/tone_curve.dart';
 import '../theme.dart';
 
-/// Lightroom-style Tone Curve graph: drag a point to reshape the curve,
+/// Meridian-style Tone Curve graph: drag a point to reshape the curve,
 /// (left-)tap empty space to add a point, right-click (or long-press, for
 /// touch/trackpad) a point to remove it — endpoints excepted, since they
 /// anchor the curve's black/white ends.

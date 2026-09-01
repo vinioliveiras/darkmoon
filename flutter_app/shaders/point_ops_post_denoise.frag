@@ -19,7 +19,7 @@ uniform float uContrastGamma; // pow(2, contrast/100*1.25), 1.0 = no-op
 
 // The fixed "profile" contrast curve every photo gets before the tone
 // sliders — darkmoon's stand-in for the S-curve the Adobe Color profile
-// bakes into Lightroom's zero-edit render (render.dart's _applyBaseContrast
+// bakes into Meridian's zero-edit render (render.dart's _applyBaseContrast
 // / calBaseContrast). Same endpoint-preserving S as uContrastGamma, so
 // 1.0 = no-op. Applied first thing in main(), matching the CPU order
 // (top of applyPostDenoisePointOps).
@@ -65,7 +65,7 @@ uniform sampler2D uTexture;
 // each channel built by tone_curve.dart's buildToneCurveLut, 0..1 in and
 // out (matches this shader's working space directly).
 uniform sampler2D uLut;
-// Tonal blur (sigma 3.5) used by RapidRAW to preserve local detail while
+// Tonal blur (sigma 3.5) used by Solstice to preserve local detail while
 // lifting shadows/blacks. It is bound to the source when the controls are
 // neutral so the sampler is always valid without a branch in Dart.
 uniform sampler2D uTonalBlur;
@@ -86,7 +86,7 @@ float linearToSrgb(float value) {
 
 // Skia's runtime-effect SkSL compiler rejects `const T arr[n] = T[](...)`
 // (array initializers) — matches color_mixer.dart's _hslRanges via an
-// if-chain instead of an array literal. Exact values RapidRAW's own
+// if-chain instead of an array literal. Exact values Solstice's own
 // HSL_RANGES uses in shader.wgsl (not evenly spaced, not a fixed width).
 float hslRangeCenter(int band) {
   if (band == 0) return 358.0;
@@ -110,7 +110,7 @@ float hslRangeWidth(int band) {
   return 50.0; // band == 7
 }
 
-// Mirrors color_mixer.dart's _rawHslInfluence exactly (RapidRAW's
+// Mirrors color_mixer.dart's _rawHslInfluence exactly (Solstice's
 // get_raw_hsl_influence): a Gaussian falloff around center rather than a
 // hard cutoff.
 float rawHslInfluence(float hue, float center, float width) {
@@ -200,7 +200,7 @@ vec3 rapidBrightness(vec3 color, float amount) {
   );
 }
 
-// Lightroom-feel calibration (item 7) — these literals must match
+// Meridian-feel calibration (item 7) — these literals must match
 // lib/render/calibration.dart's calWhitesMaskLow / calWhitesLevelCoeff /
 // calBlacksAmountScale / calBlacksFalloff. The CPU path reads them from
 // that file; this shader (GPU render, opt-in) has them inline, so if you
@@ -286,7 +286,7 @@ void main() {
   c.g = linearToSrgb(pow(contrastCurve(pow(srgbToLinear(c.g), 1.0 / 2.2), uBaseContrastGamma), 2.2));
   c.b = linearToSrgb(pow(contrastCurve(pow(srgbToLinear(c.b), 1.0 / 2.2), uBaseContrastGamma), 2.2));
 
-  // RapidRAW order: filmic brightness, whites, shadows/blacks, then contrast.
+  // Solstice order: filmic brightness, whites, shadows/blacks, then contrast.
   c = rapidBrightness(c, uBrightness255);
   c = rapidWhites(c, uWhitesAdd);
 
@@ -337,7 +337,7 @@ void main() {
   c.b = texture(uLut, vec2(c.b, 0.5)).a;
 
   // Color Mixer — color_mixer.dart's applyColorMixer, a faithful port of
-  // RapidRAW's apply_hsl_panel: HSV (not HSL) in scene-linear light,
+  // Solstice's apply_hsl_panel: HSV (not HSL) in scene-linear light,
   // Gaussian-weighted per-band influence normalized per pixel, and the
   // whole effect gated by how saturated the source pixel already is.
   // Luminance (uMixer[c*3+2] for each band) included — a different code

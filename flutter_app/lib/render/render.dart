@@ -47,7 +47,7 @@ Uint8List renderRgb(
 /// Renders [sourceRgb] with [globalParams] as the base layer, then
 /// composites each enabled mask in [masks] on top — each mask re-applies
 /// its own [MaskLayer.values] over the buffer as it stands *after* the
-/// previous layer (matching Lightroom/Photomator: masks stack, they
+/// previous layer (matching Meridian/Photomator: masks stack, they
 /// don't each start over from the untouched source), blended in using
 /// that mask's own per-pixel alpha.
 ///
@@ -262,7 +262,7 @@ void applyLocalAdjustmentSteps(
   // this pass never got a chance to remove. Doing it after tone shaping
   // (as an earlier version of this pipeline did) let a strong Shadows lift
   // amplify shadow-region noise right back up, undoing much of the
-  // smoothing. Matches Lightroom's own ordering: its noise reduction is
+  // smoothing. Matches Meridian's own ordering: its noise reduction is
   // one of the first things applied to the raw sensor data, well before
   // Basic panel tone adjustments.
   applyBaselineChromaSmoothing(buffer, width, height, rowOffset: rowOffset);
@@ -336,7 +336,7 @@ void applyPostDenoisePointOps(
   mark('shadowsBlacks');
   _applyRapidContrast(buffer, params.contrast);
   mark('contrast');
-  // Lightroom's parametric Tone Curve runs into the same result as the
+  // Meridian's parametric Tone Curve runs into the same result as the
   // point curve; apply it first, then the point curve on top.
   if (!params.parametricCurve.isIdentity) {
     applyToneCurve(buffer, parametricCurvePoints(params.parametricCurve));
@@ -379,7 +379,7 @@ void applyPostDenoisePointOps(
 ///   camera's raw as-shot decode (before this pipeline moved White
 ///   Balance earlier), a photo needing a large as-shot-to-target WB move
 ///   left that estimate badly wrong, compounding with Vibrance/Saturation
-///   into a strong magenta cast that never showed up in Lightroom (its
+///   into a strong magenta cast that never showed up in Meridian (its
 ///   own White Balance always runs before Dehaze).
 /// - [applyGlobalPointOps] — the post-denoise point ops (brightness/
 ///   contrast/highlights/shadows/whites/blacks, tone + colour curves,
@@ -399,13 +399,13 @@ void applyGlobalAdjustmentSteps(
 }
 
 void applyColorProfileStage(Float32List buffer, RenderParams params) {
-  // The "profile" contrast the Adobe Color base curve gives Lightroom for
+  // The "profile" contrast the Adobe Color base curve gives Meridian for
   // free — applied first, so every tone slider and curve below works on
-  // top of it, matching Lightroom's order (profile curve -> Basic panel).
+  // top of it, matching Meridian's order (profile curve -> Basic panel).
   _applyBaseContrast(buffer, params.baseContrast);
   // ...then the per-hue "darkmoon Color" correction — the other half of
   // what an Adobe profile bakes in (its HueSatMap). Still before any user
-  // adjustment, matching Lightroom's profile-then-Basic order.
+  // adjustment, matching Meridian's profile-then-Basic order.
   final profile = params.colorProfile;
   if (profile != null) {
     applyColorProfile(buffer, profile, params.colorProfileStrength);
@@ -459,7 +459,7 @@ void applyGlobalPointOps(
   // the bug that made Saturation look absurdly (impossibly) expensive
   // despite having no pow/exp and no allocations in its per-pixel loop.
   sw?.reset();
-  // Saturation before Vibrance, matching RapidRAW's apply_creative_color:
+  // Saturation before Vibrance, matching Solstice's apply_creative_color:
   // Vibrance's saturation/hue masks read the already-saturated color.
   _applySaturation(buffer, pixelCount, params.saturation);
   mark('saturation');
@@ -474,7 +474,7 @@ void applyGlobalPointOps(
     fullHeight: fullHeight,
   );
   mark('vignette');
-  // Grain is the last thing RapidRAW's shader adds, after curves and
+  // Grain is the last thing Solstice's shader adds, after curves and
   // vignette — a texture layered on the finished image, not something the
   // later stages should react to.
   applyGrain(
@@ -548,7 +548,7 @@ void _applyExposure(Float32List img, double exposure) {
 /// lean on several Basic sliders at once (e.g. a real preset combining
 /// Contrast=-40, Shadows=+100, Whites=+58). Replaced with an
 /// endpoint-preserving S-curve (0 always maps to 0, 255 always maps to
-/// 255, regardless of strength) — same curve shape used for RapidRAW's
+/// 255, regardless of strength) — same curve shape used for Solstice's
 /// (a sibling project) shader contrast: gamma > 1 steepens the curve
 /// (more contrast), gamma < 1 flattens it (less contrast) while the true
 /// black/white points never move.
@@ -812,16 +812,16 @@ void _applyRapidHighlights(Float32List img, int pixelCount, double highlights) {
 }
 
 /// How strongly a pixel ([r], [g], [b], each 0..1) reads as a skin tone
-/// (0..1) — Lightroom's Vibrance (unlike a plain Saturation slider) damps
+/// (0..1) — Meridian's Vibrance (unlike a plain Saturation slider) damps
 /// its own effect on skin-tone hues so faces don't oversaturate. Centered
-/// on the same 25° hue RapidRAW's own Color Mixer/HSL panel centers its
+/// on the same 25° hue Solstice's own Color Mixer/HSL panel centers its
 /// Orange band on (see `_hslRanges` in color_mixer.dart), with a narrower
 /// half-width since skin tones occupy a tighter hue range than a full
 /// Orange mixer band.
 ///
-/// **Deliberately diverges from RapidRAW's `apply_creative_color` here**
+/// **Deliberately diverges from Solstice's `apply_creative_color` here**
 /// (2026-08-31 — see `project_darkmoon_color_profile.md`'s "8th round" for
-/// the full investigation). RapidRAW's technique — mix each channel toward
+/// the full investigation). Solstice's technique — mix each channel toward
 /// scene-linear luminance by a factor, independently gamma-encoding R/G/B
 /// back afterward — is exactly hue-preserving *when hue is measured on
 /// those same linear values*, but that's not the hue a viewer perceives:
@@ -881,7 +881,7 @@ double _smoothstep(double edge0, double edge1, double value) {
 
 /// Flat saturation gain — see [_applyVibrance]'s doc comment for why this
 /// is a direct HSV saturation multiply (hue/value held fixed by
-/// construction) rather than RapidRAW's linear-light luminance mix. Runs
+/// construction) rather than Solstice's linear-light luminance mix. Runs
 /// before Vibrance (see the call order in [applyGlobalAdjustmentSteps])
 /// so Vibrance's masks read the already-saturated color, not the original.
 void _applySaturation(Float32List img, int pixelCount, double amount) {

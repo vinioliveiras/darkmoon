@@ -2,7 +2,7 @@ import '../render/tone_curve.dart';
 
 /// A named, reusable bundle of develop settings — the same shape as one
 /// photo's edits (slider values + curves), just not tied to a specific
-/// file. Doesn't include masks: real Lightroom presets don't carry local
+/// file. Doesn't include masks: real Meridian presets don't carry local
 /// adjustments either, since a mask's geometry is inherently tied to one
 /// photo's composition.
 class Preset {
@@ -28,7 +28,7 @@ class Preset {
   /// parsed preset has been placed in the folder.
   final String? sourcePath;
 
-  /// Names of settings found in an imported file (e.g. a real Lightroom
+  /// Names of settings found in an imported file (e.g. a real Meridian
   /// `.xmp`) that this app has no equivalent for — sharpening, lens
   /// corrections, camera profile, masks, etc. Empty for presets created
   /// in-app, since those can only ever contain settings we support.

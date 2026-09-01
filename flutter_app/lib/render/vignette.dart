@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'calibration.dart';
 
-/// Mirrors Lightroom's Effects panel Post-Crop Vignette — [amount] and the
+/// Mirrors Meridian's Effects panel Post-Crop Vignette — [amount] and the
 /// falloff shape (via [midpoint]/[feather]). Style (Highlight/Color
 /// Priority/Paint Overlay) and Highlight Contrast aren't modeled — they
 /// tweak how the darkening blends with highlights, a subtlety this simple

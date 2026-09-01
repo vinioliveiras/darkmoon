@@ -34,7 +34,7 @@ class FlutterWindow : public Win32Window {
   // Lets the Dart side ask for the window to be maximized once the launch
   // splash screen (see widgets/splash_screen.dart) has run its course —
   // the window starts small and centered (see main.cpp) so the real
-  // desktop is visible around the splash card, matching Lightroom's own
+  // desktop is visible around the splash card, matching Meridian's own
   // splash, then grows to maximized only once main.dart's splash timer
   // fires. See "darkmoon/window"'s "maximize" method.
   std::unique_ptr<flutter::MethodChannel<flutter::EncodableValue>>

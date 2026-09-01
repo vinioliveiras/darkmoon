@@ -6,7 +6,7 @@ import '../theme.dart';
 import 'slider_row.dart';
 import 'styled_dropdown.dart';
 
-/// Lightroom's Lens Corrections panel's Profile tab — matched-profile
+/// Meridian's Lens Corrections panel's Profile tab — matched-profile
 /// display, a manual override picker, and the two Amount sliders. The
 /// enable on/off toggle deliberately lives on this section's own
 /// `_SectionHeader` switch in editor_screen.dart (wired straight to

@@ -1,4 +1,4 @@
-// A shared CPU-vs-GPU comparison harness — item 7 of the RapidRAW-parity
+// A shared CPU-vs-GPU comparison harness — item 7 of the Solstice-parity
 // plan (translated from the original PT-BR: "Build a comparison harness.
 // Generate a fixed synthetic image. Apply the same parameters in both
 // projects. Export RGB buffers. Compute: mean error; max error; number of
@@ -9,15 +9,15 @@
 // agree with *each other* pixel-for-pixel (which is what the original
 // plan's "tolerance of 1 for rounding" is really about — GPU 8-bit
 // intermediate targets vs. CPU's Float32 buffer round differently). It
-// can't run RapidRAW's own
+// can't run Solstice's own
 // Rust/wgpu pipeline directly — that's a separate Tauri app, not something
 // this Dart test process can invoke — so it isn't a substitute for the
 // per-adjustment reference-Python-port checks already in each unit test
 // file (rapid_tonal_adjustments_test.dart, color_mixer_test.dart,
 // dehaze_test.dart, tone_curve_test.dart, hsl_test.dart), which were each
-// cross-checked against a transcription of the relevant RapidRAW shader
-// function. Extending this to a true three-way (CPU/GPU/RapidRAW)
-// comparison would need a small CLI dump mode added to RapidRAW itself
+// cross-checked against a transcription of the relevant Solstice shader
+// function. Extending this to a true three-way (CPU/GPU/Solstice)
+// comparison would need a small CLI dump mode added to Solstice itself
 // (decode a fixed test image, apply the same AllAdjustments, write the
 // raw RGB buffer to a file) — a change to that repository, not this one.
 import 'dart:typed_data';
@@ -28,7 +28,7 @@ import 'package:darkmoon/render/render_params.dart';
 
 /// One fixed, deterministic test image (no randomness, so results are
 /// reproducible run to run) built to exercise every adjustment ported from
-/// RapidRAW in this session, not just tonal ramps:
+/// Solstice in this session, not just tonal ramps:
 ///
 /// - A per-channel gradient (rows 0..1/3 of height) for Exposure/
 ///   Brightness/Contrast/tone-curve/Highlights-Shadows-Whites-Blacks —

@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'geometry.dart';
 
-/// Lightroom's Crop Overlay + Transform panels, bundled together since
+/// Meridian's Crop Overlay + Transform panels, bundled together since
 /// Transform's perspective correction and Crop's rectangle both warp/
 /// select from the same working canvas and are naturally applied as one
 /// combined geometric resample before any color/tone adjustment runs.
@@ -35,7 +35,7 @@ class CropTransformParams {
   final double horizontal;
 
   /// Differential strength between the vertical/horizontal correction,
-  /// -100..100 — Lightroom's Aspect slider.
+  /// -100..100 — Meridian's Aspect slider.
   final double aspect;
 
   /// Post-correction zoom, 100..150% — crops in to hide the empty
@@ -182,7 +182,7 @@ GeometryResult _rotateQuarterTurns(
 /// recoloring pixels in place, so it runs once before the color/tone
 /// pipeline (`render.dart`) rather than as one of its steps: every
 /// downstream stage, including mask alpha (`mask.dart`), then works in
-/// this already-cropped/corrected frame, matching how Lightroom's local
+/// this already-cropped/corrected frame, matching how Meridian's local
 /// adjustments are defined against the post-crop image.
 ///
 /// Returns [sourceRgb] unchanged (wrapped, no copy) when [params] is
@@ -231,7 +231,7 @@ GeometryResult applyCropTransform(
   // frame center. `vertical` corrects the top/bottom edges (as if
   // shot from below/above), `horizontal` the left/right edges (as if
   // shot from the side) — `aspect` differentially scales how strongly
-  // each applies, matching Lightroom's own three-slider relationship.
+  // each applies, matching Meridian's own three-slider relationship.
   final vFactor = (params.vertical / 100.0) * 0.5 * (1 + params.aspect / 200);
   final hFactor = (params.horizontal / 100.0) * 0.5 * (1 - params.aspect / 200);
   final dstCorners = [

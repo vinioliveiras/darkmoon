@@ -4,17 +4,17 @@ import 'blur.dart';
 import 'luminance.dart';
 
 /// A small, always-applied chroma smoothing pass — mirrors Adobe Camera
-/// Raw's own default Color Noise Reduction (~25), which real Lightroom
+/// Raw's own default Color Noise Reduction (~25), which real Meridian
 /// applies to every RAW file whether or not the active preset mentions
 /// denoise at all, since it's baked into ACR's default develop settings
 /// rather than written into presets/XMP. Without an equivalent baseline
 /// here, the same RAW looks chromatically noisier in Darkmoon than in
-/// Lightroom even before any user adjustment or AI Denoise level is
+/// Meridian even before any user adjustment or AI Denoise level is
 /// applied.
 ///
 /// Deliberately not exposed as a slider — same reasoning as the AI Denoise
 /// levels being pre-tuned rather than manually dialed in: this is meant to
-/// match what Lightroom does invisibly, not add another control. Uses the
+/// match what Meridian does invisibly, not add another control. Uses the
 /// same locally-calibrated noise-floor estimate as [applyAiDenoise] (via
 /// `adaptiveDenoiseChannel`) rather than a flat blend, so it stays this
 /// gentle without visibly softening real color detail/edges.

@@ -48,10 +48,10 @@ void main() {
     expect(_toUint8(buffer), source);
   });
 
-  // The algorithm is RapidRAW's apply_dehaze (fixed atmospheric light,
+  // The algorithm is Solstice's apply_dehaze (fixed atmospheric light,
   // per-pixel + sigma-40-regional dark channel with halo protection,
   // shadow lift, saturation boost), but the transmission/saturation
-  // constants were recalibrated toward Lightroom's feel (item 7 — see
+  // constants were recalibrated toward Meridian's feel (item 7 — see
   // dehaze.dart's `_dehaze*` constants), so exact reference values from
   // the original model no longer apply. These lock direction instead.
 

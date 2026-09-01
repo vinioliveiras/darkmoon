@@ -30,10 +30,10 @@ void main() {
       }
     });
 
-    // Expected values below were computed from RapidRAW's apply_curve
+    // Expected values below were computed from Solstice's apply_curve
     // (the monotone cubic Hermite spline in shader.wgsl) via a reference
     // Python port, independent of tone_curve.dart's implementation.
-    test('an S-curve matches RapidRAW\'s monotone Hermite spline', () {
+    test('an S-curve matches Solstice\'s monotone Hermite spline', () {
       const sCurve = [
         CurvePoint(0, 0),
         CurvePoint(0.25, 0.15),

@@ -58,7 +58,7 @@ void main() {
 /// flutter_window.cpp — the window starts small, centered, and frameless
 /// (see windows/runner/main.cpp and win32_window.cpp's `SetFrameless`) so
 /// the real desktop is visible around the splash card with no mismatched
-/// native title bar/close button wrapped around it, like Lightroom's own
+/// native title bar/close button wrapped around it, like Meridian's own
 /// launch screen. This is what restores the normal window frame and grows
 /// it to maximized once the splash goes away. Windows-only: the window
 /// choreography this exists for is specific to how windows/runner/main.cpp

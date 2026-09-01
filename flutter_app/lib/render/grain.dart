@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 import 'calibration.dart';
 
-/// Film grain for the Effects panel — a faithful port of RapidRAW's
+/// Film grain for the Effects panel — a faithful port of Solstice's
 /// `apply_grain` (shader.wgsl): value-noise (`gradient_noise`) additive
 /// grain, luminance-masked so it fades out of deep shadows and bright
 /// highlights, with a "roughness" control blending a finer and a coarser
@@ -24,7 +24,7 @@ class GrainParams {
 
   /// Builds params from the editor's flat `{sliderName: value}` map —
   /// keyed `'Grain' + <Amount|Size|Roughness>`, same convention as every
-  /// other slider. Matches Lightroom's `crs:GrainAmount` / `GrainSize` /
+  /// other slider. Matches Meridian's `crs:GrainAmount` / `GrainSize` /
   /// `GrainFrequency` (all 0..100).
   factory GrainParams.fromValues(Map<String, double> values) {
     const defaults = GrainParams();
@@ -167,7 +167,7 @@ void applyGrain(
     return;
   }
   final frameHeight = fullHeight ?? height;
-  // RapidRAW: amount = grain_amount * 0.5 (its buffer is 0..1); ours is
+  // Solstice: amount = grain_amount * 0.5 (its buffer is 0..1); ours is
   // 0..255, so the * 255 folds the space conversion in.
   final amount =
       (params.amount / 100.0) * 0.5 * calGrainStrength * 255.0;

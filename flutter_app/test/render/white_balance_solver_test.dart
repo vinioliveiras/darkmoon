@@ -95,7 +95,7 @@ void main() {
 
   group('wbMultipliersToKelvinTint', () {
     // Fujifilm X100VI cam_xyz (from tool/wb_dump.dart). The estimate must
-    // land near Lightroom's own "As Shot" readout — checked against four
+    // land near Meridian's own "As Shot" readout — checked against four
     // real files below (Kelvin within ~2%, Tint within ~4 units).
     const fujiCamXyz = [
       [1.1809, -0.5358, -0.1141],
@@ -103,7 +103,7 @@ void main() {
       [-0.0514, 0.1097, 0.5848],
     ];
 
-    // (camMul, LightroomKelvin, LightroomTint)
+    // (camMul, MeridianKelvin, MeridianTint)
     const fujiRefs = [
       ([515.0, 302.0, 428.0, 0.0], 5550.0, -42.0), // _DSF1337 (van)
       ([501.0, 302.0, 347.0, 0.0], 7300.0, -87.0), // _DSF1273 (hose)
@@ -112,7 +112,7 @@ void main() {
     ];
 
     for (final (camMul, lrKelvin, lrTint) in fujiRefs) {
-      test('matches Lightroom for cam_mul $camMul ($lrKelvin K / $lrTint)', () {
+      test('matches Meridian for cam_mul $camMul ($lrKelvin K / $lrTint)', () {
         final res = wbMultipliersToKelvinTint(camMul, camXyz: fujiCamXyz);
         expect(res.kelvin, closeTo(lrKelvin, lrKelvin * 0.03));
         expect(res.tint, closeTo(lrTint, 5));

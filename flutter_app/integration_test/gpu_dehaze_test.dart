@@ -52,7 +52,7 @@ void main() {
     final meanDiff = sumDiff / cpu.length;
     // ignore: avoid_print
     print('[gpu_dehaze] $label: mean=$meanDiff max=$maxDiff');
-    // RapidRAW's apply_dehaze port: a fixed atmospheric light (no more
+    // Solstice's apply_dehaze port: a fixed atmospheric light (no more
     // CPU<->GPU readback round trip) plus a sigma-40 Gaussian blur (3-pass
     // box-blur approximation on both sides) feeding one per-pixel apply
     // shader — tolerance kept from before this rewrite since it's still

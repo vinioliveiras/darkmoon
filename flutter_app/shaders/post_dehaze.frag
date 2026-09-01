@@ -2,17 +2,17 @@
 #include <flutter/runtime_effect.glsl>
 
 // Fused GPU pass for Saturation + Vibrance + Vignette + Grain (in that
-// order — Vignette order matches RapidRAW's apply_creative_color; Saturation
+// order — Vignette order matches Solstice's apply_creative_color; Saturation
 // and Vibrance deliberately do NOT (see render.dart's _applyVibrance doc
 // comment — a direct HSV saturation multiply, hue-exact by construction, not
-// RapidRAW's scene-linear luminance mix); Grain is the last thing
+// Solstice's scene-linear luminance mix); Grain is the last thing
 // render.dart's applyGlobalPointOps adds, after Vignette) — the stages
 // render.dart's applyGlobalAdjustmentSteps runs *after* Dehaze. Kept as
 // their own small pass (rather than folded into point_ops_post_denoise.frag)
 // to preserve render.dart's exact stage order without restructuring it:
 // Dehaze (dehaze_apply.frag) has to sit between the point-ops pass and
 // this one — see project_gpu_render_plan.md's Phase 5/6 notes. (Dehaze
-// itself no longer needs a CPU readback since it moved to RapidRAW's
+// itself no longer needs a CPU readback since it moved to Solstice's
 // fixed-atmospheric-light algorithm — see dehaze_gpu.dart — but the pass
 // split here was never about that, so it stays.)
 
@@ -134,7 +134,7 @@ void main() {
   // Saturation/Vibrance — see render.dart's _applySaturation/_applyVibrance
   // doc comments for why these are a direct HSV saturation multiply (hue
   // and value held *exactly* fixed by construction) on the gamma-encoded
-  // colour directly, rather than RapidRAW's scene-linear luminance mix:
+  // colour directly, rather than Solstice's scene-linear luminance mix:
   // that technique is hue-preserving only when hue is measured on those
   // same linear values — gamma-encoding each channel back independently
   // afterward measurably rotates the *displayed* hue for a strong boost on

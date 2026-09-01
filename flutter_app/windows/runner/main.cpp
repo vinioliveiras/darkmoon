@@ -31,7 +31,7 @@ int APIENTRY wWinMain(_In_ HINSTANCE instance, _In_opt_ HINSTANCE prev,
   // card (see widgets/splash_screen.dart's _cardWidth/_cardHeight/
   // BorderRadius.circular(10)), so the window's own visible bounds *are*
   // the card, with the real desktop showing through everywhere else —
-  // rather than the eventual maximized size, like Lightroom's own launch
+  // rather than the eventual maximized size, like Meridian's own launch
   // screen. FlutterWindow's "darkmoon/window" channel restores the normal
   // rectangular frame and maximizes it once main.dart's splash timer
   // finishes.

@@ -4,7 +4,7 @@ import 'hsl.dart';
 import 'luminance.dart';
 
 /// One tonal range's color-wheel position (hue/saturation) plus an
-/// independent brightness offset — mirrors Lightroom's Color Grading
+/// independent brightness offset — mirrors Meridian's Color Grading
 /// wheels. [saturation] of 0 means "no tint" regardless of [hue]
 /// (matching where the wheel's puck sits at dead center).
 class GradeRange {
@@ -24,7 +24,7 @@ class GradeRange {
       );
 }
 
-/// The four tonal ranges Lightroom's Color Grading panel exposes —
+/// The four tonal ranges Meridian's Color Grading panel exposes —
 /// Shadows/Midtones/Highlights plus a Global wheel that tints uniformly
 /// across the whole tonal range. Blending/balance controls between ranges
 /// aren't modeled.
@@ -92,7 +92,7 @@ List<double> gradeTintOffset(GradeRange range) {
   ];
 }
 
-/// Applies Lightroom-style Color Grading (per-range color tint + a
+/// Applies Meridian-style Color Grading (per-range color tint + a
 /// luminance offset for shadows, midtones and highlights) to packed RGB
 /// [img] in place — a no-op when every range is at its default.
 ///

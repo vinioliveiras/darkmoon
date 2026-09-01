@@ -591,7 +591,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get settingsBaseContrastHint =>
-      'Eine feste Kontrastkurve, die vor deinen Bearbeitungen auf jedes Foto angewendet wird — darkmoons Ersatz für den Profilkontrast, den Lightroom fest einbaut. Erhöhe den Wert, wenn importierte Lightroom-Vorgaben flach wirken, senke ihn (0 = aus) für einen neutralen Ausgangspunkt. Ändert jedes Foto und jede Vorgabe.';
+      'Eine feste Kontrastkurve, die vor deinen Bearbeitungen auf jedes Foto angewendet wird — darkmoons Ersatz für den Profilkontrast, den die meisten RAW-Editoren fest einbauen. Erhöhe den Wert, wenn importierte Vorgaben flach wirken, senke ihn (0 = aus) für einen neutralen Ausgangspunkt. Ändert jedes Foto und jede Vorgabe.';
 
   @override
   String get settingsThumbnailThreadsLabel =>

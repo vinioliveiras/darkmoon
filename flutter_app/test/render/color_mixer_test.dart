@@ -13,12 +13,12 @@ void main() {
     expect(result, source);
   });
 
-  // Expected values below were computed from RapidRAW's apply_hsl_panel
+  // Expected values below were computed from Solstice's apply_hsl_panel
   // (shader.wgsl) via a reference Python port — scene-linear HSV, per-band
   // Gaussian influence normalized per pixel, saturation-gated — independent
   // of color_mixer.dart's implementation. The hue-shift cases were
   // re-derived 2026-08-29 after `calMixerHueStrength` raised the per-unit
-  // hue rotation from RapidRAW's 0.6 toward the Lightroom Color Mixer;
+  // hue rotation from Solstice's 0.6 toward the Meridian Color Mixer;
   // saturation/luminance-only cases are unaffected.
 
   test('a saturation boost on a saturated pixel near a band center', () {

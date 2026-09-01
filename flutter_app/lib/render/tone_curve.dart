@@ -3,7 +3,7 @@ import 'dart:typed_data';
 
 /// A single draggable control point on the tone curve, normalized to
 /// 0..1 on both axes — (0,0) is pure black in/out, (1,1) is pure white
-/// in/out, matching Lightroom's Tone Curve panel.
+/// in/out, matching Meridian's Tone Curve panel.
 class CurvePoint {
   const CurvePoint(this.x, this.y);
 
@@ -37,7 +37,7 @@ bool isIdentityToneCurve(List<CurvePoint> points) {
 
 /// Builds a 256-entry 0-255 -> 0-255 lookup table from [points] (assumed
 /// already sorted by x) using the same monotone cubic Hermite spline as
-/// RapidRAW's `apply_curve` (a Fritsch-Carlson-style construction: each
+/// Solstice's `apply_curve` (a Fritsch-Carlson-style construction: each
 /// point's tangent is the average of its neighboring secant slopes,
 /// zeroed at a local extremum and rescaled if it would overshoot), for a
 /// smooth curve rather than sharp linear segments.
@@ -178,14 +178,14 @@ double _tanh(double v) {
   return (e - 1.0) / (e + 1.0);
 }
 
-/// Lightroom's *parametric* Tone Curve — four region sliders (Shadows /
+/// Meridian's *parametric* Tone Curve — four region sliders (Shadows /
 /// Darks / Lights / Highlights, each -100..100) whose extents are set by
 /// three split points (defaults 25 / 50 / 75). Unlike the point curve, the
 /// user never places points directly; the region sliders bend a fixed
 /// 7-node curve. Applied on top of (before) the point Tone Curve, matching
-/// Lightroom, where both sub-panels feed the same result.
+/// Meridian, where both sub-panels feed the same result.
 ///
-/// The node layout and the `tanh`-based response are ported from RapidRAW's
+/// The node layout and the `tanh`-based response are ported from Solstice's
 /// `buildParametricPoints` (Curves.tsx) — same spline family as
 /// [buildToneCurveLut] evaluates.
 class ParametricCurve {
@@ -311,7 +311,7 @@ const identityPhotoCurves = PhotoCurves();
 
 /// Linearly interpolates each point in [target] toward the matching point
 /// in [base] by [amount] (0..1, 0 = stays at [base], 1 = lands exactly on
-/// [target]) — used for a preset's Amount slider (Lightroom-style,
+/// [target]) — used for a preset's Amount slider (Meridian-style,
 /// 0-150%). Falls back to [target] unchanged when the two curves don't
 /// have the same number of control points (a mismatched point count has
 /// no meaningful "halfway" shape, so partial application isn't

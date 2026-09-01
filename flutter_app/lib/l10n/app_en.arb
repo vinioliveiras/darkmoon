@@ -232,7 +232,7 @@
   "settingsDynamicFullPreviewHint": "A moment after an edit settles, re-render at the sensor's native resolution so a zoomed-in view sharpens up. Decoded sources are cached to disk.",
   "settingsFullQualityScaleLabel": "Preview resolution",
   "settingsBaseContrastLabel": "darkmoon Color profile",
-  "settingsBaseContrastHint": "A fixed contrast curve applied to every photo before your edits — darkmoon's stand-in for the profile contrast Lightroom bakes in. Raise it if imported Lightroom presets look flat, lower it (0 = off) for a neutral starting point. Changes every photo and preset.",
+  "settingsBaseContrastHint": "A fixed contrast curve applied to every photo before your edits — darkmoon's stand-in for the profile contrast most RAW editors bake in. Raise it if imported presets look flat, lower it (0 = off) for a neutral starting point. Changes every photo and preset.",
   "settingsThumbnailThreadsLabel": "Thumbnail loading threads",
   "settingsCustomDenoiseModelLabel": "Custom denoise model",
   "settingsCustomDenoiseModelHint": "Replaces the on-device Denoise model in the AI Denoise dialog's Enhance tab. Must be a drop-in replacement: 3-channel RGB, same-resolution in/out, \"input\"/\"output\" tensor names, [0,1]-normalized — a model that doesn't match will error or produce visibly wrong output, not a clean failure.",

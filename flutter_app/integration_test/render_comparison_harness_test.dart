@@ -1,10 +1,10 @@
-// Item 7 of the RapidRAW-parity plan: a comprehensive CPU/GPU comparison
-// harness covering every adjustment ported from RapidRAW this session
+// Item 7 of the Solstice-parity plan: a comprehensive CPU/GPU comparison
+// harness covering every adjustment ported from Solstice this session
 // (Vibrance/Saturation, Color Mixer including Luminance, Dehaze, White
 // Balance, Tone/Color Curves), individually and combined, on one fixed
 // synthetic image — see support/render_comparison_harness.dart's own doc
 // comment for exactly what this can and can't compare (CPU vs. this app's
-// own GPU path; not a direct RapidRAW-binary comparison).
+// own GPU path; not a direct Solstice-binary comparison).
 //
 // Run with: flutter test integration_test/render_comparison_harness_test.dart -d windows
 import 'package:flutter_test/flutter_test.dart';

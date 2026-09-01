@@ -62,7 +62,7 @@ List<double> hslToRgb(double h, double s, double l) {
 }
 
 /// Converts [r], [g], [b] (each 0..1) to `(hue, saturation, value)` —
-/// same convention as RapidRAW's `rgb_to_hsv` (WGSL), which is HSV, not
+/// same convention as Solstice's `rgb_to_hsv` (WGSL), which is HSV, not
 /// HSL: value is the max channel, not `(max+min)/2`.
 ///
 /// Returns a record, not a `List<double>` — this runs once or twice per
@@ -93,7 +93,7 @@ List<double> hslToRgb(double h, double s, double l) {
 }
 
 /// Converts [h] (degrees, 0..360), [s] and [v] (each 0..1) to `(r, g, b)`
-/// (each 0..1) — inverse of [rgbToHsv], same convention as RapidRAW's
+/// (each 0..1) — inverse of [rgbToHsv], same convention as Solstice's
 /// `hsv_to_rgb` (WGSL).
 ///
 /// Returns a record — see [rgbToHsv]'s doc comment; this version also

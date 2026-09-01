@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import '../native/libraw.dart';
 import '../theme.dart';
 
-/// Formats a shutter speed in seconds as Lightroom does: a plain decimal
+/// Formats a shutter speed in seconds as Meridian does: a plain decimal
 /// with "s" for anything at or above one second, otherwise "1/N" rounded
 /// to the nearest whole denominator (matching how cameras themselves
 /// display shutter speed, e.g. 1/250 rather than 0.004s).
@@ -25,7 +25,7 @@ String _formatIso(double iso) => iso <= 0 ? '—' : 'ISO ${iso.round()}';
 
 String _formatFocalLength(double mm) => mm <= 0 ? '—' : '${mm.round()}mm';
 
-/// Lightroom-style capture info strip, shown below the histogram: camera
+/// Meridian-style capture info strip, shown below the histogram: camera
 /// model, lens, and the exposure triangle (ISO/shutter/aperture) plus
 /// focal length. Null [metadata] (still loading, or the file carries none
 /// of this) renders nothing rather than a placeholder — this is

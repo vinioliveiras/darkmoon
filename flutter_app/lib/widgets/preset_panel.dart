@@ -5,10 +5,10 @@ import '../l10n/app_localizations.dart';
 import '../presets/preset.dart';
 import '../theme.dart';
 
-/// Lightroom-style Presets panel — sits below the folder tree in the same
+/// Meridian-style Presets panel — sits below the folder tree in the same
 /// left sidebar. Save the current photo's edits as a new preset, click a
 /// saved preset to apply it, and rename/export/delete via each row's
-/// menu. Import brings in `.xmp` files from disk (Lightroom presets or
+/// menu. Import brings in `.xmp` files from disk (Meridian presets or
 /// ones exported from here). The header's select icon enters multi-select
 /// mode for bulk delete / export.
 class PresetPanel extends StatefulWidget {

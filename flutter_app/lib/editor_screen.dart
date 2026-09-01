@@ -265,7 +265,7 @@ class _SliderSpec {
   final double defaultValue;
   final int decimals;
 
-  /// Track gradient for color-affecting controls, Lightroom-style — null
+  /// Track gradient for color-affecting controls, Meridian-style — null
   /// for everything else, which keeps the plain theme track.
   final List<Color>? gradientColors;
 
@@ -394,7 +394,7 @@ PhotoCurves _withCurveCategoriesApplied(
 const _globalEditAmountKey = 'GlobalEditAmount';
 
 /// Default per-pass deposit rate for a new Flow-mask stroke — see
-/// [BrushStroke.flow]'s doc. Matches RapidRAW's own default.
+/// [BrushStroke.flow]'s doc. Matches Solstice's own default.
 const defaultFlowAmount = 10.0;
 
 /// Scales every continuous slider's deviation from its own default by
@@ -503,12 +503,12 @@ const _sections = <String, List<_SliderSpec>>{
     ),
   ],
   'DETAIL': [
-    // 40 (not 0) matches Lightroom's own default RAW-import sharpening —
+    // 40 (not 0) matches Meridian's own default RAW-import sharpening —
     // and this section's other three sliders (Radius 1.0, Detail 25) were
-    // already set to Lightroom's defaults, so Amount=0 was leaving the
+    // already set to Meridian's defaults, so Amount=0 was leaving the
     // group inconsistently "half off". A zero-edit photo now gets a small
     // baseline sharpen instead of the flat, unsharpened look competitors
-    // like RapidRAW/Vitrine also avoid by baking in a similar default.
+    // like Solstice/Vitrine also avoid by baking in a similar default.
     _SliderSpec('SharpenAmount', 0, 150, 40),
     _SliderSpec('SharpenRadius', 0.5, 3.0, 1.0, decimals: 1),
     _SliderSpec('SharpenDetail', 0, 100, 25),
@@ -516,7 +516,7 @@ const _sections = <String, List<_SliderSpec>>{
   ],
 };
 
-/// Post-Crop Vignette sliders (Lightroom's Effects panel) — global-only,
+/// Post-Crop Vignette sliders (Meridian's Effects panel) — global-only,
 /// so kept out of [_sections] (which masks also render from) rather than
 /// a fourth entry there.
 const _vignetteSliders = [
@@ -525,8 +525,8 @@ const _vignetteSliders = [
   _SliderSpec('VignetteFeather', 0, 100, 50),
 ];
 
-/// Film grain sliders (Lightroom's Effects panel) — like [_vignetteSliders],
-/// global-only, kept out of [_sections]. Ranges match Lightroom's
+/// Film grain sliders (Meridian's Effects panel) — like [_vignetteSliders],
+/// global-only, kept out of [_sections]. Ranges match Meridian's
 /// `crs:GrainAmount` / `GrainSize` / `GrainFrequency`.
 const _grainSliders = [
   _SliderSpec('GrainAmount', 0, 100, 0),
@@ -534,10 +534,10 @@ const _grainSliders = [
   _SliderSpec('GrainRoughness', 0, 100, 50),
 ];
 
-/// Lightroom's parametric Tone Curve — four region sliders plus the three
+/// Meridian's parametric Tone Curve — four region sliders plus the three
 /// split points that set where each region ends. Lives under the Tone
 /// Curve editor; toggled off with the TONE CURVE section switch. Split
-/// defaults 25/50/75 match Lightroom (and RapidRAW's Curves.tsx).
+/// defaults 25/50/75 match Meridian (and Solstice's Curves.tsx).
 const _parametricCurveSliders = [
   _SliderSpec('ParamCurveShadows', -100, 100, 0),
   _SliderSpec('ParamCurveDarks', -100, 100, 0),
@@ -568,7 +568,7 @@ Map<String, double> _defaultParamValues() {
     // Lens Correction is also global-only (see RenderJob.lensCorrection's
     // doc comment) and lives outside [_sections] for the same reason as
     // Vignette above -- seeded from the params class's own defaults
-    // (distortion/vignette amount = 100, matching Lightroom's Profile
+    // (distortion/vignette amount = 100, matching Meridian's Profile
     // checkbox starting at full strength) rather than repeating them here.
     ...const LensCorrectionParams().toValues(),
   };
@@ -713,7 +713,7 @@ class _EditorScreenState extends State<EditorScreen>
   bool _beforeAfterMode = false;
 
   /// Whether the Crop Overlay's draggable rectangle is shown over the
-  /// image — a session-wide UI mode (like Lightroom's crop tool toggle),
+  /// image — a session-wide UI mode (like Meridian's crop tool toggle),
   /// not per-photo state.
   bool _cropOverlayActive = false;
 
@@ -979,7 +979,7 @@ class _EditorScreenState extends State<EditorScreen>
 
   /// True while the Straighten slider is actively being dragged (item 28)
   /// — lets [CropOverlay] show a denser guide grid only during that
-  /// interaction, matching Lightroom. Session-only.
+  /// interaction, matching Meridian. Session-only.
   bool _straighteningActive = false;
 
   void _setStraighteningActive(bool value) {
@@ -1333,7 +1333,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// Applies [preset]'s slider values and curves to the selected photo, at
   /// their full stored strength — like every other adjustment, this only
   /// touches the global ("Image") layer, never the active mask, matching
-  /// how real Lightroom presets don't carry local adjustments either.
+  /// how real Meridian presets don't carry local adjustments either.
   ///
   /// Unlike this app's previous design, applying a preset no longer blends
   /// by the Amount slider under the preset list — [_globalEditAmountKey]
@@ -1595,7 +1595,7 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   /// Imports one or more `.xmp` presets, or `.zip` bundles of them (how
-  /// Lightroom exports multiple presets at once) — each zip is unpacked
+  /// Meridian exports multiple presets at once) — each zip is unpacked
   /// and every `.xmp` inside it imported the same way a standalone file
   /// would be.
   Future<void> _importPresets() async {
@@ -2125,7 +2125,7 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   /// Right-click on the image — "Copy Edits" / "Paste Edits", the same
-  /// idea as Lightroom's Copy/Paste Settings but with no picker (everything
+  /// idea as Meridian's Copy/Paste Settings but with no picker (everything
   /// copies: sliders, curves, masks — not crop/lens, see [_copiedEdits]'s
   /// own doc comment).
   Future<void> _showImageContextMenu(Offset globalPosition) async {
@@ -3148,7 +3148,7 @@ class _EditorScreenState extends State<EditorScreen>
   ) async {
     // While the Crop Overlay is open, render the full straightened/
     // keystoned frame (no rectangular crop) so the discarded edges are
-    // still visible under the overlay's scrim, Lightroom-style, instead
+    // still visible under the overlay's scrim, Meridian-style, instead
     // of the preview jumping to the already-cropped result mid-edit.
     final cropTransform = _cropOverlayActive
         ? _cropTransform.copyWith(
@@ -3557,7 +3557,7 @@ class _EditorScreenState extends State<EditorScreen>
       RenderJob(
         source: sources.preview,
         // "Before" still gets the base profile (contrast curve + colour
-        // correction) — it's part of the baseline rendering, like Lightroom
+        // correction) — it's part of the baseline rendering, like Meridian
         // keeping the camera profile, not a develop edit.
         params: RenderParams(
           baseContrast: _effectiveBaseContrast,
@@ -3604,7 +3604,7 @@ class _EditorScreenState extends State<EditorScreen>
 
   /// Locks the crop rect to [ratio] and immediately re-fits it (centered,
   /// as large as the frame allows) instead of only recording the lock for
-  /// the *next* drag to pick up — Lightroom's aspect picker snaps the
+  /// the *next* drag to pick up — Meridian's aspect picker snaps the
   /// selection the moment you click a ratio, it doesn't wait for you to
   /// touch a handle first.
   void _setCropAspectRatio(double? ratio) {
@@ -3718,7 +3718,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// toggle / Cloud AI — see `AiDenoiseDialog`) and, if the user confirms a
   /// choice, applies it — a deliberate one-shot action (with its own
   /// loading message) rather than a slider the user drags, matching the
-  /// Lightroom/Photomator "pick a strength, apply" pattern.
+  /// Meridian/Photomator "pick a strength, apply" pattern.
   Future<void> _openAiDenoiseDialog() async {
     if (_openingToolbarDialog) return;
     _openingToolbarDialog = true;
@@ -4384,7 +4384,7 @@ class _EditorScreenState extends State<EditorScreen>
 
   /// Double-click on the image (item 25): zoom in centered on the click
   /// point if currently at Fit or below, or back out to Fit if already
-  /// zoomed in — the same toggle Lightroom/Photoshop use, adapted to
+  /// zoomed in — the same toggle Meridian/Photoshop use, adapted to
   /// darkmoon's fit-relative zoom scale.
   void _onDoubleTapZoom(Offset localPosition) {
     if (_zoomScale > 1.0) {
@@ -4419,7 +4419,7 @@ class _EditorScreenState extends State<EditorScreen>
         ..._paramValues,
         name: value,
         // Nudging Temperature/Tint by hand drops the WB mode to Custom,
-        // matching Lightroom.
+        // matching Meridian.
         if (name == 'Temperature' || name == 'Tint')
           _wbModeKey: WbMode.custom.index.toDouble(),
       };
@@ -6331,7 +6331,7 @@ class _ImageArea extends StatelessWidget {
   }
 
   Widget _zoomableImage(Uint8List bytes) {
-    // Double-click zooms in (Lightroom/Photoshop-style, centered on the
+    // Double-click zooms in (Meridian/Photoshop-style, centered on the
     // click point) if not already zoomed in, or back out to Fit if it is
     // — but not while a mode with its own tap handling is active (mask
     // editing, crop overlay, eyedropper), where the tap-delay double-tap
@@ -7365,11 +7365,11 @@ class _ToolbarSegment extends StatelessWidget {
   }
 }
 
-/// A clickable section header with a chevron — Lightroom-style
+/// A clickable section header with a chevron — Meridian-style
 /// collapse/expand toggle, shared by every panel section (sliders and
 /// the Tone Curve alike).
 /// Rotate/straighten/keystone sliders + crop aspect-ratio picker, shown
-/// while the Crop Overlay is active — Lightroom's Crop Overlay + Transform
+/// while the Crop Overlay is active — Meridian's Crop Overlay + Transform
 /// panels combined, since they share one geometric pipeline stage (see
 /// `crop_transform.dart`).
 class _CropTransformPanel extends StatelessWidget {
@@ -7394,7 +7394,7 @@ class _CropTransformPanel extends StatelessWidget {
   final VoidCallback onDone;
 
   /// Resets crop/rotate/keystone back to identity, without closing the
-  /// overlay — matches Lightroom's own Crop panel "Reset" behavior.
+  /// overlay — matches Meridian's own Crop panel "Reset" behavior.
   final VoidCallback onReset;
 
   /// See [_ControlsPanel.onStraighteningChanged].
@@ -7975,7 +7975,7 @@ class _ControlsPanel extends StatefulWidget {
 }
 
 class _ControlsPanelState extends State<_ControlsPanel> {
-  /// Section names the user has collapsed, Lightroom-style — every section
+  /// Section names the user has collapsed, Meridian-style — every section
   /// starts expanded, matching the panel's previous (always-open) layout.
   final Set<String> _collapsed = {};
 
@@ -8089,7 +8089,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
   }
 
   /// Which Color Curve channel is currently shown in the editor — only one
-  /// at a time, switched via the R/G/B tabs, matching Lightroom.
+  /// at a time, switched via the R/G/B tabs, matching Meridian.
   String _activeColorChannel = 'red';
 
   /// Which Color Mixer band is currently shown — one of the 8 capitalized
@@ -8099,7 +8099,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
   /// channel at once instead.
   String _activeMixerChannel = 'Red';
 
-  /// Color Mixer's own display mode, matching Lightroom's Mixer/HSL toggle
+  /// Color Mixer's own display mode, matching Meridian's Mixer/HSL toggle
   /// for the same underlying data: `'Mixer'` shows one selected channel's
   /// three sliders at a time (the dot picker above); `'HSL'` shows three
   /// stacked groups (Hue, Saturation, Luminance), each listing all 8
@@ -8645,7 +8645,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   ),
                                 ),
                                 // Luminance re-enabled: color_mixer.dart now
-                                // ports RapidRAW's apply_hsl_panel in full
+                                // ports Solstice's apply_hsl_panel in full
                                 // (scene-linear HSV, per-band Gaussian
                                 // influence, saturation-gated), including its
                                 // luma-preserving-then-adjusting Luminance
@@ -8995,7 +8995,7 @@ double _mixerChannelHue(String channel) => switch (channel) {
 };
 
 /// Track gradient for a Color Mixer slider — the Hue slider runs through
-/// the channel's actual neighbouring hues (Lightroom-style), Saturation
+/// the channel's actual neighbouring hues (Meridian-style), Saturation
 /// grey→colour, Luminance dark→light of the colour.
 List<Color> _mixerTrackColors(String channel, String suffix) {
   final hue = _mixerChannelHue(channel);
@@ -9072,7 +9072,7 @@ String _mixerSliderLabel(AppLocalizations l10n, String suffix) {
 }
 
 /// Toggles the Color Mixer between its two display modes — matches
-/// Lightroom's own Mixer/HSL tabs, which control the exact same 24
+/// Meridian's own Mixer/HSL tabs, which control the exact same 24
 /// underlying values ("Mixer" + channel + "Hue/Saturation/Luminance"),
 /// just grouped differently: by channel (below, one at a time) or by
 /// attribute (all 8 channels stacked per Hue/Saturation/Luminance group).
@@ -9099,7 +9099,7 @@ class _MixerModeTabs extends StatelessWidget {
 
 /// The Color Mixer's 8-band channel picker — small colored dots (one per
 /// hue band) rather than text tabs, since 8 text labels wouldn't fit the
-/// panel's width. Matches Lightroom's own dot-based channel selector.
+/// panel's width. Matches Meridian's own dot-based channel selector.
 class _MixerChannelDots extends StatelessWidget {
   const _MixerChannelDots({required this.active, required this.onSelect});
 
@@ -9153,7 +9153,7 @@ String _gradeRangeLabel(AppLocalizations l10n, String range) {
 }
 
 /// Shadows/Midtones/Highlights tab strip for the Color Grading panel —
-/// one range's wheel is edited at a time, matching Lightroom.
+/// one range's wheel is edited at a time, matching Meridian.
 class _GradeRangeTabs extends StatelessWidget {
   const _GradeRangeTabs({required this.active, required this.onSelect});
 
@@ -9306,7 +9306,7 @@ class _SegmentedTab extends StatelessWidget {
 }
 
 /// R/G/B tab strip for the Color Curve panel — one channel's curve is
-/// edited at a time, matching Lightroom's per-channel Point Curve tabs.
+/// edited at a time, matching Meridian's per-channel Point Curve tabs.
 class _ColorChannelTabs extends StatelessWidget {
   const _ColorChannelTabs({required this.active, required this.onSelect});
 
@@ -9707,7 +9707,7 @@ class _FileTypeBadge extends StatelessWidget {
 /// Small pencil badge shown over a filmstrip thumbnail's corner when
 /// [_EditorScreenState._isPhotoEdited] is true for that photo — a filled
 /// dot rather than a pill (unlike [_FileTypeBadge]) since it carries no
-/// label, just a yes/no signal, matching Lightroom's own edited-photo
+/// label, just a yes/no signal, matching Meridian's own edited-photo
 /// indicator.
 class _EditedBadge extends StatelessWidget {
   const _EditedBadge();

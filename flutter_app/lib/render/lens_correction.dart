@@ -8,7 +8,7 @@ import '../native/libraw.dart' show RawMetadata;
 import 'crop_transform.dart' show GeometryResult;
 import 'geometry.dart' show sampleBilinear, sampleBilinearChannel;
 
-/// Lightroom's Lens Corrections panel's Profile tab (geometric distortion
+/// Meridian's Lens Corrections panel's Profile tab (geometric distortion
 /// + vignetting from a matched lens's calibration data) — kept entirely
 /// separate from `vignette.dart`'s artistic Post-Crop Vignette, which the
 /// user dials in by eye and has nothing to do with a specific lens's
@@ -44,7 +44,7 @@ class LensCorrectionParams {
 
   /// 0..100 — blends the distortion correction from full strength (100,
   /// matching the profile's calibration) down to no correction (0),
-  /// mirroring Lightroom's own Distortion amount slider under the Profile
+  /// mirroring Meridian's own Distortion amount slider under the Profile
   /// checkbox. Defaults to 50 (half-strength) rather than 100 — a lens's
   /// bundled calibration is an approximation of THIS specific copy's real
   /// optics, so starting at full strength risks over-correcting; the user
@@ -603,7 +603,7 @@ double _distortionFactor(String model, LensDistortionPoint point, double ru) {
 
 /// Undistorts [sourceRgb] against [profile]'s calibration at
 /// [focalLengthMm], blended by [amount01] (0 = untouched, 1 = full
-/// correction, matching Lightroom's Distortion amount slider). Output
+/// correction, matching Meridian's Distortion amount slider). Output
 /// keeps the source's own width/height — unlike `applyCropTransform`,
 /// this never changes the canvas size; it just resamples within it,
 /// leaving stretched-edge padding (via [sampleBilinear]'s clamp) exactly

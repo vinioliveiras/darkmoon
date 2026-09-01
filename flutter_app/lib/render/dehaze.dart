@@ -5,7 +5,7 @@ import 'blur.dart';
 import 'calibration.dart';
 import 'color_space.dart';
 
-/// Dark-channel-prior atmospheric light RapidRAW assumes for every photo
+/// Dark-channel-prior atmospheric light Solstice assumes for every photo
 /// (a fixed near-white, slightly blue sky color) rather than estimating it
 /// per image — see [applyDehaze]'s doc comment for why this replaced a
 /// full-image dark-channel percentile search.
@@ -13,7 +13,7 @@ const double _atmR = 0.95;
 const double _atmG = 0.97;
 const double _atmB = 1.0;
 
-/// Wide-radius blur RapidRAW's structure_blur_view uses, both for its
+/// Wide-radius blur Solstice's structure_blur_view uses, both for its
 /// Structure local-contrast control (which Darkmoon doesn't expose — see
 /// `local_contrast.dart`'s Texture/Clarity for the two it does) and,
 /// separately, as Dehaze's "regional" dark-channel source below.
@@ -30,14 +30,14 @@ double _smoothstep(double edge0, double edge1, double value) {
 double _min3(double a, double b, double c) => math.min(a, math.min(b, c));
 
 /// A single-image haze removal / addition effect based on the dark-channel
-/// prior (He, Sun & Tang) — a faithful port of RapidRAW's `apply_dehaze`
+/// prior (He, Sun & Tang) — a faithful port of Solstice's `apply_dehaze`
 /// (shader.wgsl), replacing this function's previous, considerably
 /// different implementation (a port of the Python app's own dehaze, which
 /// estimated atmospheric light per photo from a full-image dark-channel
 /// percentile search, then derived transmission from a large min-filter +
 /// box-blur pair).
 ///
-/// RapidRAW instead: assumes a fixed atmospheric light ([_atmR]/[_atmG]/
+/// Solstice instead: assumes a fixed atmospheric light ([_atmR]/[_atmG]/
 /// [_atmB]) rather than estimating one (cheaper, and the estimation step
 /// was the one genuinely-global, GPU-unfriendly part of the old
 /// algorithm); derives each pixel's transmission from *two* dark-channel
@@ -49,7 +49,7 @@ double _min3(double a, double b, double c) => math.min(a, math.min(b, c));
 /// shadow lift and a saturation boost proportional to how much haze was
 /// actually removed. Operates in scene-linear light (not the gamma-encoded
 /// byte buffer this pipeline otherwise stays in between stages), same as
-/// the rest of RapidRAW's tonal pipeline.
+/// the rest of Solstice's tonal pipeline.
 ///
 /// Operates in place on a packed RGB [Float32List] (3 values/pixel, 0-255).
 void applyDehaze(Float32List img, int width, int height, double amount) {

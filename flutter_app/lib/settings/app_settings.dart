@@ -99,7 +99,7 @@ class AppSettings {
 
   /// Strength of the fixed "profile" contrast curve every photo gets before
   /// the tone sliders — darkmoon's stand-in for the S-curve the Adobe Color
-  /// profile bakes into Lightroom's zero-edit render (see
+  /// profile bakes into Meridian's zero-edit render (see
   /// `render/calibration.dart`'s `calBaseContrast`, the factory value this
   /// defaults to). Same 0..100 scale as the Contrast slider; 0 disables it.
   /// Threaded into every render as `RenderParams.baseContrast`. Clamped to

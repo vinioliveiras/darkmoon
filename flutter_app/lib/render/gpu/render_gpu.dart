@@ -56,14 +56,14 @@ Future<ui.Image> renderImageGpu(
 ) async {
   // Exposure -> White Balance -> baseline chroma smoothing -> AI denoise ->
   // Sharpen -> Texture -> Clarity -> Dehaze -> Tone. Exposure/White Balance
-  // run first (RapidRAW's own order runs them much later, after Clarity)
+  // run first (Solstice's own order runs them much later, after Clarity)
   // so every later stage sees the pixel values the user's actual
   // Temp/Tint/Exposure settings establish, not the camera's raw as-shot
   // decode — see applyExposureAndWhiteBalance's doc comment in
   // render.dart. This matters most for two stages: Dehaze, which
   // estimates its own per-channel "haze color" from whatever buffer it's
   // given (badly wrong on a still-warm as-shot decode, compounding into a
-  // magenta cast Lightroom never produces); and Clarity's "protect
+  // magenta cast Meridian never produces); and Clarity's "protect
   // midtones" weight, which reads each pixel's current luminance and
   // targets the wrong tonal range on a RAW that still needs a large
   // Exposure correction.
@@ -389,7 +389,7 @@ Future<ui.Image> _rasterize(
 /// integration_test/gpu_point_ops_test.dart's "neutral params" case (a
 /// ~15/255 mean diff unrelated to the params under test) first caught.
 /// [buildToneCurveLut] now uses the same monotone cubic Hermite spline as
-/// RapidRAW's `apply_curve`, which doesn't have that flaw for *any* input
+/// Solstice's `apply_curve`, which doesn't have that flaw for *any* input
 /// (collinear or not) — this substitution stays only for performance.
 final Uint8List _identityLut = Uint8List.fromList(
   List<int>.generate(256, (i) => i),

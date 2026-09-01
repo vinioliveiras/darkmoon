@@ -1,6 +1,6 @@
 // Dumps everything LibRaw knows about a RAW file's white balance, plus
 // what wbMultipliersToKelvinTint estimates. Compare the estimate against
-// Lightroom's "As Shot" Temp/Tint to calibrate.
+// Meridian's "As Shot" Temp/Tint to calibrate.
 //
 // Usage: dart run tool/wb_dump.dart <raw-file>
 import 'dart:io';

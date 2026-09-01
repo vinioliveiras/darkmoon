@@ -5,7 +5,7 @@ import 'package:image/image.dart' as img;
 /// small enough (never upscales).
 ///
 /// Uses area-averaging (box filter) instead of nearest-neighbor so the
-/// preview downscale reduces sensor noise like Lightroom does, instead of
+/// preview downscale reduces sensor noise like Meridian does, instead of
 /// preserving full-amplitude noise by subsampling one pixel per block.
 img.Image fitToMaxDimension(img.Image image, int maxDimension) {
   final longestSide = image.width > image.height ? image.width : image.height;
@@ -31,7 +31,7 @@ img.Image fitToMaxDimension(img.Image image, int maxDimension) {
 /// across every camera's sensor resolution.
 ///
 /// Uses the same area-averaging (box filter) as [fitToMaxDimension], for
-/// the same reason: it reduces sensor noise the way Lightroom's own
+/// the same reason: it reduces sensor noise the way Meridian's own
 /// downscale does, instead of preserving full-amplitude noise the way
 /// nearest-neighbor subsampling would.
 img.Image scaleByPercent(img.Image image, int percent) {

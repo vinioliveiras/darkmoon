@@ -19,10 +19,10 @@ const int colorProfileTonePoints = 33;
 /// Filmatic Fuji comparison exposed — PENDING.md item 14).
 ///
 /// Built by `tool/build_color_profile.dart` from pairs of a RAW rendered
-/// neutrally in darkmoon and the same RAW exported from Lightroom with the
+/// neutrally in darkmoon and the same RAW exported from Meridian with the
 /// Adobe Color profile, all sliders zeroed. Applied by [applyColorProfile]
 /// right after (in place of, when its tone curve is non-identity) the base
-/// contrast curve, before any user adjustment — where Lightroom runs the
+/// contrast curve, before any user adjustment — where Meridian runs the
 /// profile.
 class ColorProfile {
   const ColorProfile({

@@ -79,7 +79,7 @@ EditSourcePair? decodeCachedAiEnhanceSources(DecodeCachedAiEnhanceArgs args) {
 /// `enhanceImage`), then derives `preview`/`live` from the *enhanced*
 /// buffer — so every later edit/mask/export builds on top of the
 /// denoised-and-upscaled image, the same "becomes the new base" model
-/// Lightroom's own Enhance uses, not a per-render pipeline stage the way
+/// Meridian's own Enhance uses, not a per-render pipeline stage the way
 /// the classical `applyAiDenoise` is.
 ///
 /// Kept in its own file rather than added to `edit_source.dart` — that

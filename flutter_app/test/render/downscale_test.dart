@@ -27,7 +27,7 @@ void main() {
       // a pure 0 or 255 for every output pixel, i.e. the checkerboard
       // survives at a coarser scale instead of being smoothed away. Area
       // averaging blends each region toward its true ~50/50 mean of
-      // ~127.5, which is the Lightroom-like, noise-reducing behavior this
+      // ~127.5, which is the Meridian-like, noise-reducing behavior this
       // function exists to provide.
       const side = 16;
       final image = img.Image(width: side, height: side);

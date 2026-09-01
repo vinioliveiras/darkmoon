@@ -9,8 +9,8 @@ import '../render/white_balance.dart' show wbMultipliersToKelvinTint;
 import 'libraw_bindings.dart';
 import 'pmrid_raw.dart';
 
-/// LibRaw (this file) vs. RapidRAW's own decoder (Rawler, a pure-Rust RAW
-/// library) — investigated as part of trying to match RapidRAW's tonal
+/// LibRaw (this file) vs. Solstice's own decoder (Rawler, a pure-Rust RAW
+/// library) — investigated as part of trying to match Solstice's tonal
 /// pipeline pixel-for-pixel (see render.dart/color_mixer.dart/dehaze.dart's
 /// own doc comments for the adjustment-level ports). The short version:
 /// **RAW decode is the one part of this pipeline that can't realistically
@@ -22,9 +22,9 @@ import 'pmrid_raw.dart';
 ///    sets `params.output_bps = 8` and a real sRGB gamma
 ///    (`params.gamm = [1/2.4, 12.92]`), so LibRaw hands back gamma-encoded
 ///    8-bit-per-channel bytes — which is *why* every adjustment ported
-///    from RapidRAW elsewhere in this codebase has to convert back to
+///    from Solstice elsewhere in this codebase has to convert back to
 ///    linear internally (`srgbToLinear`/`linearToSrgb`) before doing its
-///    own math, then re-encode afterward. RapidRAW's Rust decoder
+///    own math, then re-encode afterward. Solstice's Rust decoder
 ///    (`raw_processing.rs`'s `develop_internal`) does the opposite: it
 ///    explicitly *strips* the sRGB-encode step from Rawler's own develop
 ///    pipeline (`developer.steps.retain(|&step| step != ProcessingStep::
@@ -41,7 +41,7 @@ import 'pmrid_raw.dart';
 ///    LibRaw here uses linear interpolation for [fastPreview] (a real
 ///    demosaic, not `half_size`'s box average — see that param's own
 ///    comment) or its own AHD-class default otherwise, plus blend-mode
-///    highlight reconstruction (`params.highlight = 2`). RapidRAW's
+///    highlight reconstruction (`params.highlight = 2`). Solstice's
 ///    `raw_processing.rs` sets `DemosaicAlgorithm::Speed` for its own fast
 ///    path and otherwise leaves Rawler's own default algorithm (a
 ///    different, unrelated implementation — Rawler is vendored as a
@@ -60,7 +60,7 @@ import 'pmrid_raw.dart';
 /// RAW file), or by replacing this decoder with Rawler outright — a much
 /// larger, separate undertaking (new native/FFI story entirely, since
 /// Rawler is Rust, not a C library like LibRaw) than any adjustment-level
-/// port. Matching RapidRAW's math for each slider (as the rest of this
+/// port. Matching Solstice's math for each slider (as the rest of this
 /// codebase's ports do) gets the *relative* effect of each adjustment
 /// right; it can't erase the baseline difference the decoder itself
 /// already introduced before any slider runs.
@@ -127,7 +127,7 @@ class RawMetadata {
   });
 
   /// Manufacturer-normalized names (e.g. "Fujifilm" rather than a
-  /// per-model raw string), matching what a Lightroom-style metadata panel
+  /// per-model raw string), matching what a Meridian-style metadata panel
   /// shows — empty string if LibRaw couldn't identify the camera.
   final String cameraMake;
   final String cameraModel;
@@ -267,7 +267,7 @@ List<double>? readCamMul(String path) {
 /// balance — `cam_mul`, `pre_mul`, the WBCT colour-temperature table, the
 /// named-illuminant `WB_Coeffs` presets and `cam_xyz` — plus what
 /// [wbMultipliersToKelvinTint] makes of it. Used by `tool/wb_dump.dart` to
-/// calibrate the as-shot Kelvin/Tint estimate against Lightroom.
+/// calibrate the as-shot Kelvin/Tint estimate against Meridian.
 String dumpRawWhiteBalanceInfo(String path) {
   final lib = _Lib.instance;
   final lr = _openRaw(lib, path);
@@ -491,7 +491,7 @@ RawImage? decodeRawImage(
     // the RAW file by the manufacturer for that specific sensor) instead
     // of LibRaw's generic per-sensor-family fallback matrix. This is the
     // biggest lever available here toward "the app recognizes the camera
-    // and adjusts color like Lightroom does": Lightroom/ACR ship their own
+    // and adjusts color like Meridian does": Meridian/ACR ship their own
     // per-camera-model calibration profiles, which aren't available to
     // LibRaw, but every RAW file's own manufacturer-embedded matrix is —
     // using it noticeably closes the color gap for supported cameras
@@ -500,7 +500,7 @@ RawImage? decodeRawImage(
     params.output_bps = 8;
     // half_size did a crude 2x2-block average instead of real demosaicing:
     // fast, but visibly flatter/more aliased than a real interpolation —
-    // apps like RapidRAW/Vitrine never show a box-averaged decode, even
+    // apps like Solstice/Vitrine never show a box-averaged decode, even
     // for their fastest preview. Always demosaic properly; [fastPreview]
     // controls speed via user_qual below instead.
     params.half_size = 0;
@@ -527,7 +527,7 @@ RawImage? decodeRawImage(
     params.gamm[1] = 12.92;
     // LibRaw's default (0) hard-clips blown highlights to white. Blend
     // reconstruction (2) recovers detail from the channels that aren't
-    // clipped instead, closer to how RapidRAW/Vitrine and Lightroom-style
+    // clipped instead, closer to how Solstice/Vitrine and Meridian-style
     // tools handle overexposed regions by default.
     params.highlight = 2;
     // PAUSED 2026-08-31 — see the "_colorProfileEnabled" doc comment in
@@ -565,7 +565,7 @@ RawImage? decodeRawImage(
         // rendering (its own film-simulation color science, not a neutral
         // reference) reliably introduced a yellow/green cast and amplified
         // noise/clipping instead of correcting anything — confirmed by
-        // comparing real presets side-by-side against Lightroom. LibRaw's
+        // comparing real presets side-by-side against Meridian. LibRaw's
         // own use_camera_wb + use_camera_matrix calibration (set when
         // opening the file, above) is the actual camera-profile-based
         // color science and needs no such nudge.
@@ -585,7 +585,7 @@ RawImage? decodeRawImage(
 /// (`render/pmrid_denoise.dart`) on the sensor's own Bayer data between
 /// `libraw_unpack()` and the demosaic step (`libraw_dcraw_process()`) —
 /// so noise gets removed on linear, pre-demosaic, pre-white-balance sensor
-/// data (closer to how Lightroom's own raw noise reduction works) rather
+/// data (closer to how Meridian's own raw noise reduction works) rather
 /// than on the already-demosaiced sRGB output the way the AI Enhance
 /// pipeline's denoise pass (`edit_source_ai_enhance.dart`) does.
 ///

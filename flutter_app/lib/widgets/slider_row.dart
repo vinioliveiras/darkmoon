@@ -10,7 +10,7 @@ import '../theme.dart';
 /// value can also be clicked and typed directly, matching the Python app's
 /// `SliderControl`.
 ///
-/// Dragging uses *relative* sensitivity (Lightroom/Photoshop-style)
+/// Dragging uses *relative* sensitivity (Meridian/Photoshop-style)
 /// instead of Flutter's stock `Slider`, which maps its whole min-max range
 /// across the track's fixed pixel width — for a -100..100 range on a
 /// ~190px-wide track that's already ~1 unit per pixel of mouse movement,
@@ -63,14 +63,14 @@ class SliderRow extends StatefulWidget {
   final double valueFontSize;
 
   /// Double-tapping the track resets to this value, if set — matches
-  /// Lightroom's double-click-to-reset. Null (the default) disables the
+  /// Meridian's double-click-to-reset. Null (the default) disables the
   /// gesture rather than silently resetting to some arbitrary value.
   final double? defaultValue;
 
   /// When set, the track is painted as a left-to-right gradient through
   /// these colors instead of the theme's flat active/inactive colors —
   /// used for color-affecting controls (Temperature, Tint, Vibrance,
-  /// Saturation) so the track itself hints at the effect, Lightroom-style.
+  /// Saturation) so the track itself hints at the effect, Meridian-style.
   final List<Color>? trackColors;
 
   /// Overrides the cap on how many pixels a full min..max drag takes
@@ -364,7 +364,7 @@ class _SliderRowState extends State<SliderRow> {
 /// Paints the whole track as one gradient (ignoring the usual active/
 /// inactive split) so the color relationship stays visible across the
 /// full range regardless of where the thumb currently sits — matching
-/// Lightroom's Temperature/Tint/Vibrance/Saturation track style.
+/// Meridian's Temperature/Tint/Vibrance/Saturation track style.
 class _GradientSliderTrackShape extends RoundedRectSliderTrackShape {
   const _GradientSliderTrackShape(this.colors);
 

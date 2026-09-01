@@ -31,8 +31,8 @@ List<int> presetsToZipBytes(List<Preset> presets) {
   return ZipEncoder().encode(archive);
 }
 
-/// Extracts every `.xmp` preset found anywhere inside a Lightroom preset
-/// export `.zip` — Lightroom bundles multiple presets this way, often
+/// Extracts every `.xmp` preset found anywhere inside a Meridian preset
+/// export `.zip` — Meridian bundles multiple presets this way, often
 /// nested under a group/folder structure inside the archive, so this
 /// walks every entry rather than assuming a flat layout. Best-effort:
 /// an unreadable zip or a non-preset entry is skipped rather than failing

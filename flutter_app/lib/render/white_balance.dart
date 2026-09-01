@@ -72,7 +72,7 @@ enum WbMode {
   // the (already-neutral) as-shot white, reduced to its effect on a
   // neutral so it stays three scalars (no per-pixel matrix / shader
   // change). Cone space gives the stronger, greener blue<->yellow
-  // response Lightroom's Temperature slider has.
+  // response Meridian's Temperature slider has.
   final adapted = _bradfordNeutralGains(
     _referenceWhiteXyz(asShotKelvin),
     _referenceWhiteXyz(targetKelvin),
@@ -82,7 +82,7 @@ enum WbMode {
   var b = adapted.b;
 
   // Green/magenta tint, relative to the as-shot tint. Positive = magenta
-  // (green down, red+blue up), matching Lightroom's slider.
+  // (green down, red+blue up), matching Meridian's slider.
   final t = (targetTint - asShotTint) / 100.0;
   g *= 1.0 - t * _wbTintStrength;
   r *= 1.0 + t * _wbTintStrength * 0.5;
@@ -108,7 +108,7 @@ enum WbMode {
 }
 
 /// XYZ (Y = 1) of the reference white at [kelvin]. CIE daylight locus
-/// at/above 4000 K (what Lightroom's Temperature slider tracks), Planckian
+/// at/above 4000 K (what Meridian's Temperature slider tracks), Planckian
 /// blackbody below it.
 ({double x, double y, double z}) _referenceWhiteXyz(double kelvin) {
   final k = kelvin.clamp(1667.0, 25000.0);
@@ -272,7 +272,7 @@ List<List<double>> _matMul(List<List<double>> a, List<List<double>> b) => [
 }
 
 /// As-shot estimator calibration — all four live in `calibration.dart`
-/// under "WHITE BALANCE — estimador do As Shot", fitted against Lightroom
+/// under "WHITE BALANCE — estimador do As Shot", fitted against Meridian
 /// on real X100VI files. See that file to re-tune for another camera.
 const double _wbTintPerDuv = calWbAsShotTintPerDuv;
 const double _wbDuvBias = calWbAsShotDuvBias;
@@ -287,7 +287,7 @@ const double _wbTintScale = calWbAsShotTintScaleFallback;
 ///     this from Adobe's own per-model coefficients, so the colorimetric
 ///     estimate (invert the matrix, map the neutral to a chromaticity,
 ///     McCamy CCT + a perpendicular Δuv for tint) lands in the same
-///     reference frame Lightroom uses — typically within ~150 K.
+///     reference frame Meridian uses — typically within ~150 K.
 ///  2. [wbctCoeffs] — the camera's internal colour-temperature table
 ///     (`WBCT_Coeffs`). Camera-accurate geometry but the sensor maker's
 ///     Kelvin labels, so it can read a few hundred K off Adobe.
@@ -468,7 +468,7 @@ const double _wbTintScale = calWbAsShotTintScaleFallback;
     prevMired = mired;
   }
 
-  // Green side -> negative Tint, matching Lightroom's convention.
+  // Green side -> negative Tint, matching Meridian's convention.
   final duv = (bestCross >= 0 ? 1.0 : -1.0) * math.sqrt(bestD2);
   final tint = ((duv + _wbDuvBias) * _wbTintPerDuv).clamp(-150.0, 150.0);
   final kelvin =

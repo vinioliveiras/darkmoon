@@ -1,6 +1,6 @@
 # darkmoon
 
-A fast, native RAW and JPEG photo editor for Windows and Linux — built with Flutter, inspired by Lightroom and Photomator.
+A fast, native RAW and JPEG photo editor for Windows and Linux — built with Flutter, inspired by the best desktop RAW editors.
 
 ![darkmoon main editing view](.github/assets/screenshot-main.png)
 
@@ -8,7 +8,7 @@ A fast, native RAW and JPEG photo editor for Windows and Linux — built with Fl
 
 ### Import & library
 
-- Open individual RAW files or add whole folders to a persistent library, browsed in a Lightroom-style folder tree
+- Open individual RAW files or add whole folders to a persistent library, browsed in a familiar folder tree
 - Supports Canon (CR2/CR3), Nikon (NEF), Sony (ARW), Fujifilm (RAF, including X-Trans sensors), Olympus (ORF), Panasonic (RW2), and DNG
 - **Common image formats too** — JPEG, PNG, TIFF, WebP, and BMP go through the exact same editing pipeline as RAW, with an optional "RAW files only" library filter and a type badge on every filmstrip thumbnail
 - Fast, parallel thumbnail generation with an on-disk cache
@@ -32,7 +32,7 @@ A fast, native RAW and JPEG photo editor for Windows and Linux — built with Fl
 
 ### Presets
 
-- Lightroom-compatible: import `.xmp` presets (single files or `.zip` bundles) and export your own
+- Import `.xmp` presets (single files or `.zip` bundles) and export your own
 - Adjustable **Amount** slider blends a preset in at anywhere from 0–150% strength instead of always applying it at full force
 
 ### Performance

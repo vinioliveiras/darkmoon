@@ -11,7 +11,7 @@
 ///   1. Edit a number below.
 ///   2. Run the build:  flutter run -d windows     (or build windows --release)
 ///   3. Open a photo, move the matching slider, and compare (e.g. against
-///      Lightroom at the same value).
+///      Meridian at the same value).
 ///   4. Don't like it? Go back to the "default:" noted in the comment.
 ///
 /// GENERAL RULE
@@ -38,7 +38,7 @@ library;
 /// green vs. magenta.
 ///   ↑ higher = more aggressive Tint (green/magenta shows up faster)
 ///   ↓ lower  = gentler Tint
-/// default: 0.35   (the old model used 0.25; raised toward Lightroom)
+/// default: 0.35   (the old model used 0.25; raised toward Meridian)
 const double calWbTintStrength = 0.35;
 
 /// Working-space gamma the WB gains are applied in.
@@ -57,13 +57,13 @@ const double calWbWorkingGamma = 2.2;
 // "As Shot" (the Kelvin/Tint shown at 0 edits) is ESTIMATED via colorimetry
 // (Bradford adaptation + Ohno projection onto the locus).
 //
-// These 3 values were fit by least squares against Lightroom on 4 real
+// These 3 values were fit by least squares against Meridian on 4 real
 // X100VI files (matches within ~2% Kelvin / ~3.5 tint). If you use a
 // different camera and "As Shot" is skewing green/magenta or cool/warm vs.
-// Lightroom, re-tune here (note the reference photos you used).
+// Meridian, re-tune here (note the reference photos you used).
 
 /// Fixed Δuv (green/magenta) added before converting to Tint — our reference
-/// white locus sits ~0.0065 uv too green compared to Lightroom's.
+/// white locus sits ~0.0065 uv too green compared to Meridian's.
 ///   ↑ higher = "As Shot" skews more toward magenta (more positive Tint)
 ///   ↓ lower  = skews more toward green
 /// default: 0.00655
@@ -76,7 +76,7 @@ const double calWbAsShotDuvBias = 0.00655;
 const double calWbAsShotTintPerDuv = 3220.0;
 
 /// Mireds subtracted from the estimated temperature (our CCT reads a few
-/// mireds cooler than Lightroom's on the X100VI).
+/// mireds cooler than Meridian's on the X100VI).
 ///   ↑ higher = "As Shot" runs WARMER (higher Kelvin)
 ///   ↓ lower  = cooler
 /// default: 3.0
@@ -89,26 +89,26 @@ const double calWbAsShotCctMiredBias = 3.0;
 const double calWbAsShotTintScaleFallback = 200.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
-// ║  BASE LOOK — the "profile curve" (approximates Lightroom's "Adobe Color") ║
+// ║  BASE LOOK — the "profile curve" (approximates Meridian's "Adobe Color") ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 //
-// Lightroom, at 0 edits, ALREADY applies the "Adobe Color" profile's tone
+// Meridian, at 0 edits, ALREADY applies the "Adobe Color" profile's tone
 // curve (a gentle S-curve baked into the profile). darkmoon decodes the RAW
 // with a straight sRGB gamma and nothing else, so its starting point is much
-// FLATTER. In practice: presets made in Lightroom look low-contrast here,
+// FLATTER. In practice: presets made in Meridian look low-contrast here,
 // and you end up compensating via Blacks/Whites in every preset.
 //
 // This number applies a fixed S-curve to every photo, right at the start of
 // tone adjustments (after Exposure/WB, before Highlights/Shadows/Blacks/
 // Whites and the curves) — the same slot the profile curve occupies in
-// Lightroom. The math is identical to the Contrast slider's, so "20" here is
+// Meridian. The math is identical to the Contrast slider's, so "20" here is
 // roughly a built-in Contrast +20.
 ///
-//   ↑ higher = a more contrasty starting point (closer to Lightroom)
+//   ↑ higher = a more contrasty starting point (closer to Meridian)
 //   ↓ lower  = flatter (0.0 = off, the old behavior)
 //
-// Calibrated to 20.0 by comparing DSF1309 against a real Lightroom export
-// (the "Filmatic Fuji 2 Lightroom.xmp" profile imported unmodified) —
+// Calibrated to 20.0 by comparing DSF1309 against a real Meridian export
+// (the "Filmatic Fuji 2 Meridian.xmp" profile imported unmodified) —
 // 2026-08-29. In this range (~12 to ~28) overall contrast matches.
 //
 // ⚠️ Changing this changes the look of every photo and every preset —
@@ -171,7 +171,7 @@ const double calShadowsAmountScale = 1.0;
 /// HIGH number confines the effect to only the deepest shadows; a LOW number
 /// spreads it into the shadow-midtones too.
 ///   ↑ higher = effect more confined to deep shadows
-///   ↓ lower  = reaches a wider shadow range (more "Lightroom"-like)
+///   ↓ lower  = reaches a wider shadow range (more "Meridian"-like)
 /// default: 4.5
 const double calShadowsFalloff = 4.5;
 
@@ -185,20 +185,20 @@ const double calWhitesMaskLow = 0.32;
 /// **Whites** — how much it lifts the white point at the slider's max value.
 ///   ↑ higher = Whites +100 brightens much more
 ///   ↓ lower  = Whites +100 barely changes anything
-/// default: 0.42   (original RapidRAW: 0.25)   [also on GPU: point_ops_post_denoise.frag]
+/// default: 0.42   (original Solstice: 0.25)   [also on GPU: point_ops_post_denoise.frag]
 const double calWhitesLevelCoeff = 0.42;
 
 /// **Blacks** — multiplier on top of the slider value.
 ///   ↑ higher = stronger Blacks (crushes/lifts black much harder)
 ///   ↓ lower  = weaker Blacks
-/// default: 1.5   (original RapidRAW: 1.0)   [also on GPU: point_ops_post_denoise.frag]
+/// default: 1.5   (original Solstice: 1.0)   [also on GPU: point_ops_post_denoise.frag]
 const double calBlacksAmountScale = 1.5;
 
 /// **Blacks** — width of the affected range (exponent, same idea as
 /// Shadows').
 ///   ↑ higher (e.g. 12) = only the deepest black moves
 ///   ↓ lower (e.g. 7)   = reaches a wider shadow range
-/// default: 9.0   (original RapidRAW: 12.0)   [also on GPU: point_ops_post_denoise.frag]
+/// default: 9.0   (original Solstice: 12.0)   [also on GPU: point_ops_post_denoise.frag]
 const double calBlacksFalloff = 9.0;
 
 /// **Shadows/Blacks** — a local-contrast boost applied alongside the lift, so
@@ -245,7 +245,7 @@ const double calClarityStrength = 1.0;
 
 /// **Dehaze +** — how hard the positive slider pulls transmission down (=
 /// removes haze). This is the main control over Dehaze strength.
-///   ↑ higher (e.g. 0.85) = very aggressive Dehaze (original RapidRAW)
+///   ↑ higher (e.g. 0.85) = very aggressive Dehaze (original Solstice)
 ///   ↓ lower (e.g. 0.45) = quite gentle Dehaze
 /// default: 0.55   [also on GPU: dehaze_apply.frag]
 const double calDehazeTransmissionCoeff = 0.55;
@@ -254,21 +254,21 @@ const double calDehazeTransmissionCoeff = 0.55;
 /// in the hazier spots. Higher = safer/gentler.
 ///   ↑ higher = caps the maximum effect (gentler)
 ///   ↓ lower  = lets Dehaze go further (can blow out)
-/// default: 0.22   (original RapidRAW: 0.15)   [also on GPU: dehaze_apply.frag]
+/// default: 0.22   (original Solstice: 0.15)   [also on GPU: dehaze_apply.frag]
 const double calDehazeTransmissionFloor = 0.22;
 
 /// **Dehaze** — how much it saturates color in proportion to the haze
 /// removed.
 ///   ↑ higher = Dehaze leaves color more "punchy"
 ///   ↓ lower  = Dehaze barely touches saturation
-/// default: 0.32   (original RapidRAW: 0.5)   [also on GPU: dehaze_apply.frag]
+/// default: 0.32   (original Solstice: 0.5)   [also on GPU: dehaze_apply.frag]
 const double calDehazeSatBoost = 0.32;
 
 /// **Dehaze −** (add haze) — strength of the slider's negative side (blends
 /// the image with atmospheric light, making it look "milky").
 ///   ↑ higher = stronger negative Dehaze
 ///   ↓ lower  = subtler
-/// default: 0.55   (original RapidRAW: 0.7)   [also on GPU: dehaze_apply.frag]
+/// default: 0.55   (original Solstice: 0.7)   [also on GPU: dehaze_apply.frag]
 const double calDehazeAddMix = 0.55;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
@@ -302,14 +302,14 @@ const double calSaturationStrength = 1.0;
 
 /// **Mixer → Hue** — how many degrees of hue rotation each slider unit
 /// produces (before per-band normalization and the saturation mask). The
-/// RapidRAW port used 0.6 (= `0.3 * 2.0`); comparing against Lightroom
+/// Solstice port used 0.6 (= `0.3 * 2.0`); comparing against Meridian
 /// (Filmatic Fuji 2 on DSF1309, 2026-08-29) showed the user needed ~1.9×
-/// Lightroom's value on Orange/Yellow/Aqua/Blue — i.e. darkmoon's Hue was
+/// Meridian's value on Orange/Yellow/Aqua/Blue — i.e. darkmoon's Hue was
 /// too weak. Raised to 1.15.
 ///   ↑ higher = the same Hue slider value rotates color more
-///   ↓ lower  = rotates less (0.6 = original RapidRAW behavior)
+///   ↓ lower  = rotates less (0.6 = original Solstice behavior)
 /// ⚠️ changes older presets that touched Mixer Hue (they'll rotate further).
-/// default: 1.15   (original RapidRAW: 0.6)   [also on GPU: point_ops_post_denoise.frag]
+/// default: 1.15   (original Solstice: 0.6)   [also on GPU: point_ops_post_denoise.frag]
 const double calMixerHueStrength = 1.15;
 
 /// **Mixer → effective band width** — the "sharpness" of the gaussian that
@@ -319,10 +319,10 @@ const double calMixerHueStrength = 1.15;
 /// much). A LOW number = wider, more overlapping bands.
 ///   ↑ higher (e.g. 2.5) = bands more separated, more surgical effect
 ///   ↓ lower (e.g. 1.0) = wider bands (more "leakage")
-/// Symptom of this being too low: in Lightroom you desaturate only Green,
+/// Symptom of this being too low: in Meridian you desaturate only Green,
 /// but in darkmoon you have to compensate Yellow/Aqua because Green
 /// "leaked" into them. The 2026-08-29 comparison suggests this may be too
-/// wide; worth testing higher. Kept at 1.5 (original RapidRAW) for now.
+/// wide; worth testing higher. Kept at 1.5 (original Solstice) for now.
 /// default: 1.5   [also on GPU: point_ops_post_denoise.frag → rawHslInfluence]
 const double calMixerBandSharpness = 1.5;
 

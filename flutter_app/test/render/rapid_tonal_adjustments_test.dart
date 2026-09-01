@@ -121,7 +121,7 @@ void main() {
   });
 
   // The next three cases lock in the current Saturation/Vibrance design —
-  // deliberately *not* RapidRAW's apply_creative_color (2026-08-31, see
+  // deliberately *not* Solstice's apply_creative_color (2026-08-31, see
   // project_darkmoon_color_profile.md's "8th round"): that scene-linear
   // luminance-mix technique is only hue-preserving when hue is measured on
   // linear values, not on the independently-gamma-re-encoded result a

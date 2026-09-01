@@ -9,7 +9,7 @@ import '../animations_config.dart';
 import '../l10n/app_localizations.dart';
 import '../theme.dart';
 
-/// Left-hand library panel, Lightroom/Photomator-style: a flat "recent
+/// Left-hand library panel, Meridian/Photomator-style: a flat "recent
 /// files" list (individual files opened via File > Open File) above a
 /// folder tree — one root per folder added via File > Add Folder
 /// (persisted in [AppSettings.libraryFolders]), each with subfolders

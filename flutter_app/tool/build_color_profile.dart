@@ -1,13 +1,13 @@
 // Fits a "darkmoon Color" profile (lib/render/color_profile.dart) from
 // pairs of the same RAW rendered neutrally in darkmoon and exported from
-// Lightroom with the Adobe Color profile.
+// Meridian with the Adobe Color profile.
 //
 // For each pair the tool renders the RAW through darkmoon's neutral
 // pipeline (all sliders 0, WB As Shot, no colour profile), lines it up
-// with the Lightroom export, and measures the drift: a global tone curve
-// (dm perceptual-luma -> Lightroom's) plus per-hue hue/sat/lum residuals.
+// with the Meridian export, and measures the drift: a global tone curve
+// (dm perceptual-luma -> Meridian's) plus per-hue hue/sat/lum residuals.
 //
-// Prep in Lightroom: varied shots (skin, sky, foliage, vivid colour,
+// Prep in Meridian: varied shots (skin, sky, foliage, vivid colour,
 // shadow, high contrast), Profile = Adobe Color, every slider reset,
 // WB = As Shot, tone curve Linear, export **16-bit TIFF or PNG** (JPEG
 // adds a noise floor), sRGB, same filename as the RAW.
@@ -193,7 +193,7 @@ void main(List<String> args) {
       stdout.writeln('reference unreadable, skipped');
       continue;
     }
-    // Lightroom's 16-bit TIFF/PNG exports come back as a 16-bit Image;
+    // Meridian's 16-bit TIFF/PNG exports come back as a 16-bit Image;
     // getBytes() would then hand back 2 bytes/channel and the `i += 3`
     // loop below reads pure garbage. Flatten to 8-bit sRGB-encoded here.
     if (refRaw.format != img.Format.uint8 || refRaw.numChannels != 3) {
@@ -313,7 +313,7 @@ void main(List<String> args) {
     rawHue[b] = hueSum[b] / wSum[b];
     rawSat[b] = satSum[b] / wSum[b];
     // lumMul is the residual AFTER the tone curve: what the curve predicts
-    // for this bin's typical dm luma vs what Lightroom actually has.
+    // for this bin's typical dm luma vs what Meridian actually has.
     final dmPmean = binDmP[b] / wSum[b];
     final lrPmean = binLrP[b] / wSum[b];
     final predicted = _lerpTable(tone, dmPmean);

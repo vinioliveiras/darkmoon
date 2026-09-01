@@ -97,7 +97,7 @@ class RenderParams {
 
   /// Strength of the fixed "profile" S-curve every photo gets before the
   /// tone sliders — darkmoon's stand-in for the contrast the Adobe Color
-  /// profile bakes into Lightroom's own zero-edit rendering (see
+  /// profile bakes into Meridian's own zero-edit rendering (see
   /// [calBaseContrast]). Same scale as the Contrast slider. Not a user
   /// slider and not read from the values map — it's per-pipeline context,
   /// like [asShotKelvin]; only tests that isolate a non-tonal step set it
@@ -123,7 +123,7 @@ class RenderParams {
   final double asShotKelvin;
   final double asShotTint;
 
-  /// Off by default — matches RapidRAW's `apply_white_balance` (shader.wgsl),
+  /// Off by default — matches Solstice's `apply_white_balance` (shader.wgsl),
   /// which multiplies its Temperature/Tint gains directly with no
   /// brightness-compensation step, so a strong Tint does shift overall
   /// luminance slightly. Turning this on restores Darkmoon's own older
@@ -146,7 +146,7 @@ class RenderParams {
   final double saturation;
   final PhotoCurves curves;
 
-  /// Lightroom's parametric Tone Curve (region sliders). Applied just
+  /// Meridian's parametric Tone Curve (region sliders). Applied just
   /// before [curves]'s point Tone Curve — see `applyPostDenoisePointOps`.
   final ParametricCurve parametricCurve;
   final ColorMixerValues colorMixer;

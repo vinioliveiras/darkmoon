@@ -22,7 +22,7 @@ void main() {
     });
 
     test('raising temperature above 5500K warms the image (R > B), '
-        'matching Lightroom/Camera Raw convention', () {
+        'matching Meridian/Camera Raw convention', () {
       final src = flatGray(4, 4, 150);
       final out = renderRgb(
         4,
@@ -72,7 +72,7 @@ void main() {
     });
 
     test('positive tint shifts toward magenta (green down, red/blue up) '
-        'without desaturating red/blue asymmetrically, matching Lightroom '
+        'without desaturating red/blue asymmetrically, matching Meridian '
         "convention and this slider's green->magenta gradient", () {
       final src = flatGray(4, 4, 150);
       final out = renderRgb(

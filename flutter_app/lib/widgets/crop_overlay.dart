@@ -31,7 +31,7 @@ const _handleHitRadius = 20.0;
 /// [params]'s crop rect instead of a mask's geometry.
 ///
 /// [lockedAspectRatio], if set, constrains every drag to keep that
-/// width/height ratio (Lightroom's aspect-ratio-picker behavior);
+/// width/height ratio (Meridian's aspect-ratio-picker behavior);
 /// otherwise the four corners move independently.
 class CropOverlay extends StatefulWidget {
   const CropOverlay({

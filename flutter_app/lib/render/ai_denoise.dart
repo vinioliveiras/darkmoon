@@ -4,7 +4,7 @@ import 'blur.dart';
 import 'calibration.dart';
 import 'luminance.dart';
 
-/// One-shot, Lightroom/Photomator-style intelligent denoise pass — no
+/// One-shot, Meridian/Photomator-style intelligent denoise pass — no
 /// sliders, no manual tuning: each level is pre-tuned to what testing found
 /// to be a good noise/detail trade-off for that strength, so picking a
 /// level is the only decision the user makes.
@@ -90,7 +90,7 @@ class AiDenoiseParams {
 /// Runs early in the render pipeline (right after white balance/exposure,
 /// before tone shaping) so later adjustments that lift shadows or push
 /// local contrast don't amplify noise this pass never got a chance to
-/// remove — matching how Lightroom's own noise reduction happens before
+/// remove — matching how Meridian's own noise reduction happens before
 /// tone/presence adjustments rather than after them.
 void applyAiDenoise(
   Float32List img,

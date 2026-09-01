@@ -208,7 +208,7 @@ Future<ExportResult> _exportPhotoInternal(
       // this package's default is 4:4:4 (no subsampling at all), which
       // produces meaningfully larger files for no visible quality gain at
       // photographic content; 4:2:0 is what cameras, browsers, and
-      // Lightroom's own JPEG export all use by default.
+      // Meridian's own JPEG export all use by default.
       ExportFormat.jpeg => img.encodeJpg(
         image,
         quality: request.quality,

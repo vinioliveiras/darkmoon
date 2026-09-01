@@ -80,7 +80,7 @@ void main() {
     });
   }
 
-  runCase('default (Lightroom-style RAW-import) params', const SharpenParams());
+  runCase('default (Meridian-style RAW-import) params', const SharpenParams());
   runCase(
     'amount only, no detail/masking',
     const SharpenParams(amount: 80, detail: 0, masking: 0),
