@@ -111,7 +111,7 @@ class LensCorrectionPanel extends StatelessWidget {
           max: 100,
           value: params.distortionAmount,
           decimals: 0,
-          defaultValue: 50,
+          defaultValue: 0,
           onChanged: (v) =>
               onChanged(params.copyWith(distortionAmount: v)),
           onChangeEnd: (v) =>
@@ -124,7 +124,7 @@ class LensCorrectionPanel extends StatelessWidget {
           max: 100,
           value: params.vignetteAmount,
           decimals: 0,
-          defaultValue: 50,
+          defaultValue: 0,
           onChanged: (v) => onChanged(params.copyWith(vignetteAmount: v)),
           onChangeEnd: (v) => onChangeEnd(params.copyWith(vignetteAmount: v)),
         ),
@@ -135,7 +135,7 @@ class LensCorrectionPanel extends StatelessWidget {
           max: 100,
           value: params.chromaticAberrationAmount,
           decimals: 0,
-          defaultValue: 50,
+          defaultValue: 100,
           onChanged: (v) =>
               onChanged(params.copyWith(chromaticAberrationAmount: v)),
           onChangeEnd: (v) =>

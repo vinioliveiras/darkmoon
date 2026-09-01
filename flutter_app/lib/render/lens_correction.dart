@@ -28,9 +28,9 @@ class LensCorrectionParams {
     // amount defaults below instead of needing an explicit opt-in.
     this.enabled = true,
     this.manualProfileKeyHash,
-    this.distortionAmount = 50,
-    this.vignetteAmount = 50,
-    this.chromaticAberrationAmount = 50,
+    this.distortionAmount = 0,
+    this.vignetteAmount = 0,
+    this.chromaticAberrationAmount = 100,
   });
 
   final bool enabled;
@@ -53,18 +53,22 @@ class LensCorrectionParams {
   /// 0..100 — blends the distortion correction from full strength (100,
   /// matching the profile's calibration) down to no correction (0),
   /// mirroring Meridian's own Distortion amount slider under the Profile
-  /// checkbox. Defaults to 50 (half-strength) rather than 100 — a lens's
-  /// bundled calibration is an approximation of THIS specific copy's real
-  /// optics, so starting at full strength risks over-correcting; the user
-  /// dials it up if the photo calls for it.
+  /// checkbox. Defaults to 0 (explicit user direction, 2026-09-01) — a
+  /// lens's bundled calibration is an approximation of THIS specific
+  /// copy's real optics, so starting at full strength risks over-
+  /// correcting; the user dials it up if the photo calls for it.
   final double distortionAmount;
 
-  /// 0..100 — same blend, for the vignetting correction. Same half-
-  /// strength default as [distortionAmount], for the same reason.
+  /// 0..100 — same blend, for the vignetting correction. Same
+  /// no-correction-by-default reasoning as [distortionAmount].
   final double vignetteAmount;
 
-  /// 0..100 — same blend, for the TCA (red/blue channel) correction. Same
-  /// half-strength default as [distortionAmount], for the same reason.
+  /// 0..100 — same blend, for the TCA (red/blue channel) correction.
+  /// Defaults to 100 (full correction), unlike [distortionAmount]/
+  /// [vignetteAmount] — explicit user direction (2026-09-01): color
+  /// fringing is a pure defect with no stylistic value, so (unlike
+  /// distortion/vignette, which can be a deliberate look) there's no
+  /// reason not to remove it fully by default.
   final double chromaticAberrationAmount;
 
   bool get isIdentity => !enabled;
