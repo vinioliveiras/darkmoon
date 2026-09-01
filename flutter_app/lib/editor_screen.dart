@@ -113,6 +113,8 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderWhites;
     case 'Blacks':
       return l10n.sliderBlacks;
+    case 'ColorProfileAmount':
+      return l10n.sliderColorProfileAmount;
     case 'Texture':
       return l10n.sliderTexture;
     case 'Clarity':
@@ -487,6 +489,12 @@ const _sections = <String, List<_SliderSpec>>{
     _SliderSpec('Shadows', -100, 100, 0),
     _SliderSpec('Whites', -100, 100, 0),
     _SliderSpec('Blacks', -100, 100, 0),
+    // Per-photo/per-preset override of the fixed "profile" contrast curve
+    // — see calBaseContrast and _effectiveBaseContrast's doc. Same default
+    // (20) and range (0-60) as the old Settings-only global control this
+    // replaced (2026-09-01) — now every photo/preset carries its own value
+    // instead of one value applying to the whole library.
+    _SliderSpec('ColorProfileAmount', 0, 60, 20, decimals: 0),
   ],
   'PRESENCE': [
     _SliderSpec('Texture', -100, 100, 0),
@@ -705,11 +713,15 @@ class _EditorScreenState extends State<EditorScreen>
 
   /// The base contrast to actually render with: the profile's fitted tone
   /// curve *replaces* the hand-tuned [calBaseContrast] S when it's present,
-  /// so they don't stack.
+  /// so they don't stack. Otherwise reads the per-photo/per-preset
+  /// "ColorProfileAmount" slider (2026-09-01) — previously a single global
+  /// value in Settings, now saved with each photo/preset like every other
+  /// slider, and subject to the same Amount-slider scaling
+  /// ([_effectiveParamValues]).
   double get _effectiveBaseContrast =>
       (_colorProfile != null && !_colorProfile!.toneIsIdentity)
       ? 0.0
-      : _settings.baseContrast;
+      : _effectiveParamValues()['ColorProfileAmount'] ?? calBaseContrast;
 
   /// Unedited render of whichever photos have had Before/After turned on,
   /// computed lazily (only when first needed) since most photos are never
@@ -1747,25 +1759,10 @@ class _EditorScreenState extends State<EditorScreen>
           final fullQualityResChanged =
               next.dynamicFullPreview &&
               next.fullQualityPercent != _settings.fullQualityPercent;
-          // The base "profile" contrast feeds every render — a change makes
-          // every cached render stale, so drop them and re-render the open
-          // photo now instead of only on the next photo switch.
-          final baseContrastChanged =
-              next.baseContrast != _settings.baseContrast;
-          final currentPath = _selectedIndex == null
-              ? null
-              : _files[_selectedIndex!].path;
           setState(() {
             _settings = next;
             if (previewResolutionChanged) {
               _editSources.clear();
-            }
-            if (baseContrastChanged) {
-              // Keep the open photo's current frame on screen until its
-              // own re-render lands (below); the rest re-render on visit.
-              _renderedPreviews.removeWhere((k, _) => k != currentPath);
-              _fullQualityPreviews.removeWhere((k, _) => k != currentPath);
-              _neutralPreviews.clear();
             }
             if (dynamicFullPreviewChanged && !next.dynamicFullPreview) {
               // Off: keep the caches — the canvas just switches to reading
@@ -1803,12 +1800,6 @@ class _EditorScreenState extends State<EditorScreen>
               unawaited(
                 _loadEditSourceAndRender(selected.path, _folderGeneration),
               );
-            }
-          }
-          if (baseContrastChanged && currentPath != null) {
-            _scheduleRender(live: false);
-            if (_beforeAfterMode) {
-              unawaited(_loadNeutralPreview(currentPath));
             }
           }
         },
@@ -5988,6 +5979,9 @@ class _EditorScreenState extends State<EditorScreen>
                             onChanged: _onActiveChanged,
                             onChangeEnd: _onActiveChangeEnd,
                             onReset: _resetActive,
+                            presetAmount: _paramValues[_globalEditAmountKey] ?? 100.0,
+                            onPresetAmountChanged: _onGlobalEditAmountChanged,
+                            onPresetAmountChangeEnd: _onGlobalEditAmountChangeEnd,
                             onWhiteBalanceMode: _applyWbMode,
                             wbEyedropperActive: _wbEyedropperActive,
                             onToggleWbEyedropper: () => setState(
@@ -6101,9 +6095,6 @@ class _EditorScreenState extends State<EditorScreen>
                       onExport: selected == null ? null : _exportCurrent,
                       exporting: _exporting,
                       onReset: _resetActive,
-                      presetAmount: _paramValues[_globalEditAmountKey] ?? 100.0,
-                      onPresetAmountChanged: _onGlobalEditAmountChanged,
-                      onPresetAmountChangeEnd: _onGlobalEditAmountChangeEnd,
                     ),
                     _Filmstrip(
                       files: _files,
@@ -7104,9 +7095,6 @@ class _ViewerToolbar extends StatelessWidget {
     required this.onExport,
     required this.exporting,
     required this.onReset,
-    required this.presetAmount,
-    required this.onPresetAmountChanged,
-    required this.onPresetAmountChangeEnd,
   });
 
   final String zoomLabel;
@@ -7140,17 +7128,6 @@ class _ViewerToolbar extends StatelessWidget {
   final bool exporting;
   final VoidCallback onReset;
 
-  /// How strongly the *entire current edit* renders, 0..150% — see the
-  /// top-level `_globalEditAmountKey`/`_withGlobalEditAmountApplied`.
-  /// Lives here (rather than in `PresetPanel`) so it sits in the
-  /// toolbar's left spacer, under the preset list, matching the
-  /// width-alignment convention the two reserved spacers already follow
-  /// — a purely visual placement choice at this point, not a sign this
-  /// only affects presets.
-  final double presetAmount;
-  final ValueChanged<double> onPresetAmountChanged;
-  final ValueChanged<double> onPresetAmountChangeEnd;
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -7160,40 +7137,12 @@ class _ViewerToolbar extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          // Lines up under the folder/preset sidebar above — holds the
-          // preset Amount slider, right under the preset list it affects.
-          // Matches _controlsPanelWidth exactly (was a narrower 220 that
-          // didn't line up with the sidebar's actual 280px width, which
-          // also threw off the zoom controls right after it in the Row
-          // below). A larger label/value size than SliderRow's other call
-          // sites, since this is a standalone toolbar control rather than
-          // one of many stacked panel rows — it can afford to be more
-          // readable.
-          SizedBox(
-            width: _controlsPanelWidth,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14),
-              child: FittedBox(
-                fit: BoxFit.scaleDown,
-                child: SizedBox(
-                  width: _controlsPanelWidth - 28,
-                  child: SliderRow(
-                    name: l10n.presetAmountLabel,
-                    min: 0,
-                    max: 200,
-                    value: presetAmount,
-                    decimals: 0,
-                    valueSuffix: '%',
-                    defaultValue: 100,
-                    labelFontSize: 13,
-                    valueFontSize: 13,
-                    onChanged: onPresetAmountChanged,
-                    onChangeEnd: onPresetAmountChangeEnd,
-                  ),
-                ),
-              ),
-            ),
-          ),
+          // Lines up under the folder/preset sidebar above — the preset
+          // Amount slider used to live here; it now lives in the controls
+          // panel just below the histogram (2026-09-01). Kept as an empty
+          // spacer so the zoom controls in the Row below stay aligned with
+          // the sidebar's actual width, same as before.
+          SizedBox(width: _controlsPanelWidth),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
@@ -8016,6 +7965,9 @@ class _ControlsPanel extends StatefulWidget {
     required this.onChanged,
     required this.onChangeEnd,
     required this.onReset,
+    required this.presetAmount,
+    required this.onPresetAmountChanged,
+    required this.onPresetAmountChangeEnd,
     required this.onExport,
     required this.exporting,
     required this.enabled,
@@ -8083,6 +8035,15 @@ class _ControlsPanel extends StatefulWidget {
   final void Function(String name, double value) onChanged;
   final void Function(String name, double value) onChangeEnd;
   final VoidCallback onReset;
+
+  /// How strongly the *entire current edit* renders, 0..200% — see the
+  /// top-level `_globalEditAmountKey`/`_withGlobalEditAmountApplied`. Sits
+  /// just below the histogram (2026-09-01) — previously lived in the
+  /// viewer toolbar under the preset sidebar.
+  final double presetAmount;
+  final ValueChanged<double> onPresetAmountChanged;
+  final ValueChanged<double> onPresetAmountChangeEnd;
+
   final VoidCallback? onExport;
   final bool exporting;
 
@@ -8389,6 +8350,18 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                       ),
                     ),
                     HistogramView(histogram: histogram),
+                    const SizedBox(height: 10),
+                    SliderRow(
+                      name: l10n.presetAmountLabel,
+                      min: 0,
+                      max: 200,
+                      value: widget.presetAmount,
+                      decimals: 0,
+                      valueSuffix: '%',
+                      defaultValue: 100,
+                      onChanged: widget.onPresetAmountChanged,
+                      onChangeEnd: widget.onPresetAmountChangeEnd,
+                    ),
                     PhotoMetadataView(metadata: widget.metadata),
                     const Padding(
                       padding: EdgeInsets.only(top: 12),

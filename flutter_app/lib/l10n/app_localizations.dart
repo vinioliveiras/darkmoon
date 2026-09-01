@@ -1024,12 +1024,6 @@ abstract class AppLocalizations {
   /// **'Performance'**
   String get settingsTabPerformance;
 
-  /// No description provided for @settingsTabColor.
-  ///
-  /// In en, this message translates to:
-  /// **'Color'**
-  String get settingsTabColor;
-
   /// No description provided for @settingsTabData.
   ///
   /// In en, this message translates to:
@@ -1143,18 +1137,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Preview resolution'**
   String get settingsFullQualityScaleLabel;
-
-  /// No description provided for @settingsBaseContrastLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'darkmoon Color profile'**
-  String get settingsBaseContrastLabel;
-
-  /// No description provided for @settingsBaseContrastHint.
-  ///
-  /// In en, this message translates to:
-  /// **'A fixed contrast curve applied to every photo before your edits — darkmoon\'s stand-in for the profile contrast most RAW editors bake in. Raise it if imported presets look flat, lower it (0 = off) for a neutral starting point. Changes every photo and preset.'**
-  String get settingsBaseContrastHint;
 
   /// No description provided for @settingsThumbnailThreadsLabel.
   ///
@@ -1815,6 +1797,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Blacks'**
   String get sliderBlacks;
+
+  /// No description provided for @sliderColorProfileAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Color Profile Strength'**
+  String get sliderColorProfileAmount;
 
   /// No description provided for @sliderTexture.
   ///

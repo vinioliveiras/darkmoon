@@ -6,7 +6,6 @@ import 'package:path_provider/path_provider.dart';
 
 import '../catalog/legacy_filename_migration.dart';
 import '../native/edit_source.dart' show defaultPreviewMaxDimension;
-import '../render/calibration.dart' show calBaseContrast;
 
 /// Leave at least two cores for the UI isolate and the preview-cache
 /// prewarm that runs alongside this batch when a folder opens — pinning
@@ -43,7 +42,6 @@ class AppSettings {
     this.useGpuRender = true,
     this.dynamicFullPreview = false,
     this.fullQualityPercent = 30,
-    this.baseContrast = calBaseContrast,
     this.thumbnailConcurrency = 4,
     this.rawOnly = false,
     this.includeSubfolders = false,
@@ -98,15 +96,6 @@ class AppSettings {
   /// preview ([dynamicFullPreview]) renders at — 30 by default, 100 for a
   /// true full-resolution render on every settle. Clamped to [25, 100].
   final int fullQualityPercent;
-
-  /// Strength of the fixed "profile" contrast curve every photo gets before
-  /// the tone sliders — darkmoon's stand-in for the S-curve the Adobe Color
-  /// profile bakes into Meridian's zero-edit render (see
-  /// `render/calibration.dart`'s `calBaseContrast`, the factory value this
-  /// defaults to). Same 0..100 scale as the Contrast slider; 0 disables it.
-  /// Threaded into every render as `RenderParams.baseContrast`. Clamped to
-  /// [0, 60].
-  final double baseContrast;
 
   /// How many thumbnails to decode concurrently when a folder is opened.
   final int thumbnailConcurrency;
@@ -175,7 +164,6 @@ class AppSettings {
     bool? useGpuRender,
     bool? dynamicFullPreview,
     int? fullQualityPercent,
-    double? baseContrast,
     int? thumbnailConcurrency,
     bool? rawOnly,
     bool? includeSubfolders,
@@ -196,7 +184,6 @@ class AppSettings {
       25,
       100,
     ),
-    baseContrast: (baseContrast ?? this.baseContrast).clamp(0.0, 60.0),
     thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
     rawOnly: rawOnly ?? this.rawOnly,
     includeSubfolders: includeSubfolders ?? this.includeSubfolders,
@@ -233,7 +220,6 @@ class AppSettings {
     useGpuRender: useGpuRender,
     dynamicFullPreview: dynamicFullPreview,
     fullQualityPercent: fullQualityPercent,
-    baseContrast: baseContrast,
     thumbnailConcurrency: thumbnailConcurrency,
     rawOnly: rawOnly,
     includeSubfolders: includeSubfolders,
@@ -263,7 +249,6 @@ class AppSettings {
     useGpuRender: useGpuRender,
     dynamicFullPreview: dynamicFullPreview,
     fullQualityPercent: fullQualityPercent,
-    baseContrast: baseContrast,
     thumbnailConcurrency: thumbnailConcurrency,
     rawOnly: rawOnly,
     includeSubfolders: includeSubfolders,
@@ -313,9 +298,6 @@ Future<AppSettings> loadSettings() async {
           ((raw['fullQualityPercent'] as num?)?.toInt() ??
                   defaults.fullQualityPercent)
               .clamp(25, 100),
-      baseContrast:
-          ((raw['baseContrast'] as num?)?.toDouble() ?? defaults.baseContrast)
-              .clamp(0.0, 60.0),
       thumbnailConcurrency:
           (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
       rawOnly: raw['rawOnly'] as bool? ?? defaults.rawOnly,
@@ -353,7 +335,6 @@ Future<void> saveSettings(AppSettings settings) async {
       'useGpuRender': settings.useGpuRender,
       'dynamicFullPreview': settings.dynamicFullPreview,
       'fullQualityPercent': settings.fullQualityPercent,
-      'baseContrast': settings.baseContrast,
       'thumbnailConcurrency': settings.thumbnailConcurrency,
       'rawOnly': settings.rawOnly,
       'includeSubfolders': settings.includeSubfolders,

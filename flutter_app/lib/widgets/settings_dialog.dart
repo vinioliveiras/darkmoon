@@ -58,7 +58,7 @@ class _SettingsDialogState extends State<SettingsDialog>
     with SingleTickerProviderStateMixin {
   late AppSettings _settings = widget.settings;
   late final TabController _tabController = TabController(
-    length: 4,
+    length: 3,
     vsync: this,
   );
 
@@ -160,7 +160,6 @@ class _SettingsDialogState extends State<SettingsDialog>
               tabs: [
                 Tab(text: l10n.settingsTabGeneral),
                 Tab(text: l10n.settingsTabPerformance),
-                Tab(text: l10n.settingsTabColor),
                 Tab(text: l10n.settingsTabData),
               ],
             ),
@@ -171,7 +170,6 @@ class _SettingsDialogState extends State<SettingsDialog>
                 children: [
                   _buildGeneralTab(l10n),
                   _buildPerformanceTab(l10n),
-                  _buildColorTab(l10n),
                   _buildDataTab(l10n),
                 ],
               ),
@@ -224,6 +222,17 @@ class _SettingsDialogState extends State<SettingsDialog>
             subtitle: Text(l10n.settingsRawOnlyHint, style: _hintStyle),
             value: _settings.rawOnly,
             onChanged: (v) => _update(_settings.copyWith(rawOnly: v)),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(
+              l10n.settingsIncludeSubfoldersLabel,
+              style: _labelStyle,
+            ),
+            value: _settings.includeSubfolders,
+            onChanged: (v) =>
+                _update(_settings.copyWith(includeSubfolders: v)),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -432,51 +441,6 @@ class _SettingsDialogState extends State<SettingsDialog>
                     ),
                 ],
               ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildColorTab(AppLocalizations l10n) {
-    return SingleChildScrollView(
-      child: SettingsGroup(
-        children: [
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      l10n.settingsBaseContrastLabel,
-                      style: _labelStyle,
-                    ),
-                  ),
-                  Text(
-                    _settings.baseContrast.round().toString(),
-                    style: _hintStyle,
-                  ),
-                ],
-              ),
-              Builder(
-                builder: (context) => SliderTheme(
-                  data: SliderTheme.of(
-                    context,
-                  ).copyWith(trackShape: const RectangularSliderTrackShape()),
-                  child: Slider(
-                    min: 0,
-                    max: 60,
-                    divisions: 60,
-                    value: _settings.baseContrast.clamp(0.0, 60.0),
-                    onChanged: (v) => _update(
-                      _settings.copyWith(baseContrast: v.roundToDouble()),
-                    ),
-                  ),
-                ),
-              ),
-              Text(l10n.settingsBaseContrastHint, style: _hintStyle),
             ],
           ),
         ],

@@ -515,9 +515,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsTabPerformance => 'Performance';
 
   @override
-  String get settingsTabColor => 'Color';
-
-  @override
   String get settingsTabData => 'Data';
 
   @override
@@ -579,13 +576,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsFullQualityScaleLabel => 'Preview resolution';
-
-  @override
-  String get settingsBaseContrastLabel => 'darkmoon Color profile';
-
-  @override
-  String get settingsBaseContrastHint =>
-      'A fixed contrast curve applied to every photo before your edits — darkmoon\'s stand-in for the profile contrast most RAW editors bake in. Raise it if imported presets look flat, lower it (0 = off) for a neutral starting point. Changes every photo and preset.';
 
   @override
   String get settingsThumbnailThreadsLabel => 'Thumbnail loading threads';
@@ -938,6 +928,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sliderBlacks => 'Blacks';
+
+  @override
+  String get sliderColorProfileAmount => 'Color Profile Strength';
 
   @override
   String get sliderTexture => 'Texture';

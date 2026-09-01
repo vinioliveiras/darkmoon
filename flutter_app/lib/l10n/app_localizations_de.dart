@@ -522,9 +522,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsTabPerformance => 'Leistung';
 
   @override
-  String get settingsTabColor => 'Farbe';
-
-  @override
   String get settingsTabData => 'Daten';
 
   @override
@@ -588,13 +585,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get settingsFullQualityScaleLabel => 'Vorschauauflösung';
-
-  @override
-  String get settingsBaseContrastLabel => 'darkmoon-Farbprofil';
-
-  @override
-  String get settingsBaseContrastHint =>
-      'Eine feste Kontrastkurve, die vor deinen Bearbeitungen auf jedes Foto angewendet wird — darkmoons Ersatz für den Profilkontrast, den die meisten RAW-Editoren fest einbauen. Erhöhe den Wert, wenn importierte Vorgaben flach wirken, senke ihn (0 = aus) für einen neutralen Ausgangspunkt. Ändert jedes Foto und jede Vorgabe.';
 
   @override
   String get settingsThumbnailThreadsLabel =>
@@ -956,6 +946,9 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get sliderBlacks => 'Schwarz';
+
+  @override
+  String get sliderColorProfileAmount => 'Farbprofil-Stärke';
 
   @override
   String get sliderTexture => 'Textur';
