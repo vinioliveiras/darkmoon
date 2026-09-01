@@ -35,9 +35,15 @@ void main() {
     );
   }
 
+  // click-to-jump/double-click-to-reset temporarily disabled 2026-09-01
+  // (buggy double-click-reset, quickest fix was to turn off the whole
+  // track-tap interaction rather than ship a half-working one) —
+  // re-enable both tests below once _onTrackTap is wired back to onTapUp
+  // in slider_row.dart.
   testWidgets(
     'a single click on the track jumps to that value immediately — '
     'no waiting on the double-tap disambiguation window',
+    skip: true,
     (tester) async {
       final changed = <double>[];
       final changedEnd = <double>[];
@@ -75,6 +81,7 @@ void main() {
   testWidgets(
     'two quick clicks near the same spot reset to defaultValue instead of '
     'jumping twice',
+    skip: true,
     (tester) async {
       final changed = <double>[];
       final changedEnd = <double>[];

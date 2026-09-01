@@ -235,6 +235,9 @@ class _SliderRowState extends State<SliderRow> {
   DateTime? _lastTapTime;
   double? _lastTapX;
 
+  // Not wired to onTapUp right now (see the GestureDetector below) — kept
+  // intact so re-enabling is a one-line change.
+  // ignore: unused_element
   void _onTrackTap(double localX, double boxWidth) {
     final now = DateTime.now();
     final isDoubleTap = widget.defaultValue != null &&
@@ -318,8 +321,16 @@ class _SliderRowState extends State<SliderRow> {
                 _onDragUpdate(details.delta.dx),
             onHorizontalDragEnd: (_) => _onDragEnd(),
             onHorizontalDragCancel: _onDragEnd,
-            onTapUp: (details) =>
-                _onTrackTap(details.localPosition.dx, constraints.maxWidth),
+            // Click-to-jump-to-position (and, built on top of it,
+            // double-click-to-reset via _onTrackTap) temporarily disabled
+            // (2026-09-01, explicit user request) — the double-click reset
+            // was misbehaving and this is the quickest way to stop it
+            // without leaving a half-working interaction live. Dragging and
+            // click-to-type-a-value (_buildValueLabel/_startEditing) are
+            // untouched. _onTrackTap itself is left intact to make
+            // re-enabling this a one-line change once revisited.
+            // onTapUp: (details) =>
+            //     _onTrackTap(details.localPosition.dx, constraints.maxWidth),
             child: IgnorePointer(
               child: SliderTheme(
                 data: SliderTheme.of(context).copyWith(
