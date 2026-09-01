@@ -1,7 +1,10 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import '../native/onnx_gpu_probe.dart' show probeColorizeGpuSupport;
 import '../theme.dart';
 import 'dialog_chrome.dart';
 
@@ -41,7 +44,6 @@ class ColorizeDialog extends StatefulWidget {
     super.key,
     required this.active,
     this.intensityPercent = defaultColorizeIntensity,
-    this.gpuAvailable,
   });
 
   /// Whether colorize is already applied to the current photo — same
@@ -49,21 +51,34 @@ class ColorizeDialog extends StatefulWidget {
   final bool active;
   final int intensityPercent;
 
-  /// null while the GPU probe hasn't resolved yet — same convention as
-  /// `AiDenoiseDialog`'s own `_gpuAvailable`, passed in here instead of
-  /// probed internally since `probeAiEnhanceGpuSupport` only probes
-  /// `denoiseModelSpec` (a deliberate one-probe-per-session choice, see
-  /// its own doc) and colorize needs the DDColor session's own real
-  /// answer instead — the caller probes with `OnnxModel.forSpec
-  /// (ddcolorModelSpec).usingGpu` the same lazy-once way.
-  final bool? gpuAvailable;
-
   @override
   State<ColorizeDialog> createState() => _ColorizeDialogState();
 }
 
 class _ColorizeDialogState extends State<ColorizeDialog> {
   late int _intensity = widget.intensityPercent;
+
+  /// null while the probe hasn't resolved yet — same convention as
+  /// `AiDenoiseDialog`'s own `_gpuAvailable`. Probed here in `initState`,
+  /// not by the caller before `showDialog` (2026-09-01, fixed a real bug
+  /// — see `probeColorizeGpuSupport`'s own doc for why awaiting a probe
+  /// *before* opening the dialog is the wrong shape): the dialog opens
+  /// immediately and this warning fills in once the probe resolves,
+  /// exactly like `AiDenoiseDialog._gpuAvailable` already does.
+  bool? _gpuAvailable;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_probeGpu());
+  }
+
+  Future<void> _probeGpu() async {
+    final available = await probeColorizeGpuSupport();
+    if (mounted) {
+      setState(() => _gpuAvailable = available);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -85,7 +100,7 @@ class _ColorizeDialogState extends State<ColorizeDialog> {
               l10n.colorizeDialogMessage,
               style: Theme.of(context).textTheme.bodyMedium,
             ),
-            if (widget.gpuAvailable == false) ...[
+            if (_gpuAvailable == false) ...[
               const SizedBox(height: 8),
               Container(
                 padding: const EdgeInsets.symmetric(

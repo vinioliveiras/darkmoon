@@ -37,7 +37,6 @@ import 'native/edit_source_ai_enhance.dart';
 import 'native/edit_source_cloud_denoise.dart';
 import 'native/edit_source_colorize.dart';
 import 'native/libraw.dart' show RawMetadata, extractRawMetadata;
-import 'native/onnx_runtime.dart' show OnnxModel, ddcolorModelSpec;
 import 'native/thumbnail_loader.dart';
 import 'presets/preset.dart';
 import 'presets/preset_store.dart';
@@ -878,6 +877,20 @@ class _EditorScreenState extends State<EditorScreen>
   bool _colorizeDisabling = false;
   RenderStage? _colorizeRenderStage;
   ColorizeCancellationToken? _colorizeCancellation;
+
+  /// Guards [_openAiDenoiseDialog]/[_openColorizeDialog] against a rapid
+  /// double-tap on their toolbar button stacking two dialogs on top of
+  /// each other (2026-09-01, real bug found in testing) — `showDialog`'s
+  /// own modal barrier only blocks *further* taps once the dialog is
+  /// actually on screen; any async work before that call (there wasn't
+  /// any here, but there was in `ColorizeDialog`'s case — see
+  /// `probeColorizeGpuSupport`'s doc) leaves a real window for a second
+  /// tap to land first. Set at entry, cleared once `showAnimatedDialog`'s
+  /// own future resolves (dialog closed, choice made or cancelled) —
+  /// covers the whole open-to-close span, not just the pre-dialog gap,
+  /// since a `Navigator.pop` triggered by e.g. a keyboard shortcut could
+  /// theoretically race a queued tap too.
+  bool _openingToolbarDialog = false;
 
   /// Coarse stage name ('uploading'/'processing'/'downloading', or a
   /// provider-specific one — see each `CloudDenoiseProvider`'s own
@@ -3707,8 +3720,11 @@ class _EditorScreenState extends State<EditorScreen>
   /// loading message) rather than a slider the user drags, matching the
   /// Lightroom/Photomator "pick a strength, apply" pattern.
   Future<void> _openAiDenoiseDialog() async {
+    if (_openingToolbarDialog) return;
+    _openingToolbarDialog = true;
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
     if (selected == null) {
+      _openingToolbarDialog = false;
       return;
     }
     final currentLevel = AiDenoiseParams.fromValues(_paramValues).level;
@@ -3754,6 +3770,7 @@ class _EditorScreenState extends State<EditorScreen>
         restoreDetailAmount: restoreDetailAmount,
       ),
     );
+    _openingToolbarDialog = false;
     if (choice == null || !mounted) {
       return;
     }
@@ -3904,31 +3921,27 @@ class _EditorScreenState extends State<EditorScreen>
   /// simpler since there's only one real setting (intensity), not several
   /// independent toggles to combine.
   Future<void> _openColorizeDialog() async {
+    if (_openingToolbarDialog) return;
+    _openingToolbarDialog = true;
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
     if (selected == null) {
+      _openingToolbarDialog = false;
       return;
     }
     final active = (_paramValues[_colorizeKey] ?? 0.0) > 0;
     final intensity =
         (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
             .round();
-    // Lazy-probes DDColor's own session once per app run, same "cache the
-    // answer, it can't change mid-session" reasoning as
-    // `probeAiEnhanceGpuSupport` — not shared with that function since it
-    // deliberately only probes `denoiseModelSpec` (see its own doc).
-    final gpuAvailable = await compute(
-      (_) => OnnxModel.forSpec(ddcolorModelSpec).usingGpu,
-      null,
-    );
-    if (!mounted) return;
+    // GPU probed inside ColorizeDialog itself (its own initState), not
+    // awaited here before opening — see `probeColorizeGpuSupport`'s doc
+    // for the real bug this used to cause (the dialog took however long
+    // DirectML session creation takes to even appear, and a rapid second
+    // click in that window stacked a second dialog on top).
     final choice = await showAnimatedDialog<ColorizeChoice>(
       context: context,
-      builder: (_) => ColorizeDialog(
-        active: active,
-        intensityPercent: intensity,
-        gpuAvailable: gpuAvailable,
-      ),
+      builder: (_) => ColorizeDialog(active: active, intensityPercent: intensity),
     );
+    _openingToolbarDialog = false;
     if (choice == null || !mounted) {
       return;
     }
