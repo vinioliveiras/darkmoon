@@ -163,8 +163,9 @@ const double calBaseContrast = 20.0;
 /// light). The effect is  2^(sliderValue / this number).
 ///   ↑ higher = weaker Exposure (needs a bigger drag for the same change)
 ///   ↓ lower  = stronger Exposure
-/// default: 20.0
-const double calExposureUnitsPerStop = 25.0;
+/// default: 16.67   (2026-09-01: explicit user request for ≥1.5x the
+/// previous strength — 25.0 / 1.5)
+const double calExposureUnitsPerStop = 25.0 / 1.5;
 
 /// **Brightness**: same idea as Exposure, slider units per stop, but
 /// Brightness uses a curve that protects blacks and whites (no clipping).
