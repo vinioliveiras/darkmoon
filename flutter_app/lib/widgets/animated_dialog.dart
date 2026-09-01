@@ -2,8 +2,14 @@ import 'package:flutter/material.dart';
 
 /// Drop-in replacement for [showDialog] that gives the modal an OS-like
 /// entrance and exit instead of Material's abrupt fade: a quick fade
-/// combined with a subtle scale-up and a few pixels of upward drift,
-/// easing out on the way in and in on the way out.
+/// combined with a scale-up centered on the dialog's own middle, easing
+/// out on the way in and in on the way out.
+///
+/// Deliberately no directional drift (2026-09-01: an earlier version also
+/// slid up a couple percent from below, which — however subtle in
+/// isolation — read as the dialog "rising from below" rather than
+/// appearing in place; a pure center-anchored scale is what "emerges from
+/// the middle of the screen" actually means).
 ///
 /// Tuned to feel like a macOS / Windows system sheet — fast enough
 /// (~170 ms) to stay out of the way, never a slow "presentation". Uses
@@ -32,15 +38,9 @@ Future<T?> showAnimatedDialog<T>({
       );
       return FadeTransition(
         opacity: eased,
-        child: SlideTransition(
-          position: Tween<Offset>(
-            begin: const Offset(0, 0.02),
-            end: Offset.zero,
-          ).animate(eased),
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.965, end: 1).animate(eased),
-            child: child,
-          ),
+        child: ScaleTransition(
+          scale: Tween<double>(begin: 0.94, end: 1).animate(eased),
+          child: child,
         ),
       );
     },
