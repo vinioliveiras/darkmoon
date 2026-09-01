@@ -960,6 +960,18 @@ class AppLocalizationsDe extends AppLocalizations {
   String get colorProfileModeFlat => 'Lebendig';
 
   @override
+  String get colorProfileModeGoldenHour => 'Golden Hour';
+
+  @override
+  String get colorProfileModeTealOrange => 'Türkis & Orange';
+
+  @override
+  String get colorProfileModePastel => 'Pastell';
+
+  @override
+  String get colorProfileModeNoir => 'Noir';
+
+  @override
   String get sliderTexture => 'Textur';
 
   @override

@@ -396,27 +396,30 @@ PhotoCurves _withCurveCategoriesApplied(
 /// per-photo/per-preset pick (like [WbMode]), stored under
 /// [_colorProfileModeKey]. Deliberately a data-bearing (enhanced) enum
 /// rather than a hardcoded if/else per mode: every field below is what
-/// actually *defines* a profile, so a future third profile is just a new
-/// enum value with its own field values, never a new branch scattered
-/// through the render/UI code. Not to be confused with [ColorProfile]
+/// actually *defines* a profile, so a new profile is just a new enum
+/// value with its own field values, never a new branch scattered through
+/// the render/UI code. Not to be confused with [ColorProfile]
 /// (`render/color_profile.dart`) — that's the per-hue hue/sat/lum + tone
-/// correction *model* a profile can optionally carry ([hueProfile]);
-/// this enum is the small, curated menu of *which* profile is active.
+/// correction *model* a profile loads from [profileAsset]; this enum is
+/// the small, curated menu of *which* profile is active.
 ///
 /// - [darkmoonDefault]: today's shipped look — Strength damped by
 ///   [calGlobalAmountCompression] ([dampened]), Contrast defaulting to
-///   [calBaseContrast], no per-hue correction.
+///   [calBaseContrast], no per-hue correction. The only mode with
+///   [usesHueProfile] false — every other mode is explicitly scoped to
+///   NEVER touch Default's render output, even once its own asset is
+///   loaded (2026-09-01, explicit user request).
 /// - [vivid] (named "Flat" until 2026-09-01, renamed by explicit user
-///   request): the neutral starting point the paused/PENDING per-hue
-///   "darkmoon Color" profile work (see `project_darkmoon_color_profile
-///   .md`) is meant to build on — no Strength damping (100% applies
-///   preset/slider values exactly as authored), Contrast 0 (no base-
-///   contrast S-curve), and [usesHueProfile] true so the fitted
-///   per-hue [ColorProfile] (once that work resumes) applies only here,
-///   never under [darkmoonDefault] — picking it is explicitly meant NOT
-///   to change [darkmoonDefault]'s render output.
+///   request): the neutral, undamped starting point the resumed per-hue
+///   "darkmoon Color" fit (see `project_darkmoon_color_profile.md`)
+///   builds on — a faithful correction toward how Meridian's Adobe
+///   Color profile renders the same RAW.
+/// - [goldenHour]/[tealOrange]/[pastel]/[noir] (2026-09-01): hand-
+///   authored creative per-hue grades, not fitted against a reference —
+///   see `tool/author_color_profiles.dart`. Same undamped/Contrast-0
+///   baseline as Vivid; only the per-hue table differs.
 ///
-/// Picking either mode resets Strength to 100% and Contrast to
+/// Picking any mode resets Strength to 100% and Contrast to
 /// [contrastBaseline] (2026-09-01, explicit user request — same
 /// "picking a mode resets its fields" convention [WbMode] already uses).
 enum ColorProfileMode {
@@ -424,13 +427,44 @@ enum ColorProfileMode {
     contrastBaseline: calBaseContrast,
     dampened: true,
     usesHueProfile: false,
+    profileAsset: null,
   ),
-  vivid(contrastBaseline: 0, dampened: false, usesHueProfile: true);
+  vivid(
+    contrastBaseline: 0,
+    dampened: false,
+    usesHueProfile: true,
+    profileAsset: 'darkmoon_vivid.json',
+  ),
+  goldenHour(
+    contrastBaseline: 0,
+    dampened: false,
+    usesHueProfile: true,
+    profileAsset: 'darkmoon_golden_hour.json',
+  ),
+  tealOrange(
+    contrastBaseline: 0,
+    dampened: false,
+    usesHueProfile: true,
+    profileAsset: 'darkmoon_teal_orange.json',
+  ),
+  pastel(
+    contrastBaseline: 0,
+    dampened: false,
+    usesHueProfile: true,
+    profileAsset: 'darkmoon_pastel.json',
+  ),
+  noir(
+    contrastBaseline: 0,
+    dampened: false,
+    usesHueProfile: true,
+    profileAsset: 'darkmoon_noir.json',
+  );
 
   const ColorProfileMode({
     required this.contrastBaseline,
     required this.dampened,
     required this.usesHueProfile,
+    required this.profileAsset,
   });
 
   /// What the "Color Profile Contrast" slider resets to when this mode
@@ -442,9 +476,14 @@ enum ColorProfileMode {
   /// or an exact 1:1 pass-through.
   final bool dampened;
 
-  /// Whether the fitted per-hue [ColorProfile] (`_colorProfile`, still
-  /// unbuilt/paused as of 2026-09-01) renders under this mode.
+  /// Whether a fitted/authored per-hue [ColorProfile] renders under this
+  /// mode — false only for [darkmoonDefault].
   final bool usesHueProfile;
+
+  /// `assets/color_profiles/<profileAsset>` this mode loads into
+  /// [_EditorScreenState._colorProfiles] — null for [darkmoonDefault]
+  /// (the one mode that intentionally never has a per-hue table).
+  final String? profileAsset;
 }
 
 /// Storage key for [ColorProfileMode] — see its own doc.
@@ -792,19 +831,23 @@ class _EditorScreenState extends State<EditorScreen>
   /// whatever's rendered before it finishes loading.
   List<LensProfile> _lensProfiles = const [];
 
-  /// The fitted "darkmoon Color" profile, if bundled (see
-  /// [_loadColorProfile]). Null = no correction.
-  ColorProfile? _colorProfile;
+  /// Every bundled per-hue "darkmoon Color" profile (see
+  /// [_loadColorProfile]), keyed by the [ColorProfileMode] it belongs to
+  /// — one entry per mode with a non-null [ColorProfileMode.profileAsset]
+  /// once loading finishes. Missing entry = no correction for that mode.
+  final Map<ColorProfileMode, ColorProfile> _colorProfiles = {};
 
-  /// [_colorProfile], but only when the active [ColorProfileMode] actually
-  /// wants it ([ColorProfileMode.usesHueProfile]) — the per-hue fitted
-  /// profile must never render under [ColorProfileMode.darkmoonDefault]
-  /// even once loaded, per explicit user request (2026-09-01) that
-  /// resuming the paused per-hue color work stay scoped to
-  /// [ColorProfileMode.vivid] and leave Default's render output alone.
-  /// Every render call site should read this, not [_colorProfile] itself.
-  ColorProfile? get _effectiveColorProfile =>
-      _colorProfileModeOf(_paramValues).usesHueProfile ? _colorProfile : null;
+  /// [_colorProfiles]'s entry for the currently-active [ColorProfileMode],
+  /// but only when that mode actually wants one
+  /// ([ColorProfileMode.usesHueProfile]) — [ColorProfileMode.darkmoonDefault]
+  /// must never render a per-hue correction, per explicit user request
+  /// (2026-09-01) that this whole feature stay scoped to every mode
+  /// *except* Default and leave its render output alone. Every render
+  /// call site should read this, not [_colorProfiles] directly.
+  ColorProfile? get _effectiveColorProfile {
+    final mode = _colorProfileModeOf(_paramValues);
+    return mode.usesHueProfile ? _colorProfiles[mode] : null;
+  }
 
   /// The base contrast to actually render with: the profile's fitted tone
   /// curve *replaces* the hand-tuned [calBaseContrast] S when it's present,
@@ -1338,25 +1381,34 @@ class _EditorScreenState extends State<EditorScreen>
   /// Correction was already on for the photo showing when this finishes,
   /// the render it produced before now had nothing to resolve a profile
   /// against, so it's redone once the database is actually usable.
-  /// Loads the bundled "darkmoon Color" per-hue correction, if one has been
-  /// fitted and dropped in (`assets/color_profiles/darkmoon_fuji.json` —
-  /// see `tool/build_color_profile.dart`). Missing asset = no correction,
-  /// same as before profiles existed. Not awaited from initState; a
-  /// re-render is kicked once it lands so the open photo picks it up.
+  /// Loads every bundled "darkmoon Color" per-hue correction — one per
+  /// [ColorProfileMode] with a non-null [ColorProfileMode.profileAsset]
+  /// (see `tool/build_color_profile.dart`/`tool/author_color_profiles
+  /// .dart`) — into [_colorProfiles]. A missing individual asset just
+  /// leaves that mode without a correction, same as before profiles
+  /// existed; it doesn't block the others from loading. Not awaited from
+  /// initState; a re-render is kicked once it lands so the open photo
+  /// picks up whichever mode it's currently on.
   Future<void> _loadColorProfile() async {
-    ColorProfile? profile;
-    try {
-      final raw = await rootBundle.loadString(
-        'assets/color_profiles/darkmoon_vivid.json',
-      );
-      profile = ColorProfile.decode(raw);
-    } catch (_) {
-      profile = null; // not bundled — fine
+    final loaded = <ColorProfileMode, ColorProfile>{};
+    for (final mode in ColorProfileMode.values) {
+      final asset = mode.profileAsset;
+      if (asset == null) {
+        continue;
+      }
+      try {
+        final raw = await rootBundle.loadString(
+          'assets/color_profiles/$asset',
+        );
+        loaded[mode] = ColorProfile.decode(raw);
+      } catch (_) {
+        // Not bundled — fine, that mode just renders with no correction.
+      }
     }
-    if (!mounted || profile == null) {
+    if (!mounted || loaded.isEmpty) {
       return;
     }
-    setState(() => _colorProfile = profile);
+    setState(() => _colorProfiles.addAll(loaded));
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
     if (selected != null) {
       _scheduleRender(live: false);
@@ -8350,6 +8402,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
       switch (mode) {
         ColorProfileMode.darkmoonDefault => l10n.colorProfileModeDefault,
         ColorProfileMode.vivid => l10n.colorProfileModeFlat,
+        ColorProfileMode.goldenHour => l10n.colorProfileModeGoldenHour,
+        ColorProfileMode.tealOrange => l10n.colorProfileModeTealOrange,
+        ColorProfileMode.pastel => l10n.colorProfileModePastel,
+        ColorProfileMode.noir => l10n.colorProfileModeNoir,
       };
 
   Widget _buildWhiteBalanceModeRow(
