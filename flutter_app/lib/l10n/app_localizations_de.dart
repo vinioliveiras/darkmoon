@@ -234,6 +234,33 @@ class AppLocalizationsDe extends AppLocalizations {
       'Reduziert Bildrauschen automatisch, ohne Details zu verlieren.';
 
   @override
+  String get colorizeButton => 'Kolorieren';
+
+  @override
+  String get colorizeDialogTitle => 'Kolorieren';
+
+  @override
+  String get colorizeDialogMessage =>
+      'Fügt einem Schwarzweiß- oder verblassten Foto mithilfe von KI Farbe hinzu. Funktioniert am besten bei echten Tageslichtfotos — kann bei Nachtaufnahmen oder Kunstlicht seltsam wirken.';
+
+  @override
+  String get colorizeIntensityLabel => 'Intensität';
+
+  @override
+  String get colorizeRemoveButton => 'Kolorierung entfernen';
+
+  @override
+  String get colorizeFailedMessage =>
+      'Kolorieren konnte für dieses Foto nicht ausgeführt werden. Die Option wurde wieder deaktiviert.';
+
+  @override
+  String get colorizeFailedStatus => 'Kolorieren fehlgeschlagen';
+
+  @override
+  String get colorizeCpuWarning =>
+      'Kolorierung läuft auf der CPU (keine kompatible GPU gefunden) — das wird langsamer als gewöhnlich sein.';
+
+  @override
   String get aiDenoiseLevelOff => 'Aus';
 
   @override
@@ -255,6 +282,15 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get aiDenoiseDisablingMessage =>
       'KI-Rauschunterdrückung wird deaktiviert...';
+
+  @override
+  String get colorizeStartingMessage => 'Kolorierung wird ausgeführt...';
+
+  @override
+  String get colorizeApplyingMessage => 'Kolorierung wird angewendet...';
+
+  @override
+  String get colorizeDisablingMessage => 'Kolorierung wird entfernt...';
 
   @override
   String get aiDenoiseTabClassic => 'Klassisch';

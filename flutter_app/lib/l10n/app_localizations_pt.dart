@@ -232,6 +232,33 @@ class AppLocalizationsPt extends AppLocalizations {
       'Reduz o ruído automaticamente, ajustado para manter os detalhes nítidos.';
 
   @override
+  String get colorizeButton => 'Colorizar';
+
+  @override
+  String get colorizeDialogTitle => 'Colorizar';
+
+  @override
+  String get colorizeDialogMessage =>
+      'Adiciona cor a uma foto em preto e branco ou desbotada, usando IA. Funciona melhor em fotos reais de luz do dia — pode ficar estranho em cenas noturnas ou com luz artificial.';
+
+  @override
+  String get colorizeIntensityLabel => 'Intensidade';
+
+  @override
+  String get colorizeRemoveButton => 'Remover colorização';
+
+  @override
+  String get colorizeFailedMessage =>
+      'Não foi possível colorizar essa foto. A opção foi desligada de novo.';
+
+  @override
+  String get colorizeFailedStatus => 'Falha ao colorizar';
+
+  @override
+  String get colorizeCpuWarning =>
+      'Colorização rodando na CPU (nenhuma GPU compatível encontrada) — vai ser mais lento que o normal.';
+
+  @override
   String get aiDenoiseLevelOff => 'Desligado';
 
   @override
@@ -252,6 +279,15 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get aiDenoiseDisablingMessage =>
       'Desativando redução de ruído com IA...';
+
+  @override
+  String get colorizeStartingMessage => 'Colorizando...';
+
+  @override
+  String get colorizeApplyingMessage => 'Aplicando colorização...';
+
+  @override
+  String get colorizeDisablingMessage => 'Removendo colorização...';
 
   @override
   String get aiDenoiseTabClassic => 'Clássico';

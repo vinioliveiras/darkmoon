@@ -22,6 +22,8 @@ import 'catalog/ai_enhance_cache.dart';
 import 'catalog/ai_enhance_cache_dir.dart';
 import 'catalog/cloud_denoise_cache.dart';
 import 'catalog/cloud_denoise_cache_dir.dart';
+import 'catalog/colorize_cache.dart';
+import 'catalog/colorize_cache_dir.dart';
 import 'catalog/thumbnail_cache.dart';
 import 'catalog/thumbnail_cache_dir.dart';
 import 'cloud_denoise/cloud_denoise_provider.dart';
@@ -33,7 +35,9 @@ import 'native/common_image_thumbnail.dart';
 import 'native/edit_source.dart';
 import 'native/edit_source_ai_enhance.dart';
 import 'native/edit_source_cloud_denoise.dart';
+import 'native/edit_source_colorize.dart';
 import 'native/libraw.dart' show RawMetadata, extractRawMetadata;
+import 'native/onnx_runtime.dart' show OnnxModel, ddcolorModelSpec;
 import 'native/thumbnail_loader.dart';
 import 'presets/preset.dart';
 import 'presets/preset_store.dart';
@@ -64,6 +68,7 @@ import 'settings/app_settings.dart';
 import 'theme.dart';
 import 'widgets/about_dialog.dart';
 import 'widgets/ai_denoise_dialog.dart';
+import 'widgets/colorize_dialog.dart';
 import 'widgets/animated_dialog.dart';
 import 'widgets/brush_mask_overlay.dart';
 import 'widgets/color_range_overlay.dart';
@@ -862,6 +867,17 @@ class _EditorScreenState extends State<EditorScreen>
   /// cloud provider call is its own slow step (network upload + provider
   /// processing + download), distinct from [_isApplyingAiDenoise].
   bool _isRunningCloudDenoise = false;
+
+  /// Item 37's colorize (DDColor) — same three-state shape as the AI
+  /// Denoise trio above ([_isRunningColorize] covers the model/decode
+  /// step, [_isApplyingColorize]/[_colorizeDisabling] the quick render
+  /// pass after), kept separate rather than reused since colorize is an
+  /// independent toolbar action, not a Denoise-dialog choice.
+  bool _isRunningColorize = false;
+  bool _isApplyingColorize = false;
+  bool _colorizeDisabling = false;
+  RenderStage? _colorizeRenderStage;
+  ColorizeCancellationToken? _colorizeCancellation;
 
   /// Coarse stage name ('uploading'/'processing'/'downloading', or a
   /// provider-specific one — see each `CloudDenoiseProvider`'s own
@@ -2456,6 +2472,7 @@ class _EditorScreenState extends State<EditorScreen>
     _exportCancellation?.cancel();
     _aiEnhanceCancellation?.cancel();
     _cloudDenoiseCancellation?.cancel();
+    _colorizeCancellation?.cancel();
     setState(() {
       _loading = false;
       _isDecodingPhoto = false;
@@ -2465,6 +2482,8 @@ class _EditorScreenState extends State<EditorScreen>
       _aiEnhanceProgress = null;
       _isRunningCloudDenoise = false;
       _cloudDenoiseStage = null;
+      _isApplyingColorize = false;
+      _isRunningColorize = false;
       _thumbnailsLoaded = 0;
       _thumbnailsTotal = 0;
     });
@@ -2760,7 +2779,34 @@ class _EditorScreenState extends State<EditorScreen>
           }
         }
       }
-      final wantAnyPipeline = wantAnyEnhance || wantCloudProvider != null;
+
+      // Same reasoning again, for item 37's colorize — mutually exclusive
+      // with both of the above (see `_openColorizeDialog`'s doc), so at
+      // most one of these three cache lookups ever actually finds
+      // something.
+      final wantColorize = (_paramValues[_colorizeKey] ?? 0.0) > 0;
+      final wantColorizeIntensity =
+          (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
+              .round();
+      if (wantColorize) {
+        final cacheDir = await resolveColorizeCacheDir();
+        if (mounted) {
+          final cachedPng = await lookupColorizeCache(
+            cacheDir,
+            path,
+            intensityPercent: wantColorizeIntensity,
+          );
+          if (cachedPng != null) {
+            sources = await compute(
+              decodeCachedColorizeSources,
+              DecodeCachedColorizeArgs(cachedPng, _settings.previewResolution),
+            );
+            fromCache = sources != null;
+          }
+        }
+      }
+      final wantAnyPipeline =
+          wantAnyEnhance || wantCloudProvider != null || wantColorize;
 
       // Cache lookup/decode happens here in the main isolate/from a
       // compute() call (same split as ThumbnailCacheManager's own usage,
@@ -2811,6 +2857,7 @@ class _EditorScreenState extends State<EditorScreen>
               _neuralRawDenoiseKey: 0.0,
               _restoreDetailKey: 0.0,
               _cloudDenoiseProviderKey: 0.0,
+              _colorizeKey: 0.0,
             };
           });
         }
@@ -3416,6 +3463,38 @@ class _EditorScreenState extends State<EditorScreen>
     return compute(decodeCloudDenoiseCacheEntry, cachedPng);
   }
 
+  /// Export's colorize equivalent of [_loadEnhancedNativeSource] — same
+  /// "re-run on a cache miss" behavior (colorize is on-device and free,
+  /// same reasoning as AI Enhance, unlike the cloud-denoise cache-only
+  /// choice above).
+  Future<EditSource?> _loadColorizedNativeSource(
+    String path, {
+    required int intensityPercent,
+  }) async {
+    final cacheDir = await resolveColorizeCacheDir();
+    if (!mounted) return null;
+    var cachedPng = await lookupColorizeCache(
+      cacheDir,
+      path,
+      intensityPercent: intensityPercent,
+    );
+    if (cachedPng == null) {
+      final ok = await _runColorize(path, intensityPercent: intensityPercent);
+      if (!mounted || !ok) {
+        return null;
+      }
+      cachedPng = await lookupColorizeCache(
+        cacheDir,
+        path,
+        intensityPercent: intensityPercent,
+      );
+    }
+    if (cachedPng == null || !mounted) {
+      return null;
+    }
+    return compute(decodeColorizeCacheEntry, cachedPng);
+  }
+
   /// Decodes [path]'s native source and re-renders the settled view
   /// against it — from then on [_fullQualityReadyFor] is true for this
   /// photo and settled renders stay at full quality until it changes.
@@ -3605,6 +3684,18 @@ class _EditorScreenState extends State<EditorScreen>
       ? 0
       : CloudDenoiseProviderKind.values.indexOf(provider) + 1;
 
+  /// Item 37's colorize (DDColor) toggle — persisted the same way as the
+  /// AI Enhance flags above, independent of them (mutually exclusive with
+  /// nothing; colorize can run on a photo regardless of Denoise/Upscale/
+  /// Restore detail state, since it replaces the base image the same way
+  /// those do, just for a different purpose). `> 0` means active.
+  static const _colorizeKey = 'Colorize';
+
+  /// See `ColorizeDialog`'s `ColorizeChoice.intensityPercent` — 0-100,
+  /// persisted the same way as `_restoreDetailAmountKey`. Defaults to
+  /// [defaultColorizeIntensity] when absent.
+  static const _colorizeIntensityKey = 'ColorizeIntensity';
+
   CloudDenoiseProviderKind? _cloudProviderFromIndex(int index) =>
       index <= 0 || index > CloudDenoiseProviderKind.values.length
       ? null
@@ -3641,7 +3732,10 @@ class _EditorScreenState extends State<EditorScreen>
         neuralUpscale ||
         neuralRawDenoise ||
         neuralRestoreDetail;
-    final wasAnyPipelineActive = wasNeuralActive || cloudProvider != null;
+    final wasAnyPipelineActive =
+        wasNeuralActive ||
+        cloudProvider != null ||
+        (_paramValues[_colorizeKey] ?? 0.0) > 0;
     final rawDenoiseAvailable =
         isRawFile(selected.path) &&
         (_metadata[selected.path]?.isBayerCfa ?? false);
@@ -3677,6 +3771,7 @@ class _EditorScreenState extends State<EditorScreen>
             _neuralRawDenoiseKey: 0.0,
             _restoreDetailKey: 0.0,
             _cloudDenoiseProviderKey: 0.0,
+            _colorizeKey: 0.0,
           };
         });
         // Switching away from a previously-enhanced source: _editSources
@@ -3714,6 +3809,7 @@ class _EditorScreenState extends State<EditorScreen>
             _restoreDetailKey: wantRestoreDetail ? 1.0 : 0.0,
             _restoreDetailAmountKey: wantRestoreDetailAmount.toDouble(),
             _cloudDenoiseProviderKey: 0.0,
+            _colorizeKey: 0.0,
             'AiDenoiseLevel': 0.0,
           };
         });
@@ -3761,6 +3857,7 @@ class _EditorScreenState extends State<EditorScreen>
             _cloudDenoiseProviderKey: _cloudProviderIndex(
               wantProvider,
             ).toDouble(),
+            _colorizeKey: 0.0,
             'AiDenoiseLevel': 0.0,
           };
         });
@@ -3800,6 +3897,170 @@ class _EditorScreenState extends State<EditorScreen>
     if (mounted && normalSources != null) {
       setState(() => _editSources[path] = normalSources);
     }
+  }
+
+  /// Opens item 37's Colorize dialog and, if confirmed, applies the
+  /// choice — same one-shot-action shape as [_openAiDenoiseDialog], much
+  /// simpler since there's only one real setting (intensity), not several
+  /// independent toggles to combine.
+  Future<void> _openColorizeDialog() async {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null) {
+      return;
+    }
+    final active = (_paramValues[_colorizeKey] ?? 0.0) > 0;
+    final intensity =
+        (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
+            .round();
+    // Lazy-probes DDColor's own session once per app run, same "cache the
+    // answer, it can't change mid-session" reasoning as
+    // `probeAiEnhanceGpuSupport` — not shared with that function since it
+    // deliberately only probes `denoiseModelSpec` (see its own doc).
+    final gpuAvailable = await compute(
+      (_) => OnnxModel.forSpec(ddcolorModelSpec).usingGpu,
+      null,
+    );
+    if (!mounted) return;
+    final choice = await showAnimatedDialog<ColorizeChoice>(
+      context: context,
+      builder: (_) => ColorizeDialog(
+        active: active,
+        intensityPercent: intensity,
+        gpuAvailable: gpuAvailable,
+      ),
+    );
+    if (choice == null || !mounted) {
+      return;
+    }
+    // Colorize replaces `_editSources[path]` the same way AI Enhance/Cloud
+    // AI do — mutually exclusive with both for the same reason those two
+    // already are with each other (only one buffer can be "the base"
+    // at a time).
+    if (choice.active) {
+      setState(() {
+        _paramValues = {
+          ..._paramValues,
+          _colorizeKey: 1.0,
+          _colorizeIntensityKey: choice.intensityPercent.toDouble(),
+          _neuralDenoiseKey: 0.0,
+          _neuralUpscaleKey: 0.0,
+          _neuralRawDenoiseKey: 0.0,
+          _restoreDetailKey: 0.0,
+          _cloudDenoiseProviderKey: 0.0,
+          'AiDenoiseLevel': 0.0,
+        };
+      });
+      final ok = await _runColorize(
+        selected.path,
+        intensityPercent: choice.intensityPercent,
+      );
+      if (!mounted || !ok) {
+        return;
+      }
+      await _applyColorizeChoiceAndRender(selected.path);
+    } else {
+      setState(() {
+        _paramValues = {..._paramValues, _colorizeKey: 0.0};
+      });
+      await _revertToNormalEditSource(selected.path);
+      if (!mounted) return;
+      await _applyColorizeChoiceAndRender(selected.path, disabling: true);
+    }
+  }
+
+  /// Runs the colorize pipeline (`native/edit_source_colorize.dart`,
+  /// disk-cached) for [path] and swaps the result into `_editSources`.
+  /// Returns false (having already reverted the `_colorizeKey` marker and
+  /// shown a message) on failure — same contract as `_runNeuralEnhance`.
+  Future<bool> _runColorize(
+    String path, {
+    required int intensityPercent,
+  }) async {
+    setState(() {
+      _isRunningColorize = true;
+    });
+    final cancellation = ColorizeCancellationToken();
+    _colorizeCancellation = cancellation;
+    final cacheDir = await resolveColorizeCacheDir();
+    if (!mounted) return false;
+    var cpuWarningShown = false;
+    final sources = await decodeEditSourcesWithColorize(
+      path,
+      cacheDir,
+      (stage) {
+        if (!mounted) return;
+        if (stage is ColorizeModelInfo) {
+          DevLog.log(
+            'Colorize model: '
+            '${stage.usingGpu ? "GPU (DirectML)" : "CPU fallback"}'
+            '${stage.directMlError == null ? "" : " — DirectML error: ${stage.directMlError}"}',
+            tag: 'colorize',
+          );
+          if (!stage.usingGpu && !cpuWarningShown) {
+            cpuWarningShown = true;
+            _notify(detail: AppLocalizations.of(context)!.colorizeCpuWarning);
+          }
+        }
+      },
+      intensityPercent: intensityPercent,
+      previewMaxDimension: _settings.previewResolution,
+      cancellationToken: cancellation,
+    );
+    _colorizeCancellation = null;
+    if (!mounted) {
+      return false;
+    }
+    if (sources == null) {
+      final wasCancelled = cancellation.isCancelled;
+      setState(() {
+        _paramValues = {..._paramValues, _colorizeKey: 0.0};
+        _isRunningColorize = false;
+      });
+      if (!wasCancelled) {
+        _notify(
+          detail: AppLocalizations.of(context)!.colorizeFailedMessage,
+          status: AppLocalizations.of(context)!.colorizeFailedStatus,
+        );
+      }
+      return false;
+    }
+    setState(() {
+      _editSources[path] = sources;
+      _isRunningColorize = false;
+    });
+    return true;
+  }
+
+  /// Renders/persists a colorize choice — same shape as
+  /// `_applyAiDenoiseChoiceAndRender`, kept separate since it drives its
+  /// own overlay state ([_isApplyingColorize]/[_colorizeDisabling]) rather
+  /// than the AI Denoise trio.
+  Future<void> _applyColorizeChoiceAndRender(
+    String path, {
+    bool disabling = false,
+  }) async {
+    setState(() {
+      _isApplyingColorize = true;
+      _colorizeDisabling = disabling;
+      _colorizeRenderStage = null;
+    });
+    await _renderPreview(
+      path,
+      onStage: (stage) {
+        if (mounted) {
+          setState(() => _colorizeRenderStage = stage);
+        }
+      },
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _isApplyingColorize = false;
+      _colorizeRenderStage = null;
+    });
+    _pushHistory();
+    _scheduleCatalogSave();
   }
 
   /// Runs item 13's neural Enhance pipeline (AI denoise and/or
@@ -5064,6 +5325,10 @@ class _EditorScreenState extends State<EditorScreen>
     final wantCloudProvider = _cloudProviderFromIndex(
       (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
     );
+    final wantColorize = (_paramValues[_colorizeKey] ?? 0.0) > 0;
+    final wantColorizeIntensity =
+        (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
+            .round();
     EditSource? nativeForExport;
     final srcSw = Stopwatch()..start();
     try {
@@ -5082,6 +5347,11 @@ class _EditorScreenState extends State<EditorScreen>
         nativeForExport = await _loadCloudDenoisedNativeSource(
           selected.path,
           wantCloudProvider,
+        );
+      } else if (wantColorize) {
+        nativeForExport = await _loadColorizedNativeSource(
+          selected.path,
+          intensityPercent: wantColorizeIntensity,
         );
       }
       nativeForExport ??= await _loadNativeSource(
@@ -5242,6 +5512,9 @@ class _EditorScreenState extends State<EditorScreen>
       };
       return _LoadingInfo(message: stageMessage);
     }
+    if (_isRunningColorize) {
+      return _LoadingInfo(message: l10n.colorizeStartingMessage);
+    }
     // Deliberately NOT handled here: _isDecodingPhoto (opening a single
     // photo) gets a small spinner centered over just the image area
     // instead of this full-screen overlay — see _ImageArea's usage in
@@ -5252,6 +5525,20 @@ class _EditorScreenState extends State<EditorScreen>
         message: _aiDenoiseDisabling
             ? l10n.aiDenoiseDisablingMessage
             : l10n.aiDenoiseApplyingMessage,
+        progress: switch (stage) {
+          null => 0.0,
+          RenderStage.denoising => 0.15,
+          RenderStage.adjusting => 0.55,
+          RenderStage.encoding => 0.85,
+        },
+      );
+    }
+    if (_isApplyingColorize) {
+      final stage = _colorizeRenderStage;
+      return _LoadingInfo(
+        message: _colorizeDisabling
+            ? l10n.colorizeDisablingMessage
+            : l10n.colorizeApplyingMessage,
         progress: switch (stage) {
           null => 0.0,
           RenderStage.denoising => 0.15,
@@ -5598,6 +5885,10 @@ class _EditorScreenState extends State<EditorScreen>
                       onOpenAiDenoise: selected == null
                           ? null
                           : _openAiDenoiseDialog,
+                      colorizeActive: (_paramValues[_colorizeKey] ?? 0.0) > 0,
+                      onOpenColorize: selected == null
+                          ? null
+                          : _openColorizeDialog,
                       cropOverlayActive: _cropOverlayActive,
                       onToggleCropOverlay: selected == null
                           ? null
@@ -6601,6 +6892,8 @@ class _ViewerToolbar extends StatelessWidget {
     required this.onRedo,
     required this.aiDenoiseActive,
     required this.onOpenAiDenoise,
+    required this.colorizeActive,
+    required this.onOpenColorize,
     required this.cropOverlayActive,
     required this.onToggleCropOverlay,
     required this.onExport,
@@ -6628,6 +6921,12 @@ class _ViewerToolbar extends StatelessWidget {
   /// a filled/selected button, same convention as Before/After.
   final bool aiDenoiseActive;
   final VoidCallback? onOpenAiDenoise;
+
+  /// True when colorize (item 37, DDColor) is already applied to the
+  /// current photo — same selected/filled-button convention as
+  /// [aiDenoiseActive].
+  final bool colorizeActive;
+  final VoidCallback? onOpenColorize;
 
   final bool cropOverlayActive;
   final VoidCallback? onToggleCropOverlay;
@@ -6798,6 +7097,21 @@ class _ViewerToolbar extends StatelessWidget {
                         selected: aiDenoiseActive,
                         onTap: onOpenAiDenoise,
                         tooltip: l10n.aiDenoiseButton,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 6),
+                  _ToolbarPill(
+                    height: _squareButtonSize,
+                    showChrome: false,
+                    children: [
+                      _ToolbarSegment(
+                        icon: CupertinoIcons.paintbrush,
+                        iconSize: _squareButtonIconSize,
+                        width: _squareButtonSize,
+                        selected: colorizeActive,
+                        onTap: onOpenColorize,
+                        tooltip: l10n.colorizeButton,
                       ),
                     ],
                   ),

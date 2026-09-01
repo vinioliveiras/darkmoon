@@ -186,6 +186,41 @@ const gaterV3SharpenModelSpec = OnnxModelSpec(
 // constant kept for it; re-fetch `huggingface.co/huggingworld/
 // onnx-image-models` if revisiting.
 
+/// DDColor "modelscope" checkpoint (Apache-2.0, piddnad/DDColor, ICCV 2023
+/// — encoder_name='convnext-l', decoder='MultiScaleColorDecoder', the
+/// repo's own recommended default "if you want to test images outside
+/// ImageNet") — colorization for item 37 (restore/recolor old B&W
+/// photos), 2026-09-01. Not a tiled model like everything else in this
+/// file: [inputTileSize] 512 is the model's one fixed working
+/// resolution — `colorize.dart`'s pipeline runs it exactly once per
+/// photo (no `denoiseTiled`/overlap-blend), on a downscaled version of
+/// the image, then upsamples just the 2 predicted a/b channels back onto
+/// the photo's own full-resolution L channel (`lab_color.dart`) — the
+/// model's own fixed size never limits final output resolution, the same
+/// trick this app's own `baseline_chroma.dart` already uses for its own
+/// chroma smoothing. [channels] 3 describes the *input* (RGB); the
+/// output is 2-channel (Lab a/b), reached via [OnnxModel.runToChannels],
+/// not [OnnxModel.runTile].
+///
+/// Exported from the official `pytorch_model.bin` checkpoint via the
+/// repo's own `scripts/export_onnx.py` (opset 12, `dynamo=False` — same
+/// legacy-TorchScript-exporter trick as this project's other from-scratch
+/// exports), verified numerically against PyTorch (max abs diff 0.009 on
+/// random input) and visually on a real daytime photo (sky came back
+/// genuinely blue, skin tones plausible) — real caveat found the same
+/// day: noticeably worse on night/artificial-lighting scenes (defaults
+/// to a warm/sepia cast, misses saturated colored light entirely), and a
+/// mild tendency to oversaturate, both consistent with the
+/// restoration-research report's own warning about this model. 934MB —
+/// far larger than every other bundled model combined; kept anyway since
+/// this is a strictly opt-in, on-demand tool, not part of the always-
+/// available Enhance pipeline (2026-09-01, confirmed with user).
+const ddcolorModelSpec = OnnxModelSpec(
+  fileName: 'ddcolor_modelscope.onnx',
+  inputTileSize: 512,
+  scaleFactor: 1,
+);
+
 /// Thrown when an ONNX Runtime C API call returns a non-null `OrtStatus*`.
 /// Carries the human-readable message `OrtApi::GetErrorMessage` returns,
 /// since the status pointer itself isn't meaningful to callers.
@@ -544,24 +579,32 @@ class OnnxModel {
   ///
   /// Blocking native call — run on a background isolate, same convention
   /// as `libraw.dart`'s decode functions.
-  Float32List runTile(Float32List rgbTile) => _runTile(rgbTile, 3);
+  Float32List runTile(Float32List rgbTile) => _runTile(rgbTile, 3, 3);
 
   /// Generalization of [runTile] for a model whose [OnnxModelSpec.channels]
   /// isn't 3 — currently just [pmridDenoiseModelSpec] (4: packed RGGB Bayer
   /// planes). [packedTile] is packed, row-major, [OnnxModelSpec.channels]
   /// floats/pixel, same normalization convention as [runTile].
   Float32List runPackedTile(Float32List packedTile) =>
-      _runTile(packedTile, _spec.channels);
+      _runTile(packedTile, _spec.channels, _spec.channels);
 
-  Float32List _runTile(Float32List tile, int channels) {
+  /// Generalization for a model whose output has a *different* channel
+  /// count than its input — currently just [ddcolorModelSpec] (3-channel
+  /// RGB in, 2-channel Lab a/b out; [outChannels] 2). Same spatial size
+  /// in/out either way ([OnnxModelSpec.scaleFactor] 1), same [Float32List]
+  /// packing/normalization convention as [runTile].
+  Float32List runToChannels(Float32List tile, int outChannels) =>
+      _runTile(tile, _spec.channels, outChannels);
+
+  Float32List _runTile(Float32List tile, int inChannels, int outChannels) {
     final inSize = _spec.inputTileSize;
     final outSize = _spec.outputTileSize;
-    final expectedInLength = inSize * inSize * channels;
-    final expectedOutLength = outSize * outSize * channels;
+    final expectedInLength = inSize * inSize * inChannels;
+    final expectedOutLength = outSize * outSize * outChannels;
     if (tile.length != expectedInLength) {
       throw ArgumentError(
         'tile must have $expectedInLength floats '
-        '($inSize x $inSize x $channels), got ${tile.length}',
+        '($inSize x $inSize x $inChannels), got ${tile.length}',
       );
     }
     final api = _OrtLib.api;
@@ -569,12 +612,12 @@ class OnnxModel {
     // NCHW layout, matching the export's expected input shape.
     final shape = calloc<Int64>(4);
     shape[0] = 1;
-    shape[1] = channels;
+    shape[1] = inChannels;
     shape[2] = inSize;
     shape[3] = inSize;
 
     final inputData = calloc<Float>(expectedInLength);
-    _packChw(tile, inputData.asTypedList(expectedInLength), inSize, channels);
+    _packChw(tile, inputData.asTypedList(expectedInLength), inSize, inChannels);
 
     final inputValueOut = calloc<Pointer<OrtValue>>();
     final outputValue = calloc<Pointer<OrtValue>>();
@@ -655,7 +698,7 @@ class OnnxModel {
 
       final chwOut = outData.cast<Float>().asTypedList(expectedOutLength);
       final packedOut = Float32List(expectedOutLength);
-      _unpackChw(chwOut, packedOut, outSize, channels);
+      _unpackChw(chwOut, packedOut, outSize, outChannels);
       return packedOut;
     } finally {
       if (outputValue.value != nullptr) {

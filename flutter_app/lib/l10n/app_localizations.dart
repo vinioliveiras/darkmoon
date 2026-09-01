@@ -508,6 +508,54 @@ abstract class AppLocalizations {
   /// **'Reduce noise automatically, tuned to keep detail sharp.'**
   String get aiDenoiseDialogMessage;
 
+  /// No description provided for @colorizeButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Colorize'**
+  String get colorizeButton;
+
+  /// No description provided for @colorizeDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Colorize'**
+  String get colorizeDialogTitle;
+
+  /// No description provided for @colorizeDialogMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Add color to a black & white or faded photo, using AI. Works best on real daylight photos — may look off on night or artificially-lit scenes.'**
+  String get colorizeDialogMessage;
+
+  /// No description provided for @colorizeIntensityLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Intensity'**
+  String get colorizeIntensityLabel;
+
+  /// No description provided for @colorizeRemoveButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove colorization'**
+  String get colorizeRemoveButton;
+
+  /// No description provided for @colorizeFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Colorize couldn\'t run on this photo. It\'s been turned back off.'**
+  String get colorizeFailedMessage;
+
+  /// No description provided for @colorizeFailedStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Colorize failed'**
+  String get colorizeFailedStatus;
+
+  /// No description provided for @colorizeCpuWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'Colorize is running on the CPU (no compatible GPU found) — this will be slower than usual.'**
+  String get colorizeCpuWarning;
+
   /// No description provided for @aiDenoiseLevelOff.
   ///
   /// In en, this message translates to:
@@ -549,6 +597,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Disabling AI Denoise...'**
   String get aiDenoiseDisablingMessage;
+
+  /// No description provided for @colorizeStartingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Running Colorize...'**
+  String get colorizeStartingMessage;
+
+  /// No description provided for @colorizeApplyingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Applying Colorize...'**
+  String get colorizeApplyingMessage;
+
+  /// No description provided for @colorizeDisablingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Disabling Colorize...'**
+  String get colorizeDisablingMessage;
 
   /// No description provided for @aiDenoiseTabClassic.
   ///

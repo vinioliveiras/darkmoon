@@ -232,6 +232,33 @@ class AppLocalizationsEn extends AppLocalizations {
       'Reduce noise automatically, tuned to keep detail sharp.';
 
   @override
+  String get colorizeButton => 'Colorize';
+
+  @override
+  String get colorizeDialogTitle => 'Colorize';
+
+  @override
+  String get colorizeDialogMessage =>
+      'Add color to a black & white or faded photo, using AI. Works best on real daylight photos — may look off on night or artificially-lit scenes.';
+
+  @override
+  String get colorizeIntensityLabel => 'Intensity';
+
+  @override
+  String get colorizeRemoveButton => 'Remove colorization';
+
+  @override
+  String get colorizeFailedMessage =>
+      'Colorize couldn\'t run on this photo. It\'s been turned back off.';
+
+  @override
+  String get colorizeFailedStatus => 'Colorize failed';
+
+  @override
+  String get colorizeCpuWarning =>
+      'Colorize is running on the CPU (no compatible GPU found) — this will be slower than usual.';
+
+  @override
   String get aiDenoiseLevelOff => 'Off';
 
   @override
@@ -251,6 +278,15 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get aiDenoiseDisablingMessage => 'Disabling AI Denoise...';
+
+  @override
+  String get colorizeStartingMessage => 'Running Colorize...';
+
+  @override
+  String get colorizeApplyingMessage => 'Applying Colorize...';
+
+  @override
+  String get colorizeDisablingMessage => 'Disabling Colorize...';
 
   @override
   String get aiDenoiseTabClassic => 'Classic';
