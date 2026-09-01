@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../render/crop_transform.dart';
@@ -21,9 +23,29 @@ const cropAspectPresets = [
   CropAspectPreset('5:4', 5 / 4),
 ];
 
-enum _CropHandle { topLeft, topRight, bottomLeft, bottomRight, move }
+enum _CropHandle { topLeft, topRight, bottomLeft, bottomRight, move, rotate }
 
 const _handleHitRadius = 20.0;
+
+/// How far outside the crop rect's top-right corner the rotate anchor sits
+/// — along the same diagonal the corner itself sits on relative to the
+/// crop's centre, so it reads as "an extension of that corner" rather
+/// than a floating, disconnected dot.
+const _rotateHandleOffset = 26.0;
+
+/// Where the rotate anchor sits for a given [cropRect] — shared between
+/// hit-testing ([_CropOverlayState._handlePanStart]) and painting
+/// ([_CropPainter]) so the two can never drift apart.
+Offset _rotateHandlePosition(Rect cropRect) {
+  final center = cropRect.center;
+  final corner = cropRect.topRight;
+  final dir = (corner - center);
+  final len = dir.distance;
+  if (len < 1e-6) {
+    return corner;
+  }
+  return corner + dir / len * _rotateHandleOffset;
+}
 
 /// Draggable crop rectangle, shown over the (already straightened/
 /// keystoned) preview image while the Crop tool is active — same
@@ -68,6 +90,12 @@ class _CropOverlayState extends State<CropOverlay> {
   Offset _dragStartLocal = Offset.zero;
   CropTransformParams _dragStartParams = const CropTransformParams();
 
+  /// Angle (radians, from the crop rect's centre to the drag start point)
+  /// captured when a [_CropHandle.rotate] drag begins — every subsequent
+  /// [_applyDrag] call measures the *change* in that angle, not the
+  /// absolute one, so the anchor doesn't jump the moment the drag starts.
+  double _rotateStartAngle = 0;
+
   Rect _imageRect() {
     final imageAspect = widget.imageWidth / widget.imageHeight;
     final size = widget.containerSize;
@@ -94,6 +122,20 @@ class _CropOverlayState extends State<CropOverlay> {
     _dragStartLocal = details.localPosition;
     _dragStartParams = widget.params;
     final cropRect = _cropRectLocal(imageRect);
+    // Checked before the corners: the rotate anchor sits just outside the
+    // top-right one (see _rotateHandlePosition's doc), so it needs first
+    // pick within its own hit radius or a click meant for it would keep
+    // resolving to the nearby corner instead.
+    if ((_rotateHandlePosition(cropRect) - _dragStartLocal).distance <=
+        _handleHitRadius) {
+      _active = _CropHandle.rotate;
+      final center = cropRect.center;
+      _rotateStartAngle = math.atan2(
+        _dragStartLocal.dy - center.dy,
+        _dragStartLocal.dx - center.dx,
+      );
+      return;
+    }
     final corners = {
       _CropHandle.topLeft: cropRect.topLeft,
       _CropHandle.topRight: cropRect.topRight,
@@ -158,6 +200,18 @@ class _CropOverlayState extends State<CropOverlay> {
           newRight: start.cropRight + dx,
           newBottom: start.cropBottom + dy,
         );
+      case _CropHandle.rotate:
+        final cropRect = Rect.fromLTRB(
+          imageRect.left + start.cropLeft * imageRect.width,
+          imageRect.top + start.cropTop * imageRect.height,
+          imageRect.left + start.cropRight * imageRect.width,
+          imageRect.top + start.cropBottom * imageRect.height,
+        );
+        final center = cropRect.center;
+        final angle = math.atan2(local.dy - center.dy, local.dx - center.dx);
+        final deltaDeg = (angle - _rotateStartAngle) * 180.0 / math.pi;
+        final next = (start.straightenAngle + deltaDeg).clamp(-45.0, 45.0);
+        return start.copyWith(straightenAngle: next);
       case null:
         return start;
     }
@@ -264,7 +318,7 @@ class _CropOverlayState extends State<CropOverlay> {
         painter: _CropPainter(
           imageRect: imageRect,
           cropRect: _cropRectLocal(imageRect),
-          denseGrid: widget.straighteningActive,
+          denseGrid: widget.straighteningActive || _active == _CropHandle.rotate,
         ),
       ),
     );
@@ -370,6 +424,32 @@ class _CropPainter extends CustomPainter {
           ..strokeWidth = 1.5,
       );
     }
+
+    // Rotate anchor — a hollow ring (vs. the corners' filled dots) just
+    // outside the top-right corner, connected to it by a short line so it
+    // reads as "an extension of that corner" rather than a stray dot. See
+    // _rotateHandlePosition's doc for the exact placement.
+    final rotateAt = inset(_rotateHandlePosition(cropRect));
+    canvas.drawLine(
+      inset(cropRect.topRight),
+      rotateAt,
+      Paint()
+        ..color = Colors.white.withValues(alpha: 0.7)
+        ..strokeWidth = 1.5,
+    );
+    canvas.drawCircle(
+      rotateAt,
+      handleRadius,
+      Paint()..color = Colors.black54,
+    );
+    canvas.drawCircle(
+      rotateAt,
+      handleRadius,
+      Paint()
+        ..color = DarkmoonColors.accent
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5,
+    );
   }
 
   @override
