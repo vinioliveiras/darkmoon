@@ -168,6 +168,8 @@ String _sliderLabel(AppLocalizations l10n, String key) {
 /// same reasoning as [_sliderLabel].
 String _sectionLabel(AppLocalizations l10n, String key) {
   switch (key) {
+    case 'COLOR PROFILE':
+      return l10n.sectionColorProfile;
     case 'WHITE BALANCE':
       return l10n.sectionWhiteBalance;
     case 'TONE':
@@ -464,6 +466,20 @@ Map<String, double> _withGlobalEditAmountApplied(Map<String, double> values) {
 }
 
 const _sections = <String, List<_SliderSpec>>{
+  // Amount (the global Amount slider, injected specially — see the
+  // `entry.key == 'COLOR PROFILE'` branch below, since it isn't a plain
+  // _paramValues slider) and ColorProfileAmount (the per-photo/per-preset
+  // override of the fixed "profile" contrast curve — see calBaseContrast
+  // and _effectiveBaseContrast's doc) live together here (2026-09-01,
+  // moved out of a standalone toolbar control and out of TONE
+  // respectively) since conceptually both describe "how much of the
+  // darkmoon Color profile treatment applies," not a tone adjustment.
+  'COLOR PROFILE': [
+    // Same default (20) and range (0-60) as the old Settings-only global
+    // control this replaced — now every photo/preset carries its own
+    // value instead of one value applying to the whole library.
+    _SliderSpec('ColorProfileAmount', 0, 60, 20, decimals: 0),
+  ],
   'WHITE BALANCE': [
     _SliderSpec(
       'Temperature',
@@ -489,12 +505,6 @@ const _sections = <String, List<_SliderSpec>>{
     _SliderSpec('Shadows', -100, 100, 0),
     _SliderSpec('Whites', -100, 100, 0),
     _SliderSpec('Blacks', -100, 100, 0),
-    // Per-photo/per-preset override of the fixed "profile" contrast curve
-    // — see calBaseContrast and _effectiveBaseContrast's doc. Same default
-    // (20) and range (0-60) as the old Settings-only global control this
-    // replaced (2026-09-01) — now every photo/preset carries its own value
-    // instead of one value applying to the whole library.
-    _SliderSpec('ColorProfileAmount', 0, 60, 20, decimals: 0),
   ],
   'PRESENCE': [
     _SliderSpec('Texture', -100, 100, 0),
@@ -8350,18 +8360,6 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                       ),
                     ),
                     HistogramView(histogram: histogram),
-                    const SizedBox(height: 10),
-                    SliderRow(
-                      name: l10n.presetAmountLabel,
-                      min: 0,
-                      max: 200,
-                      value: widget.presetAmount,
-                      decimals: 0,
-                      valueSuffix: '%',
-                      defaultValue: 100,
-                      onChanged: widget.onPresetAmountChanged,
-                      onChangeEnd: widget.onPresetAmountChangeEnd,
-                    ),
                     PhotoMetadataView(metadata: widget.metadata),
                     const Padding(
                       padding: EdgeInsets.only(top: 12),
@@ -8631,6 +8629,26 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                             onChangeEnd(key, v ? 1 : 0);
                           },
                           children: [
+                            // Amount isn't a plain _paramValues slider (see
+                            // _globalEditAmountKey's doc), so it's injected
+                            // here by hand rather than as a _SliderSpec —
+                            // same pattern as the White Balance mode row
+                            // below.
+                            if (entry.key == 'COLOR PROFILE')
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: SliderRow(
+                                  name: l10n.presetAmountLabel,
+                                  min: 0,
+                                  max: 200,
+                                  value: widget.presetAmount,
+                                  decimals: 0,
+                                  valueSuffix: '%',
+                                  defaultValue: 100,
+                                  onChanged: widget.onPresetAmountChanged,
+                                  onChangeEnd: widget.onPresetAmountChangeEnd,
+                                ),
+                              ),
                             if (entry.key == 'WHITE BALANCE')
                               Padding(
                                 padding: const EdgeInsets.only(

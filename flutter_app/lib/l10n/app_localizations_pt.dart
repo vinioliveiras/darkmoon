@@ -111,7 +111,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get presetAmountLabel => 'Intensidade';
+  String get presetAmountLabel => 'Força do Perfil de Cor';
 
   @override
   String get presetAmountApplyButton => 'Aplicar';
@@ -703,6 +703,9 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String get sectionColorProfile => 'PERFIL DE COR';
+
+  @override
   String get sectionWhiteBalance => 'BALANÇO DE BRANCO';
 
   @override
@@ -938,7 +941,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sliderBlacks => 'Pretos';
 
   @override
-  String get sliderColorProfileAmount => 'Força do Perfil de Cor';
+  String get sliderColorProfileAmount => 'Contraste do Perfil de Cor';
 
   @override
   String get sliderTexture => 'Textura';

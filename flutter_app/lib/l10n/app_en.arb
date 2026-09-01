@@ -50,7 +50,7 @@
   "@presetAmountDialogTitle": {
     "placeholders": { "name": {"type": "String"} }
   },
-  "presetAmountLabel": "Amount",
+  "presetAmountLabel": "Color Profile Strength",
   "presetAmountApplyButton": "Apply",
   "presetRenameLabel": "Rename",
   "presetExportLabel": "Export",
@@ -277,6 +277,7 @@
     "placeholders": { "name": {"type": "String"}, "error": {"type": "String"} }
   },
 
+  "sectionColorProfile": "COLOR PROFILE",
   "sectionWhiteBalance": "WHITE BALANCE",
   "sectionTone": "TONE",
   "sectionPresence": "PRESENCE",
@@ -357,7 +358,7 @@
   "sliderShadows": "Shadows",
   "sliderWhites": "Whites",
   "sliderBlacks": "Blacks",
-  "sliderColorProfileAmount": "Color Profile Strength",
+  "sliderColorProfileAmount": "Color Profile Contrast",
   "sliderTexture": "Texture",
   "sliderClarity": "Clarity",
   "sliderDehaze": "Dehaze",

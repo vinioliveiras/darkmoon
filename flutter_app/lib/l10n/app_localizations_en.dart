@@ -111,7 +111,7 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get presetAmountLabel => 'Amount';
+  String get presetAmountLabel => 'Color Profile Strength';
 
   @override
   String get presetAmountApplyButton => 'Apply';
@@ -696,6 +696,9 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String get sectionColorProfile => 'COLOR PROFILE';
+
+  @override
   String get sectionWhiteBalance => 'WHITE BALANCE';
 
   @override
@@ -930,7 +933,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sliderBlacks => 'Blacks';
 
   @override
-  String get sliderColorProfileAmount => 'Color Profile Strength';
+  String get sliderColorProfileAmount => 'Color Profile Contrast';
 
   @override
   String get sliderTexture => 'Texture';

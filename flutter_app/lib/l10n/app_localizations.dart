@@ -283,7 +283,7 @@ abstract class AppLocalizations {
   /// No description provided for @presetAmountLabel.
   ///
   /// In en, this message translates to:
-  /// **'Amount'**
+  /// **'Color Profile Strength'**
   String get presetAmountLabel;
 
   /// No description provided for @presetAmountApplyButton.
@@ -1330,6 +1330,12 @@ abstract class AppLocalizations {
   /// **'Couldn\'t delete \"{name}\": {error}'**
   String filmstripDeleteFailedMessage(String name, String error);
 
+  /// No description provided for @sectionColorProfile.
+  ///
+  /// In en, this message translates to:
+  /// **'COLOR PROFILE'**
+  String get sectionColorProfile;
+
   /// No description provided for @sectionWhiteBalance.
   ///
   /// In en, this message translates to:
@@ -1801,7 +1807,7 @@ abstract class AppLocalizations {
   /// No description provided for @sliderColorProfileAmount.
   ///
   /// In en, this message translates to:
-  /// **'Color Profile Strength'**
+  /// **'Color Profile Contrast'**
   String get sliderColorProfileAmount;
 
   /// No description provided for @sliderTexture.
