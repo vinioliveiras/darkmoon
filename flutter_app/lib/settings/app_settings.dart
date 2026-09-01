@@ -234,6 +234,35 @@ class AppSettings {
     customDenoiseModelPath: null,
     animationsEnabled: animationsEnabled,
   );
+
+  /// [lastActiveFolder] cleared (same `copyWith`-can't-null limitation as
+  /// [withDefaultDenoiseModel]) — real bug fix (2026-09-01): opening a
+  /// single file (via File > Open File or Recent Files) left whatever
+  /// folder was last active still recorded here, so on the next launch
+  /// `_loadSettings` restored that stale folder instead of the single
+  /// file the user was actually editing (or, if no folder had ever been
+  /// opened, restored nothing at all — `_loadSettings` only ever calls
+  /// `_loadFolder`). Called from `_loadSingleFile` alongside
+  /// `_saveLastActiveFile`, mirroring how `_loadFolder` records its own
+  /// [lastActiveFolder].
+  AppSettings asSingleFileSession(String path) => AppSettings(
+    language: language,
+    fastPreview: fastPreview,
+    previewResolution: previewResolution,
+    useGpuRender: useGpuRender,
+    dynamicFullPreview: dynamicFullPreview,
+    fullQualityPercent: fullQualityPercent,
+    baseContrast: baseContrast,
+    thumbnailConcurrency: thumbnailConcurrency,
+    rawOnly: rawOnly,
+    devLogging: devLogging,
+    libraryFolders: libraryFolders,
+    recentFiles: recentFiles,
+    lastActiveFolder: null,
+    lastActiveFile: path,
+    customDenoiseModelPath: customDenoiseModelPath,
+    animationsEnabled: animationsEnabled,
+  );
 }
 
 Future<File> _settingsFile() async {

@@ -118,8 +118,22 @@ String _monthKey(DateTime modified) {
   return '$year-$month';
 }
 
+/// Bump this whenever a decode-correctness fix changes what bytes a cache
+/// entry *should* contain for the same path/mtime/size — the key has no
+/// other way to tell a stale entry (written by the old, buggy decoder)
+/// from a fresh one, so without this every cache (thumbnails, previews,
+/// the native-source cache) would keep serving the old wrong bytes
+/// forever, since the source file on disk hasn't actually changed.
+///
+/// Bumped to 2 (2026-09-01): a real bug fix in `common_image.dart`
+/// (16-bit TIFF/RGBA-PNG decoding as noise) needed every existing common-
+/// image thumbnail/preview to be treated as a miss, not just newly-opened
+/// files — the file's mtime/size didn't change, only the code did.
+const _cacheFormatVersion = 2;
+
 String _entryKey(String path, DateTime modified, int size) {
-  final raw = '$path|${modified.microsecondsSinceEpoch}|$size';
+  final raw =
+      '$path|${modified.microsecondsSinceEpoch}|$size|v$_cacheFormatVersion';
   return sha1.convert(utf8.encode(raw)).toString();
 }
 

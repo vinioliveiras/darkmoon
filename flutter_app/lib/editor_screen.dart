@@ -1650,6 +1650,15 @@ class _EditorScreenState extends State<EditorScreen>
     final lastFolder = settings.lastActiveFolder;
     if (lastFolder != null && await Directory(lastFolder).exists()) {
       unawaited(_loadFolder(lastFolder, selectPath: settings.lastActiveFile));
+    } else {
+      // No folder to restore — either there never was one, or the last
+      // session was a single file (`lastActiveFolder` cleared by
+      // `_loadSingleFile`'s `asSingleFileSession`). Reopen that file
+      // directly instead of leaving the editor empty on launch.
+      final lastFile = settings.lastActiveFile;
+      if (lastFile != null) {
+        unawaited(_loadSingleFile(lastFile));
+      }
     }
   }
 
@@ -2438,6 +2447,15 @@ class _EditorScreenState extends State<EditorScreen>
     _beginLoadingFiles();
     _currentFolder = null;
     _currentSingleFile = path;
+    // Real bug (2026-09-01): without this, a single-file session (File >
+    // Open File, or Recent Files) left `lastActiveFolder` pointing at
+    // whatever folder was open before (or left it unset entirely, if none
+    // ever was) — `_loadSettings` only restores via `_loadFolder`, so the
+    // app either reopened the wrong folder or nothing at all on the next
+    // launch, never this file.
+    final next = _settings.asSingleFileSession(path);
+    _settings = next;
+    unawaited(saveSettings(next));
     DateTime modified;
     try {
       modified = (await File(path).stat()).modified;
