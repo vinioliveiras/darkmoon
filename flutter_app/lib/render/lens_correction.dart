@@ -18,7 +18,15 @@ import 'geometry.dart' show sampleBilinear, sampleBilinearChannel;
 /// match a bundled profile.
 class LensCorrectionParams {
   const LensCorrectionParams({
-    this.enabled = false,
+    // On by default (2026-09-01, explicit user direction) — a real no-op
+    // for the common case regardless: render_job.dart only ever applies
+    // anything when a lens profile actually resolves from the photo's
+    // EXIF against the bundled database, so most photos (no matching
+    // profile) render identically either way. Only changes behavior for
+    // a photo whose exact lens *is* in the database, which now gets its
+    // distortion/vignette/CA correction applied immediately at the
+    // amount defaults below instead of needing an explicit opt-in.
+    this.enabled = true,
     this.manualProfileKeyHash,
     this.distortionAmount = 50,
     this.vignetteAmount = 50,

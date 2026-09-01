@@ -304,16 +304,16 @@ Map<String, double> _withCategoriesApplied(
   double asShotTint = 0,
 }) {
   bool disabled(String category) {
-    // Every other section defaults to on (a brand-new photo has no
-    // catalog entry yet, so the key is absent) — EFFECTS (Grain +
-    // Vignette) is the one exception, off by default like Lens
-    // Correction's own `enabled` flag. Motivated by a real user report:
-    // film-look presets often set Grain/Texture/Sharpen together, and a
-    // grain layer added *after* AI Enhance's denoise pass visually
-    // masked the whole improvement — defaulting Effects off keeps that
-    // choice deliberate instead of silently inherited from a preset.
-    final defaultEnabled = category == 'EFFECTS' ? 0.0 : 1.0;
-    return (values[_categoryEnabledKey(category)] ?? defaultEnabled) == 0;
+    // Every section defaults to on (a brand-new photo has no catalog
+    // entry yet, so the key is absent). EFFECTS (Grain + Vignette) was
+    // off by default for a while (2026-08-31 – 2026-09-01): a film-look
+    // preset that sets Grain/Texture/Sharpen together, applied while the
+    // section was off, silently masked AI Enhance's improvement once
+    // switched on. Reverted to defaulting on (2026-09-01, explicit user
+    // direction, aware of the tradeoff) — a preset that sets a non-zero
+    // Grain amount now applies it immediately again, same as it does for
+    // every other section's sliders.
+    return (values[_categoryEnabledKey(category)] ?? 1.0) == 0;
   }
 
   final overrides = <String, double>{};
@@ -9025,10 +9025,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                           ..._section(
                             'EFFECTS',
                             label: l10n.sectionEffects,
-                            // Off by default (unlike every other section) —
+                            // On by default, like every other section —
                             // see _withCategoriesApplied's disabled() doc.
                             enabled:
-                                (values[_categoryEnabledKey('EFFECTS')] ?? 0) !=
+                                (values[_categoryEnabledKey('EFFECTS')] ?? 1) !=
                                 0,
                             onEnabledChanged: (v) {
                               final key = _categoryEnabledKey('EFFECTS');
