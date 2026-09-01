@@ -9,7 +9,7 @@ import 'dialog_chrome.dart';
 
 /// Displayed app version — bump this alongside pubspec.yaml's `version:`
 /// and the git tag on each release.
-const String darkmoonAppVersion = 'v1.7.0';
+const String darkmoonAppVersion = 'v1.7.1';
 
 /// Tapping the app icon this many times in a row triggers the hidden
 /// easter egg (see [_DarkmoonAboutDialogState._onIconTap]) — 5 is the
