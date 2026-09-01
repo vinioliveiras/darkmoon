@@ -155,11 +155,15 @@ ThemeData buildDarkmoonTheme() {
             }),
           ),
     ),
-    // macOS-style switch: a plain rounded track (accent when on, subtle
-    // gray when off) with a plain thumb — no Material halo/ripple around
-    // it. The track is now white (the app's accent), so the thumb has to
-    // shift to a light gray when on — a white thumb on a white track was
-    // literally invisible.
+    // iOS/Apple-style switch (2026-09-01, explicit user request): a plain
+    // capsule track (accent when on, a clearly-visible neutral gray when
+    // off — the old off-track colour, `DarkmoonColors.border`, was tuned
+    // for hairline dividers, not a control someone needs to read as "off"
+    // at a glance, so it read as almost invisible against the panel
+    // background) with a plain thumb and no Material halo/ripple. The
+    // track is white (the app's accent) when on, so the thumb shifts to a
+    // light gray when on — a white thumb on a white track was literally
+    // invisible.
     switchTheme: SwitchThemeData(
       thumbColor: WidgetStateProperty.resolveWith((states) {
         return states.contains(WidgetState.selected)
@@ -169,7 +173,7 @@ ThemeData buildDarkmoonTheme() {
       trackColor: WidgetStateProperty.resolveWith((states) {
         return states.contains(WidgetState.selected)
             ? DarkmoonColors.accent
-            : DarkmoonColors.border;
+            : const Color(0xFF3A3B3E);
       }),
       trackOutlineColor: const WidgetStatePropertyAll(Colors.transparent),
       overlayColor: const WidgetStatePropertyAll(Colors.transparent),
