@@ -56,10 +56,18 @@ void main() {
       await tester.tapAt(mid);
       // Exactly one pump — a regression of the double-tap-arena bug this
       // guards against would require pumping past kDoubleTapTimeout
-      // (~300ms) before onTapUp fires at all.
+      // (~300ms) before onTapUp fires at all. onChanged (the live value/
+      // preview) is unaffected by the onChangeEnd-deferral fix below —
+      // still instant.
       await tester.pump();
-
       expect(changed, [50.0]);
+      expect(changedEnd, isEmpty);
+
+      // onChangeEnd (the undo-history/catalog commit) is deliberately
+      // deferred past the same window used to detect a double-tap — see
+      // [_onTrackTap]'s doc — so a click's commit only lands once we're
+      // sure a second tap isn't about to turn it into a reset instead.
+      await tester.pump(const Duration(milliseconds: 350));
       expect(changedEnd, [50.0]);
     },
   );
@@ -85,10 +93,15 @@ void main() {
       await tester.tapAt(tapPoint);
       await tester.pump();
 
-      // First tap jumps to 50, second (within the window, same spot)
-      // resets to defaultValue instead of jumping to 50 again.
+      // First tap's live value jumps to 50, second (within the window,
+      // same spot) resets to defaultValue instead of jumping to 50 again.
+      // Real bug fixed 2026-09-01: the first tap's onChangeEnd(50) used to
+      // fire unconditionally too, right alongside onChangeEnd(77) — a
+      // spurious extra undo-history/catalog-save commit for a value the
+      // user never actually meant to land on. It's now cancelled by the
+      // detected double-tap, so only the net reset ever commits.
       expect(changed, [50.0, 77.0]);
-      expect(changedEnd, [50.0, 77.0]);
+      expect(changedEnd, [77.0]);
     },
   );
 

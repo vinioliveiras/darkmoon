@@ -111,6 +111,10 @@ class _SliderRowState extends State<SliderRow> {
   double? _dragValue;
   Timer? _propagateTimer;
 
+  /// Deferred `onChangeEnd` for a plain track click — see [_onTrackTap]'s
+  /// doc for why.
+  Timer? _pendingClickCommitTimer;
+
   // decimals doubles as the drag step: most sliders use decimals: 0, so
   // this lands on exactly 1 unit/pixel (20, 21, 22, ...) — the old stock
   // Slider-like feel. Exposure is the one control with decimals: 1, which
@@ -135,6 +139,7 @@ class _SliderRowState extends State<SliderRow> {
   @override
   void dispose() {
     _propagateTimer?.cancel();
+    _pendingClickCommitTimer?.cancel();
     _controller.dispose();
     _focusNode.dispose();
     super.dispose();
@@ -158,12 +163,16 @@ class _SliderRowState extends State<SliderRow> {
     if (parsed == null) {
       return;
     }
+    _pendingClickCommitTimer?.cancel();
+    _pendingClickCommitTimer = null;
     final clamped = parsed.clamp(widget.min, widget.max);
     widget.onChanged(clamped);
     widget.onChangeEnd?.call(clamped);
   }
 
   void _scheduleUpdate(double next) {
+    _pendingClickCommitTimer?.cancel();
+    _pendingClickCommitTimer = null;
     setState(() => _dragValue = next);
     _propagateTimer ??= Timer(_dragPropagateThrottle, () {
       _propagateTimer = null;
@@ -200,6 +209,8 @@ class _SliderRowState extends State<SliderRow> {
     }
     _propagateTimer?.cancel();
     _propagateTimer = null;
+    _pendingClickCommitTimer?.cancel();
+    _pendingClickCommitTimer = null;
     setState(() => _dragValue = null);
     widget.onChanged(reset);
     widget.onChangeEnd?.call(reset);
@@ -237,6 +248,12 @@ class _SliderRowState extends State<SliderRow> {
     _lastTapX = isDoubleTap ? null : localX;
 
     if (isDoubleTap) {
+      // The first tap of this pair already fired onChanged (below) and
+      // queued its onChangeEnd — cancel that queued commit so a double-
+      // click never pushes two undo-history entries (jump-to-click-
+      // position, then reset), just the one net reset.
+      _pendingClickCommitTimer?.cancel();
+      _pendingClickCommitTimer = null;
       _resetToDefault();
       return;
     }
@@ -253,7 +270,16 @@ class _SliderRowState extends State<SliderRow> {
     _propagateTimer = null;
     setState(() => _dragValue = null);
     widget.onChanged(v);
-    widget.onChangeEnd?.call(v);
+    // onChangeEnd (history/catalog commit) is deferred by the same window
+    // used to detect a double-tap above, and cancelled entirely if one
+    // lands — a plain click still updates the value/live preview
+    // instantly via onChanged, it just doesn't commit to undo history
+    // until we're sure a second tap isn't about to reset it away.
+    _pendingClickCommitTimer?.cancel();
+    _pendingClickCommitTimer = Timer(_doubleTapTimeout, () {
+      _pendingClickCommitTimer = null;
+      widget.onChangeEnd?.call(v);
+    });
   }
 
   @override
