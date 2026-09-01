@@ -23,9 +23,18 @@ RawImage? decodeCommonImage(String path) {
     return null;
   }
   final oriented = img.bakeOrientation(decoded);
+  // `getBytes` only reorders channels — it does NOT rescale bit depth or
+  // drop an alpha channel, it just returns the image's native buffer. A
+  // 16-bit TIFF (real bug, 2026-09-01: a Fujifilm camera TIFF decoded as
+  // pure noise) or a PNG with an alpha channel would otherwise hand back a
+  // buffer wider than the 3-bytes/pixel 8-bit RGB every downstream caller
+  // (`RawImage.rgbBytes`) assumes, silently misaligning every pixel.
+  // `convert` rescales channel values to 8-bit and drops/adds channels as
+  // needed, so this always produces the packed shape `RawImage` expects.
+  final normalized = oriented.convert(format: img.Format.uint8, numChannels: 3);
   return RawImage(
-    width: oriented.width,
-    height: oriented.height,
-    rgbBytes: oriented.getBytes(order: img.ChannelOrder.rgb),
+    width: normalized.width,
+    height: normalized.height,
+    rgbBytes: normalized.getBytes(order: img.ChannelOrder.rgb),
   );
 }
