@@ -131,7 +131,7 @@ const double calBaseContrast = 20.0;
 ///   ↑ higher = weaker Exposure (needs a bigger drag for the same change)
 ///   ↓ lower  = stronger Exposure
 /// default: 20.0
-const double calExposureUnitsPerStop = 20.0;
+const double calExposureUnitsPerStop = 25.0;
 
 /// **Brightness**: same idea as Exposure, slider units per stop, but
 /// Brightness uses a curve that protects blacks and whites (no clipping).
@@ -150,7 +150,7 @@ const double calBrightnessMidtoneStrength = 1.2;
 ///   ↑ higher = more aggressive Contrast at the same value
 ///   ↓ lower  = gentler Contrast
 /// default: 1.25
-const double calContrastStrength = 1.25;
+const double calContrastStrength = 0.50;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  BASIC — Highlights / Shadows / Whites / Blacks                           ║
@@ -160,7 +160,7 @@ const double calContrastStrength = 1.25;
 ///   ↑ higher = Highlights recovers/lifts much faster
 ///   ↓ lower  = subtler
 /// default: 1.75
-const double calHighlightsStrength = 1.75;
+const double calHighlightsStrength = 1.0;
 
 /// **Shadows**: multiplier on top of the slider value.
 ///   ↑ higher = stronger Shadows     ↓ lower = weaker
@@ -186,13 +186,13 @@ const double calWhitesMaskLow = 0.32;
 ///   ↑ higher = Whites +100 brightens much more
 ///   ↓ lower  = Whites +100 barely changes anything
 /// default: 0.42   (original Solstice: 0.25)   [also on GPU: point_ops_post_denoise.frag]
-const double calWhitesLevelCoeff = 0.42;
+const double calWhitesLevelCoeff = 0.25;
 
 /// **Blacks** — multiplier on top of the slider value.
 ///   ↑ higher = stronger Blacks (crushes/lifts black much harder)
 ///   ↓ lower  = weaker Blacks
 /// default: 1.5   (original Solstice: 1.0)   [also on GPU: point_ops_post_denoise.frag]
-const double calBlacksAmountScale = 1.5;
+const double calBlacksAmountScale = 2.0;
 
 /// **Blacks** — width of the affected range (exponent, same idea as
 /// Shadows').
@@ -224,7 +224,7 @@ const double calShadowBlacksContrastMix = 0.85;
 ///   ↑ higher = enhances larger structures
 ///   ↓ lower  = enhances only the finest detail
 /// default: 3.0
-const double calTextureSigma = 3.0;
+const double calTextureSigma = 3.5;
 
 /// **Texture** — strength multiplier on top of the slider.
 ///   ↑ higher = stronger Texture     ↓ lower = weaker
@@ -241,35 +241,54 @@ const double calClaritySigma = 25.0;
 /// **Clarity** — strength multiplier on top of the slider.
 ///   ↑ higher = stronger Clarity     ↓ lower = weaker
 /// default: 1.0
-const double calClarityStrength = 1.0;
+const double calClarityStrength = 0.5;
 
 /// **Dehaze +** — how hard the positive slider pulls transmission down (=
 /// removes haze). This is the main control over Dehaze strength.
 ///   ↑ higher (e.g. 0.85) = very aggressive Dehaze (original Solstice)
 ///   ↓ lower (e.g. 0.45) = quite gentle Dehaze
 /// default: 0.55   [also on GPU: dehaze_apply.frag]
-const double calDehazeTransmissionCoeff = 0.55;
+/// 2026-09-01: user set this to 0.1 (5.5x weaker) wanting a gentler Dehaze —
+/// landed at a real but more moderate weakening instead (~1.6x), since the
+/// transmission-floor bug below meant 0.1 was never actually tested against
+/// a working Dehaze.
+const double calDehazeTransmissionCoeff = 0.35;
 
 /// **Dehaze** — transmission floor: keeps Dehaze from "breaking" the image
 /// in the hazier spots. Higher = safer/gentler.
 ///   ↑ higher = caps the maximum effect (gentler)
 ///   ↓ lower  = lets Dehaze go further (can blow out)
 /// default: 0.22   (original Solstice: 0.15)   [also on GPU: dehaze_apply.frag]
-const double calDehazeTransmissionFloor = 0.22;
+/// 2026-09-01: user set this to 1.0, which is a real bug, not just
+/// "gentler" — `t = max(1.0 - strength*mappedHaze*coeff, floor)` and the
+/// first term is always ≤ 1.0, so a floor of 1.0 clamps `t` to exactly 1.0
+/// on every pixel regardless of the Dehaze slider, making positive Dehaze
+/// a complete no-op (recR/recG/recB reduce to r/g/b unchanged, shadowLift
+/// and satBoost both zero out too since both scale off `1.0 - t`). Set to
+/// a real "safer/gentler" value instead — meaningfully higher than the
+/// 0.22 default (caps how far Dehaze can push) without fully disabling it.
+const double calDehazeTransmissionFloor = 0.40;
 
 /// **Dehaze** — how much it saturates color in proportion to the haze
 /// removed.
 ///   ↑ higher = Dehaze leaves color more "punchy"
 ///   ↓ lower  = Dehaze barely touches saturation
 /// default: 0.32   (original Solstice: 0.5)   [also on GPU: dehaze_apply.frag]
-const double calDehazeSatBoost = 0.32;
+/// 2026-09-01: weakened from 0.32, moderately (not all the way to the
+/// user's 0.1) — same "floor bug meant this was never really tested"
+/// reasoning as the coefficient above.
+const double calDehazeSatBoost = 0.20;
 
 /// **Dehaze −** (add haze) — strength of the slider's negative side (blends
 /// the image with atmospheric light, making it look "milky").
 ///   ↑ higher = stronger negative Dehaze
 ///   ↓ lower  = subtler
 /// default: 0.55   (original Solstice: 0.7)   [also on GPU: dehaze_apply.frag]
-const double calDehazeAddMix = 0.30;
+/// 2026-09-01: the doc's "0.55" was already stale — the real prior
+/// committed value was 0.30, not 0.55. Weakened moderately from *that*
+/// (not from the stale comment) — user's 0.2 was a real ~33% cut, this
+/// lands at roughly half that.
+const double calDehazeAddMix = 0.25;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  COLOR — Vibrance / Saturation                                            ║
@@ -281,19 +300,27 @@ const double calDehazeAddMix = 0.30;
 ///   ↑ higher = Vibrance +100 is much more intense
 ///   ↓ lower  = more restrained
 /// default: 1.5
-const double calVibranceStrength = 1.5;
+/// 2026-09-01: user set this to 0.1 (15x weaker than the 1.5 default,
+/// ~30x weaker than the original 3.0) wanting less blow-out — landed on a
+/// more moderate weakening (~2x from 1.5) instead, since 0.1 makes
+/// Vibrance +100 barely perceptible (closer to "off" than "gentler").
+const double calVibranceStrength = 0.8;
 
 /// **Vibrance** — how much it HOLDS BACK the effect on skin tones (so faces
 /// don't turn orange). 1.0 = holds back nothing; 0.0 = zeroes out on skin.
 ///   ↑ higher (near 1) = skin saturates right along with everything else
 ///   ↓ lower (near 0) = skin stays well protected
 /// default: 0.6
-const double calVibranceSkinDampen = 0.6;
+const double calVibranceSkinDampen = 0.2;
 
 /// **Saturation** — multiplier on top of the slider (the effect is
 /// 1 + sliderValue/100 * this number).
 ///   ↑ higher = stronger Saturation     ↓ lower = weaker
 /// default: 1.0
+/// 2026-09-01: user set this to 0.1 (10x weaker) wanting less blow-out —
+/// landed on a moderate 2x weakening instead, since 0.1 leaves Saturation
+/// +100 as only a ~1.01x multiplier, effectively disabling the slider
+/// rather than just softening it.
 const double calSaturationStrength = 0.5;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
@@ -310,7 +337,7 @@ const double calSaturationStrength = 0.5;
 ///   ↓ lower  = rotates less (0.6 = original Solstice behavior)
 /// ⚠️ changes older presets that touched Mixer Hue (they'll rotate further).
 /// default: 1.15   (original Solstice: 0.6)   [also on GPU: point_ops_post_denoise.frag]
-const double calMixerHueStrength = 1.15;
+const double calMixerHueStrength = 1.0;
 
 /// **Mixer → effective band width** — the "sharpness" of the gaussian that
 /// decides how much each band (Red, Orange…) influences a pixel of a given

@@ -151,16 +151,16 @@ void main() {
       const RenderParams(baseContrast: 0, saturation: -50),
     );
 
-    // Already at full saturation (204, 51, 51) — sat=0.75 pinned to 1.0 at
-    // +50%, so the max channel (204, this pixel's HSV "value") is the only
-    // one exactly preserved; the *min* channel is what saturating further
-    // can still move, down to 0.
+    // (204, 51, 51) — sat=0.75, factor = 1 + 0.5*calSaturationStrength
+    // (0.5, 2026-09-01) at +50%, so the max channel (204, this pixel's HSV
+    // "value") is exactly preserved; the *min* channel is what saturating
+    // moves.
     expect(saturated[0], closeTo(204, 1));
-    expect(saturated[1], closeTo(0, 1));
-    expect(saturated[2], closeTo(0, 1));
+    expect(saturated[1], closeTo(13, 1));
+    expect(saturated[2], closeTo(13, 1));
     expect(desaturated[0], closeTo(204, 1));
-    expect(desaturated[1], closeTo(128, 1));
-    expect(desaturated[2], closeTo(128, 1));
+    expect(desaturated[1], closeTo(89, 1));
+    expect(desaturated[2], closeTo(89, 1));
   });
 
   test('vibrance multiplies HSV saturation, hue and value held fixed', () {
@@ -179,9 +179,12 @@ void main() {
     );
 
     // The max channel (180, blue) is this pixel's HSV "value" — held
-    // exactly fixed in both directions by construction.
-    expect(boosted[0], closeTo(30, 1));
-    expect(boosted[1], closeTo(105, 1));
+    // exactly fixed in both directions by construction. Boosted values
+    // reflect calVibranceStrength=0.8/calVibranceSkinDampen=0.2
+    // (2026-09-01) — the negative branch doesn't depend on either
+    // constant, so it's unchanged.
+    expect(boosted[0], closeTo(96, 1));
+    expect(boosted[1], closeTo(138, 1));
     expect(boosted[2], closeTo(180, 1));
     expect(reduced[0], closeTo(146, 1));
     expect(reduced[1], closeTo(163, 1));
@@ -198,13 +201,15 @@ void main() {
 
     // Unlike the old scene-linear technique, applying the two steps in the
     // opposite order no longer shifts hue or value — both stages hold both
-    // exactly fixed by construction — so the two orders now land close
-    // together (8, 94, 180) instead of "well outside tolerance." Order
-    // still matters (Vibrance's own boost is masked by *current*
-    // saturation, so which stage went first is still measurable), just far
-    // more subtly, which this narrower expectation locks in.
-    expect(result[0], closeTo(10, 1));
-    expect(result[1], closeTo(95, 1));
+    // exactly fixed by construction — so the two orders land close
+    // together instead of "well outside tolerance." Order still matters
+    // (Vibrance's own boost is masked by *current* saturation, so which
+    // stage went first is still measurable), just far more subtly, which
+    // this narrower expectation locks in. Values reflect
+    // calSaturationStrength=0.5/calVibranceStrength=0.8/
+    // calVibranceSkinDampen=0.2 (2026-09-01).
+    expect(result[0], closeTo(89, 1));
+    expect(result[1], closeTo(134, 1));
     expect(result[2], closeTo(180, 1));
   });
 }

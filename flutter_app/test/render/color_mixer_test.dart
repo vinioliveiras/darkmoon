@@ -60,9 +60,12 @@ void main() {
       ),
     );
 
-    expect(result[0], closeTo(170, 1));
+    // Re-derived 2026-09-01 after calMixerHueStrength eased back from 1.15
+    // toward Solstice's original 0.6 (now 1.0) — every channel shifts with
+    // the hue rotation strength, not just the two that moved the most.
+    expect(result[0], closeTo(166, 1));
     expect(result[1], closeTo(0, 1));
-    expect(result[2], closeTo(187, 1));
+    expect(result[2], closeTo(197, 1));
   });
 
   test(
