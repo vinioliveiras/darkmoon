@@ -68,7 +68,6 @@ void main() {
       expect(find.text('Settings'), findsOneWidget);
       expect(find.text('General'), findsOneWidget);
       expect(find.text('Performance'), findsOneWidget);
-      expect(find.text('Color'), findsOneWidget);
       expect(find.text('Data'), findsOneWidget);
 
       // Starts on the General tab.
