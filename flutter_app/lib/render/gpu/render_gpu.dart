@@ -260,6 +260,8 @@ Future<ui.Image> _runPostDenoise(
   shader.setFloat(i++, blacksAdd);
   shader.setFloat(i++, calMixerHueStrength);
   shader.setFloat(i++, calMixerBandSharpness);
+  shader.setFloat(i++, calMixerSaturationStrength);
+  shader.setFloat(i++, calMixerLuminanceStrength);
   for (final ch in mixerChannels) {
     shader.setFloat(i++, ch.hue);
     shader.setFloat(i++, ch.saturation);

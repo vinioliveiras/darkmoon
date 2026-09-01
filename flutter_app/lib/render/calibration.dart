@@ -357,6 +357,29 @@ const double calMixerHueStrength = 1.0;
 /// default: 1.5   [also on GPU: point_ops_post_denoise.frag → rawHslInfluence]
 const double calMixerBandSharpness = 1.5;
 
+/// **Mixer → Saturation** — strength multiplier on the raw Saturation
+/// slider (unlike Hue, this had no calibration constant at all before
+/// 2026-09-01 — always applied at literal 1:1 strength). Real bug found
+/// via a live preset (Filmatic Fuji 4's Green channel: Saturation -75,
+/// Luminance -57, close to the -100 floor on both) — at full strength
+/// this crushed all foliage detail into a near-featureless dark mass;
+/// scaling the Amount slider down to ~35% (which also scales this) fixed
+/// it, which only makes sense if the raw per-slider-unit strength itself
+/// was too aggressive, the same shape of problem Hue already had.
+///   ↑ higher = the same Saturation slider value desaturates/saturates more
+///   ↓ lower  = gentler
+/// default: 0.5   (original/unset: 1.0)   [also on GPU: point_ops_post_denoise.frag]
+const double calMixerSaturationStrength = 0.5;
+
+/// **Mixer → Luminance** — same idea as [calMixerSaturationStrength], for
+/// the Luminance slider. This one is the more visually destructive of the
+/// two at full strength (a large negative Luminance directly darkens a
+/// whole hue band toward black, not just desaturating it).
+///   ↑ higher = the same Luminance slider value brightens/darkens more
+///   ↓ lower  = gentler
+/// default: 0.5   (original/unset: 1.0)   [also on GPU: point_ops_post_denoise.frag]
+const double calMixerLuminanceStrength = 0.5;
+
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  DETAIL — Sharpen                                                         ║
 // ╚══════════════════════════════════════════════════════════════════════════╝

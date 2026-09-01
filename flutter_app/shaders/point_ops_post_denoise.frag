@@ -36,10 +36,13 @@ uniform float uWhitesAdd; // whites param normalized from -100..100
 uniform float uBlacksAdd; // blacks param normalized from -100..100
 
 // Color Mixer calibration — must match lib/render/calibration.dart's
-// calMixerHueStrength / calMixerBandSharpness (the CPU path reads them
-// from there; this shader gets them as uniforms).
+// calMixerHueStrength / calMixerBandSharpness / calMixerSaturationStrength
+// / calMixerLuminanceStrength (the CPU path reads them from there; this
+// shader gets them as uniforms).
 uniform float uMixerHueStrength; // degrees of hue rotation per slider unit
 uniform float uMixerBandSharpness; // Gaussian tightness of each HSL band
+uniform float uMixerSaturationStrength; // scales the raw Saturation slider
+uniform float uMixerLuminanceStrength; // scales the raw Luminance slider
 
 // Color Mixer — color_mixer.dart's applyColorMixer. 8 bands x
 // [hueShift, satShift, lumShift], band order matches
@@ -374,36 +377,36 @@ void main() {
       float totalHueShift = 0.0, totalSatMul = 0.0, totalLumAdj = 0.0;
       float n0 = w0 / totalRaw; float hs0 = n0 * saturationMask; float lu0 = n0 * luminanceWeight;
       totalHueShift += uMixer[0] * uMixerHueStrength * hs0;
-      totalSatMul += (uMixer[1] / 100.0) * hs0;
-      totalLumAdj += (uMixer[2] / 100.0) * lu0;
+      totalSatMul += (uMixer[1] / 100.0 * uMixerSaturationStrength) * hs0;
+      totalLumAdj += (uMixer[2] / 100.0 * uMixerLuminanceStrength) * lu0;
       float n1 = w1 / totalRaw; float hs1 = n1 * saturationMask; float lu1 = n1 * luminanceWeight;
       totalHueShift += uMixer[3] * uMixerHueStrength * hs1;
-      totalSatMul += (uMixer[4] / 100.0) * hs1;
-      totalLumAdj += (uMixer[5] / 100.0) * lu1;
+      totalSatMul += (uMixer[4] / 100.0 * uMixerSaturationStrength) * hs1;
+      totalLumAdj += (uMixer[5] / 100.0 * uMixerLuminanceStrength) * lu1;
       float n2 = w2 / totalRaw; float hs2 = n2 * saturationMask; float lu2 = n2 * luminanceWeight;
       totalHueShift += uMixer[6] * uMixerHueStrength * hs2;
-      totalSatMul += (uMixer[7] / 100.0) * hs2;
-      totalLumAdj += (uMixer[8] / 100.0) * lu2;
+      totalSatMul += (uMixer[7] / 100.0 * uMixerSaturationStrength) * hs2;
+      totalLumAdj += (uMixer[8] / 100.0 * uMixerLuminanceStrength) * lu2;
       float n3 = w3 / totalRaw; float hs3 = n3 * saturationMask; float lu3 = n3 * luminanceWeight;
       totalHueShift += uMixer[9] * uMixerHueStrength * hs3;
-      totalSatMul += (uMixer[10] / 100.0) * hs3;
-      totalLumAdj += (uMixer[11] / 100.0) * lu3;
+      totalSatMul += (uMixer[10] / 100.0 * uMixerSaturationStrength) * hs3;
+      totalLumAdj += (uMixer[11] / 100.0 * uMixerLuminanceStrength) * lu3;
       float n4 = w4 / totalRaw; float hs4 = n4 * saturationMask; float lu4 = n4 * luminanceWeight;
       totalHueShift += uMixer[12] * uMixerHueStrength * hs4;
-      totalSatMul += (uMixer[13] / 100.0) * hs4;
-      totalLumAdj += (uMixer[14] / 100.0) * lu4;
+      totalSatMul += (uMixer[13] / 100.0 * uMixerSaturationStrength) * hs4;
+      totalLumAdj += (uMixer[14] / 100.0 * uMixerLuminanceStrength) * lu4;
       float n5 = w5 / totalRaw; float hs5 = n5 * saturationMask; float lu5 = n5 * luminanceWeight;
       totalHueShift += uMixer[15] * uMixerHueStrength * hs5;
-      totalSatMul += (uMixer[16] / 100.0) * hs5;
-      totalLumAdj += (uMixer[17] / 100.0) * lu5;
+      totalSatMul += (uMixer[16] / 100.0 * uMixerSaturationStrength) * hs5;
+      totalLumAdj += (uMixer[17] / 100.0 * uMixerLuminanceStrength) * lu5;
       float n6 = w6 / totalRaw; float hs6 = n6 * saturationMask; float lu6 = n6 * luminanceWeight;
       totalHueShift += uMixer[18] * uMixerHueStrength * hs6;
-      totalSatMul += (uMixer[19] / 100.0) * hs6;
-      totalLumAdj += (uMixer[20] / 100.0) * lu6;
+      totalSatMul += (uMixer[19] / 100.0 * uMixerSaturationStrength) * hs6;
+      totalLumAdj += (uMixer[20] / 100.0 * uMixerLuminanceStrength) * lu6;
       float n7 = w7 / totalRaw; float hs7 = n7 * saturationMask; float lu7 = n7 * luminanceWeight;
       totalHueShift += uMixer[21] * uMixerHueStrength * hs7;
-      totalSatMul += (uMixer[22] / 100.0) * hs7;
-      totalLumAdj += (uMixer[23] / 100.0) * lu7;
+      totalSatMul += (uMixer[22] / 100.0 * uMixerSaturationStrength) * hs7;
+      totalLumAdj += (uMixer[23] / 100.0 * uMixerLuminanceStrength) * lu7;
 
       if (originalSat * (1.0 + totalSatMul) < 0.0001) {
         // Matches apply_hsl_panel's own near-zero-saturation fallback:

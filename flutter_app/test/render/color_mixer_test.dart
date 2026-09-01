@@ -37,9 +37,9 @@ void main() {
       ),
     );
 
-    expect(result[0], closeTo(236, 1));
-    expect(result[1], closeTo(0, 1));
-    expect(result[2], closeTo(0, 1));
+    expect(result[0], closeTo(221, 1));
+    expect(result[1], closeTo(49, 1));
+    expect(result[2], closeTo(49, 1));
   });
 
   test('a hue+saturation push on a deep blue pixel', () {
@@ -106,9 +106,9 @@ void main() {
       ),
     );
 
-    expect(result[0], closeTo(136, 1));
-    expect(result[1], closeTo(170, 1));
-    expect(result[2], closeTo(204, 1));
+    expect(result[0], closeTo(129, 1));
+    expect(result[1], closeTo(161, 1));
+    expect(result[2], closeTo(193, 1));
   });
 
   test('a luminance cut darkens a pixel near a band center', () {
@@ -123,9 +123,9 @@ void main() {
       ),
     );
 
-    expect(result[0], closeTo(100, 1));
-    expect(result[1], closeTo(126, 1));
-    expect(result[2], closeTo(151, 1));
+    expect(result[0], closeTo(111, 1));
+    expect(result[1], closeTo(139, 1));
+    expect(result[2], closeTo(167, 1));
   });
 
   test('a fully neutral gray pixel is left untouched', () {

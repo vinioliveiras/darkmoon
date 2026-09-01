@@ -172,8 +172,8 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
   final lumAmt = Float64List(n);
   for (var c = 0; c < n; c++) {
     hueAmt[c] = channels[c].hue * calMixerHueStrength;
-    satAmt[c] = channels[c].saturation / 100.0;
-    lumAmt[c] = channels[c].luminance / 100.0;
+    satAmt[c] = channels[c].saturation / 100.0 * calMixerSaturationStrength;
+    lumAmt[c] = channels[c].luminance / 100.0 * calMixerLuminanceStrength;
   }
   final rawInfluences = Float64List(n);
 
