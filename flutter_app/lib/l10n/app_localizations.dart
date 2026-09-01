@@ -1813,13 +1813,13 @@ abstract class AppLocalizations {
   /// No description provided for @colorProfileModeDefault.
   ///
   /// In en, this message translates to:
-  /// **'Darkmoon Default'**
+  /// **'Default'**
   String get colorProfileModeDefault;
 
   /// No description provided for @colorProfileModeFlat.
   ///
   /// In en, this message translates to:
-  /// **'Flat'**
+  /// **'Vivid'**
   String get colorProfileModeFlat;
 
   /// No description provided for @sliderTexture.
