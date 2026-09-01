@@ -90,58 +90,67 @@ void main() {
   const red = 358.0, orange = 25.0, yellow = 60.0;
   const green = 115.0, aqua = 180.0, blue = 225.0, magenta = 330.0;
 
-  // ---- Golden Hour: warm glow, oranges pushed warmer, blues cooled ----
-  // Amplitudes halved from the first pass (2026-09-01): even 2-4 sparse
-  // bumps read as too punchy at the original strength on a real photo —
-  // "a warm accent," not "everything drenched in yellow."
+  // ---- Golden Hour: warm glow EVERYWHERE, blues pulled well back ----
+  // Amplitudes re-tuned twice (2026-09-01): the first pass was too strong
+  // ("everything drenched in yellow"), the second too gentle to read as
+  // distinct from Teal & Orange on a warm-dominant photo. This pass keeps
+  // Golden Hour a pure warm push (no cool-zone split like Teal & Orange
+  // gets) but commits to it — a real "late-day glow," not a hint of one.
   final goldenHour = _build(
     'Golden Hour',
     hue: [
-      (yellow, 25, -5), // yellow leans toward orange
-      (blue, 40, 4), // blue nudged toward violet -- cooler-reading
+      (yellow, 25, -8), // yellow leans toward orange
+      (blue, 40, 6), // blue nudged toward violet -- cooler-reading
     ],
     sat: [
-      (orange, 28, 0.12),
-      (yellow, 22, 0.06),
-      (red, 25, 0.03), // gentle -- keep skin tones believable
-      (blue, 35, -0.08),
-      (aqua, 30, -0.05),
+      (orange, 28, 0.22),
+      (yellow, 22, 0.13),
+      (red, 25, 0.06), // gentle -- keep skin tones believable
+      (blue, 35, -0.15),
+      (aqua, 30, -0.10),
     ],
     lum: [
-      (orange, 28, 0.04),
-      (yellow, 22, 0.02),
-      (blue, 35, -0.03),
+      (orange, 28, 0.07),
+      (yellow, 22, 0.04),
+      (blue, 35, -0.05),
     ],
   );
 
-  // ---- Teal & Orange: classic cinematic split, warm skin / teal shadows ----
+  // ---- Teal & Orange: a real two-tone SPLIT, not just "warm" ----
+  // The point of this profile (vs. Golden Hour) is contrast BETWEEN warm
+  // and cool zones, so the cool side needs to read as clearly as the
+  // warm one — pushed noticeably harder than the first two passes, with
+  // yellow/green pulled toward neutral so the split doesn't muddy.
   final tealOrange = _build(
     'Teal & Orange',
     hue: [
-      (aqua, 35, -12), // aqua/cyan pulled toward teal
-      (blue, 35, -7),
-      (yellow, 20, -4), // tuck yellow toward orange, cleans the split
+      (aqua, 35, -22), // aqua/cyan pulled hard toward teal
+      (blue, 35, -13),
+      (yellow, 20, -7), // tuck yellow toward orange, cleans the split
     ],
     sat: [
-      (orange, 28, 0.15),
-      (red, 25, 0.06),
-      (aqua, 38, 0.15),
-      (blue, 32, 0.10),
-      (yellow, 20, -0.08),
-      (green, 32, -0.06),
+      (orange, 28, 0.22),
+      (red, 25, 0.08),
+      (aqua, 38, 0.26),
+      (blue, 32, 0.17),
+      (yellow, 20, -0.16),
+      (green, 32, -0.14),
     ],
     lum: [
-      (orange, 28, 0.03),
-      (aqua, 38, -0.03),
-      (blue, 32, -0.04),
+      (orange, 28, 0.04),
+      (aqua, 38, -0.05),
+      (blue, 32, -0.07),
     ],
   );
 
-  // ---- Pastel: soft and airy, gentle lift, minimal hue movement ----
+  // ---- Pastel: bright and airy -- the light, soft opposite of Noir ----
   // Uniform (satFlat/lumFlat), not per-hue bumps -- "pastel" is a global
   // softening, not a selective grade, and see _sum's doc for why stacking
   // 7 overlapping bumps to fake "uniform" badly overcorrected the first
-  // attempt (read as near-monochrome, not softly desaturated).
+  // attempt (read as near-monochrome, not softly desaturated). Lift
+  // raised well above the desaturation this pass (2026-09-01) so it
+  // reads as "bright and soft," not just "muted" -- the clearer opposite
+  // of Noir's dark-and-desaturated below.
   final pastel = _build(
     'Pastel',
     hue: [
@@ -149,29 +158,31 @@ void main() {
     ],
     sat: const [],
     lum: const [],
-    satFlat: -0.22,
-    lumFlat: 0.04,
+    satFlat: -0.20,
+    lumFlat: 0.10,
   );
 
-  // ---- Noir: moody and cool, desaturated, deep-shadow feel ----
+  // ---- Noir: dark, cool and heavily desaturated -- Pastel's opposite ----
   // (No true B&W/contrast here by design -- tone stays identity, see this
-  // file's header. Reads as "cool, subdued," not monochrome -- same
-  // uniform-via-flat fix as Pastel, plus a couple of small selective
-  // accents layered on top for character.)
+  // file's header. Reads as "cool, subdued, moody," not monochrome --
+  // same uniform-via-flat fix as Pastel, plus a couple of small
+  // selective accents layered on top for character. Pushed clearly
+  // darker/more desaturated than Pastel is bright/soft, 2026-09-01, so
+  // the two read as opposites rather than both landing on "muted.")
   final noir = _build(
     'Noir',
     hue: [
-      (red, 45, 4), // reds nudged toward magenta -- cooler skin
-      (orange, 35, 5), // oranges nudged toward yellow -- less warmth
-      (blue, 45, -4), // blue nudged toward aqua -- steelier
+      (red, 45, 5), // reds nudged toward magenta -- cooler skin
+      (orange, 35, 6), // oranges nudged toward yellow -- less warmth
+      (blue, 45, -5), // blue nudged toward aqua -- steelier
     ],
     sat: const [],
     lum: [
-      (aqua, 50, 0.03), // faint moonlit lift in the cool end
-      (blue, 45, 0.04),
+      (aqua, 50, 0.04), // faint moonlit lift in the cool end
+      (blue, 45, 0.05),
     ],
-    satFlat: -0.35,
-    lumFlat: -0.04,
+    satFlat: -0.42,
+    lumFlat: -0.09,
   );
 
   final outDir = Directory('assets/color_profiles');
