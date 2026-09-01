@@ -24,24 +24,22 @@ const _warningColor = Color(0xFFE8A33D);
 /// previous denoise model (NAFNet-SIDD), whose raw output tended to look
 /// over-smoothed/"painted" on real photos; the model swap (2026-08-31,
 /// item 35 follow-up — see `onnx_runtime.dart`'s [denoiseModelSpec] doc)
-/// was specifically chosen for *not* having that problem in testing, so
-/// defaulting to a half-strength blend no longer serves a purpose (the
-/// model still has no strength control of its own — see
-/// [NeuralEnhanceChoice.denoiseAmount]'s own doc on why this is a
-/// post-hoc blend rather than a model input). `editor_screen.dart` uses
-/// this same constant as the fallback for any photo whose `_paramValues`
-/// doesn't have an amount recorded yet (never turned Denoise on before,
-/// or predates this slider) — see its own `_neuralDenoiseAmountKey` doc.
-const defaultNeuralDenoiseAmount = 100;
+/// was specifically chosen for *not* having that problem in testing, and
+/// this briefly defaulted to 100% on that basis. Reverted back to 50%
+/// (2026-09-01, explicit user direction) to follow the same plain "new
+/// toggle, balanced default" convention every other Amount slider in this
+/// dialog uses (see [defaultRestoreDetailAmount]'s doc) rather than stay
+/// the one exception. `editor_screen.dart` uses this same constant as the
+/// fallback for any photo whose `_paramValues` doesn't have an amount
+/// recorded yet (never turned Denoise on before, or predates this
+/// slider) — see its own `_neuralDenoiseAmountKey` doc.
+const defaultNeuralDenoiseAmount = 50;
 
 /// Default value for [NeuralEnhanceChoice.restoreDetailAmount] — 50%, a
-/// balanced starting blend. Unlike [defaultNeuralDenoiseAmount]'s 100%
-/// (justified by the current denoise model specifically *not* needing a
-/// safety blend — see its own doc), this toggle has no such evidence yet
-/// for any user's specific photo, so it follows the plain "new toggle,
-/// balanced default" convention instead (2026-08-31, explicit user
-/// direction after testing GaterV3 restore+sharpen — PENDING.md item 35
-/// combo follow-up).
+/// balanced starting blend, following the plain "new toggle, balanced
+/// default" convention (2026-08-31, explicit user direction after testing
+/// GaterV3 restore+sharpen — PENDING.md item 35 combo follow-up). See
+/// [defaultNeuralDenoiseAmount]'s own doc — it now uses the same 50%.
 const defaultRestoreDetailAmount = 50;
 
 String _levelLabel(AppLocalizations l10n, AiDenoiseLevel? level) =>
