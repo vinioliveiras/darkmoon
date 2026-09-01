@@ -7230,7 +7230,11 @@ class _ViewerToolbar extends StatelessWidget {
                     height: _squareButtonSize,
                     // Kept boxed (unlike its sibling pills) — explicit
                     // user request (2026-09-01) to restore the outline
-                    // for this specific trio.
+                    // for this specific trio, and its fill matches the
+                    // edit sections' own background instead of the usual
+                    // toolbar button tone (2026-09-01, explicit user
+                    // request).
+                    backgroundColor: DarkmoonColors.sectionCardBackground,
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.arrow_uturn_left,
@@ -7394,6 +7398,7 @@ class _ToolbarPill extends StatelessWidget {
     required this.children,
     this.height = 40,
     this.showChrome = true,
+    this.backgroundColor = DarkmoonColors.surfaceRaised,
   });
 
   final List<Widget> children;
@@ -7410,13 +7415,19 @@ class _ToolbarPill extends StatelessWidget {
   /// flipping this back to true restores the old boxed look exactly.
   final bool showChrome;
 
+  /// Fill behind the pill when [showChrome] is true — defaults to the
+  /// toolbar's usual button tone, but the Undo/Reset/Redo pill overrides
+  /// this to [DarkmoonColors.sectionCardBackground] (2026-09-01, explicit
+  /// user request: match the edit sections' own background).
+  final Color backgroundColor;
+
   @override
   Widget build(BuildContext context) {
     return Container(
       height: height,
       decoration: showChrome
           ? BoxDecoration(
-              color: DarkmoonColors.surfaceRaised,
+              color: backgroundColor,
               borderRadius: BorderRadius.circular(7),
               border: Border.all(color: DarkmoonColors.border),
             )
