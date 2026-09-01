@@ -631,6 +631,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Katalog leeren (alle Bearbeitungen)';
 
   @override
+  String get settingsPruneMissingButton =>
+      'Fehlende Fotos aus dem Katalog entfernen';
+
+  @override
   String get settingsDevLoggingLabel => 'Entwicklermodus';
 
   @override
@@ -654,6 +658,22 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get confirmClearCatalogMessage =>
       'Dadurch wird jede gespeicherte Bearbeitung für jedes Foto dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.';
+
+  @override
+  String get confirmPruneMissingMessage =>
+      'Dadurch werden gespeicherte Bearbeitungen, Kurven, Masken, Vorgaben und Einträge zuletzt verwendeter Dateien für Fotos entfernt, die nicht mehr auf der Festplatte vorhanden sind. Dies kann nicht rückgängig gemacht werden.';
+
+  @override
+  String pruneMissingResultMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count fehlende Fotos aus dem Katalog entfernt',
+      one: '1 fehlendes Foto aus dem Katalog entfernt',
+      zero: 'Keine fehlenden Fotos gefunden',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get clearButton => 'Leeren';

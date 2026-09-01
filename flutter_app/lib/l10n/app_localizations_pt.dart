@@ -624,6 +624,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsClearCatalogButton => 'Limpar catálogo (todas as edições)';
 
   @override
+  String get settingsPruneMissingButton => 'Remover fotos ausentes do catálogo';
+
+  @override
   String get settingsDevLoggingLabel => 'Modo desenvolvedor';
 
   @override
@@ -647,6 +650,22 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get confirmClearCatalogMessage =>
       'Isso apaga permanentemente todas as edições salvas de todas as fotos. Essa ação não pode ser desfeita.';
+
+  @override
+  String get confirmPruneMissingMessage =>
+      'Isso remove edições, curvas, máscaras, presets e itens de arquivos recentes salvos de fotos que não existem mais no disco. Essa ação não pode ser desfeita.';
+
+  @override
+  String pruneMissingResultMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count fotos ausentes removidas do catálogo',
+      one: '1 foto ausente removida do catálogo',
+      zero: 'Nenhuma foto ausente encontrada',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get clearButton => 'Limpar';

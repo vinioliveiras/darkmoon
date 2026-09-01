@@ -194,6 +194,7 @@
   "settingsClearThumbnailsButton": "Cache für Miniaturansichten leeren",
   "settingsClearRecentFilesButton": "Liste zuletzt verwendeter Dateien leeren",
   "settingsClearCatalogButton": "Katalog leeren (alle Bearbeitungen)",
+  "settingsPruneMissingButton": "Fehlende Fotos aus dem Katalog entfernen",
   "settingsDevLoggingLabel": "Entwicklermodus",
   "settingsDevLoggingHint": "Schreibt ein detailliertes Protokoll auf die Festplatte (Fehler, GPU/CPU-Status von KI-Enhance usw.) für Fehlerberichte. Standardmäßig deaktiviert.",
   "settingsOpenLogFolderButton": "Protokollordner öffnen",
@@ -201,6 +202,11 @@
   "confirmClearThumbnailsMessage": "Dadurch werden alle zwischengespeicherten Miniaturansichten gelöscht. Sie werden beim nächsten Öffnen eines Ordners neu erstellt.",
   "confirmClearRecentFilesMessage": "Dadurch wird deine Liste zuletzt verwendeter Dateien geleert. Hinzugefügte Ordner bleiben unberührt.",
   "confirmClearCatalogMessage": "Dadurch wird jede gespeicherte Bearbeitung für jedes Foto dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
+  "confirmPruneMissingMessage": "Dadurch werden gespeicherte Bearbeitungen, Kurven, Masken, Vorgaben und Einträge zuletzt verwendeter Dateien für Fotos entfernt, die nicht mehr auf der Festplatte vorhanden sind. Dies kann nicht rückgängig gemacht werden.",
+  "pruneMissingResultMessage": "{count, plural, =0{Keine fehlenden Fotos gefunden} =1{1 fehlendes Foto aus dem Katalog entfernt} other{{count} fehlende Fotos aus dem Katalog entfernt}}",
+  "@pruneMissingResultMessage": {
+    "placeholders": { "count": {"type": "int"} }
+  },
   "clearButton": "Leeren",
   "closeButton": "Schließen",
 

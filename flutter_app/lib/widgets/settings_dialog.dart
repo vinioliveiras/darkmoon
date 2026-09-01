@@ -24,6 +24,7 @@ class SettingsDialog extends StatefulWidget {
     required this.onChanged,
     required this.onClearThumbnails,
     required this.onClearCatalog,
+    required this.onPruneMissing,
     this.nativeWidth,
     this.nativeHeight,
   });
@@ -43,6 +44,11 @@ class SettingsDialog extends StatefulWidget {
   /// on this dialog.
   final VoidCallback onClearThumbnails;
   final VoidCallback onClearCatalog;
+
+  /// Removes saved edits/curves/masks/presets/recent-file entries for
+  /// photos that no longer exist on disk — a targeted prune rather than
+  /// [onClearCatalog]'s wipe-everything.
+  final VoidCallback onPruneMissing;
 
   @override
   State<SettingsDialog> createState() => _SettingsDialogState();
@@ -501,6 +507,13 @@ class _SettingsDialogState extends State<SettingsDialog>
             onPressed: () => _confirmAndRun(
               l10n.confirmClearCatalogMessage,
               widget.onClearCatalog,
+            ),
+          ),
+          _ClearDataRow(
+            label: l10n.settingsPruneMissingButton,
+            onPressed: () => _confirmAndRun(
+              l10n.confirmPruneMissingMessage,
+              widget.onPruneMissing,
             ),
           ),
           const SizedBox(height: 4),

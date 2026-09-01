@@ -617,6 +617,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsClearCatalogButton => 'Clear catalog (all edits)';
 
   @override
+  String get settingsPruneMissingButton => 'Remove missing photos from catalog';
+
+  @override
   String get settingsDevLoggingLabel => 'Developer mode';
 
   @override
@@ -640,6 +643,22 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get confirmClearCatalogMessage =>
       'This permanently deletes every saved edit for every photo. This can\'t be undone.';
+
+  @override
+  String get confirmPruneMissingMessage =>
+      'This removes saved edits, curves, masks, presets, and recent-file entries for photos that no longer exist on disk. This can\'t be undone.';
+
+  @override
+  String pruneMissingResultMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Removed $count missing photos from the catalog',
+      one: 'Removed 1 missing photo from the catalog',
+      zero: 'No missing photos found',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get clearButton => 'Clear';

@@ -1796,6 +1796,7 @@ class _EditorScreenState extends State<EditorScreen>
         },
         onClearThumbnails: () => unawaited(_clearThumbnailCache()),
         onClearCatalog: () => unawaited(_clearCatalogData()),
+        onPruneMissing: () => unawaited(_pruneMissingCatalogEntries()),
       ),
     );
   }
@@ -1839,6 +1840,62 @@ class _EditorScreenState extends State<EditorScreen>
     if (selected != null) {
       unawaited(_renderPreview(selected.path));
     }
+  }
+
+  /// Removes every catalog/curves/masks/preset/recent-file entry whose
+  /// path no longer exists on disk — a targeted prune (Settings, item 2,
+  /// 2026-09-01) rather than [_clearCatalogData]'s wipe-everything, for
+  /// photos moved/renamed/deleted outside darkmoon whose stale entries
+  /// would otherwise sit in these files forever (nothing else ever
+  /// removes them).
+  Future<void> _pruneMissingCatalogEntries() async {
+    final paths = <String>{
+      ..._edits.keys,
+      ..._photoCurves.keys,
+      ..._photoMasks.keys,
+      ..._photoPresets.keys,
+      ..._settings.recentFiles,
+    };
+    final missing = <String>{};
+    await Future.wait(
+      paths.map((path) async {
+        if (!await File(path).exists()) {
+          missing.add(path);
+        }
+      }),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (missing.isEmpty) {
+      _notify(detail: AppLocalizations.of(context)!.pruneMissingResultMessage(0));
+      return;
+    }
+    setState(() {
+      _edits.removeWhere((path, _) => missing.contains(path));
+      _photoCurves.removeWhere((path, _) => missing.contains(path));
+      _photoMasks.removeWhere((path, _) => missing.contains(path));
+      _photoPresets.removeWhere((path, _) => missing.contains(path));
+      final next = _settings.copyWith(
+        recentFiles: _settings.recentFiles
+            .where((p) => !missing.contains(p))
+            .toList(),
+      );
+      _settings = next;
+      unawaited(saveSettings(next));
+    });
+    await saveCatalog(_edits);
+    await savePhotoCurves(_photoCurves);
+    await savePhotoMasks(_photoMasks);
+    await savePhotoPresets(_photoPresets);
+    if (!mounted) {
+      return;
+    }
+    _notify(
+      detail: AppLocalizations.of(
+        context,
+      )!.pruneMissingResultMessage(missing.length),
+    );
   }
 
   @override

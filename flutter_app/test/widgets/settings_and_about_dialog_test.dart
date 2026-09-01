@@ -58,6 +58,7 @@ void main() {
             onChanged: (_) {},
             onClearThumbnails: () {},
             onClearCatalog: () {},
+            onPruneMissing: () {},
           ),
         ),
       );
@@ -100,6 +101,7 @@ void main() {
               onChanged: (_) {},
               onClearThumbnails: () {},
               onClearCatalog: () {},
+              onPruneMissing: () {},
             ),
           ),
         );
@@ -121,6 +123,7 @@ void main() {
             onChanged: (_) {},
             onClearThumbnails: () {},
             onClearCatalog: () {},
+            onPruneMissing: () {},
           ),
         ),
       );

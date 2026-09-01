@@ -1210,6 +1210,12 @@ abstract class AppLocalizations {
   /// **'Clear catalog (all edits)'**
   String get settingsClearCatalogButton;
 
+  /// No description provided for @settingsPruneMissingButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove missing photos from catalog'**
+  String get settingsPruneMissingButton;
+
   /// No description provided for @settingsDevLoggingLabel.
   ///
   /// In en, this message translates to:
@@ -1251,6 +1257,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'This permanently deletes every saved edit for every photo. This can\'t be undone.'**
   String get confirmClearCatalogMessage;
+
+  /// No description provided for @confirmPruneMissingMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This removes saved edits, curves, masks, presets, and recent-file entries for photos that no longer exist on disk. This can\'t be undone.'**
+  String get confirmPruneMissingMessage;
+
+  /// No description provided for @pruneMissingResultMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No missing photos found} =1{Removed 1 missing photo from the catalog} other{Removed {count} missing photos from the catalog}}'**
+  String pruneMissingResultMessage(int count);
 
   /// No description provided for @clearButton.
   ///

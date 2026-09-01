@@ -243,6 +243,7 @@
   "settingsClearThumbnailsButton": "Clear thumbnail cache",
   "settingsClearRecentFilesButton": "Clear recent files list",
   "settingsClearCatalogButton": "Clear catalog (all edits)",
+  "settingsPruneMissingButton": "Remove missing photos from catalog",
   "settingsDevLoggingLabel": "Developer mode",
   "settingsDevLoggingHint": "Writes a detailed log to disk (errors, AI Enhance GPU/CPU status, etc.) for bug reports. Off by default.",
   "settingsOpenLogFolderButton": "Open log folder",
@@ -250,6 +251,11 @@
   "confirmClearThumbnailsMessage": "This deletes every cached thumbnail. They'll be regenerated next time you open a folder.",
   "confirmClearRecentFilesMessage": "This clears your recent files list. Folders you've added stay untouched.",
   "confirmClearCatalogMessage": "This permanently deletes every saved edit for every photo. This can't be undone.",
+  "confirmPruneMissingMessage": "This removes saved edits, curves, masks, presets, and recent-file entries for photos that no longer exist on disk. This can't be undone.",
+  "pruneMissingResultMessage": "{count, plural, =0{No missing photos found} =1{Removed 1 missing photo from the catalog} other{Removed {count} missing photos from the catalog}}",
+  "@pruneMissingResultMessage": {
+    "placeholders": { "count": {"type": "int"} }
+  },
   "clearButton": "Clear",
   "closeButton": "Close",
 

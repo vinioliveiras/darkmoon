@@ -200,6 +200,7 @@
   "settingsClearThumbnailsButton": "Limpar cache de miniaturas",
   "settingsClearRecentFilesButton": "Limpar histórico de arquivos recentes",
   "settingsClearCatalogButton": "Limpar catálogo (todas as edições)",
+  "settingsPruneMissingButton": "Remover fotos ausentes do catálogo",
   "settingsDevLoggingLabel": "Modo desenvolvedor",
   "settingsDevLoggingHint": "Grava um log detalhado em disco (erros, status GPU/CPU do AI Enhance, etc.) pra relatar bugs. Desligado por padrão.",
   "settingsOpenLogFolderButton": "Abrir pasta de logs",
@@ -207,6 +208,11 @@
   "confirmClearThumbnailsMessage": "Isso apaga todas as miniaturas em cache. Elas serão geradas novamente na próxima vez que você abrir uma pasta.",
   "confirmClearRecentFilesMessage": "Isso limpa sua lista de arquivos recentes. As pastas que você adicionou não são afetadas.",
   "confirmClearCatalogMessage": "Isso apaga permanentemente todas as edições salvas de todas as fotos. Essa ação não pode ser desfeita.",
+  "confirmPruneMissingMessage": "Isso remove edições, curvas, máscaras, presets e itens de arquivos recentes salvos de fotos que não existem mais no disco. Essa ação não pode ser desfeita.",
+  "pruneMissingResultMessage": "{count, plural, =0{Nenhuma foto ausente encontrada} =1{1 foto ausente removida do catálogo} other{{count} fotos ausentes removidas do catálogo}}",
+  "@pruneMissingResultMessage": {
+    "placeholders": { "count": {"type": "int"} }
+  },
   "clearButton": "Limpar",
   "closeButton": "Fechar",
 
