@@ -1475,11 +1475,22 @@ class _EditorScreenState extends State<EditorScreen>
       ..remove('Tint')
       // Amount is a separate, persistent setting (see
       // _withGlobalEditAmountApplied) — applying a preset never resets it.
-      ..remove(_globalEditAmountKey);
+      ..remove(_globalEditAmountKey)
+      // Same reasoning as Amount, real bug fixed 2026-09-01: an XMP-derived
+      // preset never carries this key (it's darkmoon-specific), so the
+      // generic "preset doesn't specify it -> use the flat _SliderSpec
+      // default (20)" fallback below was resetting Contrast to 20 on
+      // every preset apply regardless of which ColorProfileMode was
+      // active — wrong for Vivid (baseline 0). Handled explicitly below
+      // instead, against the *current* mode's own baseline.
+      ..remove('ColorProfileAmount');
     final newValues = <String, double>{..._paramValues};
     for (final key in sliderKeys) {
       newValues[key] = preset.values[key] ?? defaults[key] ?? 0;
     }
+    newValues['ColorProfileAmount'] =
+        preset.values['ColorProfileAmount'] ??
+        _colorProfileModeOf(_paramValues).contrastBaseline;
     for (final entry in preset.values.entries) {
       if (!sliderKeys.contains(entry.key) &&
           entry.key != 'Temperature' &&
