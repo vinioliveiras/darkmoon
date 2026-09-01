@@ -2757,6 +2757,22 @@ class _EditorScreenState extends State<EditorScreen>
     return compute(decodeRawThumbnailLowPriority, file.path);
   }
 
+  /// Left/Right arrow key filmstrip navigation (2026-09-01, explicit user
+  /// request) — [delta] is -1 (previous) or 1 (next). No-op past either
+  /// end rather than wrapping around, matching how most photo browsers
+  /// (including this one's own thumbnail-click selection) behave.
+  void _selectAdjacentPhoto(int delta) {
+    final current = _selectedIndex;
+    if (current == null || _files.isEmpty) {
+      return;
+    }
+    final next = current + delta;
+    if (next < 0 || next >= _files.length) {
+      return;
+    }
+    _selectIndex(next);
+  }
+
   void _selectIndex(int index) {
     if (index == _selectedIndex) {
       return;
@@ -5590,6 +5606,14 @@ class _EditorScreenState extends State<EditorScreen>
           shift: true,
         ): _redo,
         const SingleActivator(LogicalKeyboardKey.keyY, control: true): _redo,
+        // Filmstrip navigation (2026-09-01, explicit user request) — a
+        // focused text field (e.g. the Cloud AI token field) consumes
+        // arrow keys itself for cursor movement before they ever reach
+        // this CallbackShortcuts, same as every other binding here.
+        const SingleActivator(LogicalKeyboardKey.arrowLeft): () =>
+            _selectAdjacentPhoto(-1),
+        const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
+            _selectAdjacentPhoto(1),
       },
       child: Focus(
         focusNode: _shortcutsFocusNode,
