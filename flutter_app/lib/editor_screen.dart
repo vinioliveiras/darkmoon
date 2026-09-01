@@ -1881,7 +1881,9 @@ class _EditorScreenState extends State<EditorScreen>
       return;
     }
     if (missing.isEmpty) {
-      _notify(detail: AppLocalizations.of(context)!.pruneMissingResultMessage(0));
+      _notify(
+        detail: AppLocalizations.of(context)!.pruneMissingResultMessage(0),
+      );
       return;
     }
     setState(() {
@@ -4064,7 +4066,8 @@ class _EditorScreenState extends State<EditorScreen>
     // click in that window stacked a second dialog on top).
     final choice = await showAnimatedDialog<ColorizeChoice>(
       context: context,
-      builder: (_) => ColorizeDialog(active: active, intensityPercent: intensity),
+      builder: (_) =>
+          ColorizeDialog(active: active, intensityPercent: intensity),
     );
     _openingToolbarDialog = false;
     if (choice == null || !mounted) {
@@ -7799,71 +7802,61 @@ class _SectionHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      // Spacing lives here, outside the InkWell, so hovering/clicking the
-      // gap above and below the header doesn't register as a tap on it —
-      // only the visible row itself should react. The larger bottom gap
-      // keeps the first slider/editor from sitting flush against it.
-      padding: const EdgeInsets.only(top: 14, bottom: 8),
-      child: MouseRegion(
-        onEnter: (_) => onHoverChanged?.call(true),
-        onExit: (_) => onHoverChanged?.call(false),
-        child: Material(
-          color: Colors.transparent,
+    return MouseRegion(
+      onEnter: (_) => onHoverChanged?.call(true),
+      onExit: (_) => onHoverChanged?.call(false),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
           borderRadius: BorderRadius.circular(6),
-          child: InkWell(
-            borderRadius: BorderRadius.circular(6),
-            onTap: onTap,
-            // The enclosing MouseRegion already drives the whole
-            // _SectionCard's hover tint — this InkWell's own default
-            // hover/highlight overlay would otherwise paint a *second*,
-            // smaller one on just the header row on top of it.
-            hoverColor: Colors.transparent,
-            highlightColor: Colors.transparent,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 4),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      label,
-                      style: _labelStyle.copyWith(
-                        color: enabled == false
-                            ? DarkmoonColors.textMuted
-                            : null,
+          onTap: onTap,
+          // The enclosing MouseRegion already drives the whole
+          // _SectionCard's hover tint — this InkWell's own default
+          // hover/highlight overlay would otherwise paint a *second*,
+          // smaller one on just the header row on top of it.
+          hoverColor: Colors.transparent,
+          highlightColor: Colors.transparent,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    label,
+                    style: _labelStyle.copyWith(
+                      color: enabled == false ? DarkmoonColors.textMuted : null,
+                    ),
+                  ),
+                ),
+                if (enabled != null && onEnabledChanged != null) ...[
+                  // SizedBox+FittedBox (not Transform.scale) so the
+                  // switch's *layout* box shrinks along with its paint —
+                  // Transform.scale only shrinks what's drawn, leaving the
+                  // full-size unscaled switch still reserving space in the
+                  // Row and forcing the whole header taller than it looks
+                  // like it should be.
+                  SizedBox(
+                    width: 34,
+                    height: 21,
+                    child: FittedBox(
+                      child: Switch(
+                        value: enabled!,
+                        onChanged: onEnabledChanged,
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                       ),
                     ),
                   ),
-                  if (enabled != null && onEnabledChanged != null) ...[
-                    // SizedBox+FittedBox (not Transform.scale) so the
-                    // switch's *layout* box shrinks along with its paint —
-                    // Transform.scale only shrinks what's drawn, leaving the
-                    // full-size unscaled switch still reserving space in the
-                    // Row and forcing the whole header taller than it looks
-                    // like it should be.
-                    SizedBox(
-                      width: 34,
-                      height: 21,
-                      child: FittedBox(
-                        child: Switch(
-                          value: enabled!,
-                          onChanged: onEnabledChanged,
-                          materialTapTargetSize:
-                              MaterialTapTargetSize.shrinkWrap,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 6),
-                  ],
-                  Icon(
-                    collapsed
-                        ? CupertinoIcons.chevron_right
-                        : CupertinoIcons.chevron_down,
-                    size: 13,
-                    color: DarkmoonColors.textMuted,
-                  ),
+                  const SizedBox(width: 6),
                 ],
-              ),
+                Icon(
+                  collapsed
+                      ? CupertinoIcons.chevron_right
+                      : CupertinoIcons.chevron_down,
+                  size: 13,
+                  color: DarkmoonColors.textMuted,
+                ),
+              ],
             ),
           ),
         ),
@@ -7914,7 +7907,20 @@ class _SectionCardState extends State<_SectionCard> {
         const Duration(milliseconds: 120),
       ),
       margin: const EdgeInsets.only(top: 10),
-      padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
+      // Real bug (2026-09-01, user report): the old fromLTRB(10, 0, 10, 4)
+      // read as visibly uneven — the header used to carry its own extra
+      // top/bottom padding on top of this, so the effective top gap (card
+      // padding + header's own) didn't match the effective bottom gap
+      // (card padding + the body's last item's own trailing space). The
+      // header's own padding is gone now (folded in here): 16 + the
+      // header's remaining 4px inner padding = 20 top, matched against
+      // an 8px card bottom + the body's typical last-item trailing space
+      // (12px) = 20 bottom too — but only while expanded. Collapsed, the
+      // body contributes zero height (see _CollapsibleSection), so the
+      // bottom padding alone has to reach 20 on its own then, or a
+      // collapsed card reads as 20 top / 8 bottom (the same complaint,
+      // just newly visible with the section closed).
+      padding: EdgeInsets.fromLTRB(12, 16, 12, widget.collapsed ? 20 : 8),
       decoration: BoxDecoration(
         color: _headerHovered
             ? Color.alphaBlend(
