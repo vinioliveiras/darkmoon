@@ -553,7 +553,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsRawOnlyLabel => 'Somente arquivos RAW';
 
   @override
-  String get settingsIncludeSubfoldersLabel => 'Mostrar imagens em subpastas';
+  String get settingsIncludeSubfoldersLabel => 'Imagens em subpastas';
 
   @override
   String get settingsRawOnlyHint =>

@@ -549,7 +549,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsRawOnlyLabel => 'RAW files only';
 
   @override
-  String get settingsIncludeSubfoldersLabel => 'Show images in subfolders';
+  String get settingsIncludeSubfoldersLabel => 'Subfolder images';
 
   @override
   String get settingsRawOnlyHint =>

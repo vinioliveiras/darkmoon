@@ -223,7 +223,7 @@
   "settingsPreviewResolutionLabel": "Preview resolution",
   "settingsPreviewResolutionHint": "Lower is faster to open and edit photos; export always uses the full sensor resolution",
   "settingsRawOnlyLabel": "RAW files only",
-  "settingsIncludeSubfoldersLabel": "Show images in subfolders",
+  "settingsIncludeSubfoldersLabel": "Subfolder images",
   "settingsRawOnlyHint": "Hide JPEG, PNG and other common image formats from the library",
   "settingsAnimationsLabel": "Interface animations",
   "settingsAnimationsHint": "Smooth transitions for panel sections, tab switches, zoom, and the preview after an edit",

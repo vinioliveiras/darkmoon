@@ -161,7 +161,7 @@ class _SidebarSectionHeader extends StatelessWidget {
 }
 
 /// The two library-scan checkboxes, side by side — "RAW files only" and
-/// "Show images in subfolders" (2026-09-01, explicit user request: "à
+/// "Subfolder images" (2026-09-01, explicit user request: "à
 /// direita do checkbox Raw files only" — to the right of it, not stacked
 /// below).
 class _LibraryFilterRow extends StatelessWidget {

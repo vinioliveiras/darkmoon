@@ -1687,7 +1687,7 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   /// Mirrors [_setRawOnly] — same "re-scan the open folder immediately"
-  /// treatment for the sibling "Show images in subfolders" checkbox.
+  /// treatment for the sibling "Subfolder images" checkbox.
   void _setIncludeSubfolders(bool value) {
     final next = _settings.copyWith(includeSubfolders: value);
     setState(() => _settings = next);

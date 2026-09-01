@@ -1093,7 +1093,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsIncludeSubfoldersLabel.
   ///
   /// In en, this message translates to:
-  /// **'Show images in subfolders'**
+  /// **'Subfolder images'**
   String get settingsIncludeSubfoldersLabel;
 
   /// No description provided for @settingsRawOnlyHint.

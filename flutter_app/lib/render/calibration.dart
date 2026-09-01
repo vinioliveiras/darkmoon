@@ -269,7 +269,7 @@ const double calDehazeSatBoost = 0.32;
 ///   ↑ higher = stronger negative Dehaze
 ///   ↓ lower  = subtler
 /// default: 0.55   (original Solstice: 0.7)   [also on GPU: dehaze_apply.frag]
-const double calDehazeAddMix = 0.55;
+const double calDehazeAddMix = 0.30;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  COLOR — Vibrance / Saturation                                            ║
@@ -280,8 +280,8 @@ const double calDehazeAddMix = 0.55;
 /// before that protection kicks in.
 ///   ↑ higher = Vibrance +100 is much more intense
 ///   ↓ lower  = more restrained
-/// default: 3.0
-const double calVibranceStrength = 3.0;
+/// default: 1.5
+const double calVibranceStrength = 1.5;
 
 /// **Vibrance** — how much it HOLDS BACK the effect on skin tones (so faces
 /// don't turn orange). 1.0 = holds back nothing; 0.0 = zeroes out on skin.
@@ -294,7 +294,7 @@ const double calVibranceSkinDampen = 0.6;
 /// 1 + sliderValue/100 * this number).
 ///   ↑ higher = stronger Saturation     ↓ lower = weaker
 /// default: 1.0
-const double calSaturationStrength = 1.0;
+const double calSaturationStrength = 0.5;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  COLOR — Color Mixer / HSL (8 bands)                                      ║
