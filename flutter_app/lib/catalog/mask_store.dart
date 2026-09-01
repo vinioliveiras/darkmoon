@@ -6,9 +6,10 @@ import 'package:path_provider/path_provider.dart';
 
 import '../render/mask.dart';
 import '../render/tone_curve.dart';
+import 'legacy_filename_migration.dart';
 
 /// Per-photo mask layers (Linear/Radial Gradient for now), keyed by
-/// absolute RAW file path — kept in its own file (`flutter_masks.json`)
+/// absolute RAW file path — kept in its own file (`darkmoon_masks.json`)
 /// since a mask is structured data (geometry + its own slider values),
 /// not a single double like the rest of the catalog.
 Future<Directory> _maskDir() async {
@@ -22,7 +23,8 @@ Future<Directory> _maskDir() async {
 
 Future<File> _maskFile() async {
   final dir = await _maskDir();
-  return File(p.join(dir.path, 'flutter_masks.json'));
+  await migrateLegacyFilename(dir, 'flutter_masks.json', 'darkmoon_masks.json');
+  return File(p.join(dir.path, 'darkmoon_masks.json'));
 }
 
 BrushGeometry _decodeBrush(List<dynamic>? raw) {

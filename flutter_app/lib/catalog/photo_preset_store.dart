@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'legacy_filename_migration.dart';
+
 /// Which preset (by id) is currently applied to each photo, keyed by
 /// absolute file path — persisted so the Presets panel still shows a
 /// preset as "applied" after an app restart, not just within a session.
@@ -15,7 +17,12 @@ Future<File> _photoPresetFile() async {
   if (!await dir.exists()) {
     await dir.create(recursive: true);
   }
-  return File(p.join(dir.path, 'flutter_photo_presets.json'));
+  await migrateLegacyFilename(
+    dir,
+    'flutter_photo_presets.json',
+    'darkmoon_photo_presets.json',
+  );
+  return File(p.join(dir.path, 'darkmoon_photo_presets.json'));
 }
 
 Future<Map<String, String>> loadPhotoPresets() async {

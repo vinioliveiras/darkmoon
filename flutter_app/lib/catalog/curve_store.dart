@@ -5,11 +5,12 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../render/tone_curve.dart';
+import 'legacy_filename_migration.dart';
 
 /// Per-photo curves (Tone Curve + Color Curve's R/G/B channels), keyed by
 /// absolute RAW file path — kept in its own file
-/// (`flutter_photo_curves.json`) rather than folded into
-/// `flutter_catalog.json`'s flat `{sliderName: value}` shape, since a
+/// (`darkmoon_photo_curves.json`) rather than folded into
+/// `darkmoon_catalog.json`'s flat `{sliderName: value}` shape, since a
 /// curve is a list of points, not a single double.
 Future<Directory> _curveDir() async {
   final documents = await getApplicationDocumentsDirectory();
@@ -22,7 +23,12 @@ Future<Directory> _curveDir() async {
 
 Future<File> _curveFile() async {
   final dir = await _curveDir();
-  return File(p.join(dir.path, 'flutter_photo_curves.json'));
+  await migrateLegacyFilename(
+    dir,
+    'flutter_photo_curves.json',
+    'darkmoon_photo_curves.json',
+  );
+  return File(p.join(dir.path, 'darkmoon_photo_curves.json'));
 }
 
 List<CurvePoint> _decodePoints(dynamic raw) {

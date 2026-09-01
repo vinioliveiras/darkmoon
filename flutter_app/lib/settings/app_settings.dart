@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../catalog/legacy_filename_migration.dart';
 import '../native/edit_source.dart' show defaultPreviewMaxDimension;
 import '../render/calibration.dart' show calBaseContrast;
 
@@ -282,7 +283,12 @@ Future<File> _settingsFile() async {
   if (!await dir.exists()) {
     await dir.create(recursive: true);
   }
-  return File(p.join(dir.path, 'flutter_settings.json'));
+  await migrateLegacyFilename(
+    dir,
+    'flutter_settings.json',
+    'darkmoon_settings.json',
+  );
+  return File(p.join(dir.path, 'darkmoon_settings.json'));
 }
 
 Future<AppSettings> loadSettings() async {

@@ -4,9 +4,11 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import 'legacy_filename_migration.dart';
+
 /// Per-photo slider values, keyed by absolute RAW file path — persisted so
 /// edits survive switching photos, folders and app restarts. Kept in its
-/// own file (`flutter_catalog.json`) rather than the Python app's
+/// own file (`darkmoon_catalog.json`) rather than the Python app's
 /// `catalog.json`, since the two use different key casing and this port
 /// isn't trying to stay wire-compatible with it.
 ///
@@ -23,7 +25,8 @@ Future<Directory> _catalogDir() async {
 
 Future<File> _catalogFile() async {
   final dir = await _catalogDir();
-  return File(p.join(dir.path, 'flutter_catalog.json'));
+  await migrateLegacyFilename(dir, 'flutter_catalog.json', 'darkmoon_catalog.json');
+  return File(p.join(dir.path, 'darkmoon_catalog.json'));
 }
 
 /// Loads the saved per-photo slider values. Returns an empty map if the
