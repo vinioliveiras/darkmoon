@@ -1881,9 +1881,7 @@ class _EditorScreenState extends State<EditorScreen>
       return;
     }
     if (missing.isEmpty) {
-      _notify(
-        detail: AppLocalizations.of(context)!.pruneMissingResultMessage(0),
-      );
+      _notify(detail: AppLocalizations.of(context)!.pruneMissingResultMessage(0));
       return;
     }
     setState(() {
@@ -4066,8 +4064,7 @@ class _EditorScreenState extends State<EditorScreen>
     // click in that window stacked a second dialog on top).
     final choice = await showAnimatedDialog<ColorizeChoice>(
       context: context,
-      builder: (_) =>
-          ColorizeDialog(active: active, intensityPercent: intensity),
+      builder: (_) => ColorizeDialog(active: active, intensityPercent: intensity),
     );
     _openingToolbarDialog = false;
     if (choice == null || !mounted) {
@@ -7771,7 +7768,6 @@ class _SectionHeader extends StatelessWidget {
     this.enabled,
     this.onEnabledChanged,
     this.onHoverChanged,
-    this.onReset,
   });
 
   final String label;
@@ -7792,12 +7788,6 @@ class _SectionHeader extends StatelessWidget {
   final bool? enabled;
   final ValueChanged<bool>? onEnabledChanged;
 
-  /// Resets just this section's own sliders/curves back to their
-  /// defaults, leaving every other section untouched — a per-section
-  /// counterpart to the toolbar's whole-photo Reset (2026-09-01,
-  /// explicit user request). Null hides the button entirely.
-  final VoidCallback? onReset;
-
   /// Bolder, larger, sentence-scale label — replaces the old tiny
   /// tight-tracked all-caps style with something closer to Photomator's
   /// plain bold section titles (no boxed background/border bar to match).
@@ -7813,10 +7803,8 @@ class _SectionHeader extends StatelessWidget {
       // Spacing lives here, outside the InkWell, so hovering/clicking the
       // gap above and below the header doesn't register as a tap on it —
       // only the visible row itself should react. The larger bottom gap
-      // keeps the first slider/editor from sitting flush against it. No
-      // top padding — _SectionCard's own symmetric padding provides that
-      // now (used to double up: 14 here on top of the card's own).
-      padding: const EdgeInsets.only(bottom: 8),
+      // keeps the first slider/editor from sitting flush against it.
+      padding: const EdgeInsets.only(top: 14, bottom: 8),
       child: MouseRegion(
         onEnter: (_) => onHoverChanged?.call(true),
         onExit: (_) => onHoverChanged?.call(false),
@@ -7846,24 +7834,6 @@ class _SectionHeader extends StatelessWidget {
                       ),
                     ),
                   ),
-                  if (onReset != null) ...[
-                    Tooltip(
-                      message: AppLocalizations.of(context)!.resetTooltip,
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(4),
-                        onTap: onReset,
-                        child: const Padding(
-                          padding: EdgeInsets.all(2),
-                          child: Icon(
-                            CupertinoIcons.arrow_2_circlepath,
-                            size: 13,
-                            color: DarkmoonColors.textMuted,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                  ],
                   if (enabled != null && onEnabledChanged != null) ...[
                     // SizedBox+FittedBox (not Transform.scale) so the
                     // switch's *layout* box shrinks along with its paint —
@@ -7919,7 +7889,6 @@ class _SectionCard extends StatefulWidget {
     required this.onTap,
     this.enabled,
     this.onEnabledChanged,
-    this.onReset,
     required this.body,
   });
 
@@ -7928,7 +7897,6 @@ class _SectionCard extends StatefulWidget {
   final VoidCallback onTap;
   final bool? enabled;
   final ValueChanged<bool>? onEnabledChanged;
-  final VoidCallback? onReset;
   final Widget body;
 
   @override
@@ -7946,12 +7914,7 @@ class _SectionCardState extends State<_SectionCard> {
         const Duration(milliseconds: 120),
       ),
       margin: const EdgeInsets.only(top: 10),
-      // Symmetric on every side (2026-09-01, explicit user request — the
-      // old fromLTRB(10, 0, 10, 4) left top/bottom uneven and let the
-      // header's own top padding do that job instead, which doubled up
-      // oddly). The header below drops its matching top padding now that
-      // this alone provides it.
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.fromLTRB(10, 0, 10, 4),
       decoration: BoxDecoration(
         color: _headerHovered
             ? Color.alphaBlend(
@@ -7971,7 +7934,6 @@ class _SectionCardState extends State<_SectionCard> {
             onTap: widget.onTap,
             enabled: widget.enabled,
             onEnabledChanged: widget.onEnabledChanged,
-            onReset: widget.onReset,
             onHoverChanged: (hovered) =>
                 setState(() => _headerHovered = hovered),
           ),
@@ -8328,7 +8290,6 @@ class _ControlsPanelState extends State<_ControlsPanel> {
     required String label,
     bool? enabled,
     ValueChanged<bool>? onEnabledChanged,
-    VoidCallback? onReset,
     required List<Widget> children,
   }) => [
     _SectionCard(
@@ -8337,7 +8298,6 @@ class _ControlsPanelState extends State<_ControlsPanel> {
       onTap: () => _toggleSection(key),
       enabled: enabled,
       onEnabledChanged: onEnabledChanged,
-      onReset: onReset,
       body: _CollapsibleSection(
         collapsed: _collapsed.contains(key),
         child: Column(
@@ -8669,26 +8629,6 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                             onChanged(key, v ? 1 : 0);
                             onChangeEnd(key, v ? 1 : 0);
                           },
-                          onReset: () {
-                            for (final spec in entry.value) {
-                              onChanged(
-                                spec.name,
-                                entry.key == 'WHITE BALANCE'
-                                    ? (_wbSliderFallback(spec.name) ??
-                                          spec.defaultValue)
-                                    : spec.defaultValue,
-                              );
-                            }
-                            if (entry.key == 'WHITE BALANCE') {
-                              onChanged(
-                                'WhiteBalanceMode',
-                                WbMode.asShot.index.toDouble(),
-                              );
-                            }
-                            if (entry.value.isNotEmpty) {
-                              onChangeEnd(entry.value.first.name, 0);
-                            }
-                          },
                           children: [
                             if (entry.key == 'WHITE BALANCE')
                               Padding(
@@ -8747,25 +8687,6 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChanged(key, v ? 1 : 0);
                               onChangeEnd(key, v ? 1 : 0);
                             },
-                            onReset: () {
-                              // onChanged (not onChangeEnd) for every step
-                              // but the last, so this collapses into a
-                              // single undo entry instead of one per call —
-                              // both _onToneCurveChangeEnd and
-                              // _onParamChangeEnd push history on every
-                              // call, but onChangeEnd's own (name, value)
-                              // args are ignored (it just commits whatever
-                              // _paramValues already holds), so only the
-                              // final call needs to be the "End" variant.
-                              onToneCurveChanged(identityPhotoCurves.tone);
-                              for (final spec in _parametricCurveSliders) {
-                                onChanged(spec.name, spec.defaultValue);
-                              }
-                              onChangeEnd(
-                                _parametricCurveSliders.first.name,
-                                0,
-                              );
-                            },
                             children: [
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
@@ -8815,23 +8736,6 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChanged(key, v ? 1 : 0);
                               onChangeEnd(key, v ? 1 : 0);
                             },
-                            onReset: () {
-                              // onChanged for every channel but the last,
-                              // same single-undo-entry reasoning as TONE
-                              // CURVE's own onReset above.
-                              onColorCurveChanged(
-                                'red',
-                                identityPhotoCurves.tone,
-                              );
-                              onColorCurveChanged(
-                                'green',
-                                identityPhotoCurves.tone,
-                              );
-                              onColorCurveChangeEnd(
-                                'blue',
-                                identityPhotoCurves.tone,
-                              );
-                            },
                             children: [
                               Padding(
                                 padding: const EdgeInsets.only(
@@ -8878,17 +8782,6 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               final key = _categoryEnabledKey('COLOR MIXER');
                               onChanged(key, v ? 1 : 0);
                               onChangeEnd(key, v ? 1 : 0);
-                            },
-                            onReset: () {
-                              for (final channel in _mixerChannels) {
-                                for (final suffix in _hslSuffixes) {
-                                  onChanged('Mixer$channel$suffix', 0);
-                                }
-                              }
-                              onChangeEnd(
-                                'Mixer${_mixerChannels.first}${_hslSuffixes.first}',
-                                0,
-                              );
                             },
                             children: [
                               Padding(
@@ -9026,17 +8919,6 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChanged(key, v ? 1 : 0);
                               onChangeEnd(key, v ? 1 : 0);
                             },
-                            onReset: () {
-                              for (final range in _gradeRanges) {
-                                for (final suffix in _hslSuffixes) {
-                                  onChanged('Grade$range$suffix', 0);
-                                }
-                              }
-                              onChangeEnd(
-                                'Grade${_gradeRanges.first}${_hslSuffixes.first}',
-                                0,
-                              );
-                            },
                             children: [
                               Padding(
                                 padding: const EdgeInsets.only(
@@ -9164,16 +9046,6 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               onChanged(key, v ? 1 : 0);
                               onChangeEnd(key, v ? 1 : 0);
                             },
-                            onReset: () {
-                              final specs = [
-                                ..._vignetteSliders,
-                                ..._grainSliders,
-                              ];
-                              for (final spec in specs) {
-                                onChanged(spec.name, spec.defaultValue);
-                              }
-                              onChangeEnd(specs.first.name, 0);
-                            },
                             children: [
                               for (final spec in [
                                 ..._vignetteSliders,
@@ -9204,17 +9076,6 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 widget.onLensCorrectionChangeEnd(
                                   widget.lensCorrection.copyWith(enabled: v),
                                 ),
-                            onReset: () => widget.onLensCorrectionChangeEnd(
-                              widget.lensCorrection.copyWith(
-                                distortionAmount: const LensCorrectionParams()
-                                    .distortionAmount,
-                                vignetteAmount:
-                                    const LensCorrectionParams().vignetteAmount,
-                                chromaticAberrationAmount:
-                                    const LensCorrectionParams()
-                                        .chromaticAberrationAmount,
-                              ),
-                            ),
                             children: [
                               Padding(
                                 padding: const EdgeInsets.only(top: 10),
