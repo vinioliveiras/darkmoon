@@ -38,11 +38,13 @@ library;
 /// before it reaches the renderer — the actual mechanism behind the "Amount"
 /// slider under the preset list (`_globalEditAmountKey` in editor_screen.dart,
 /// `_withGlobalEditAmountApplied`/`_effectiveCurves`). Amount's own UI value
-/// (0-500, default 100) is multiplied by this constant to get the real blend
+/// (0-200, default 100) is multiplied by this constant to get the real blend
 /// fraction — so the *default* Amount (100%) no longer means "apply every
 /// slider/preset value exactly as authored," it means "apply it at this
-/// fraction of that." Full, un-dampened strength (fraction 1.0) now needs
-/// Amount ≈ 333%; the old 150% overshoot ceiling is preserved at Amount 500%.
+/// fraction of that." Amount's max (200%) caps out at fraction 0.6 — the UI
+/// deliberately doesn't go high enough to reach full/un-dampened strength
+/// (fraction 1.0, which would need Amount ≈ 333%) since that's the exact
+/// literal-authored-value look this constant exists to move away from.
 ///
 /// Exists because, after individually calibrating one effect at a time
 /// (Vibrance/Saturation/Dehaze/Mixer — see their own `cal*Strength`

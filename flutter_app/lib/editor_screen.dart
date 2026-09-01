@@ -390,7 +390,7 @@ PhotoCurves _withCurveCategoriesApplied(
 
 /// Storage key for the global Amount slider (below the preset list) —
 /// lives in the same flat `_paramValues` map every other per-photo value
-/// does, 0-500, default 100. Despite the default being the UI's "no-op"
+/// does, 0-200, default 100. Despite the default being the UI's "no-op"
 /// position, this is NOT render-neutral — see [calGlobalAmountCompression]
 /// and [_withGlobalEditAmountApplied]'s doc for what this actually does at
 /// render time.
@@ -437,7 +437,7 @@ const defaultFlowAmount = 10.0;
 /// Transform, [_globalEditAmountKey] itself — none of which are
 /// continuous "how much of an effect" sliders.
 ///
-/// The blend fraction is the UI's 0-500 value scaled down by
+/// The blend fraction is the UI's 0-200 value scaled down by
 /// [calGlobalAmountCompression] — so the default Amount (100%, the "no-op"
 /// UI position) still damps everything to that fraction. There's no
 /// no-op fast path anymore: even the default state now scales every value.
@@ -7180,7 +7180,7 @@ class _ViewerToolbar extends StatelessWidget {
                   child: SliderRow(
                     name: l10n.presetAmountLabel,
                     min: 0,
-                    max: 500,
+                    max: 200,
                     value: presetAmount,
                     decimals: 0,
                     valueSuffix: '%',
