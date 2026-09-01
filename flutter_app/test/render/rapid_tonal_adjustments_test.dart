@@ -152,15 +152,15 @@ void main() {
     );
 
     // (204, 51, 51) — sat=0.75, factor = 1 + 0.5*calSaturationStrength
-    // (0.5, 2026-09-01) at +50%, so the max channel (204, this pixel's HSV
-    // "value") is exactly preserved; the *min* channel is what saturating
-    // moves.
+    // (0.35, 2026-09-01) at +50%, so the max channel (204, this pixel's
+    // HSV "value") is exactly preserved; the *min* channel is what
+    // saturating moves.
     expect(saturated[0], closeTo(204, 1));
-    expect(saturated[1], closeTo(13, 1));
-    expect(saturated[2], closeTo(13, 1));
+    expect(saturated[1], closeTo(24, 1));
+    expect(saturated[2], closeTo(24, 1));
     expect(desaturated[0], closeTo(204, 1));
-    expect(desaturated[1], closeTo(89, 1));
-    expect(desaturated[2], closeTo(89, 1));
+    expect(desaturated[1], closeTo(78, 1));
+    expect(desaturated[2], closeTo(78, 1));
   });
 
   test('vibrance multiplies HSV saturation, hue and value held fixed', () {
@@ -180,11 +180,11 @@ void main() {
 
     // The max channel (180, blue) is this pixel's HSV "value" — held
     // exactly fixed in both directions by construction. Boosted values
-    // reflect calVibranceStrength=0.8/calVibranceSkinDampen=0.2
+    // reflect calVibranceStrength=0.5/calVibranceSkinDampen=0.2
     // (2026-09-01) — the negative branch doesn't depend on either
     // constant, so it's unchanged.
-    expect(boosted[0], closeTo(96, 1));
-    expect(boosted[1], closeTo(138, 1));
+    expect(boosted[0], closeTo(105, 1));
+    expect(boosted[1], closeTo(143, 1));
     expect(boosted[2], closeTo(180, 1));
     expect(reduced[0], closeTo(146, 1));
     expect(reduced[1], closeTo(163, 1));
@@ -206,10 +206,10 @@ void main() {
     // (Vibrance's own boost is masked by *current* saturation, so which
     // stage went first is still measurable), just far more subtly, which
     // this narrower expectation locks in. Values reflect
-    // calSaturationStrength=0.5/calVibranceStrength=0.8/
+    // calSaturationStrength=0.35/calVibranceStrength=0.5/
     // calVibranceSkinDampen=0.2 (2026-09-01).
-    expect(result[0], closeTo(89, 1));
-    expect(result[1], closeTo(134, 1));
+    expect(result[0], closeTo(100, 1));
+    expect(result[1], closeTo(140, 1));
     expect(result[2], closeTo(180, 1));
   });
 }

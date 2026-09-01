@@ -251,8 +251,8 @@ const double calClarityStrength = 0.5;
 /// 2026-09-01: user set this to 0.1 (5.5x weaker) wanting a gentler Dehaze —
 /// landed at a real but more moderate weakening instead (~1.6x), since the
 /// transmission-floor bug below meant 0.1 was never actually tested against
-/// a working Dehaze.
-const double calDehazeTransmissionCoeff = 0.35;
+/// a working Dehaze. Weakened again 2026-09-01 (user: "still a bit strong").
+const double calDehazeTransmissionCoeff = 0.22;
 
 /// **Dehaze** — transmission floor: keeps Dehaze from "breaking" the image
 /// in the hazier spots. Higher = safer/gentler.
@@ -267,7 +267,10 @@ const double calDehazeTransmissionCoeff = 0.35;
 /// and satBoost both zero out too since both scale off `1.0 - t`). Set to
 /// a real "safer/gentler" value instead — meaningfully higher than the
 /// 0.22 default (caps how far Dehaze can push) without fully disabling it.
-const double calDehazeTransmissionFloor = 0.40;
+/// Raised again 2026-09-01 (user: "still a bit strong") — at this floor +
+/// the coefficient above, the strongest possible pull (slider at 100, max
+/// haze) only takes transmission down to ~0.78, a real but gentle range.
+const double calDehazeTransmissionFloor = 0.55;
 
 /// **Dehaze** — how much it saturates color in proportion to the haze
 /// removed.
@@ -276,8 +279,8 @@ const double calDehazeTransmissionFloor = 0.40;
 /// default: 0.32   (original Solstice: 0.5)   [also on GPU: dehaze_apply.frag]
 /// 2026-09-01: weakened from 0.32, moderately (not all the way to the
 /// user's 0.1) — same "floor bug meant this was never really tested"
-/// reasoning as the coefficient above.
-const double calDehazeSatBoost = 0.20;
+/// reasoning as the coefficient above. Weakened again 2026-09-01.
+const double calDehazeSatBoost = 0.14;
 
 /// **Dehaze −** (add haze) — strength of the slider's negative side (blends
 /// the image with atmospheric light, making it look "milky").
@@ -287,8 +290,8 @@ const double calDehazeSatBoost = 0.20;
 /// 2026-09-01: the doc's "0.55" was already stale — the real prior
 /// committed value was 0.30, not 0.55. Weakened moderately from *that*
 /// (not from the stale comment) — user's 0.2 was a real ~33% cut, this
-/// lands at roughly half that.
-const double calDehazeAddMix = 0.25;
+/// lands at roughly half that. Weakened again 2026-09-01.
+const double calDehazeAddMix = 0.18;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  COLOR — Vibrance / Saturation                                            ║
@@ -304,7 +307,8 @@ const double calDehazeAddMix = 0.25;
 /// ~30x weaker than the original 3.0) wanting less blow-out — landed on a
 /// more moderate weakening (~2x from 1.5) instead, since 0.1 makes
 /// Vibrance +100 barely perceptible (closer to "off" than "gentler").
-const double calVibranceStrength = 0.8;
+/// Weakened again 2026-09-01 (user: "still a bit strong").
+const double calVibranceStrength = 0.5;
 
 /// **Vibrance** — how much it HOLDS BACK the effect on skin tones (so faces
 /// don't turn orange). 1.0 = holds back nothing; 0.0 = zeroes out on skin.
@@ -320,8 +324,8 @@ const double calVibranceSkinDampen = 0.2;
 /// 2026-09-01: user set this to 0.1 (10x weaker) wanting less blow-out —
 /// landed on a moderate 2x weakening instead, since 0.1 leaves Saturation
 /// +100 as only a ~1.01x multiplier, effectively disabling the slider
-/// rather than just softening it.
-const double calSaturationStrength = 0.5;
+/// rather than just softening it. Weakened again 2026-09-01.
+const double calSaturationStrength = 0.35;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  COLOR — Color Mixer / HSL (8 bands)                                      ║
