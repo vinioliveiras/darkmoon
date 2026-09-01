@@ -359,6 +359,8 @@
   "sliderWhites": "Whites",
   "sliderBlacks": "Blacks",
   "sliderColorProfileAmount": "Color Profile Contrast",
+  "colorProfileModeDefault": "Darkmoon Default",
+  "colorProfileModeFlat": "Flat",
   "sliderTexture": "Texture",
   "sliderClarity": "Clarity",
   "sliderDehaze": "Dehaze",

@@ -954,6 +954,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get sliderColorProfileAmount => 'Farbprofil-Kontrast';
 
   @override
+  String get colorProfileModeDefault => 'Darkmoon-Standard';
+
+  @override
+  String get colorProfileModeFlat => 'Flach';
+
+  @override
   String get sliderTexture => 'Textur';
 
   @override

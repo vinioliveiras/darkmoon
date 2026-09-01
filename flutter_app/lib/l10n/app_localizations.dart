@@ -1810,6 +1810,18 @@ abstract class AppLocalizations {
   /// **'Color Profile Contrast'**
   String get sliderColorProfileAmount;
 
+  /// No description provided for @colorProfileModeDefault.
+  ///
+  /// In en, this message translates to:
+  /// **'Darkmoon Default'**
+  String get colorProfileModeDefault;
+
+  /// No description provided for @colorProfileModeFlat.
+  ///
+  /// In en, this message translates to:
+  /// **'Flat'**
+  String get colorProfileModeFlat;
+
   /// No description provided for @sliderTexture.
   ///
   /// In en, this message translates to:

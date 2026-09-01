@@ -392,6 +392,22 @@ PhotoCurves _withCurveCategoriesApplied(
   return result;
 }
 
+/// Which baseline the COLOR PROFILE section's Strength/Contrast sliders
+/// start from — a per-photo/per-preset pick (like [WbMode]), stored under
+/// [_colorProfileModeKey]. [darkmoonDefault] is today's shipped look
+/// (Strength damped by [calGlobalAmountCompression], Contrast defaulting
+/// to [calBaseContrast]); [flat] is a genuinely neutral starting point —
+/// no damping (Strength 100% applies preset/slider values exactly as
+/// authored) and no base-contrast S-curve (Contrast 0) — for anyone who
+/// wants to build their own look on an unmodified decode rather than
+/// darkmoon's own baked-in one. Picking either resets both sliders to
+/// that mode's baseline (2026-09-01, explicit user request — same
+/// "picking a mode resets its fields" convention [WbMode] already uses).
+enum ColorProfileMode { darkmoonDefault, flat }
+
+/// Storage key for [ColorProfileMode] — see its own doc.
+const _colorProfileModeKey = 'ColorProfileMode';
+
 /// Storage key for the global Amount slider (below the preset list) —
 /// lives in the same flat `_paramValues` map every other per-photo value
 /// does, 0-200, default 100. Despite the default being the UI's "no-op"
@@ -445,9 +461,15 @@ const defaultFlowAmount = 10.0;
 /// [calGlobalAmountCompression] — so the default Amount (100%, the "no-op"
 /// UI position) still damps everything to that fraction. There's no
 /// no-op fast path anymore: even the default state now scales every value.
+/// Skipped entirely under [ColorProfileMode.flat] (see its own doc) — a
+/// flat profile's Amount 100% means an exact, undamped 1:1 pass-through.
 Map<String, double> _withGlobalEditAmountApplied(Map<String, double> values) {
   final amount = values[_globalEditAmountKey] ?? 100.0;
-  final fraction = amount / 100.0 * calGlobalAmountCompression;
+  final isFlat =
+      (values[_colorProfileModeKey] ?? 0.0) ==
+      ColorProfileMode.flat.index.toDouble();
+  final compression = isFlat ? 1.0 : calGlobalAmountCompression;
+  final fraction = amount / 100.0 * compression;
   final defaults = _defaultParamValues();
   final scaleKeys = defaults.keys.toSet()
     ..remove('Temperature')
@@ -4595,6 +4617,27 @@ class _EditorScreenState extends State<EditorScreen>
     _scheduleCatalogSave();
   }
 
+  /// COLOR PROFILE section's mode dropdown — see [ColorProfileMode]'s doc.
+  /// Resets Strength (Amount) to 100% and Contrast to that mode's default
+  /// (mirrors [_applyWbMode]'s "picking a mode resets its own fields"
+  /// convention), rather than leaving whatever values were dialed in
+  /// under the previous mode — 2026-09-01, explicit user request.
+  void _applyColorProfileMode(ColorProfileMode mode) {
+    setState(() {
+      _paramValues = {
+        ..._paramValues,
+        _colorProfileModeKey: mode.index.toDouble(),
+        _globalEditAmountKey: 100.0,
+        'ColorProfileAmount': mode == ColorProfileMode.flat
+            ? 0.0
+            : calBaseContrast,
+      };
+    });
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
   /// [_paramValues] with every disabled category's sliders swapped for
   /// their defaults, then the whole result scaled by the global Amount
   /// slider — used wherever the render pipeline reads the global layer's
@@ -4635,7 +4678,11 @@ class _EditorScreenState extends State<EditorScreen>
       _paramValues,
     );
     final amount = _paramValues[_globalEditAmountKey] ?? 100.0;
-    final fraction = amount / 100.0 * calGlobalAmountCompression;
+    final isFlat =
+        (_paramValues[_colorProfileModeKey] ?? 0.0) ==
+        ColorProfileMode.flat.index.toDouble();
+    final compression = isFlat ? 1.0 : calGlobalAmountCompression;
+    final fraction = amount / 100.0 * compression;
     return lerpPhotoCurves(identityPhotoCurves, categoryApplied, fraction);
   }
 
@@ -5992,6 +6039,8 @@ class _EditorScreenState extends State<EditorScreen>
                             presetAmount: _paramValues[_globalEditAmountKey] ?? 100.0,
                             onPresetAmountChanged: _onGlobalEditAmountChanged,
                             onPresetAmountChangeEnd: _onGlobalEditAmountChangeEnd,
+                            colorProfileMode: ColorProfileMode.values[(_paramValues[_colorProfileModeKey] ?? 0).toInt().clamp(0, ColorProfileMode.values.length - 1)],
+                            onColorProfileModeChanged: _applyColorProfileMode,
                             onWhiteBalanceMode: _applyWbMode,
                             wbEyedropperActive: _wbEyedropperActive,
                             onToggleWbEyedropper: () => setState(
@@ -7978,6 +8027,8 @@ class _ControlsPanel extends StatefulWidget {
     required this.presetAmount,
     required this.onPresetAmountChanged,
     required this.onPresetAmountChangeEnd,
+    required this.colorProfileMode,
+    required this.onColorProfileModeChanged,
     required this.onExport,
     required this.exporting,
     required this.enabled,
@@ -8053,6 +8104,10 @@ class _ControlsPanel extends StatefulWidget {
   final double presetAmount;
   final ValueChanged<double> onPresetAmountChanged;
   final ValueChanged<double> onPresetAmountChangeEnd;
+
+  /// COLOR PROFILE section's mode dropdown — see [ColorProfileMode]'s doc.
+  final ColorProfileMode colorProfileMode;
+  final ValueChanged<ColorProfileMode> onColorProfileModeChanged;
 
   final VoidCallback? onExport;
   final bool exporting;
@@ -8210,6 +8265,12 @@ class _ControlsPanelState extends State<_ControlsPanel> {
     WbMode.flash => l10n.wbModeFlash,
     WbMode.custom => l10n.wbModeCustom,
   };
+
+  String _colorProfileModeLabel(AppLocalizations l10n, ColorProfileMode mode) =>
+      switch (mode) {
+        ColorProfileMode.darkmoonDefault => l10n.colorProfileModeDefault,
+        ColorProfileMode.flat => l10n.colorProfileModeFlat,
+      };
 
   Widget _buildWhiteBalanceModeRow(
     AppLocalizations l10n,
@@ -8634,7 +8695,24 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                             // here by hand rather than as a _SliderSpec —
                             // same pattern as the White Balance mode row
                             // below.
-                            if (entry.key == 'COLOR PROFILE')
+                            if (entry.key == 'COLOR PROFILE') ...[
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: StyledDropdown<ColorProfileMode>(
+                                  value: widget.colorProfileMode,
+                                  items: [
+                                    for (final mode in ColorProfileMode.values)
+                                      StyledDropdownItem(
+                                        value: mode,
+                                        label: _colorProfileModeLabel(
+                                          l10n,
+                                          mode,
+                                        ),
+                                      ),
+                                  ],
+                                  onChanged: widget.onColorProfileModeChanged,
+                                ),
+                              ),
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 child: SliderRow(
@@ -8649,6 +8727,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   onChangeEnd: widget.onPresetAmountChangeEnd,
                                 ),
                               ),
+                            ],
                             if (entry.key == 'WHITE BALANCE')
                               Padding(
                                 padding: const EdgeInsets.only(
