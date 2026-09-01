@@ -392,21 +392,74 @@ PhotoCurves _withCurveCategoriesApplied(
   return result;
 }
 
-/// Which baseline the COLOR PROFILE section's Strength/Contrast sliders
-/// start from — a per-photo/per-preset pick (like [WbMode]), stored under
-/// [_colorProfileModeKey]. [darkmoonDefault] is today's shipped look
-/// (Strength damped by [calGlobalAmountCompression], Contrast defaulting
-/// to [calBaseContrast]); [flat] is a genuinely neutral starting point —
-/// no damping (Strength 100% applies preset/slider values exactly as
-/// authored) and no base-contrast S-curve (Contrast 0) — for anyone who
-/// wants to build their own look on an unmodified decode rather than
-/// darkmoon's own baked-in one. Picking either resets both sliders to
-/// that mode's baseline (2026-09-01, explicit user request — same
+/// A selectable "color profile" for the COLOR PROFILE section — a
+/// per-photo/per-preset pick (like [WbMode]), stored under
+/// [_colorProfileModeKey]. Deliberately a data-bearing (enhanced) enum
+/// rather than a hardcoded if/else per mode: every field below is what
+/// actually *defines* a profile, so a future third profile is just a new
+/// enum value with its own field values, never a new branch scattered
+/// through the render/UI code. Not to be confused with [ColorProfile]
+/// (`render/color_profile.dart`) — that's the per-hue hue/sat/lum + tone
+/// correction *model* a profile can optionally carry ([hueProfile]);
+/// this enum is the small, curated menu of *which* profile is active.
+///
+/// - [darkmoonDefault]: today's shipped look — Strength damped by
+///   [calGlobalAmountCompression] ([dampened]), Contrast defaulting to
+///   [calBaseContrast], no per-hue correction.
+/// - [vivid] (named "Flat" until 2026-09-01, renamed by explicit user
+///   request): the neutral starting point the paused/PENDING per-hue
+///   "darkmoon Color" profile work (see `project_darkmoon_color_profile
+///   .md`) is meant to build on — no Strength damping (100% applies
+///   preset/slider values exactly as authored), Contrast 0 (no base-
+///   contrast S-curve), and [usesHueProfile] true so the fitted
+///   per-hue [ColorProfile] (once that work resumes) applies only here,
+///   never under [darkmoonDefault] — picking it is explicitly meant NOT
+///   to change [darkmoonDefault]'s render output.
+///
+/// Picking either mode resets Strength to 100% and Contrast to
+/// [contrastBaseline] (2026-09-01, explicit user request — same
 /// "picking a mode resets its fields" convention [WbMode] already uses).
-enum ColorProfileMode { darkmoonDefault, flat }
+enum ColorProfileMode {
+  darkmoonDefault(
+    contrastBaseline: calBaseContrast,
+    dampened: true,
+    usesHueProfile: false,
+  ),
+  vivid(contrastBaseline: 0, dampened: false, usesHueProfile: true);
+
+  const ColorProfileMode({
+    required this.contrastBaseline,
+    required this.dampened,
+    required this.usesHueProfile,
+  });
+
+  /// What the "Color Profile Contrast" slider resets to when this mode
+  /// is picked.
+  final double contrastBaseline;
+
+  /// Whether Strength's 100% position is damped by
+  /// [calGlobalAmountCompression] (see [_withGlobalEditAmountApplied])
+  /// or an exact 1:1 pass-through.
+  final bool dampened;
+
+  /// Whether the fitted per-hue [ColorProfile] (`_colorProfile`, still
+  /// unbuilt/paused as of 2026-09-01) renders under this mode.
+  final bool usesHueProfile;
+}
 
 /// Storage key for [ColorProfileMode] — see its own doc.
 const _colorProfileModeKey = 'ColorProfileMode';
+
+/// [ColorProfileMode] currently selected for [values] (a flat
+/// `{paramName: value}` map — the global layer's `_paramValues`, since
+/// masks don't get their own profile) — the shared lookup every render-
+/// and UI-facing spot that needs the mode reads through, so there's one
+/// place that knows how the stored double maps back to the enum.
+ColorProfileMode _colorProfileModeOf(Map<String, double> values) {
+  final index = (values[_colorProfileModeKey] ?? 0.0).toInt();
+  return ColorProfileMode
+      .values[index.clamp(0, ColorProfileMode.values.length - 1)];
+}
 
 /// Storage key for the global Amount slider (below the preset list) —
 /// lives in the same flat `_paramValues` map every other per-photo value
@@ -461,14 +514,14 @@ const defaultFlowAmount = 10.0;
 /// [calGlobalAmountCompression] — so the default Amount (100%, the "no-op"
 /// UI position) still damps everything to that fraction. There's no
 /// no-op fast path anymore: even the default state now scales every value.
-/// Skipped entirely under [ColorProfileMode.flat] (see its own doc) — a
-/// flat profile's Amount 100% means an exact, undamped 1:1 pass-through.
+/// Skipped when the active [ColorProfileMode.dampened] is false (see its
+/// own doc) — an undamped profile's Strength 100% means an exact 1:1
+/// pass-through.
 Map<String, double> _withGlobalEditAmountApplied(Map<String, double> values) {
   final amount = values[_globalEditAmountKey] ?? 100.0;
-  final isFlat =
-      (values[_colorProfileModeKey] ?? 0.0) ==
-      ColorProfileMode.flat.index.toDouble();
-  final compression = isFlat ? 1.0 : calGlobalAmountCompression;
+  final compression = _colorProfileModeOf(values).dampened
+      ? calGlobalAmountCompression
+      : 1.0;
   final fraction = amount / 100.0 * compression;
   final defaults = _defaultParamValues();
   final scaleKeys = defaults.keys.toSet()
@@ -743,6 +796,16 @@ class _EditorScreenState extends State<EditorScreen>
   /// [_loadColorProfile]). Null = no correction.
   ColorProfile? _colorProfile;
 
+  /// [_colorProfile], but only when the active [ColorProfileMode] actually
+  /// wants it ([ColorProfileMode.usesHueProfile]) — the per-hue fitted
+  /// profile must never render under [ColorProfileMode.darkmoonDefault]
+  /// even once loaded, per explicit user request (2026-09-01) that
+  /// resuming the paused per-hue color work stay scoped to
+  /// [ColorProfileMode.vivid] and leave Default's render output alone.
+  /// Every render call site should read this, not [_colorProfile] itself.
+  ColorProfile? get _effectiveColorProfile =>
+      _colorProfileModeOf(_paramValues).usesHueProfile ? _colorProfile : null;
+
   /// The base contrast to actually render with: the profile's fitted tone
   /// curve *replaces* the hand-tuned [calBaseContrast] S when it's present,
   /// so they don't stack. Otherwise reads the per-photo/per-preset
@@ -751,7 +814,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// slider, and subject to the same Amount-slider scaling
   /// ([_effectiveParamValues]).
   double get _effectiveBaseContrast =>
-      (_colorProfile != null && !_colorProfile!.toneIsIdentity)
+      (_effectiveColorProfile != null && !_effectiveColorProfile!.toneIsIdentity)
       ? 0.0
       : _effectiveParamValues()['ColorProfileAmount'] ?? calBaseContrast;
 
@@ -3320,7 +3383,7 @@ class _EditorScreenState extends State<EditorScreen>
         asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
         asShotTint: metadata?.asShotTint ?? wbDefaultTint,
         baseContrast: _effectiveBaseContrast,
-        colorProfile: _colorProfile,
+        colorProfile: _effectiveColorProfile,
       ),
       masks: _effectiveMasks,
       cropTransform: cropTransform,
@@ -3716,7 +3779,7 @@ class _EditorScreenState extends State<EditorScreen>
         // keeping the camera profile, not a develop edit.
         params: RenderParams(
           baseContrast: _effectiveBaseContrast,
-          colorProfile: _colorProfile,
+          colorProfile: _effectiveColorProfile,
         ),
       ),
     );
@@ -4628,9 +4691,7 @@ class _EditorScreenState extends State<EditorScreen>
         ..._paramValues,
         _colorProfileModeKey: mode.index.toDouble(),
         _globalEditAmountKey: 100.0,
-        'ColorProfileAmount': mode == ColorProfileMode.flat
-            ? 0.0
-            : calBaseContrast,
+        'ColorProfileAmount': mode.contrastBaseline,
       };
     });
     _pushHistory();
@@ -4678,10 +4739,9 @@ class _EditorScreenState extends State<EditorScreen>
       _paramValues,
     );
     final amount = _paramValues[_globalEditAmountKey] ?? 100.0;
-    final isFlat =
-        (_paramValues[_colorProfileModeKey] ?? 0.0) ==
-        ColorProfileMode.flat.index.toDouble();
-    final compression = isFlat ? 1.0 : calGlobalAmountCompression;
+    final compression = _colorProfileModeOf(_paramValues).dampened
+        ? calGlobalAmountCompression
+        : 1.0;
     final fraction = amount / 100.0 * compression;
     return lerpPhotoCurves(identityPhotoCurves, categoryApplied, fraction);
   }
@@ -5615,7 +5675,7 @@ class _EditorScreenState extends State<EditorScreen>
           asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
           asShotTint: metadata?.asShotTint ?? wbDefaultTint,
           baseContrast: _effectiveBaseContrast,
-          colorProfile: _colorProfile,
+          colorProfile: _effectiveColorProfile,
         ),
         masks: _effectiveMasks,
         format: options.format,
@@ -8269,7 +8329,7 @@ class _ControlsPanelState extends State<_ControlsPanel> {
   String _colorProfileModeLabel(AppLocalizations l10n, ColorProfileMode mode) =>
       switch (mode) {
         ColorProfileMode.darkmoonDefault => l10n.colorProfileModeDefault,
-        ColorProfileMode.flat => l10n.colorProfileModeFlat,
+        ColorProfileMode.vivid => l10n.colorProfileModeFlat,
       };
 
   Widget _buildWhiteBalanceModeRow(
