@@ -7225,7 +7225,9 @@ class _ViewerToolbar extends StatelessWidget {
                   // group.
                   _ToolbarPill(
                     height: _squareButtonSize,
-                    showChrome: false,
+                    // Kept boxed (unlike its sibling pills) — explicit
+                    // user request (2026-09-01) to restore the outline
+                    // for this specific trio.
                     children: [
                       _ToolbarSegment(
                         icon: CupertinoIcons.arrow_uturn_left,
