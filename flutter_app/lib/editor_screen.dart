@@ -3351,12 +3351,29 @@ class _EditorScreenState extends State<EditorScreen>
   /// `previews/native` disk cache, then a fresh RAW decode that also warms
   /// the cache. Used by both the full-quality preview and export, so the
   /// slow RAW demosaic (especially X-Trans) is paid at most once per photo.
+  ///
+  /// The disk cache is skipped entirely for a common (non-RAW) image: real
+  /// bug (2026-09-01) — the cache stores a JPEG (quality 96, but still
+  /// lossy), so every export of an already-JPEG (or other lossy-format)
+  /// source stacked an extra lossy generation on top of the file's own
+  /// compression, on top of the final export's own JPEG encode. Unlike a
+  /// RAW demosaic, decoding a common image is cheap enough (`package:image`
+  /// straight off disk) that there's nothing worth caching — a fresh decode
+  /// every time keeps the source exactly as lossy as the original file.
   Future<EditSource?> _loadNativeSource(
     String path, {
     required bool lowPriority,
   }) async {
     if (_fullQualitySourcePath == path && _fullQualitySource != null) {
       return _fullQualitySource;
+    }
+    if (!isRawFile(path)) {
+      return compute(
+        lowPriority
+            ? decodeFullQualitySourceLowPriority
+            : decodeFullQualitySource,
+        path,
+      );
     }
     final cachedJpeg = await _nativeSourceCache?.lookup(path);
     EditSource? native;

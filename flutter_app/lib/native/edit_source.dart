@@ -11,14 +11,21 @@ import 'image_utils.dart';
 import 'libraw.dart';
 
 /// Default long-edge cap the editing pipeline downscales to instead of the
-/// sensor's native resolution — comfortably above any reasonably-sized
-/// viewport and much cheaper to re-render on every adjustment (both the
-/// RAW decode itself, via [decodeRawImage]'s `fastPreview`, and every
-/// settled-view render afterward). Overridable per call (see
+/// sensor's native resolution — much cheaper to re-render on every
+/// adjustment (both the RAW decode itself, via [decodeRawImage]'s
+/// `fastPreview`, and every settled-view render afterward) than the
+/// sensor's native resolution. Overridable per call (see
 /// [decodeEditSources]'s `previewMaxDimension` parameter) — this is just
 /// the value used when no explicit choice is passed, and matches the
 /// app settings' own default preview resolution (`app_settings.dart`).
-const int defaultPreviewMaxDimension = 1024;
+///
+/// Raised from 1024 to 1600 (2026-09-01, real complaint: the settled view
+/// looked "blurry and blocky" — confirmed by rendering a real photo at
+/// 1024px and comparing a 1:1 crop against the native decode) — 1024 was
+/// comfortably above a typical viewport a decade ago, not against a
+/// current 1440p/4K editor panel, where the editor was stretching this
+/// buffer up rather than showing it near 1:1.
+const int defaultPreviewMaxDimension = 1600;
 
 /// A smaller version of the same buffer: used while a slider is actively
 /// being dragged so re-rendering stays fast enough to feel live, swapped
