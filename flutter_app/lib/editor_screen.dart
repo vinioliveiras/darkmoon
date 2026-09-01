@@ -9512,8 +9512,14 @@ class _SegmentedTabs<T> extends StatelessWidget {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final segmentWidth =
-              (constraints.maxWidth - _padding * 2) / items.length;
+          // Real bug (2026-09-01, user report — the highlight drifted
+          // further off with each tab to the right, worst on the last
+          // one): Container's own padding above already shrinks the
+          // constraints this LayoutBuilder receives — constraints.maxWidth
+          // here is already the inner (padded) width. Subtracting
+          // _padding * 2 again double-counted it, making segmentWidth too
+          // narrow and compounding a growing offset as activeIndex grew.
+          final segmentWidth = constraints.maxWidth / items.length;
           return Stack(
             children: [
               // The sliding highlight — a single pill that animates its
