@@ -334,16 +334,36 @@ class _CropPainter extends CustomPainter {
         ..strokeWidth = 1.5,
     );
 
+    // Handle drawn slightly inset from the true corner when that corner
+    // sits at (or very near) the canvas's own edge — real bug fixed
+    // 2026-09-01: an uncropped/full-frame crop rect puts corners exactly
+    // on the canvas boundary, so the handle circle's outer edge got cut
+    // off by whatever clips this canvas (the viewer panel's own bounds).
+    // Only the *drawn* position moves; hit-testing below still uses the
+    // real corner (cropRect.topLeft etc.) via [_handleHitRadius]'s
+    // generous 20px radius, so dragging still feels anchored to the
+    // actual corner, not the nudged dot.
+    const handleRadius = 6.0;
+    const edgePadding = handleRadius + 2;
+    Offset inset(Offset corner) => Offset(
+      corner.dx.clamp(edgePadding, size.width - edgePadding),
+      corner.dy.clamp(edgePadding, size.height - edgePadding),
+    );
     for (final corner in [
       cropRect.topLeft,
       cropRect.topRight,
       cropRect.bottomLeft,
       cropRect.bottomRight,
     ]) {
-      canvas.drawCircle(corner, 6, Paint()..color = DarkmoonColors.accent);
+      final drawAt = inset(corner);
       canvas.drawCircle(
-        corner,
-        6,
+        drawAt,
+        handleRadius,
+        Paint()..color = DarkmoonColors.accent,
+      );
+      canvas.drawCircle(
+        drawAt,
+        handleRadius,
         Paint()
           ..color = Colors.black54
           ..style = PaintingStyle.stroke

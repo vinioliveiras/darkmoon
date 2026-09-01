@@ -36,19 +36,39 @@ const _hitRadius = 16.0;
 const _minPointSpacing = 0.02;
 const _maxPoints = 12;
 
+/// Margin, in pixels, the plotted 0..1 curve space is inset from the
+/// widget's own edges — real bug fixed 2026-09-01: an endpoint sitting
+/// exactly at x=0/1 or y=0/1 put its handle circle's centre right on the
+/// widget's boundary, so the section card's rounded-corner clip (or any
+/// other ancestor clip) cut off roughly half of it at every corner.
+/// [_handlePaintRadius] (the biggest thing drawn at a point) plus a
+/// couple of px of breathing room is enough for the whole handle to
+/// always render fully on-screen, at every point position.
+const _plotInset = 8.0;
+
 class _ToneCurveEditorState extends State<ToneCurveEditor> {
   int? _activeIndex;
 
   List<CurvePoint> get _sorted =>
       [...widget.points]..sort((a, b) => a.x.compareTo(b.x));
 
-  Offset _toLocal(CurvePoint point, Size size) =>
-      Offset(point.x * size.width, (1 - point.y) * size.height);
+  Offset _toLocal(CurvePoint point, Size size) {
+    final usableW = size.width - 2 * _plotInset;
+    final usableH = size.height - 2 * _plotInset;
+    return Offset(
+      _plotInset + point.x * usableW,
+      _plotInset + (1 - point.y) * usableH,
+    );
+  }
 
-  CurvePoint _toPoint(Offset local, Size size) => CurvePoint(
-    (local.dx / size.width).clamp(0.0, 1.0),
-    (1 - local.dy / size.height).clamp(0.0, 1.0),
-  );
+  CurvePoint _toPoint(Offset local, Size size) {
+    final usableW = size.width - 2 * _plotInset;
+    final usableH = size.height - 2 * _plotInset;
+    return CurvePoint(
+      ((local.dx - _plotInset) / usableW).clamp(0.0, 1.0),
+      (1 - (local.dy - _plotInset) / usableH).clamp(0.0, 1.0),
+    );
+  }
 
   int? _nearestPointIndex(Offset local, Size size, List<CurvePoint> points) {
     var closestIndex = -1;
@@ -160,26 +180,35 @@ class _ToneCurvePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Everything below is drawn inset from the widget's own edges by
+    // [_plotInset] — grid, curve and handles alike — so an endpoint
+    // handle sitting at the very corner of the *plotted* range still has
+    // a few px of margin before the widget's actual boundary (see
+    // [_plotInset]'s doc for the corner-clipping bug this fixes).
+    final plot = Rect.fromLTWH(
+      _plotInset,
+      _plotInset,
+      size.width - 2 * _plotInset,
+      size.height - 2 * _plotInset,
+    );
+
     final gridPaint = Paint()
       ..color = DarkmoonColors.border
       ..strokeWidth = 1;
     for (var i = 1; i < 4; i++) {
-      final x = size.width * i / 4;
-      final y = size.height * i / 4;
-      canvas.drawLine(Offset(x, 0), Offset(x, size.height), gridPaint);
-      canvas.drawLine(Offset(0, y), Offset(size.width, y), gridPaint);
+      final x = plot.left + plot.width * i / 4;
+      final y = plot.top + plot.height * i / 4;
+      canvas.drawLine(Offset(x, plot.top), Offset(x, plot.bottom), gridPaint);
+      canvas.drawLine(Offset(plot.left, y), Offset(plot.right, y), gridPaint);
     }
-    canvas.drawRect(
-      Offset.zero & size,
-      gridPaint..style = PaintingStyle.stroke,
-    );
+    canvas.drawRect(plot, gridPaint..style = PaintingStyle.stroke);
 
     final diagonalPaint = Paint()
       ..color = DarkmoonColors.textMuted.withValues(alpha: 0.35)
       ..strokeWidth = 1;
     canvas.drawLine(
-      Offset(0, size.height),
-      Offset(size.width, 0),
+      Offset(plot.left, plot.bottom),
+      Offset(plot.right, plot.top),
       diagonalPaint,
     );
 
@@ -190,8 +219,8 @@ class _ToneCurvePainter extends CustomPainter {
       ..strokeWidth = 2;
     final path = Path();
     for (var i = 0; i < 256; i++) {
-      final x = size.width * i / 255;
-      final y = size.height * (1 - lut[i] / 255);
+      final x = plot.left + plot.width * i / 255;
+      final y = plot.top + plot.height * (1 - lut[i] / 255);
       if (i == 0) {
         path.moveTo(x, y);
       } else {
@@ -206,7 +235,10 @@ class _ToneCurvePainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2;
     for (final point in points) {
-      final center = Offset(point.x * size.width, (1 - point.y) * size.height);
+      final center = Offset(
+        plot.left + point.x * plot.width,
+        plot.top + (1 - point.y) * plot.height,
+      );
       canvas.drawCircle(center, 5, handleFill);
       canvas.drawCircle(center, 5, handleBorder);
     }
