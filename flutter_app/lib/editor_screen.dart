@@ -1683,6 +1683,19 @@ class _EditorScreenState extends State<EditorScreen>
     final next = _settings.copyWith(rawOnly: value);
     setState(() => _settings = next);
     unawaited(saveSettings(next));
+    _reloadCurrentFolderPreservingSelection();
+  }
+
+  /// Mirrors [_setRawOnly] — same "re-scan the open folder immediately"
+  /// treatment for the sibling "Show images in subfolders" checkbox.
+  void _setIncludeSubfolders(bool value) {
+    final next = _settings.copyWith(includeSubfolders: value);
+    setState(() => _settings = next);
+    unawaited(saveSettings(next));
+    _reloadCurrentFolderPreservingSelection();
+  }
+
+  void _reloadCurrentFolderPreservingSelection() {
     final folder = _currentFolder;
     if (folder != null) {
       final selectedIndex = _selectedIndex;
@@ -2487,7 +2500,11 @@ class _EditorScreenState extends State<EditorScreen>
       _settings = next;
       unawaited(saveSettings(next));
     }
-    final files = await listRawFiles(folder, rawOnly: _settings.rawOnly);
+    final files = await listRawFiles(
+      folder,
+      rawOnly: _settings.rawOnly,
+      includeSubfolders: _settings.includeSubfolders,
+    );
     if (!mounted || generation != _folderGeneration) {
       return;
     }
@@ -5761,6 +5778,10 @@ class _EditorScreenState extends State<EditorScreen>
                                     onRemoveRecentFile: _removeRecentFile,
                                     rawOnly: _settings.rawOnly,
                                     onRawOnlyChanged: _setRawOnly,
+                                    includeSubfolders:
+                                        _settings.includeSubfolders,
+                                    onIncludeSubfoldersChanged:
+                                        _setIncludeSubfolders,
                                   ),
                                 ),
                                 Container(

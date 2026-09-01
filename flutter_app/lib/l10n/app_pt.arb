@@ -180,6 +180,7 @@
   "settingsPreviewResolutionLabel": "Resolução do preview",
   "settingsPreviewResolutionHint": "Quanto menor, mais rápido para abrir e editar fotos; a exportação sempre usa a resolução total do sensor",
   "settingsRawOnlyLabel": "Somente arquivos RAW",
+  "settingsIncludeSubfoldersLabel": "Mostrar imagens em subpastas",
   "settingsRawOnlyHint": "Oculta JPEG, PNG e outros formatos comuns de imagem da biblioteca",
   "settingsAnimationsLabel": "Animações da interface",
   "settingsAnimationsHint": "Transições suaves nas seções do painel, troca de abas, zoom e no preview após uma edição",

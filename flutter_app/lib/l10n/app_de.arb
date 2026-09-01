@@ -174,6 +174,7 @@
   "settingsPreviewResolutionLabel": "Vorschauauflösung",
   "settingsPreviewResolutionHint": "Niedriger ist schneller beim Öffnen und Bearbeiten von Fotos; der Export verwendet immer die volle Sensorauflösung",
   "settingsRawOnlyLabel": "Nur RAW-Dateien",
+  "settingsIncludeSubfoldersLabel": "Bilder in Unterordnern anzeigen",
   "settingsRawOnlyHint": "JPEG, PNG und andere gängige Bildformate aus der Bibliothek ausblenden",
   "settingsAnimationsLabel": "Oberflächenanimationen",
   "settingsAnimationsHint": "Sanfte Übergänge für Panelabschnitte, Tab-Wechsel, Zoom und die Vorschau nach einer Bearbeitung",

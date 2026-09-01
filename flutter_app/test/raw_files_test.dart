@@ -85,5 +85,23 @@ void main() {
       final files = await listRawFiles(p.join(tempDir.path, 'nope'));
       expect(files, isEmpty);
     });
+
+    test('ignores a subfolder by default', () async {
+      final sub = Directory(p.join(tempDir.path, 'sub'))..createSync();
+      await File(p.join(sub.path, 'nested.raf')).writeAsBytes([0]);
+      final files = await listRawFiles(tempDir.path);
+      final names = files.map((f) => f.name).toSet();
+      expect(names.contains('nested.raf'), isFalse);
+    });
+
+    test('includeSubfolders descends into nested folders', () async {
+      final sub = Directory(p.join(tempDir.path, 'sub'))..createSync();
+      await File(p.join(sub.path, 'nested.raf')).writeAsBytes([0]);
+      final files = await listRawFiles(tempDir.path, includeSubfolders: true);
+      final names = files.map((f) => f.name).toSet();
+      expect(names.contains('nested.raf'), isTrue);
+      // Still finds the top-level files too, not just the nested ones.
+      expect(names.contains('a.raf'), isTrue);
+    });
   });
 }

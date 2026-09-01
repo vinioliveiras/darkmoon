@@ -45,6 +45,7 @@ class AppSettings {
     this.baseContrast = calBaseContrast,
     this.thumbnailConcurrency = 4,
     this.rawOnly = false,
+    this.includeSubfolders = false,
     this.devLogging = false,
     this.libraryFolders = const [],
     this.recentFiles = const [],
@@ -113,6 +114,12 @@ class AppSettings {
   /// PNG, etc.) are filtered out of the library entirely.
   final bool rawOnly;
 
+  /// When true, a library folder's scan also descends into every nested
+  /// subfolder instead of only its top level. Off by default — a
+  /// subfolder is often an unrelated export/album a user wouldn't expect
+  /// mixed into the top-level view.
+  final bool includeSubfolders;
+
   /// "Developer Mode" — when true, `DevLog` writes a timestamped diagnostic
   /// log (crashes, AI Enhance stage/GPU-CPU info, etc. — see
   /// `diagnostics/dev_log.dart`) to disk for bug reports. Off by default,
@@ -170,6 +177,7 @@ class AppSettings {
     double? baseContrast,
     int? thumbnailConcurrency,
     bool? rawOnly,
+    bool? includeSubfolders,
     bool? devLogging,
     List<String>? libraryFolders,
     List<String>? recentFiles,
@@ -190,6 +198,7 @@ class AppSettings {
     baseContrast: (baseContrast ?? this.baseContrast).clamp(0.0, 60.0),
     thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
     rawOnly: rawOnly ?? this.rawOnly,
+    includeSubfolders: includeSubfolders ?? this.includeSubfolders,
     devLogging: devLogging ?? this.devLogging,
     libraryFolders: libraryFolders ?? this.libraryFolders,
     recentFiles: recentFiles ?? this.recentFiles,
@@ -226,6 +235,7 @@ class AppSettings {
     baseContrast: baseContrast,
     thumbnailConcurrency: thumbnailConcurrency,
     rawOnly: rawOnly,
+    includeSubfolders: includeSubfolders,
     devLogging: devLogging,
     libraryFolders: libraryFolders,
     recentFiles: recentFiles,
@@ -255,6 +265,7 @@ class AppSettings {
     baseContrast: baseContrast,
     thumbnailConcurrency: thumbnailConcurrency,
     rawOnly: rawOnly,
+    includeSubfolders: includeSubfolders,
     devLogging: devLogging,
     libraryFolders: libraryFolders,
     recentFiles: recentFiles,
@@ -302,6 +313,8 @@ Future<AppSettings> loadSettings() async {
       thumbnailConcurrency:
           (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
       rawOnly: raw['rawOnly'] as bool? ?? defaults.rawOnly,
+      includeSubfolders:
+          raw['includeSubfolders'] as bool? ?? defaults.includeSubfolders,
       devLogging: raw['devLogging'] as bool? ?? defaults.devLogging,
       libraryFolders:
           (raw['libraryFolders'] as List?)?.cast<String>() ??
@@ -337,6 +350,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'baseContrast': settings.baseContrast,
       'thumbnailConcurrency': settings.thumbnailConcurrency,
       'rawOnly': settings.rawOnly,
+      'includeSubfolders': settings.includeSubfolders,
       'devLogging': settings.devLogging,
       'libraryFolders': settings.libraryFolders,
       'recentFiles': settings.recentFiles,

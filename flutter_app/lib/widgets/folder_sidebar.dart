@@ -31,6 +31,8 @@ class FolderSidebar extends StatelessWidget {
     required this.onRemoveRecentFile,
     required this.rawOnly,
     required this.onRawOnlyChanged,
+    required this.includeSubfolders,
+    required this.onIncludeSubfoldersChanged,
   });
 
   final List<String> roots;
@@ -49,6 +51,11 @@ class FolderSidebar extends StatelessWidget {
   /// Settings) since it directly affects what this browser shows.
   final bool rawOnly;
   final ValueChanged<bool> onRawOnlyChanged;
+
+  /// Mirrors [AppSettings.includeSubfolders] — same reasoning as
+  /// [rawOnly], shown right alongside it.
+  final bool includeSubfolders;
+  final ValueChanged<bool> onIncludeSubfoldersChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +82,12 @@ class FolderSidebar extends StatelessWidget {
                 ),
               ),
             ),
-            _RawOnlyCheckboxRow(value: rawOnly, onChanged: onRawOnlyChanged),
+            _LibraryFilterRow(
+              rawOnly: rawOnly,
+              onRawOnlyChanged: onRawOnlyChanged,
+              includeSubfolders: includeSubfolders,
+              onIncludeSubfoldersChanged: onIncludeSubfoldersChanged,
+            ),
           ],
         ),
       );
@@ -122,7 +134,12 @@ class FolderSidebar extends StatelessWidget {
           // — sits right at the boundary with the Presets section (its
           // sibling below this widget in EditorScreen's layout), not
           // scrolling away with a long folder list.
-          _RawOnlyCheckboxRow(value: rawOnly, onChanged: onRawOnlyChanged),
+          _LibraryFilterRow(
+            rawOnly: rawOnly,
+            onRawOnlyChanged: onRawOnlyChanged,
+            includeSubfolders: includeSubfolders,
+            onIncludeSubfoldersChanged: onIncludeSubfoldersChanged,
+          ),
         ],
       ),
     );
@@ -143,22 +160,71 @@ class _SidebarSectionHeader extends StatelessWidget {
   }
 }
 
-class _RawOnlyCheckboxRow extends StatelessWidget {
-  const _RawOnlyCheckboxRow({required this.value, required this.onChanged});
+/// The two library-scan checkboxes, side by side — "RAW files only" and
+/// "Show images in subfolders" (2026-09-01, explicit user request: "à
+/// direita do checkbox Raw files only" — to the right of it, not stacked
+/// below).
+class _LibraryFilterRow extends StatelessWidget {
+  const _LibraryFilterRow({
+    required this.rawOnly,
+    required this.onRawOnlyChanged,
+    required this.includeSubfolders,
+    required this.onIncludeSubfoldersChanged,
+  });
 
+  final bool rawOnly;
+  final ValueChanged<bool> onRawOnlyChanged;
+  final bool includeSubfolders;
+  final ValueChanged<bool> onIncludeSubfoldersChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(4, 4, 8, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: _LibraryFilterCheckbox(
+              label: l10n.settingsRawOnlyLabel,
+              value: rawOnly,
+              onChanged: onRawOnlyChanged,
+            ),
+          ),
+          Expanded(
+            child: _LibraryFilterCheckbox(
+              label: l10n.settingsIncludeSubfoldersLabel,
+              value: includeSubfolders,
+              onChanged: onIncludeSubfoldersChanged,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _LibraryFilterCheckbox extends StatelessWidget {
+  const _LibraryFilterCheckbox({
+    required this.label,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
   final bool value;
   final ValueChanged<bool> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
     return Material(
       color: Colors.transparent,
       child: InkWell(
         onTap: () => onChanged(!value),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(8, 4, 12, 8),
+          padding: const EdgeInsets.symmetric(horizontal: 4),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: [
               SizedBox(
                 width: 14,
@@ -172,15 +238,16 @@ class _RawOnlyCheckboxRow extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
+              const SizedBox(width: 6),
+              Flexible(
                 child: Text(
-                  l10n.settingsRawOnlyLabel,
-                  maxLines: 1,
+                  label,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     color: DarkmoonColors.textSecondary,
-                    fontSize: 12,
+                    fontSize: 11,
+                    height: 1.2,
                   ),
                 ),
               ),

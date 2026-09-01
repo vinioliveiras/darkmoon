@@ -557,6 +557,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsRawOnlyLabel => 'Nur RAW-Dateien';
 
   @override
+  String get settingsIncludeSubfoldersLabel =>
+      'Bilder in Unterordnern anzeigen';
+
+  @override
   String get settingsRawOnlyHint =>
       'JPEG, PNG und andere gängige Bildformate aus der Bibliothek ausblenden';
 

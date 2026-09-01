@@ -1090,6 +1090,12 @@ abstract class AppLocalizations {
   /// **'RAW files only'**
   String get settingsRawOnlyLabel;
 
+  /// No description provided for @settingsIncludeSubfoldersLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Show images in subfolders'**
+  String get settingsIncludeSubfoldersLabel;
+
   /// No description provided for @settingsRawOnlyHint.
   ///
   /// In en, this message translates to:

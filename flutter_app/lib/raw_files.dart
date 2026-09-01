@@ -59,17 +59,24 @@ class RawFile {
 
 /// Lists photo files directly inside [folderPath], most recently modified
 /// first. When [rawOnly] is true, common (non-RAW) image formats are
-/// excluded — the "work with RAW only" library preference.
+/// excluded — the "work with RAW only" library preference. When
+/// [includeSubfolders] is true, also descends into every nested folder
+/// (off by default — a library folder's own subfolders are often unrelated
+/// exports/albums a user wouldn't expect mixed into the top-level view).
 Future<List<RawFile>> listRawFiles(
   String folderPath, {
   bool rawOnly = false,
+  bool includeSubfolders = false,
 }) async {
   final dir = Directory(folderPath);
   if (!dir.existsSync()) {
     return const [];
   }
   final candidates = <File>[];
-  await for (final entry in dir.list(followLinks: false)) {
+  await for (final entry in dir.list(
+    recursive: includeSubfolders,
+    followLinks: false,
+  )) {
     if (entry is! File) {
       continue;
     }
