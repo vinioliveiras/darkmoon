@@ -4718,7 +4718,16 @@ class _EditorScreenState extends State<EditorScreen>
   /// be surprising for a button labeled "Reset", and there's no separate
   /// per-mask reset affordance, so this is the only way back to a blank
   /// slate.
-  void _resetActive() {
+  Future<void> _resetActive() async {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    final wasAnyPipelineActive =
+        selected != null &&
+        ((_paramValues[_neuralDenoiseKey] ?? 0.0) > 0 ||
+            (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0 ||
+            (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0 ||
+            (_paramValues[_restoreDetailKey] ?? 0.0) > 0 ||
+            (_paramValues[_cloudDenoiseProviderKey] ?? 0.0) > 0 ||
+            (_paramValues[_colorizeKey] ?? 0.0) > 0);
     setState(() {
       _paramValues = _freshParamValues();
       _currentCurves = identityPhotoCurves;
@@ -4727,6 +4736,16 @@ class _EditorScreenState extends State<EditorScreen>
       // Reset clears the edit — no preset is "applied" any more.
       _appliedPresetId = null;
     });
+    if (wasAnyPipelineActive) {
+      // `_editSources[path]` currently holds the AI-pipeline buffer
+      // (Enhance/Cloud/Colorize) — resetting `_paramValues` alone left it
+      // in place, so the photo kept looking enhanced/colorized after Reset
+      // (2026-09-01, real bug report). Revert it the same way turning a
+      // pipeline off elsewhere already does (see `wasAnyPipelineActive` in
+      // `_openAiDenoiseDialog`).
+      await _revertToNormalEditSource(selected.path);
+      if (!mounted) return;
+    }
     _pushHistory();
     _scheduleRender(live: false);
     _scheduleCatalogSave();
