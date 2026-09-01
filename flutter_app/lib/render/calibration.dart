@@ -262,8 +262,8 @@ const double calTextureSigma = 3.5;
 
 /// **Texture** — strength multiplier on top of the slider.
 ///   ↑ higher = stronger Texture     ↓ lower = weaker
-/// default: 1.0
-const double calTextureStrength = 1.0;
+/// default: 1.0   (user raised to 2.0, then asked for a bit more)
+const double calTextureStrength = 2.3;
 
 /// **Clarity** — radius (in pixels) of the local contrast. Deliberately
 /// large (mid-range contrast, more like "definition").
@@ -274,8 +274,8 @@ const double calClaritySigma = 25.0;
 
 /// **Clarity** — strength multiplier on top of the slider.
 ///   ↑ higher = stronger Clarity     ↓ lower = weaker
-/// default: 1.0
-const double calClarityStrength = 0.5;
+/// default: 1.0   (2026-09-01: raised from 0.5, explicit user request)
+const double calClarityStrength = 0.65;
 
 /// **Dehaze +** — how hard the positive slider pulls transmission down (=
 /// removes haze). This is the main control over Dehaze strength.
