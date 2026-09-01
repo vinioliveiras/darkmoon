@@ -152,8 +152,13 @@ const double calWbAsShotTintScaleFallback = 200.0;
 // This is the FACTORY value. The user can override it live in
 // Settings → "darkmoon Color Profile" (saved in AppSettings), no rebuild
 // needed. Both CPU and GPU apply the curve.
-/// default: 20.0   (0.0 = off)
-const double calBaseContrast = 20.0;
+/// default: 20.0   (0.0 = off; 2026-09-02: lowered to 15.0, explicit
+/// user request — photos opened a bit brighter than the same RAW in
+/// Meridian. Deliberately not touching `no_auto_bright` (libraw.dart)
+/// for this — that's the decode-time exposure baseline, and re-opening
+/// it risks the whole incident history in project_darkmoon_color_profile
+/// .md; this S-curve is the safer, purely render-time lever.)
+const double calBaseContrast = 15.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  BASIC — Exposure / Brightness / Contrast                                 ║
@@ -163,9 +168,9 @@ const double calBaseContrast = 20.0;
 /// light). The effect is  2^(sliderValue / this number).
 ///   ↑ higher = weaker Exposure (needs a bigger drag for the same change)
 ///   ↓ lower  = stronger Exposure
-/// default: 16.67   (2026-09-01: explicit user request for ≥1.5x the
-/// previous strength — 25.0 / 1.5)
-const double calExposureUnitsPerStop = 25.0 / 1.5;
+/// default: 12.0   (2026-09-02: still felt too weak at 16.67, explicit
+/// user request to push it further)
+const double calExposureUnitsPerStop = 12.0;
 
 /// **Brightness**: same idea as Exposure, slider units per stop, but
 /// Brightness uses a curve that protects blacks and whites (no clipping).
@@ -183,8 +188,9 @@ const double calBrightnessMidtoneStrength = 1.2;
 /// **Contrast**: how hard the slider tilts the S-curve.
 ///   ↑ higher = more aggressive Contrast at the same value
 ///   ↓ lower  = gentler Contrast
-/// default: 1.25
-const double calContrastStrength = 0.50;
+/// default: 1.25   (2026-09-02: raised from 0.50, explicit user request —
+/// felt too weak)
+const double calContrastStrength = 0.75;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  BASIC — Highlights / Shadows / Whites / Blacks                           ║
@@ -213,14 +219,16 @@ const double calShadowsFalloff = 4.5;
 /// This is the floor of a mask (0..1 on perceived luminance).
 ///   ↑ higher (e.g. 0.5) = only the brightest whites move ("weak" effect)
 ///   ↓ lower (e.g. 0.30) = also reaches the upper-midtones ("strong" effect)
-/// default: 0.32     [also on GPU: point_ops_post_denoise.frag → rapidWhiteMask]
-const double calWhitesMaskLow = 0.32;
+/// default: 0.32   (2026-09-02: lowered to 0.26, explicit user request —
+/// Whites felt too weak)   [also on GPU: point_ops_post_denoise.frag → rapidWhiteMask]
+const double calWhitesMaskLow = 0.26;
 
 /// **Whites** — how much it lifts the white point at the slider's max value.
 ///   ↑ higher = Whites +100 brightens much more
 ///   ↓ lower  = Whites +100 barely changes anything
-/// default: 0.42   (original Solstice: 0.25)   [also on GPU: point_ops_post_denoise.frag]
-const double calWhitesLevelCoeff = 0.25;
+/// default: 0.42   (original Solstice: 0.25; 2026-09-02: raised to 0.40,
+/// explicit user request — Whites felt too weak)   [also on GPU: point_ops_post_denoise.frag]
+const double calWhitesLevelCoeff = 0.40;
 
 /// **Blacks** — multiplier on top of the slider value.
 ///   ↑ higher = stronger Blacks (crushes/lifts black much harder)

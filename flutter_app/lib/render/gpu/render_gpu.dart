@@ -178,7 +178,8 @@ Future<ui.Image> _runPreDenoise(
   final normalizedRGain = wb.r;
   final gGain = wb.g;
   final normalizedBGain = wb.b;
-  final exposureFactor = math.pow(2.0, params.exposure / 20.0).toDouble();
+  final exposureFactor =
+      math.pow(2.0, params.exposure / calExposureUnitsPerStop).toDouble();
 
   var i = 0;
   shader.setFloat(i++, width.toDouble());
@@ -213,12 +214,12 @@ Future<ui.Image> _runPostDenoise(
   // replaced a plain linear contrastFactor).
   final contrastGamma = params.contrast == 0
       ? 1.0
-      : math.pow(2.0, params.contrast / 100.0 * 1.25).toDouble();
+      : math.pow(2.0, params.contrast / 100.0 * calContrastStrength).toDouble();
   // The fixed "profile" contrast curve (render.dart's _applyBaseContrast /
   // calBaseContrast) — same S as the Contrast slider. 1.0 = no-op.
   final baseContrastGamma = params.baseContrast == 0
       ? 1.0
-      : math.pow(2.0, params.baseContrast / 100.0 * 1.25).toDouble();
+      : math.pow(2.0, params.baseContrast / 100.0 * calContrastStrength).toDouble();
   final shadowsAdd = params.shadows / 100.0;
   final highlightsAdd = params.highlights / 100.0;
   final whitesAdd = params.whites / 100.0;

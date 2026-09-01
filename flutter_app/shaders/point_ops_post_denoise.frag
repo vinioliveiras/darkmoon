@@ -210,7 +210,7 @@ vec3 rapidBrightness(vec3 color, float amount) {
 // tune calibration.dart and use the GPU path, change them here too.
 float rapidWhiteMask(float luma) {
   float whiteInput = tanh(max(luma, 0.0001) * 1.5);
-  return smoothstep(0.32, 0.98, whiteInput);
+  return smoothstep(0.26, 0.98, whiteInput);
 }
 
 vec3 rapidHighlights(vec3 color, float amount) {
@@ -238,7 +238,7 @@ vec3 rapidWhites(vec3 color, float amount) {
   );
   float luma = dot(max(linearColor, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722));
   float mask = rapidWhiteMask(luma);
-  float level = 1.0 - amount * 0.42;
+  float level = 1.0 - amount * 0.40;
   float multiplier = 1.0 / max(mix(1.0, level, mask), 0.01);
   linearColor *= multiplier;
   return vec3(
