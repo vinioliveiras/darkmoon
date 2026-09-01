@@ -111,6 +111,7 @@ flutter:
     - shaders/sharpen_combine.frag
     - shaders/local_contrast_combine.frag
     - shaders/dehaze_apply.frag
+    - shaders/color_profile.frag
     - shaders/post_dehaze.frag
     - shaders/mask_blend.frag
     - shaders/srgb_to_linear.frag

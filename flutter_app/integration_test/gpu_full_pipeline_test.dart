@@ -12,6 +12,7 @@ import 'package:integration_test/integration_test.dart';
 import 'package:darkmoon/render/ai_denoise.dart';
 import 'package:darkmoon/render/color_grading.dart';
 import 'package:darkmoon/render/color_mixer.dart';
+import 'package:darkmoon/render/color_profile.dart';
 import 'package:darkmoon/render/gpu/render_gpu.dart';
 import 'package:darkmoon/render/grain.dart';
 import 'package:darkmoon/render/render.dart';
@@ -194,6 +195,75 @@ void main() {
         // by close to the full amplitude even though its neighbors
         // (safely inside a cell) match closely.
         maxTolerance: 50,
+      );
+    });
+
+    // "darkmoon Color" per-hue correction (color_profile_gpu.dart) — a
+    // real hand-authored profile, not identityColorProfile, exercising
+    // every one of the 24 hue bins' triangular-weight blending at once.
+    testWidgets('color profile (per-hue correction) alone', (tester) async {
+      await expectMatchesCpu(
+        RenderParams(
+          colorProfile: ColorProfile(
+            tone: identityColorProfile.tone,
+            hueShift: [
+              for (var i = 0; i < colorProfileBins; i++)
+                (i.isEven ? 8.0 : -6.0),
+            ],
+            satMul: [
+              for (var i = 0; i < colorProfileBins; i++)
+                1.0 + (i % 3 == 0 ? 0.25 : -0.1),
+            ],
+            lumMul: [
+              for (var i = 0; i < colorProfileBins; i++)
+                1.0 + (i % 4 == 0 ? 0.15 : -0.05),
+            ],
+          ),
+          colorProfileStrength: 1.0,
+        ),
+        'color profile alone',
+        // Same "mean stays low, one clip-boundary pixel pushes max up"
+        // signature as this file's other wide-tolerance cases above: the
+        // new color-profile pass is one more 8-bit-quantized round trip
+        // in the GPU chain, and this test's aggressive hand-picked
+        // hueShift/satMul/lumMul values (up to +-8 deg / 1.25x / 1.15x)
+        // push a handful of the synthetic photo's most saturated pixels
+        // right up against a bin boundary.
+        maxTolerance: 50,
+      );
+    });
+
+    testWidgets('color profile combined with tone edits and dehaze', (
+      tester,
+    ) async {
+      await expectMatchesCpu(
+        RenderParams(
+          exposure: 10,
+          contrast: 15,
+          dehaze: 25,
+          colorProfile: ColorProfile(
+            tone: identityColorProfile.tone,
+            hueShift: [
+              for (var i = 0; i < colorProfileBins; i++)
+                (i.isEven ? 8.0 : -6.0),
+            ],
+            satMul: [
+              for (var i = 0; i < colorProfileBins; i++)
+                1.0 + (i % 3 == 0 ? 0.25 : -0.1),
+            ],
+            lumMul: [
+              for (var i = 0; i < colorProfileBins; i++)
+                1.0 + (i % 4 == 0 ? 0.15 : -0.05),
+            ],
+          ),
+          colorProfileStrength: 0.7,
+        ),
+        'color profile + tone + dehaze',
+        // Same reasoning as the "alone" case above, compounded by Dehaze's
+        // own pre-existing 8-bit-quantization divergence (see this file's
+        // "haze addition" case and PENDING.md — a real, pre-dating-this-
+        // change gap between the GPU and CPU Dehaze implementations).
+        maxTolerance: 115,
       );
     });
 

@@ -8,6 +8,7 @@ import '../color_grading.dart';
 import '../render_params.dart';
 import '../tone_curve.dart';
 import '../white_balance.dart';
+import 'color_profile_gpu.dart';
 import 'dehaze_gpu.dart';
 import 'denoise_gpu.dart';
 import 'gpu_pass.dart';
@@ -118,8 +119,22 @@ Future<ui.Image> renderImageGpu(
     protectMidtones: true,
   );
 
+  // Per-hue "darkmoon Color" correction — same spot render.dart's
+  // applyColorProfileStage runs it, before Dehaze (see that function's doc
+  // comment for why: Dehaze estimates its own haze color from whatever
+  // buffer it's given, so any per-hue shift needs to happen first).
+  final profile = params.colorProfile;
+  final afterColorProfile = profile == null
+      ? afterClarity
+      : await runColorProfileGpu(
+          afterClarity,
+          width,
+          height,
+          profile,
+          params.colorProfileStrength,
+        );
   final afterDehaze = await runDehazeGpu(
-    afterClarity,
+    afterColorProfile,
     width,
     height,
     params.dehaze,
