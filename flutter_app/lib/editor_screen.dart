@@ -5664,7 +5664,18 @@ class _EditorScreenState extends State<EditorScreen>
                                 Expanded(
                                   child: FolderSidebar(
                                     roots: _settings.libraryFolders,
-                                    recentFiles: _settings.recentFiles,
+                                    // Real bug report (2026-09-01): a
+                                    // common-image entry stayed clickable
+                                    // here even with "RAW files only" on,
+                                    // and clicking it didn't open anything.
+                                    // Hide it instead of leaving a dead
+                                    // click target — same intent "RAW files
+                                    // only" already has for folder scans.
+                                    recentFiles: _settings.rawOnly
+                                        ? _settings.recentFiles
+                                              .where(isRawFile)
+                                              .toList()
+                                        : _settings.recentFiles,
                                     selectedPath: _currentFolder,
                                     selectedRecentFile: _currentSingleFile,
                                     onSelect: (path) =>
