@@ -4,8 +4,19 @@
 //
 // For each pair the tool renders the RAW through darkmoon's neutral
 // pipeline (all sliders 0, WB As Shot, no colour profile), lines it up
-// with the Meridian export, and measures the drift: a global tone curve
-// (dm perceptual-luma -> Meridian's) plus per-hue hue/sat/lum residuals.
+// with the Meridian export, and measures the per-hue hue/sat/lum drift.
+//
+// 2026-09-01: per-hue ONLY — the tone curve is forced to identity and no
+// longer fit at all (see project_darkmoon_color_profile.md's full incident
+// history: every real bug this profile ever caused traced back to that
+// curve's brightness lift amplifying something else downstream). This
+// version is also fit against whatever `libraw.dart`'s CURRENT
+// `no_auto_bright` setting decodes with (today: auto-bright ON, matching
+// darkmoon's normal/Default render) instead of requiring a separate global
+// decode-time flag flip — so this profile only ever changes render-time
+// per-hue color, never a photo's baseline exposure/decode, and applying it
+// (gated to ColorProfileMode.vivid, never Default) can't regress anything
+// outside that scope.
 //
 // Prep in Meridian: varied shots (skin, sky, foliage, vivid colour,
 // shadow, high contrast), Profile = Adobe Color, every slider reset,
@@ -54,56 +65,6 @@ double _lerpTable(List<double> t, double x) {
   return t[a] + (t[b] - t[a]) * (f - a);
 }
 
-/// Weighted Pool-Adjacent-Violators — the correct way to fit a
-/// non-decreasing curve to noisy per-bin data. A naive "clamp to the
-/// previous bin's value" monotonic pass (what this tool used to do) lets
-/// one well-supported, aggressively-lifted bin permanently floor every
-/// later bin, even sparsely-sampled ones with their own (lower, and
-/// legitimate) target — that's what blew out real highlights in the first
-/// fit. PAVA instead *pools* a violating run into a single weighted
-/// average, so a low-weight bin barely moves its neighbours and a
-/// high-weight one dominates only the bins it actually has evidence for.
-List<double> _isotonicRegression(List<double> y, List<double> w) {
-  final vals = <double>[];
-  final wts = <double>[];
-  final sizes = <int>[];
-  for (var i = 0; i < y.length; i++) {
-    var v = y[i];
-    var wt = math.max(w[i], 1e-6);
-    var sz = 1;
-    while (vals.isNotEmpty && vals.last > v) {
-      final pv = vals.removeLast();
-      final pw = wts.removeLast();
-      sz += sizes.removeLast();
-      final nw = pw + wt;
-      v = (pv * pw + v * wt) / nw;
-      wt = nw;
-    }
-    vals.add(v);
-    wts.add(wt);
-    sizes.add(sz);
-  }
-  final out = List<double>.filled(y.length, 0);
-  var idx = 0;
-  for (var k = 0; k < vals.length; k++) {
-    for (var j = 0; j < sizes[k]; j++) {
-      out[idx++] = vals[k];
-    }
-  }
-  return out;
-}
-
-/// Hard safety ceiling/floor on how far the tone curve may move a value
-/// away from identity, as a function of the input — generous in deep
-/// shadows (where a big lift is real and can't "blow out" — there's
-/// nowhere whiter than white to overshoot into that matters visually),
-/// tapering toward near-zero by the upper midtones so a badly-supported
-/// bin can never again push highlights toward blown/washed. Independent
-/// of the fit itself — a backstop, not a replacement for isotonic
-/// regression fixing the root cause.
-double _maxLift(double x) => 0.30 * math.pow(1.0 - x, 2.2);
-double _maxDrop(double x) => 0.12 * math.pow(x, 1.6);
-
 void main(List<String> args) {
   if (args.isEmpty) {
     stderr.writeln(
@@ -142,28 +103,19 @@ void main(List<String> args) {
   }
   stdout.writeln('${pairs.length} pair(s) found.');
 
-  // Tone curve: dm perceptual-luma -> mean lr perceptual-luma, over EVERY
-  // lit pixel (grey included — the curve is the brightness/contrast match).
-  //
-  // Weighted *per pair*, not per pixel: a single very dark/night photo can
-  // have vastly more near-black pixels than the other 14 pairs combined,
-  // which — under flat per-pixel weighting — let that one photo's own
-  // "how much to lift near-black" answer dominate the fit for everyone.
-  // (Root cause of a real overedited/yellow-green result on exactly such
-  // a photo — see project_darkmoon_color_profile.md, 2026-08-31.) Each
-  // pair instead contributes its own per-bin mean once, so 15 pairs means
-  // ~15 equal votes per bin regardless of how many pixels each pair has.
-  const toneBins = 48;
-  final toneSum = List<double>.filled(toneBins, 0);
-  final tonePairCount = List<double>.filled(toneBins, 0);
-  const minPairPixelsPerBin = 30;
-
-  // Per-hue-bin accumulators (saturated pixels only).
-  final wSum = List<double>.filled(colorProfileBins, 0);
+  // Per-hue-bin cross-pair accumulators (saturated pixels only). Each pair
+  // contributes at most ONE vote per bin (its own weighted mean), not one
+  // vote per pixel — same "equal weight per pair" fix already applied to
+  // the old tone-curve fit (project_darkmoon_color_profile.md, 2026-08-31,
+  // "5th round": a single very saturated/dominant photo was otherwise
+  // free to outvote all 13 other pairs combined in whichever bin its own
+  // colours happened to land in).
+  final pairCount = List<double>.filled(colorProfileBins, 0);
   final hueSum = List<double>.filled(colorProfileBins, 0);
   final satSum = List<double>.filled(colorProfileBins, 0);
   final binDmP = List<double>.filled(colorProfileBins, 0);
   final binLrP = List<double>.filled(colorProfileBins, 0);
+  const minPairWeightPerBin = 20.0;
 
   img.Image? firstDm;
   img.Image? firstRef;
@@ -208,8 +160,11 @@ void main(List<String> args) {
     final refBytes = ref.getBytes(order: img.ChannelOrder.rgb);
 
     var used = 0;
-    final pairToneLr = List<double>.filled(toneBins, 0);
-    final pairToneN = List<double>.filled(toneBins, 0);
+    final pairW = List<double>.filled(colorProfileBins, 0);
+    final pairHue = List<double>.filled(colorProfileBins, 0);
+    final pairSat = List<double>.filled(colorProfileBins, 0);
+    final pairDmP = List<double>.filled(colorProfileBins, 0);
+    final pairLrP = List<double>.filled(colorProfileBins, 0);
     for (var i = 0; i + 2 < dm.length && i + 2 < refBytes.length; i += 3) {
       final dr = srgbToLinear(dm[i] / 255.0);
       final dg = srgbToLinear(dm[i + 1] / 255.0);
@@ -222,12 +177,6 @@ void main(List<String> args) {
       final lP = perceptualEncode(math.max(_luma(lr, lg, lb), 1e-6));
       if (dP < 0.02 || dP > 0.99 || lP > 0.995) continue; // black / clipped
 
-      // Tone curve — every lit pixel, accumulated *per pair* first (see
-      // toneSum's doc comment above for why).
-      final tb = (dP * (toneBins - 1)).round().clamp(0, toneBins - 1);
-      pairToneLr[tb] += lP;
-      pairToneN[tb] += 1;
-
       final (dHue, dSat, _) = rgbToHsv(dr, dg, db);
       final (lHue, lSat, _) = rgbToHsv(lr, lg, lb);
       if (dSat < 0.07 || lSat < 0.05) continue; // hue is noise on greys
@@ -236,21 +185,23 @@ void main(List<String> args) {
           (dHue / (360.0 / colorProfileBins)).round() % colorProfileBins;
       final weight = dSat; // more saturated -> more trustworthy
 
-      wSum[bin] += weight;
-      hueSum[bin] +=
-          _shortestAngle(lHue - dHue).clamp(-60.0, 60.0) * weight;
-      satSum[bin] += (lSat / math.max(dSat, 1e-3)).clamp(0.3, 3.0) * weight;
-      binDmP[bin] += dP * weight;
-      binLrP[bin] += lP * weight;
+      pairW[bin] += weight;
+      pairHue[bin] += _shortestAngle(lHue - dHue).clamp(-60.0, 60.0) * weight;
+      pairSat[bin] += (lSat / math.max(dSat, 1e-3)).clamp(0.3, 3.0) * weight;
+      pairDmP[bin] += dP * weight;
+      pairLrP[bin] += lP * weight;
       used++;
     }
-    // Fold this pair's own per-bin mean into the cross-pair accumulator —
-    // one vote per pair per bin, regardless of how many of this pair's own
-    // pixels landed there.
-    for (var t = 0; t < toneBins; t++) {
-      if (pairToneN[t] < minPairPixelsPerBin) continue;
-      toneSum[t] += pairToneLr[t] / pairToneN[t];
-      tonePairCount[t] += 1;
+    // Fold this pair's own per-bin weighted mean into the cross-pair
+    // accumulator — one vote per pair per bin, regardless of how many of
+    // this pair's own pixels landed there (see pairCount's doc comment).
+    for (var b = 0; b < colorProfileBins; b++) {
+      if (pairW[b] < minPairWeightPerBin) continue;
+      hueSum[b] += pairHue[b] / pairW[b];
+      satSum[b] += pairSat[b] / pairW[b];
+      binDmP[b] += pairDmP[b] / pairW[b];
+      binLrP[b] += pairLrP[b] / pairW[b];
+      pairCount[b] += 1;
     }
     stdout.writeln('$used samples');
     firstDm ??= img.Image.fromBytes(
@@ -264,58 +215,35 @@ void main(List<String> args) {
     pairsData.add((name: p.basename(pair.raw), dm: dm, ref: refBytes));
   }
 
-  const damp = 0.9;
+  // 2026-09-01: dropped from 0.9 (light damping) to 0.5 — the first
+  // undamped-tone-curve fit blew out highlights on one pair (_DSF1202,
+  // 330 newly-clipped pixels) and regressed several others; explicit
+  // user request for a more aggressive reduction given that.
+  const damp = 0.5;
 
   // ---- Tone curve ----
-  // Per tone-bin mean lr perceptual-luma (identity where unsupported) and
-  // its pair-count weight — sparse bins get a weak identity prior instead
-  // of pretending to be real data.
-  final toneRaw = <double>[
-    for (var t = 0; t < toneBins; t++)
-      tonePairCount[t] > 0 ? toneSum[t] / tonePairCount[t] : t / (toneBins - 1),
-  ];
-  // Light smoothing to cut per-bin noise, THEN a weighted isotonic
-  // regression (not a naive floor-clamp — see its own doc comment) to
-  // guarantee monotonic without letting one aggressive well-supported bin
-  // permanently drag every later, possibly-sparse bin up with it.
-  var toneS = List<double>.from(toneRaw);
-  for (var pass = 0; pass < 2; pass++) {
-    final next = List<double>.from(toneS);
-    for (var t = 1; t < toneBins - 1; t++) {
-      next[t] = (toneS[t - 1] + 2 * toneS[t] + toneS[t + 1]) / 4.0;
-    }
-    toneS = next;
-  }
-  toneS = _isotonicRegression(toneS, tonePairCount);
-  // Resample to the profile's point count, damped toward identity, then
-  // hard-capped so no bin — however it got there — can blow or crush past
-  // a sane distance from identity.
-  final tone = <double>[
-    for (var k = 0; k < colorProfileTonePoints; k++)
-      () {
-        final x = k / (colorProfileTonePoints - 1);
-        final f = (x * (toneBins - 1)).clamp(0.0, (toneBins - 1).toDouble());
-        final a = f.floor();
-        final bIdx = math.min(a + 1, toneBins - 1);
-        final v = toneS[a] + (toneS[bIdx] - toneS[a]) * (f - a);
-        final damped = x + (v - x) * damp;
-        return damped.clamp(x - _maxDrop(x), x + _maxLift(x)).clamp(0.0, 1.0);
-      }(),
-  ];
+  // Forced identity (2026-09-01) — no longer fit at all. See this file's
+  // header comment for why: every real bug this profile ever caused
+  // traced back to the tone curve's brightness lift amplifying something
+  // downstream. `lumMul` below still corrects per-hue brightness, just
+  // without a global curve doing a first, much bigger pass first.
+  final tone = identityColorProfile.tone;
 
   // ---- Per-hue table ----
-  final minWeight = 200.0;
+  // A bin needs support from at least this many *pairs* (not pixels) —
+  // one or two saturated photos alone can't define a bin's correction.
+  const minPairsPerBin = 3.0;
   final rawHue = List<double>.filled(colorProfileBins, 0);
   final rawSat = List<double>.filled(colorProfileBins, 1);
   final rawLum = List<double>.filled(colorProfileBins, 1);
   for (var b = 0; b < colorProfileBins; b++) {
-    if (wSum[b] < minWeight) continue;
-    rawHue[b] = hueSum[b] / wSum[b];
-    rawSat[b] = satSum[b] / wSum[b];
-    // lumMul is the residual AFTER the tone curve: what the curve predicts
-    // for this bin's typical dm luma vs what Meridian actually has.
-    final dmPmean = binDmP[b] / wSum[b];
-    final lrPmean = binLrP[b] / wSum[b];
+    if (pairCount[b] < minPairsPerBin) continue;
+    rawHue[b] = hueSum[b] / pairCount[b];
+    rawSat[b] = satSum[b] / pairCount[b];
+    // lumMul is the residual: what this bin's typical dm luma predicts
+    // (identity — the tone curve is gone) vs what Meridian actually has.
+    final dmPmean = binDmP[b] / pairCount[b];
+    final lrPmean = binLrP[b] / pairCount[b];
     final predicted = _lerpTable(tone, dmPmean);
     rawLum[b] =
         perceptualDecode(lrPmean) / math.max(perceptualDecode(predicted), 1e-4);

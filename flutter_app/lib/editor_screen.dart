@@ -193,27 +193,27 @@ String _sectionLabel(AppLocalizations l10n, String key) {
 /// `timings` plumbing) once export is settled. See PENDING "Débitos".
 const bool _showExportTimings = false;
 
-/// PAUSED 2026-08-31 (not because of an unresolved bug this time — the
-/// user asked to step back from the color topic for a while). Two real
-/// bugs *were* found and fixed on the way here, both exposed by this
-/// feature's big brightness lift amplifying something previously too
-/// subtle to notice, and both fixes are shipped/kept regardless of this
-/// flag: (1) `_applySaturation`/`_applyVibrance` (render.dart) rotated hue
-/// once gamma-re-encoded, fixed with a direct HSV saturation multiply;
-/// (2) `applyBaselineChromaSmoothing`'s chroma denoise upsampled with
-/// nearest-neighbor (blur.dart), producing an invisible-until-amplified
-/// 4x4 block grid, fixed with bilinear upsampling (CPU + GPU shader).
-/// Live-testing after both fixes showed the *blockiness* was gone, but
-/// flagged a still-open question worth a fresh look before re-enabling:
-/// on at least one photo ("Colorful 5" on a warm/skin-tone-heavy scene)
-/// the result reads as very intensely saturated — possibly just that
-/// preset's own Vibrance+82/Saturation+60 being genuinely this strong
-/// once exposure is finally correct, not necessarily a bug, but not
-/// independently confirmed either way. See
-/// project_darkmoon_color_profile.md's "9th"/"10th" rounds for the full
-/// trail. Keep `no_auto_bright` (libraw.dart) in lockstep with this —
-/// both on together, both off together.
-const bool _colorProfileEnabled = false;
+/// RE-ENABLED 2026-09-01 under a scoped, safer design — see
+/// [ColorProfileMode]/[_effectiveColorProfile]'s docs. Everything below
+/// this line is the OLD (paused 2026-08-31, multiple real-bug incidents —
+/// see project_darkmoon_color_profile.md's full trail) design's history,
+/// kept for context; it does not describe the current one.
+///
+/// The old design paired this flag with `no_auto_bright` (libraw.dart) and
+/// fit a global tone curve, both of which repeatedly amplified unrelated
+/// bugs into visible ones (a Saturation/Vibrance hue-rotation bug, a
+/// chroma-smoothing block artifact, an unresolved "overedited" cast
+/// question) — every incident traced back to that tone curve's brightness
+/// lift making some later stage's small pre-existing flaw large enough to
+/// notice. The current profile (`assets/color_profiles/darkmoon_vivid
+/// .json`, built 2026-09-01) has its tone curve forced to identity (no
+/// longer fit at all — see `tool/build_color_profile.dart`'s header) and
+/// is fit against today's normal decode (`no_auto_bright` stays off,
+/// untouched, forever — this flag no longer needs it toggled in lockstep).
+/// Loading is unconditional now; whether it ever *renders* is gated
+/// per-photo by [ColorProfileMode] instead of this static flag — see
+/// [_effectiveColorProfile]'s doc for why that's the safer boundary.
+const bool _colorProfileEnabled = true;
 
 /// Zoom bounds and step, matching the Python app's MIN_ZOOM/MAX_ZOOM/ZOOM_STEP.
 const double _minZoom = 0.1;
@@ -1347,7 +1347,7 @@ class _EditorScreenState extends State<EditorScreen>
     ColorProfile? profile;
     try {
       final raw = await rootBundle.loadString(
-        'assets/color_profiles/darkmoon_fuji.json',
+        'assets/color_profiles/darkmoon_vivid.json',
       );
       profile = ColorProfile.decode(raw);
     } catch (_) {
