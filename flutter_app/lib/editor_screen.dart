@@ -592,7 +592,7 @@ const _sections = <String, List<_SliderSpec>>{
     // Same default (20) and range (0-60) as the old Settings-only global
     // control this replaced — now every photo/preset carries its own
     // value instead of one value applying to the whole library.
-    _SliderSpec('ColorProfileAmount', 0, 60, 20, decimals: 0),
+    _SliderSpec('ColorProfileAmount', 0, 60, calBaseContrast, decimals: 0),
   ],
   'WHITE BALANCE': [
     _SliderSpec(
