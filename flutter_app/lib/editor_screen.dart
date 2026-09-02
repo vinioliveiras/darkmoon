@@ -8856,7 +8856,15 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                             // below.
                             if (entry.key == 'COLOR PROFILE') ...[
                               Padding(
-                                padding: const EdgeInsets.only(bottom: 12),
+                                // Matches White Balance's mode row below
+                                // (top: 6, bottom: 14) — was missing the
+                                // top gap, reading as noticeably closer to
+                                // the section title than every other
+                                // dropdown/mode row (2026-09-02).
+                                padding: const EdgeInsets.only(
+                                  top: 6,
+                                  bottom: 14,
+                                ),
                                 child: StyledDropdown<ColorProfileMode>(
                                   value: widget.colorProfileMode,
                                   items: [
