@@ -309,7 +309,7 @@ const double calTextureSigma = 3.5;
 ///   ↑ higher = stronger Texture     ↓ lower = weaker
 /// default: 2.7   (user raised to 2.0, then 2.3, then asked for more —
 /// 2026-09-02)
-const double calTextureStrength = 2.7;
+const double calTextureStrength = 3.0;
 
 /// **Clarity** — radius (in pixels) of the local contrast. Deliberately
 /// large (mid-range contrast, more like "definition").
@@ -407,7 +407,7 @@ const double calVibranceSkinDampen = 0.6;
 /// +100 as only a ~1.01x multiplier, effectively disabling the slider
 /// rather than just softening it. Weakened again 2026-09-01. Weakened
 /// further 2026-09-02 (explicit user request).
-const double calSaturationStrength = 0.22;
+const double calSaturationStrength = 0.10;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  COLOR — Color Mixer / HSL (8 bands)                                      ║

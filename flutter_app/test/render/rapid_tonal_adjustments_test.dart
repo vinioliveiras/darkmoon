@@ -152,15 +152,15 @@ void main() {
     );
 
     // (204, 51, 51) — sat=0.75, factor = 1 + 0.5*calSaturationStrength
-    // (0.22, 2026-09-02) at +50%, so the max channel (204, this pixel's
+    // (0.10, 2026-09-02) at +50%, so the max channel (204, this pixel's
     // HSV "value") is exactly preserved; the *min* channel is what
     // saturating moves.
     expect(saturated[0], closeTo(204, 1));
-    expect(saturated[1], closeTo(34, 1));
-    expect(saturated[2], closeTo(34, 1));
+    expect(saturated[1], closeTo(43, 1));
+    expect(saturated[2], closeTo(43, 1));
     expect(desaturated[0], closeTo(204, 1));
-    expect(desaturated[1], closeTo(68, 1));
-    expect(desaturated[2], closeTo(68, 1));
+    expect(desaturated[1], closeTo(59, 1));
+    expect(desaturated[2], closeTo(59, 1));
   });
 
   test('vibrance multiplies HSV saturation, hue and value held fixed', () {
@@ -206,9 +206,9 @@ void main() {
     // (Vibrance's own boost is masked by *current* saturation, so which
     // stage went first is still measurable), just far more subtly, which
     // this narrower expectation locks in. Values reflect
-    // calSaturationStrength=0.22/calVibranceStrength=0.7/
+    // calSaturationStrength=0.10/calVibranceStrength=0.7/
     // calVibranceSkinDampen=0.6 (2026-09-02).
-    expect(result[0], closeTo(98, 1));
+    expect(result[0], closeTo(101, 1));
     expect(result[1], closeTo(140, 1));
     expect(result[2], closeTo(180, 1));
   });
