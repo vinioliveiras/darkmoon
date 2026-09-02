@@ -84,10 +84,20 @@ class SliderRow extends StatefulWidget {
   State<SliderRow> createState() => _SliderRowState();
 }
 
-/// Roughly one frame at 60Hz — propagating faster than the app can
-/// actually redraw at wouldn't be visible anyway, so this is the cheapest
-/// throttle that still feels instant.
-const _dragPropagateThrottle = Duration(milliseconds: 16);
+/// Was 16ms (one frame at 60Hz) — but every propagation triggers a
+/// top-level `setState` that rebuilds the whole editor screen's widget
+/// tree plus schedules a live render, and paying that cost 60x/second
+/// during a drag can itself blow the frame budget enough to stall this
+/// widget's own (otherwise fully local, otherwise-already-smooth)
+/// `_dragValue` redraw — the same class of problem as the section-toggle
+/// switch's animation freezing (2026-09-02, see PENDING.md), just
+/// recurring throughout a drag instead of once. Lowered to ~30Hz: still
+/// comfortably above "feels live" for a photo preview, but roughly halves
+/// how often that expensive rebuild has to compete for a frame. Doesn't
+/// affect the slider's own thumb/value-label motion at all (see
+/// [_scheduleUpdate] — `_dragValue` updates via local `setState`
+/// unthrottled, on every pointer move).
+const _dragPropagateThrottle = Duration(milliseconds: 32);
 
 /// Reference track width (px) the sensitivity formula is tuned against —
 /// not the widget's actual rendered width, just a fixed constant so
