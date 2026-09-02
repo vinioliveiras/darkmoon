@@ -1822,18 +1822,6 @@ abstract class AppLocalizations {
   /// **'Vivid'**
   String get colorProfileModeFlat;
 
-  /// No description provided for @colorProfileModeGoldenHour.
-  ///
-  /// In en, this message translates to:
-  /// **'Golden Hour'**
-  String get colorProfileModeGoldenHour;
-
-  /// No description provided for @colorProfileModeTealOrange.
-  ///
-  /// In en, this message translates to:
-  /// **'Teal & Orange'**
-  String get colorProfileModeTealOrange;
-
   /// No description provided for @colorProfileModePastel.
   ///
   /// In en, this message translates to:

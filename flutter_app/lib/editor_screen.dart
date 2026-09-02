@@ -414,10 +414,13 @@ PhotoCurves _withCurveCategoriesApplied(
 ///   "darkmoon Color" fit (see `project_darkmoon_color_profile.md`)
 ///   builds on — a faithful correction toward how Meridian's Adobe
 ///   Color profile renders the same RAW.
-/// - [goldenHour]/[tealOrange]/[pastel]/[noir] (2026-09-01): hand-
-///   authored creative per-hue grades, not fitted against a reference —
-///   see `tool/author_color_profiles.dart`. Same undamped/Contrast-0
-///   baseline as Vivid; only the per-hue table differs.
+/// - [pastel]/[noir] (2026-09-01): hand-authored creative per-hue grades,
+///   not fitted against a reference — see `tool/author_color_profiles.dart`.
+///   Same undamped/Contrast-0 baseline as Vivid; only the per-hue table
+///   differs. Two sibling grades ("Golden Hour"/"Teal & Orange") shipped
+///   the same day and were removed again 2026-09-02 (explicit user request,
+///   keeping only Default/Vivid/Pastel/Noir) — see [_colorProfileModeOf]
+///   for the index-migration this left behind.
 ///
 /// Picking any mode resets Strength to 100% and Contrast to
 /// [contrastBaseline] (2026-09-01, explicit user request — same
@@ -434,18 +437,6 @@ enum ColorProfileMode {
     dampened: false,
     usesHueProfile: true,
     profileAsset: 'darkmoon_vivid.json',
-  ),
-  goldenHour(
-    contrastBaseline: 0,
-    dampened: false,
-    usesHueProfile: true,
-    profileAsset: 'darkmoon_golden_hour.json',
-  ),
-  tealOrange(
-    contrastBaseline: 0,
-    dampened: false,
-    usesHueProfile: true,
-    profileAsset: 'darkmoon_teal_orange.json',
   ),
   pastel(
     contrastBaseline: 0,
@@ -495,7 +486,19 @@ const _colorProfileModeKey = 'ColorProfileMode';
 /// and UI-facing spot that needs the mode reads through, so there's one
 /// place that knows how the stored double maps back to the enum.
 ColorProfileMode _colorProfileModeOf(Map<String, double> values) {
-  final index = (values[_colorProfileModeKey] ?? 0.0).toInt();
+  final stored = (values[_colorProfileModeKey] ?? 0.0).toInt();
+  // Index migration (2026-09-02): goldenHour(2)/tealOrange(3) were
+  // removed from the enum, shifting pastel/noir down from 4/5 to 2/3.
+  // A pre-2026-09-02 saved photo/preset still carries the OLD index, so
+  // remap it here rather than let it silently render as whatever mode
+  // now happens to sit at that number. goldenHour/tealOrange themselves
+  // have nothing to remap to — they fall back to Default (0).
+  final index = switch (stored) {
+    4 => 2, // old pastel -> new pastel
+    5 => 3, // old noir -> new noir
+    2 || 3 => 0, // old goldenHour/tealOrange (removed) -> Default
+    _ => stored,
+  };
   return ColorProfileMode
       .values[index.clamp(0, ColorProfileMode.values.length - 1)];
 }
@@ -593,10 +596,11 @@ const _sections = <String, List<_SliderSpec>>{
   // respectively) since conceptually both describe "how much of the
   // darkmoon Color profile treatment applies," not a tone adjustment.
   'COLOR PROFILE': [
-    // Same default (20) and range (0-60) as the old Settings-only global
-    // control this replaced — now every photo/preset carries its own
-    // value instead of one value applying to the whole library.
-    _SliderSpec('ColorProfileAmount', 0, 60, calBaseContrast, decimals: 0),
+    // Range raised 0-60 -> 0-100 (2026-09-02, explicit user request — "a
+    // boost"), now that ColorProfileAmount is undamped (see
+    // calGlobalAmountCompressionOverrides) and no longer silently
+    // clipped by the Amount slider's own 30% compression.
+    _SliderSpec('ColorProfileAmount', 0, 100, calBaseContrast, decimals: 0),
   ],
   'WHITE BALANCE': [
     _SliderSpec(
@@ -6193,7 +6197,7 @@ class _EditorScreenState extends State<EditorScreen>
                             presetAmount: _paramValues[_globalEditAmountKey] ?? 100.0,
                             onPresetAmountChanged: _onGlobalEditAmountChanged,
                             onPresetAmountChangeEnd: _onGlobalEditAmountChangeEnd,
-                            colorProfileMode: ColorProfileMode.values[(_paramValues[_colorProfileModeKey] ?? 0).toInt().clamp(0, ColorProfileMode.values.length - 1)],
+                            colorProfileMode: _colorProfileModeOf(_paramValues),
                             onColorProfileModeChanged: _applyColorProfileMode,
                             onWhiteBalanceMode: _applyWbMode,
                             wbEyedropperActive: _wbEyedropperActive,
@@ -8452,8 +8456,6 @@ class _ControlsPanelState extends State<_ControlsPanel> {
       switch (mode) {
         ColorProfileMode.darkmoonDefault => l10n.colorProfileModeDefault,
         ColorProfileMode.vivid => l10n.colorProfileModeFlat,
-        ColorProfileMode.goldenHour => l10n.colorProfileModeGoldenHour,
-        ColorProfileMode.tealOrange => l10n.colorProfileModeTealOrange,
         ColorProfileMode.pastel => l10n.colorProfileModePastel,
         ColorProfileMode.noir => l10n.colorProfileModeNoir,
       };

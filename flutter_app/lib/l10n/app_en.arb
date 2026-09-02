@@ -361,8 +361,6 @@
   "sliderColorProfileAmount": "Color Profile Contrast",
   "colorProfileModeDefault": "Default",
   "colorProfileModeFlat": "Vivid",
-  "colorProfileModeGoldenHour": "Golden Hour",
-  "colorProfileModeTealOrange": "Teal & Orange",
   "colorProfileModePastel": "Pastel",
   "colorProfileModeNoir": "Noir",
   "sliderTexture": "Texture",

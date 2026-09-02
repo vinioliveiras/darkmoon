@@ -87,61 +87,13 @@ void main() {
   // Hue landmarks (matches color_mixer.dart's own band centres): red 358,
   // orange 25, yellow 60, green 115, aqua 180, blue 225, purple 280,
   // magenta 330.
-  const red = 358.0, orange = 25.0, yellow = 60.0;
-  const green = 115.0, aqua = 180.0, blue = 225.0, magenta = 330.0;
+  const red = 358.0, orange = 25.0;
+  const aqua = 180.0, blue = 225.0, magenta = 330.0;
 
-  // ---- Golden Hour: warm glow EVERYWHERE, blues pulled well back ----
-  // Amplitudes re-tuned twice (2026-09-01): the first pass was too strong
-  // ("everything drenched in yellow"), the second too gentle to read as
-  // distinct from Teal & Orange on a warm-dominant photo. This pass keeps
-  // Golden Hour a pure warm push (no cool-zone split like Teal & Orange
-  // gets) but commits to it — a real "late-day glow," not a hint of one.
-  final goldenHour = _build(
-    'Golden Hour',
-    hue: [
-      (yellow, 25, -8), // yellow leans toward orange
-      (blue, 40, 6), // blue nudged toward violet -- cooler-reading
-    ],
-    sat: [
-      (orange, 28, 0.22),
-      (yellow, 22, 0.13),
-      (red, 25, 0.06), // gentle -- keep skin tones believable
-      (blue, 35, -0.15),
-      (aqua, 30, -0.10),
-    ],
-    lum: [
-      (orange, 28, 0.07),
-      (yellow, 22, 0.04),
-      (blue, 35, -0.05),
-    ],
-  );
-
-  // ---- Teal & Orange: a real two-tone SPLIT, not just "warm" ----
-  // The point of this profile (vs. Golden Hour) is contrast BETWEEN warm
-  // and cool zones, so the cool side needs to read as clearly as the
-  // warm one — pushed noticeably harder than the first two passes, with
-  // yellow/green pulled toward neutral so the split doesn't muddy.
-  final tealOrange = _build(
-    'Teal & Orange',
-    hue: [
-      (aqua, 35, -22), // aqua/cyan pulled hard toward teal
-      (blue, 35, -13),
-      (yellow, 20, -7), // tuck yellow toward orange, cleans the split
-    ],
-    sat: [
-      (orange, 28, 0.22),
-      (red, 25, 0.08),
-      (aqua, 38, 0.26),
-      (blue, 32, 0.17),
-      (yellow, 20, -0.16),
-      (green, 32, -0.14),
-    ],
-    lum: [
-      (orange, 28, 0.04),
-      (aqua, 38, -0.05),
-      (blue, 32, -0.07),
-    ],
-  );
+  // "Golden Hour"/"Teal & Orange" (2026-09-01) were removed again
+  // 2026-09-02, explicit user request — keeping only Default/Vivid/
+  // Pastel/Noir. See git history for their _build(...) calls if
+  // reviving either.
 
   // ---- Pastel: bright and airy -- the light, soft opposite of Noir ----
   // Uniform (satFlat/lumFlat), not per-hue bumps -- "pastel" is a global
@@ -186,7 +138,7 @@ void main() {
   );
 
   final outDir = Directory('assets/color_profiles');
-  for (final profile in [goldenHour, tealOrange, pastel, noir]) {
+  for (final profile in [pastel, noir]) {
     final fileName =
         'darkmoon_${profile.name.toLowerCase().replaceAll(RegExp(r'[^a-z]+'), '_')}.json';
     final path = '${outDir.path}/$fileName';

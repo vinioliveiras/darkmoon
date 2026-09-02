@@ -942,12 +942,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get colorProfileModeFlat => 'Vivid';
 
   @override
-  String get colorProfileModeGoldenHour => 'Golden Hour';
-
-  @override
-  String get colorProfileModeTealOrange => 'Teal & Orange';
-
-  @override
   String get colorProfileModePastel => 'Pastel';
 
   @override
