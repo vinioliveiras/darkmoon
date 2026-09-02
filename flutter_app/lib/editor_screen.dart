@@ -865,6 +865,26 @@ class _EditorScreenState extends State<EditorScreen>
       ? 0.0
       : _effectiveParamValues()['ColorProfileAmount'] ?? calBaseContrast;
 
+  /// The per-hue correction's actual blend strength — the "Color Profile
+  /// Strength" slider (0-200%, [_globalEditAmountKey], labeled "Strength"
+  /// in the COLOR PROFILE section) scaled to the 0..1 fraction
+  /// [RenderParams.colorProfileStrength] expects. `applyColorProfile`
+  /// itself clamps to [0,1], so 100-200% both mean "full strength" — same
+  /// ceiling behavior every other slider already has once its own blend
+  /// hits 1:1.
+  ///
+  /// Real bug fixed 2026-09-02: `RenderParams.fromValues`'s own
+  /// `colorProfileStrength` parameter defaults to 1.0 and was never once
+  /// passed at either of this file's two real render call sites — the
+  /// slider visibly moved but the per-hue correction always rendered at
+  /// full authored strength regardless, since nothing read the slider's
+  /// value for it. `_withGlobalEditAmountApplied` reads the same
+  /// [_globalEditAmountKey] but only ever touches `_paramValues`'
+  /// continuous sliders — the loaded [ColorProfile] tables live in
+  /// [_colorProfiles], a separate structure it never reaches.
+  double get _effectiveColorProfileStrength =>
+      ((_paramValues[_globalEditAmountKey] ?? 100.0) / 100.0).clamp(0.0, 1.0);
+
   /// Unedited render of whichever photos have had Before/After turned on,
   /// computed lazily (only when first needed) since most photos are never
   /// compared this way.
@@ -3451,6 +3471,7 @@ class _EditorScreenState extends State<EditorScreen>
         asShotTint: metadata?.asShotTint ?? wbDefaultTint,
         baseContrast: _effectiveBaseContrast,
         colorProfile: _effectiveColorProfile,
+        colorProfileStrength: _effectiveColorProfileStrength,
       ),
       masks: _effectiveMasks,
       cropTransform: cropTransform,
@@ -5748,6 +5769,7 @@ class _EditorScreenState extends State<EditorScreen>
           asShotTint: metadata?.asShotTint ?? wbDefaultTint,
           baseContrast: _effectiveBaseContrast,
           colorProfile: _effectiveColorProfile,
+          colorProfileStrength: _effectiveColorProfileStrength,
         ),
         masks: _effectiveMasks,
         format: options.format,
