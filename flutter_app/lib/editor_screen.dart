@@ -327,9 +327,15 @@ Map<String, double> _withCategoriesApplied(
       for (final spec in entry.value) {
         // A disabled White Balance section means "no WB shift" — that's
         // the per-photo as-shot value, not the fixed 5500/0 default.
+        // A disabled COLOR PROFILE section means fully raw/off (0), not
+        // its own default (calBaseContrast, a real non-zero S-curve) —
+        // real bug fixed 2026-09-02: without this, toggling the section
+        // off still applied a real amount of contrast, just whatever the
+        // slider happens to default to.
         overrides[spec.name] = switch (spec.name) {
           'Temperature' => asShotKelvin,
           'Tint' => asShotTint,
+          'ColorProfileAmount' => 0.0,
           _ => spec.defaultValue,
         };
       }
@@ -857,6 +863,15 @@ class _EditorScreenState extends State<EditorScreen>
   /// *except* Default and leave its render output alone. Every render
   /// call site should read this, not [_colorProfiles] directly.
   ColorProfile? get _effectiveColorProfile {
+    // Real bug fixed 2026-09-02: this never checked the COLOR PROFILE
+    // section's own enable toggle at all — turning it off reset
+    // ColorProfileAmount (see _withCategoriesApplied) but left the
+    // per-hue table (Vivid/Pastel/Noir's hueShift/satMul/lumMul) applying
+    // at full strength regardless, so "off" never actually meant "100%
+    // raw" the way every other section's toggle does.
+    if ((_paramValues[_categoryEnabledKey('COLOR PROFILE')] ?? 1.0) == 0) {
+      return null;
+    }
     final mode = _colorProfileModeOf(_paramValues);
     return mode.usesHueProfile ? _colorProfiles[mode] : null;
   }
@@ -1350,6 +1365,7 @@ class _EditorScreenState extends State<EditorScreen>
     unawaited(_loadSettings());
     unawaited(_loadThumbnailCache());
     unawaited(_loadLensProfiles());
+    unawaited(cleanupStalePreviewCacheVersions());
     if (_colorProfileEnabled) {
       unawaited(_loadColorProfile());
     }
