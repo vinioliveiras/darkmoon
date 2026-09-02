@@ -24,6 +24,16 @@
 // as an unrolled sum of fixed-index reads instead of two dynamic ones.
 
 uniform vec2 uSize;
+// The fixed "profile" contrast S-curve (calBaseContrast) — same math as
+// point_ops_post_denoise.frag's uBaseContrastGamma, moved here 2026-09-02
+// to fix a real GPU/CPU order divergence: render.dart's
+// applyColorProfileStage runs _applyBaseContrast (this) immediately
+// before applyColorProfile (the per-hue correction below), both BEFORE
+// Dehaze — but the GPU pipeline used to apply the equivalent gamma
+// inside the big post-Dehaze point-ops shader instead, i.e. after
+// Dehaze. At calBaseContrast's original small values this barely
+// showed; at its current 80 the divergence is real. 1.0 = no-op.
+uniform float uBaseContrastGamma;
 uniform float uStrength; // colorProfileStrength, 0..1
 uniform float uHueShift[24];
 uniform float uSatMul[24];
@@ -91,9 +101,29 @@ float binWeight(float hue, int bin) {
   return max(0.0, 1.0 - dist / BIN_WIDTH);
 }
 
+// Endpoint-preserving S-curve (0->0, 1->1 always) — mirrors
+// point_ops_post_denoise.frag's own contrastCurve exactly (kept as a
+// separate copy rather than a shared include, matching how every other
+// pass in this pipeline already duplicates its own small helpers).
+// gamma==1.0 reduces to the identity algebraically.
+float contrastCurve(float t, float gamma) {
+  float x = clamp(t, 0.0, 1.0);
+  if (x < 0.5) {
+    return 0.5 * pow(2.0 * x, gamma);
+  }
+  return 1.0 - 0.5 * pow(2.0 * (1.0 - x), gamma);
+}
+
 void main() {
   vec2 uv = FlutterFragCoord().xy / uSize;
   vec3 c = texture(uTexture, uv).rgb;
+
+  // Base "profile" contrast — same slot render.dart's applyColorProfileStage
+  // runs it in (right before the per-hue correction below, both before
+  // Dehaze). See uBaseContrastGamma's doc comment for why this moved here.
+  c.r = linearToSrgb(pow(contrastCurve(pow(srgbToLinear(c.r), 1.0 / 2.2), uBaseContrastGamma), 2.2));
+  c.g = linearToSrgb(pow(contrastCurve(pow(srgbToLinear(c.g), 1.0 / 2.2), uBaseContrastGamma), 2.2));
+  c.b = linearToSrgb(pow(contrastCurve(pow(srgbToLinear(c.b), 1.0 / 2.2), uBaseContrastGamma), 2.2));
 
   vec3 lin = vec3(srgbToLinear(c.r), srgbToLinear(c.g), srgbToLinear(c.b));
   if (abs(lin.r - lin.g) >= 0.001 || abs(lin.g - lin.b) >= 0.001) {

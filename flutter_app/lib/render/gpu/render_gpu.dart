@@ -119,20 +119,25 @@ Future<ui.Image> renderImageGpu(
     protectMidtones: true,
   );
 
-  // Per-hue "darkmoon Color" correction — same spot render.dart's
-  // applyColorProfileStage runs it, before Dehaze (see that function's doc
-  // comment for why: Dehaze estimates its own haze color from whatever
-  // buffer it's given, so any per-hue shift needs to happen first).
-  final profile = params.colorProfile;
-  final afterColorProfile = profile == null
-      ? afterClarity
-      : await runColorProfileGpu(
-          afterClarity,
-          width,
-          height,
-          profile,
-          params.colorProfileStrength,
-        );
+  // "darkmoon Color" profile stage — the fixed base-contrast S-curve
+  // then the per-hue correction, same spot render.dart's
+  // applyColorProfileStage runs both in, before Dehaze (see that
+  // function's doc comment for why: Dehaze estimates its own haze color
+  // from whatever buffer it's given, so any contrast/hue shift needs to
+  // happen first). baseContrastGamma moved here 2026-09-02 — it used to
+  // be computed and applied inside _runPostDenoise, i.e. *after* Dehaze,
+  // a real GPU/CPU order divergence at odds with the comment above.
+  final baseContrastGamma = params.baseContrast == 0
+      ? 1.0
+      : math.pow(2.0, params.baseContrast / 100.0 * calContrastStrength).toDouble();
+  final afterColorProfile = await runColorProfileGpu(
+    afterClarity,
+    width,
+    height,
+    params.colorProfile,
+    params.colorProfileStrength,
+    baseContrastGamma,
+  );
   final afterDehaze = await runDehazeGpu(
     afterColorProfile,
     width,
@@ -230,11 +235,6 @@ Future<ui.Image> _runPostDenoise(
   final contrastGamma = params.contrast == 0
       ? 1.0
       : math.pow(2.0, params.contrast / 100.0 * calContrastStrength).toDouble();
-  // The fixed "profile" contrast curve (render.dart's _applyBaseContrast /
-  // calBaseContrast) — same S as the Contrast slider. 1.0 = no-op.
-  final baseContrastGamma = params.baseContrast == 0
-      ? 1.0
-      : math.pow(2.0, params.baseContrast / 100.0 * calContrastStrength).toDouble();
   final shadowsAdd = params.shadows / 100.0;
   final highlightsAdd = params.highlights / 100.0;
   final whitesAdd = params.whites / 100.0;
@@ -269,7 +269,6 @@ Future<ui.Image> _runPostDenoise(
   shader.setFloat(i++, height.toDouble());
   shader.setFloat(i++, params.brightness / 20.0);
   shader.setFloat(i++, contrastGamma);
-  shader.setFloat(i++, baseContrastGamma);
   shader.setFloat(i++, shadowsAdd);
   shader.setFloat(i++, highlightsAdd);
   shader.setFloat(i++, whitesAdd);
