@@ -8329,6 +8329,34 @@ class _ControlsPanelState extends State<_ControlsPanel> {
   /// (e.g. Effects), reading as "nothing happened" when Crop was tapped.
   final _scrollController = ScrollController();
 
+  /// A category switch flips (and its own slide animation starts) the
+  /// instant it's tapped — [onChanged] fires synchronously, same as any
+  /// slider drag. What's deferred is [onChangeEnd]: the expensive settled
+  /// render it triggers runs its GPU shader chain on the main isolate
+  /// (see `render_gpu.dart`'s doc comment) and can stall the frame pump
+  /// long enough to freeze the switch's own animation mid-slide if it
+  /// starts immediately — a slider's thumb has no such animation to
+  /// interrupt after release, which is why this was only ever visible on
+  /// toggles (2026-09-02). Giving the animation a head start (skipped
+  /// entirely when the user has animations off, via [AnimationsConfig])
+  /// doesn't make the render itself any faster — it only changes *when*
+  /// the resulting stall lands, not whether it happens.
+  void _toggleCategoryEnabled(String key, bool value) {
+    widget.onChanged(key, value ? 1 : 0);
+    final delay = AnimationsConfig.duration(
+      context,
+      const Duration(milliseconds: 200),
+    );
+    if (delay == Duration.zero) {
+      widget.onChangeEnd(key, value ? 1 : 0);
+      return;
+    }
+    Future.delayed(delay, () {
+      if (!mounted) return;
+      widget.onChangeEnd(key, value ? 1 : 0);
+    });
+  }
+
   @override
   void didUpdateWidget(_ControlsPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
@@ -8816,11 +8844,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                           enabled:
                               (values[_categoryEnabledKey(entry.key)] ?? 1) !=
                               0,
-                          onEnabledChanged: (v) {
-                            final key = _categoryEnabledKey(entry.key);
-                            onChanged(key, v ? 1 : 0);
-                            onChangeEnd(key, v ? 1 : 0);
-                          },
+                          onEnabledChanged: (v) => _toggleCategoryEnabled(
+                            _categoryEnabledKey(entry.key),
+                            v,
+                          ),
                           children: [
                             // Amount isn't a plain _paramValues slider (see
                             // _globalEditAmountKey's doc), so it's injected
@@ -8912,11 +8939,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 (values[_categoryEnabledKey('TONE CURVE')] ??
                                     1) !=
                                 0,
-                            onEnabledChanged: (v) {
-                              final key = _categoryEnabledKey('TONE CURVE');
-                              onChanged(key, v ? 1 : 0);
-                              onChangeEnd(key, v ? 1 : 0);
-                            },
+                            onEnabledChanged: (v) => _toggleCategoryEnabled(
+                              _categoryEnabledKey('TONE CURVE'),
+                              v,
+                            ),
                             children: [
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
@@ -8961,11 +8987,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 (values[_categoryEnabledKey('COLOR CURVE')] ??
                                     1) !=
                                 0,
-                            onEnabledChanged: (v) {
-                              final key = _categoryEnabledKey('COLOR CURVE');
-                              onChanged(key, v ? 1 : 0);
-                              onChangeEnd(key, v ? 1 : 0);
-                            },
+                            onEnabledChanged: (v) => _toggleCategoryEnabled(
+                              _categoryEnabledKey('COLOR CURVE'),
+                              v,
+                            ),
                             children: [
                               Padding(
                                 padding: const EdgeInsets.only(
@@ -9008,11 +9033,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 (values[_categoryEnabledKey('COLOR MIXER')] ??
                                     1) !=
                                 0,
-                            onEnabledChanged: (v) {
-                              final key = _categoryEnabledKey('COLOR MIXER');
-                              onChanged(key, v ? 1 : 0);
-                              onChangeEnd(key, v ? 1 : 0);
-                            },
+                            onEnabledChanged: (v) => _toggleCategoryEnabled(
+                              _categoryEnabledKey('COLOR MIXER'),
+                              v,
+                            ),
                             children: [
                               Padding(
                                 padding: const EdgeInsets.only(
@@ -9144,11 +9168,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 (values[_categoryEnabledKey('COLOR GRADING')] ??
                                     1) !=
                                 0,
-                            onEnabledChanged: (v) {
-                              final key = _categoryEnabledKey('COLOR GRADING');
-                              onChanged(key, v ? 1 : 0);
-                              onChangeEnd(key, v ? 1 : 0);
-                            },
+                            onEnabledChanged: (v) => _toggleCategoryEnabled(
+                              _categoryEnabledKey('COLOR GRADING'),
+                              v,
+                            ),
                             children: [
                               Padding(
                                 padding: const EdgeInsets.only(
@@ -9271,11 +9294,10 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                             enabled:
                                 (values[_categoryEnabledKey('EFFECTS')] ?? 1) !=
                                 0,
-                            onEnabledChanged: (v) {
-                              final key = _categoryEnabledKey('EFFECTS');
-                              onChanged(key, v ? 1 : 0);
-                              onChangeEnd(key, v ? 1 : 0);
-                            },
+                            onEnabledChanged: (v) => _toggleCategoryEnabled(
+                              _categoryEnabledKey('EFFECTS'),
+                              v,
+                            ),
                             children: [
                               for (final spec in [
                                 ..._vignetteSliders,
