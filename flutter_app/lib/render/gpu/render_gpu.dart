@@ -274,6 +274,9 @@ Future<ui.Image> _runPostDenoise(
   shader.setFloat(i++, highlightsAdd);
   shader.setFloat(i++, whitesAdd);
   shader.setFloat(i++, blacksAdd);
+  shader.setFloat(i++, calHighlightsStrength);
+  shader.setFloat(i++, calShadowsAmountScale);
+  shader.setFloat(i++, calBlacksAmountScale);
   shader.setFloat(i++, calMixerHueStrength);
   shader.setFloat(i++, calMixerBandSharpness);
   shader.setFloat(i++, calMixerSaturationStrength);
@@ -362,7 +365,9 @@ Future<ui.Image> _runPostDehaze(
   shader.setFloat(i++, width.toDouble());
   shader.setFloat(i++, height.toDouble());
   shader.setFloat(i++, params.vibrance / 100.0);
-  shader.setFloat(i++, 1.0 + params.saturation / 100.0);
+  shader.setFloat(i++, 1.0 + params.saturation / 100.0 * calSaturationStrength);
+  shader.setFloat(i++, calVibranceStrength);
+  shader.setFloat(i++, calVibranceSkinDampen);
   shader.setFloat(i++, vignetteStrength);
   shader.setFloat(i++, vignetteStart);
   shader.setFloat(i++, vignetteFeatherWidth);

@@ -12,6 +12,15 @@
 
 uniform vec2 uSize;
 uniform float uStrength; // amount/100 (dehaze.dart's `strength`)
+// calDehazeTransmissionCoeff/Floor/SatBoost/AddMix (lib/render/
+// calibration.dart) — real bug fixed 2026-09-02: these used to be
+// hardcoded literals here, last synced 2026-08-28 and never updated
+// through several rounds of CPU-side Dehaze weakening on 2026-09-01 —
+// GPU Dehaze ran 2-3x stronger than CPU at the same slider value.
+uniform float uTransmissionCoeff;
+uniform float uTransmissionFloor;
+uniform float uSatBoost;
+uniform float uAddMix;
 uniform sampler2D uSource;
 uniform sampler2D uBlurred;
 
@@ -61,18 +70,17 @@ void main() {
     float spatialDark = mix(regionalDark, pixelDark, haloProtection);
     float safeDark = max(spatialDark - 0.02, 0.0);
     float mappedHaze = safeDark / (safeDark + 0.2);
-    // Meridian-feel calibration (item 7) — these literals must match
-    // lib/render/calibration.dart's calDehazeTransmissionCoeff / Floor /
-    // SatBoost / AddMix. CPU reads that file; this GPU shader has them
-    // inline — tune both if you use the GPU path.
-    float t = max(1.0 - uStrength * mappedHaze * 0.55, 0.22);
+    float t = max(
+      1.0 - uStrength * mappedHaze * uTransmissionCoeff,
+      uTransmissionFloor
+    );
 
     vec3 recovered = (color - kAtmosphericLight) / t + kAtmosphericLight;
     float recLuma = dot(max(recovered, vec3(0.0)), kLumaWeights);
     float shadowLift = smoothstepCustom(0.1, 0.0, recLuma) * (1.0 - t) * 0.15;
     recovered += shadowLift;
 
-    float satBoost = (1.0 - t) * 0.32;
+    float satBoost = (1.0 - t) * uSatBoost;
     float finalLuma = dot(max(recovered, vec3(0.0)), kLumaWeights);
     recovered = mix(vec3(finalLuma), recovered, 1.0 + satBoost);
     result = max(recovered, vec3(0.0));
@@ -82,7 +90,7 @@ void main() {
     float mappedDepth = safeDark / (safeDark + 0.2);
     float depthFactor = mix(0.4, 1.0, mappedDepth);
     float hazeAmount = -uStrength;
-    result = mix(color, kAtmosphericLight, hazeAmount * 0.55 * depthFactor);
+    result = mix(color, kAtmosphericLight, hazeAmount * uAddMix * depthFactor);
   }
 
   fragColor = vec4(linearToSrgb3(result), 1.0);

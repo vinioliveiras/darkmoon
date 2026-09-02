@@ -187,14 +187,14 @@ const double calWbAsShotTintScaleFallback = 200.0;
 // This is the FACTORY value. The user can override it live in
 // Settings → "darkmoon Color Profile" (saved in AppSettings), no rebuild
 // needed. Both CPU and GPU apply the curve.
-/// default: 30.0   (0.0 = off; 2026-08-29: originally 20.0; briefly
+/// default: 80.0   (0.0 = off; 2026-08-29: originally 20.0; briefly
 /// lowered to 15.0 on 2026-09-02 — photos opened a bit brighter than the
-/// same RAW in Meridian — then raised past both, to 30.0, same day,
-/// explicit user request. Deliberately not touching `no_auto_bright`
-/// (libraw.dart) for this — that's the decode-time exposure baseline,
-/// and re-opening it risks the whole incident history in
-/// project_darkmoon_color_profile.md; this S-curve is the safer, purely
-/// render-time lever.)
+/// same RAW in Meridian — then raised past both, to 30.0, then to 80.0,
+/// same day, explicit user request each time. Deliberately not touching
+/// `no_auto_bright` (libraw.dart) for this — that's the decode-time
+/// exposure baseline, and re-opening it risks the whole incident history
+/// in project_darkmoon_color_profile.md; this S-curve is the safer,
+/// purely render-time lever.)
 const double calBaseContrast = 80.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
@@ -307,8 +307,8 @@ const double calTextureSigma = 3.5;
 
 /// **Texture** — strength multiplier on top of the slider.
 ///   ↑ higher = stronger Texture     ↓ lower = weaker
-/// default: 2.7   (user raised to 2.0, then 2.3, then asked for more —
-/// 2026-09-02)
+/// default: 3.0   (user raised to 2.0, then 2.3, then 2.7, then asked
+/// for more — 2026-09-02)
 const double calTextureStrength = 3.0;
 
 /// **Clarity** — radius (in pixels) of the local contrast. Deliberately
@@ -327,7 +327,7 @@ const double calClarityStrength = 0.65;
 /// removes haze). This is the main control over Dehaze strength.
 ///   ↑ higher (e.g. 0.85) = very aggressive Dehaze (original Solstice)
 ///   ↓ lower (e.g. 0.45) = quite gentle Dehaze
-/// default: 0.55   [also on GPU: dehaze_apply.frag]
+/// default: 0.22   (original Solstice: 0.55)   [also on GPU: dehaze_apply.frag]
 /// 2026-09-01: user set this to 0.1 (5.5x weaker) wanting a gentler Dehaze —
 /// landed at a real but more moderate weakening instead (~1.6x), since the
 /// transmission-floor bug below meant 0.1 was never actually tested against
@@ -338,7 +338,7 @@ const double calDehazeTransmissionCoeff = 0.22;
 /// in the hazier spots. Higher = safer/gentler.
 ///   ↑ higher = caps the maximum effect (gentler)
 ///   ↓ lower  = lets Dehaze go further (can blow out)
-/// default: 0.22   (original Solstice: 0.15)   [also on GPU: dehaze_apply.frag]
+/// default: 0.55   (original Solstice: 0.15)   [also on GPU: dehaze_apply.frag]
 /// 2026-09-01: user set this to 1.0, which is a real bug, not just
 /// "gentler" — `t = max(1.0 - strength*mappedHaze*coeff, floor)` and the
 /// first term is always ≤ 1.0, so a floor of 1.0 clamps `t` to exactly 1.0
@@ -356,7 +356,7 @@ const double calDehazeTransmissionFloor = 0.55;
 /// removed.
 ///   ↑ higher = Dehaze leaves color more "punchy"
 ///   ↓ lower  = Dehaze barely touches saturation
-/// default: 0.32   (original Solstice: 0.5)   [also on GPU: dehaze_apply.frag]
+/// default: 0.14   (original Solstice: 0.5)   [also on GPU: dehaze_apply.frag]
 /// 2026-09-01: weakened from 0.32, moderately (not all the way to the
 /// user's 0.1) — same "floor bug meant this was never really tested"
 /// reasoning as the coefficient above. Weakened again 2026-09-01.
@@ -366,7 +366,7 @@ const double calDehazeSatBoost = 0.14;
 /// the image with atmospheric light, making it look "milky").
 ///   ↑ higher = stronger negative Dehaze
 ///   ↓ lower  = subtler
-/// default: 0.55   (original Solstice: 0.7)   [also on GPU: dehaze_apply.frag]
+/// default: 0.18   (original Solstice: 0.7)   [also on GPU: dehaze_apply.frag]
 /// 2026-09-01: the doc's "0.55" was already stale — the real prior
 /// committed value was 0.30, not 0.55. Weakened moderately from *that*
 /// (not from the stale comment) — user's 0.2 was a real ~33% cut, this
@@ -382,7 +382,7 @@ const double calDehazeAddMix = 0.18;
 /// before that protection kicks in.
 ///   ↑ higher = Vibrance +100 is much more intense
 ///   ↓ lower  = more restrained
-/// default: 1.5
+/// default: 0.7   (original: 1.5)
 /// 2026-09-01: user set this to 0.1 (15x weaker than the 1.5 default,
 /// ~30x weaker than the original 3.0) wanting less blow-out — landed on a
 /// more moderate weakening (~2x from 1.5) instead, since 0.1 makes
@@ -395,13 +395,14 @@ const double calVibranceStrength = 0.7;
 /// don't turn orange). 1.0 = holds back nothing; 0.0 = zeroes out on skin.
 ///   ↑ higher (near 1) = skin saturates right along with everything else
 ///   ↓ lower (near 0) = skin stays well protected
-/// default: 0.2
+/// default: 0.6   (2026-09-02: user's own direct edit, confirmed keep —
+/// raised from 0.2, i.e. skin now holds back less than it briefly did)
 const double calVibranceSkinDampen = 0.6;
 
 /// **Saturation** — multiplier on top of the slider (the effect is
 /// 1 + sliderValue/100 * this number).
 ///   ↑ higher = stronger Saturation     ↓ lower = weaker
-/// default: 1.0
+/// default: 0.10   (original: 1.0)
 /// 2026-09-01: user set this to 0.1 (10x weaker) wanting less blow-out —
 /// landed on a moderate 2x weakening instead, since 0.1 leaves Saturation
 /// +100 as only a ~1.01x multiplier, effectively disabling the slider

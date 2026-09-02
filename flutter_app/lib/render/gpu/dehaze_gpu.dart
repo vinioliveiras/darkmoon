@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 
+import '../calibration.dart';
 import 'gpu_pass.dart';
 
 /// GPU port of `dehaze.dart`'s `applyDehaze` — see that function's own doc
@@ -25,7 +26,15 @@ Future<ui.Image> runDehazeGpu(
 
   return GpuPass.run(
     'shaders/dehaze_apply.frag',
-    floats: [width.toDouble(), height.toDouble(), strength],
+    floats: [
+      width.toDouble(),
+      height.toDouble(),
+      strength,
+      calDehazeTransmissionCoeff,
+      calDehazeTransmissionFloor,
+      calDehazeSatBoost,
+      calDehazeAddMix,
+    ],
     samplers: [source, blurred],
     outputWidth: width,
     outputHeight: height,

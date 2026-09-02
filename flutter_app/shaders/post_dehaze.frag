@@ -18,7 +18,14 @@
 
 uniform vec2 uSize;
 uniform float uVibranceAmount; // params.vibrance / 100.0
-uniform float uSaturationFactor; // 1.0 + params.saturation / 100.0
+uniform float uSaturationFactor; // 1.0 + params.saturation/100 * calSaturationStrength
+// calVibranceStrength/calVibranceSkinDampen (lib/render/calibration.dart) —
+// real bug fixed 2026-09-02: this shader used to hardcode 3.0/0.6 (the
+// pre-calibration Solstice-port values), never updated across the several
+// rounds of CPU-side Vibrance/skin-dampen tuning — GPU Vibrance rendered
+// up to ~4x stronger than CPU at the same slider value.
+uniform float uVibranceStrength;
+uniform float uVibranceSkinDampen;
 uniform float uVignetteStrength; // params.vignette.amount/100 * 0.8
 uniform float uVignetteStart; // clamp(midpoint/100, 0, 1)
 uniform float uVignetteFeatherWidth; // clamp(feather/100, 0.02, 1)
@@ -165,12 +172,12 @@ void main() {
       float hue = hueOf(c);
       float hueDistance = min(abs(hue - 25.0), 360.0 - abs(hue - 25.0));
       float isSkin = smoothstep(35.0, 10.0, hueDistance);
-      float skinDampener = mix(1.0, 0.6, isSkin);
+      float skinDampener = mix(1.0, uVibranceSkinDampen, isSkin);
       float vibranceFactor;
       if (uVibranceAmount >= 0.0) {
         vibranceFactor = 1.0 + uVibranceAmount *
             (1.0 - smoothstep(0.4, 0.9, sat)) *
-            skinDampener * 3.0;
+            skinDampener * uVibranceStrength;
       } else {
         vibranceFactor = 1.0 + uVibranceAmount *
             (1.0 - smoothstep(0.2, 0.8, sat));

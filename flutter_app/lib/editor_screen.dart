@@ -428,9 +428,13 @@ PhotoCurves _withCurveCategoriesApplied(
 ///   Default/Vivid/Pastel/Noir) — see [_colorProfileModeOf] for the
 ///   index-migration this left behind.
 ///
-/// [vivid]/[pastel]/[noir] all default Contrast to 80 (2026-09-02,
-/// explicit user request, raised from 0) — [darkmoonDefault] keeps its
-/// own separate [calBaseContrast]-derived baseline.
+/// [vivid]/[pastel]/[noir] all default Contrast to [calBaseContrast]
+/// (2026-09-02, explicit user request, raised from a literal 0) — the
+/// same constant [darkmoonDefault] already used, not a separately
+/// hardcoded number, so the two families of profiles can't drift apart
+/// the next time [calBaseContrast] itself gets re-tuned (real, if
+/// currently harmless, gap found 2026-09-02: they were a hardcoded `80`
+/// literal that only coincidentally matched).
 ///
 /// Picking any mode resets Strength to 100% and Contrast to
 /// [contrastBaseline] (2026-09-01, explicit user request — same
@@ -443,19 +447,19 @@ enum ColorProfileMode {
     profileAsset: null,
   ),
   vivid(
-    contrastBaseline: 80,
+    contrastBaseline: calBaseContrast,
     dampened: false,
     usesHueProfile: true,
     profileAsset: 'darkmoon_vivid.json',
   ),
   pastel(
-    contrastBaseline: 80,
+    contrastBaseline: calBaseContrast,
     dampened: false,
     usesHueProfile: true,
     profileAsset: 'darkmoon_pastel.json',
   ),
   noir(
-    contrastBaseline: 80,
+    contrastBaseline: calBaseContrast,
     dampened: false,
     usesHueProfile: true,
     profileAsset: 'darkmoon_noir.json',

@@ -35,6 +35,16 @@ uniform float uHighlightsAdd;
 uniform float uWhitesAdd; // whites param normalized from -100..100
 uniform float uBlacksAdd; // blacks param normalized from -100..100
 
+// calHighlightsStrength/calShadowsAmountScale/calBlacksAmountScale
+// (lib/render/calibration.dart) — real bugs fixed 2026-09-02: Highlights
+// and Blacks were hardcoded to stale pre-calibration literals (1.75 and
+// 1.5) here, never updated through later CPU-side tuning rounds. Shadows
+// was never wired to its own scale constant at all — currently a no-op
+// gap only because calShadowsAmountScale still happens to be 1.0.
+uniform float uHighlightsStrength;
+uniform float uShadowsAmountScale;
+uniform float uBlacksAmountScale;
+
 // Color Mixer calibration — must match lib/render/calibration.dart's
 // calMixerHueStrength / calMixerBandSharpness / calMixerSaturationStrength
 // / calMixerLuminanceStrength (the CPU path reads them from there; this
@@ -222,8 +232,8 @@ vec3 rapidHighlights(vec3 color, float amount) {
   float mask = smoothstep(0.55, 0.95, tanh(max(luma, 0.0001) * 1.5));
   if (mask <= 0.0) return color;
   float newLuma = amount < 0.0
-      ? pow(luma, 1.0 - amount * 1.75)
-      : luma * pow(2.0, amount * 1.75);
+      ? pow(luma, 1.0 - amount * uHighlightsStrength)
+      : luma * pow(2.0, amount * uHighlightsStrength);
   linearColor *= 1.0 + (newLuma / max(luma, 0.0001) - 1.0) * mask;
   return vec3(
     linearToSrgb(linearColor.r), linearToSrgb(linearColor.g),
@@ -259,8 +269,8 @@ vec3 rapidShadowsBlacks(
   );
   float luma = dot(max(linearColor, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722));
   float t = pow(max(luma, 0.0001), 0.4545);
-  float shadowLift = shadows * t * pow(max(1.0 - t, 0.0), 4.5);
-  float blackLift = blacks * 1.5 * t * pow(max(1.0 - t, 0.0), 9.0);
+  float shadowLift = shadows * uShadowsAmountScale * t * pow(max(1.0 - t, 0.0), 4.5);
+  float blackLift = blacks * uBlacksAmountScale * t * pow(max(1.0 - t, 0.0), 9.0);
   float lift = max(shadowLift + blackLift, 0.0);
   float curved = max(t + shadowLift + blackLift, 0.0);
   float contrasted = 0.2 + (curved - 0.2) * (1.0 + lift * 1.3);

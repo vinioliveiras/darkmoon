@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show listEquals;
 import 'package:flutter/material.dart';
 
 import '../render/tone_curve.dart';
@@ -246,5 +247,13 @@ class _ToneCurvePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _ToneCurvePainter oldDelegate) =>
-      oldDelegate.points != points || oldDelegate.lineColor != lineColor;
+      // Real bug fixed 2026-09-02: `_ToneCurveEditorState._sorted` builds a
+      // brand-new List every call (`[...widget.points]..sort(...)`), so a
+      // plain `!=` (identity) here was always true regardless of whether
+      // the curve actually changed — every drag of an unrelated slider
+      // repainted this and recomputed its 256-sample LUT for nothing.
+      // CurvePoint has value equality, so listEquals does a real content
+      // comparison instead.
+      !listEquals(oldDelegate.points, points) ||
+      oldDelegate.lineColor != lineColor;
 }
