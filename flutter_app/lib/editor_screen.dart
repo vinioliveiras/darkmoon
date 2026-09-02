@@ -8914,16 +8914,43 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                               ),
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
-                                child: SliderRow(
-                                  name: l10n.presetAmountLabel,
-                                  min: 0,
-                                  max: 200,
-                                  value: widget.presetAmount,
-                                  decimals: 0,
-                                  valueSuffix: '%',
-                                  defaultValue: 100,
-                                  onChanged: widget.onPresetAmountChanged,
-                                  onChangeEnd: widget.onPresetAmountChangeEnd,
+                                // Faded + non-interactive under Default
+                                // (2026-09-02, explicit user request):
+                                // Default has no per-hue ColorProfile
+                                // loaded at all, so Strength only ever had
+                                // anything to visibly scale there if some
+                                // OTHER slider was already off its own
+                                // default — confusing enough in practice
+                                // ("moving it does nothing") that the user
+                                // asked for it disabled outright in this
+                                // mode rather than left live-but-usually-
+                                // inert. Trade-off worth knowing: this also
+                                // blocks using it to damp a manual
+                                // Exposure/Contrast/etc. edit while still
+                                // under Default, which used to work.
+                                child: Opacity(
+                                  opacity:
+                                      widget.colorProfileMode ==
+                                          ColorProfileMode.darkmoonDefault
+                                      ? 0.4
+                                      : 1.0,
+                                  child: IgnorePointer(
+                                    ignoring:
+                                        widget.colorProfileMode ==
+                                        ColorProfileMode.darkmoonDefault,
+                                    child: SliderRow(
+                                      name: l10n.presetAmountLabel,
+                                      min: 0,
+                                      max: 200,
+                                      value: widget.presetAmount,
+                                      decimals: 0,
+                                      valueSuffix: '%',
+                                      defaultValue: 100,
+                                      onChanged: widget.onPresetAmountChanged,
+                                      onChangeEnd:
+                                          widget.onPresetAmountChangeEnd,
+                                    ),
+                                  ),
                                 ),
                               ),
                             ],

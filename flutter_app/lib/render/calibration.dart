@@ -195,7 +195,7 @@ const double calWbAsShotTintScaleFallback = 200.0;
 /// and re-opening it risks the whole incident history in
 /// project_darkmoon_color_profile.md; this S-curve is the safer, purely
 /// render-time lever.)
-const double calBaseContrast = 30.0;
+const double calBaseContrast = 80.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  BASIC — Exposure / Brightness / Contrast                                 ║
@@ -307,8 +307,9 @@ const double calTextureSigma = 3.5;
 
 /// **Texture** — strength multiplier on top of the slider.
 ///   ↑ higher = stronger Texture     ↓ lower = weaker
-/// default: 1.0   (user raised to 2.0, then asked for a bit more)
-const double calTextureStrength = 2.3;
+/// default: 2.7   (user raised to 2.0, then 2.3, then asked for more —
+/// 2026-09-02)
+const double calTextureStrength = 2.7;
 
 /// **Clarity** — radius (in pixels) of the local contrast. Deliberately
 /// large (mid-range contrast, more like "definition").
@@ -386,8 +387,9 @@ const double calDehazeAddMix = 0.18;
 /// ~30x weaker than the original 3.0) wanting less blow-out — landed on a
 /// more moderate weakening (~2x from 1.5) instead, since 0.1 makes
 /// Vibrance +100 barely perceptible (closer to "off" than "gentler").
-/// Weakened again 2026-09-01 (user: "still a bit strong").
-const double calVibranceStrength = 0.5;
+/// Weakened again 2026-09-01 (user: "still a bit strong"). Raised back up
+/// 2026-09-02 (explicit user request — wanted it stronger again).
+const double calVibranceStrength = 0.7;
 
 /// **Vibrance** — how much it HOLDS BACK the effect on skin tones (so faces
 /// don't turn orange). 1.0 = holds back nothing; 0.0 = zeroes out on skin.
@@ -403,8 +405,9 @@ const double calVibranceSkinDampen = 0.6;
 /// 2026-09-01: user set this to 0.1 (10x weaker) wanting less blow-out —
 /// landed on a moderate 2x weakening instead, since 0.1 leaves Saturation
 /// +100 as only a ~1.01x multiplier, effectively disabling the slider
-/// rather than just softening it. Weakened again 2026-09-01.
-const double calSaturationStrength = 0.35;
+/// rather than just softening it. Weakened again 2026-09-01. Weakened
+/// further 2026-09-02 (explicit user request).
+const double calSaturationStrength = 0.22;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  COLOR — Color Mixer / HSL (8 bands)                                      ║
