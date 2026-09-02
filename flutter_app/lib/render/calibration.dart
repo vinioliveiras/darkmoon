@@ -78,7 +78,7 @@ const double calGlobalAmountCompression = 0.3;
 /// reads through it for every key.
 const Map<String, double> calGlobalAmountCompressionOverrides = {
   'Exposure': 1.0,
-  'Contrast': 1.0,
+  'Contrast': 0.5,
 };
 
 // Temperature/Tint deliberately have NO entry here, not even 1.0: they
@@ -177,13 +177,15 @@ const double calWbAsShotTintScaleFallback = 200.0;
 // This is the FACTORY value. The user can override it live in
 // Settings → "darkmoon Color Profile" (saved in AppSettings), no rebuild
 // needed. Both CPU and GPU apply the curve.
-/// default: 20.0   (0.0 = off; 2026-09-02: lowered to 15.0, explicit
-/// user request — photos opened a bit brighter than the same RAW in
-/// Meridian. Deliberately not touching `no_auto_bright` (libraw.dart)
-/// for this — that's the decode-time exposure baseline, and re-opening
-/// it risks the whole incident history in project_darkmoon_color_profile
-/// .md; this S-curve is the safer, purely render-time lever.)
-const double calBaseContrast = 20.0;
+/// default: 30.0   (0.0 = off; 2026-08-29: originally 20.0; briefly
+/// lowered to 15.0 on 2026-09-02 — photos opened a bit brighter than the
+/// same RAW in Meridian — then raised past both, to 30.0, same day,
+/// explicit user request. Deliberately not touching `no_auto_bright`
+/// (libraw.dart) for this — that's the decode-time exposure baseline,
+/// and re-opening it risks the whole incident history in
+/// project_darkmoon_color_profile.md; this S-curve is the safer, purely
+/// render-time lever.)
+const double calBaseContrast = 30.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  BASIC — Exposure / Brightness / Contrast                                 ║
@@ -213,7 +215,7 @@ const double calBrightnessMidtoneStrength = 1.2;
 /// **Contrast**: how hard the slider tilts the S-curve.
 ///   ↑ higher = more aggressive Contrast at the same value
 ///   ↓ lower  = gentler Contrast
-/// default: 1.25   (2026-09-02: raised from 0.50, explicit user request —
+/// default: 0.75   (2026-09-02: raised from 0.50, explicit user request —
 /// felt too weak)
 const double calContrastStrength = 0.75;
 
@@ -224,7 +226,7 @@ const double calContrastStrength = 0.75;
 /// **Highlights**: recovery/blowout strength.
 ///   ↑ higher = Highlights recovers/lifts much faster
 ///   ↓ lower  = subtler
-/// default: 1.75
+/// default: 1.0
 const double calHighlightsStrength = 1.0;
 
 /// **Shadows**: multiplier on top of the slider value.
@@ -251,14 +253,14 @@ const double calWhitesMaskLow = 0.26;
 /// **Whites** — how much it lifts the white point at the slider's max value.
 ///   ↑ higher = Whites +100 brightens much more
 ///   ↓ lower  = Whites +100 barely changes anything
-/// default: 0.42   (original Solstice: 0.25; 2026-09-02: raised to 0.40,
+/// default: 0.40   (original Solstice: 0.25; 2026-09-02: raised to 0.40,
 /// explicit user request — Whites felt too weak)   [also on GPU: point_ops_post_denoise.frag]
 const double calWhitesLevelCoeff = 0.40;
 
 /// **Blacks** — multiplier on top of the slider value.
 ///   ↑ higher = stronger Blacks (crushes/lifts black much harder)
 ///   ↓ lower  = weaker Blacks
-/// default: 1.5   (original Solstice: 1.0)   [also on GPU: point_ops_post_denoise.frag]
+/// default: 2.0   (original Solstice: 1.0)   [also on GPU: point_ops_post_denoise.frag]
 const double calBlacksAmountScale = 2.0;
 
 /// **Blacks** — width of the affected range (exponent, same idea as
@@ -290,7 +292,7 @@ const double calShadowBlacksContrastMix = 0.85;
 /// fine detail (pores, hair); large = coarser detail.
 ///   ↑ higher = enhances larger structures
 ///   ↓ lower  = enhances only the finest detail
-/// default: 3.0
+/// default: 3.5
 const double calTextureSigma = 3.5;
 
 /// **Texture** — strength multiplier on top of the slider.
@@ -307,7 +309,7 @@ const double calClaritySigma = 25.0;
 
 /// **Clarity** — strength multiplier on top of the slider.
 ///   ↑ higher = stronger Clarity     ↓ lower = weaker
-/// default: 1.0   (2026-09-01: raised from 0.5, explicit user request)
+/// default: 0.65   (2026-09-01: raised from 0.5, explicit user request)
 const double calClarityStrength = 0.65;
 
 /// **Dehaze +** — how hard the positive slider pulls transmission down (=
@@ -381,7 +383,7 @@ const double calVibranceStrength = 0.5;
 /// don't turn orange). 1.0 = holds back nothing; 0.0 = zeroes out on skin.
 ///   ↑ higher (near 1) = skin saturates right along with everything else
 ///   ↓ lower (near 0) = skin stays well protected
-/// default: 0.6
+/// default: 0.2
 const double calVibranceSkinDampen = 0.2;
 
 /// **Saturation** — multiplier on top of the slider (the effect is
@@ -403,11 +405,12 @@ const double calSaturationStrength = 0.35;
 /// Solstice port used 0.6 (= `0.3 * 2.0`); comparing against Meridian
 /// (Filmatic Fuji 2 on DSF1309, 2026-08-29) showed the user needed ~1.9×
 /// Meridian's value on Orange/Yellow/Aqua/Blue — i.e. darkmoon's Hue was
-/// too weak. Raised to 1.15.
+/// too weak. Raised toward that (landed at 1.0, not the full 1.15 this
+/// comment used to say — corrected 2026-09-02, no functional change).
 ///   ↑ higher = the same Hue slider value rotates color more
 ///   ↓ lower  = rotates less (0.6 = original Solstice behavior)
 /// ⚠️ changes older presets that touched Mixer Hue (they'll rotate further).
-/// default: 1.15   (original Solstice: 0.6)   [also on GPU: point_ops_post_denoise.frag]
+/// default: 1.0   (original Solstice: 0.6)   [also on GPU: point_ops_post_denoise.frag]
 const double calMixerHueStrength = 1.0;
 
 /// **Mixer → effective band width** — the "sharpness" of the gaussian that
