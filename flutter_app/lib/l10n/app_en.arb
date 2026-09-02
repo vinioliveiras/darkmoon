@@ -226,7 +226,7 @@
   "settingsRawOnlyHint": "Hide JPEG, PNG and other common image formats from the library",
   "settingsAnimationsLabel": "Interface animations",
   "settingsAnimationsHint": "Smooth transitions for panel sections, tab switches, zoom, and the preview after an edit",
-  "settingsGpuRenderLabel": "Use GPU rendering (experimental)",
+  "settingsGpuRenderLabel": "Use GPU rendering",
   "settingsGpuRenderHint": "Renders on the graphics card instead of the CPU; falls back automatically if unsupported",
   "settingsDynamicFullPreviewLabel": "Dynamic full-resolution preview",
   "settingsDynamicFullPreviewHint": "A moment after an edit settles, re-render at the sensor's native resolution so a zoomed-in view sharpens up. Decoded sources are cached to disk.",

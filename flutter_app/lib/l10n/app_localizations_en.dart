@@ -560,7 +560,7 @@ class AppLocalizationsEn extends AppLocalizations {
       'Smooth transitions for panel sections, tab switches, zoom, and the preview after an edit';
 
   @override
-  String get settingsGpuRenderLabel => 'Use GPU rendering (experimental)';
+  String get settingsGpuRenderLabel => 'Use GPU rendering';
 
   @override
   String get settingsGpuRenderHint =>

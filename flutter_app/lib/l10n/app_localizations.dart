@@ -1111,7 +1111,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsGpuRenderLabel.
   ///
   /// In en, this message translates to:
-  /// **'Use GPU rendering (experimental)'**
+  /// **'Use GPU rendering'**
   String get settingsGpuRenderLabel;
 
   /// No description provided for @settingsGpuRenderHint.

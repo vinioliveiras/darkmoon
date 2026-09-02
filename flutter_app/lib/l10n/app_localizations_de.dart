@@ -568,8 +568,7 @@ class AppLocalizationsDe extends AppLocalizations {
       'Sanfte Übergänge für Panelabschnitte, Tab-Wechsel, Zoom und die Vorschau nach einer Bearbeitung';
 
   @override
-  String get settingsGpuRenderLabel =>
-      'GPU-Rendering verwenden (experimentell)';
+  String get settingsGpuRenderLabel => 'GPU-Rendering verwenden';
 
   @override
   String get settingsGpuRenderHint =>

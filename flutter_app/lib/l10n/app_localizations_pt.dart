@@ -564,8 +564,7 @@ class AppLocalizationsPt extends AppLocalizations {
       'Transições suaves nas seções do painel, troca de abas, zoom e no preview após uma edição';
 
   @override
-  String get settingsGpuRenderLabel =>
-      'Usar renderização por GPU (experimental)';
+  String get settingsGpuRenderLabel => 'Usar renderização por GPU';
 
   @override
   String get settingsGpuRenderHint =>

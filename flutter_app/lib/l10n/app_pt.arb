@@ -183,7 +183,7 @@
   "settingsRawOnlyHint": "Oculta JPEG, PNG e outros formatos comuns de imagem da biblioteca",
   "settingsAnimationsLabel": "Animações da interface",
   "settingsAnimationsHint": "Transições suaves nas seções do painel, troca de abas, zoom e no preview após uma edição",
-  "settingsGpuRenderLabel": "Usar renderização por GPU (experimental)",
+  "settingsGpuRenderLabel": "Usar renderização por GPU",
   "settingsGpuRenderHint": "Renderiza na placa de vídeo em vez da CPU; volta automaticamente para a CPU se não houver suporte",
   "settingsDynamicFullPreviewLabel": "Preview dinâmico em resolução total",
   "settingsDynamicFullPreviewHint": "Um instante depois que a edição assenta, re-renderiza na resolução nativa do sensor pra imagem ampliada ficar nítida. As fontes decodificadas ficam em cache no disco.",
