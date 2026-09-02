@@ -472,6 +472,24 @@ abstract class AppLocalizations {
   /// **'Rotate 90° right'**
   String get cropRotateRightTooltip;
 
+  /// No description provided for @cropGuidedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Guided'**
+  String get cropGuidedLabel;
+
+  /// No description provided for @cropGuidedTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Draw a line that should be level or plumb'**
+  String get cropGuidedTooltip;
+
+  /// No description provided for @cropGuidedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag along an edge that should be perfectly horizontal or vertical — release to level it.'**
+  String get cropGuidedHint;
+
   /// No description provided for @cropDoneButton.
   ///
   /// In en, this message translates to:

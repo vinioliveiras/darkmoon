@@ -213,6 +213,16 @@ class AppLocalizationsEn extends AppLocalizations {
   String get cropRotateRightTooltip => 'Rotate 90° right';
 
   @override
+  String get cropGuidedLabel => 'Guided';
+
+  @override
+  String get cropGuidedTooltip => 'Draw a line that should be level or plumb';
+
+  @override
+  String get cropGuidedHint =>
+      'Drag along an edge that should be perfectly horizontal or vertical — release to level it.';
+
+  @override
   String get cropDoneButton => 'OK';
 
   @override

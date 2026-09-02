@@ -1199,6 +1199,17 @@ class _EditorScreenState extends State<EditorScreen>
     setState(() => _straighteningActive = value);
   }
 
+  /// True while the "Guided" upright tool (PENDING.md item 27) is active —
+  /// see [CropOverlay.guidedModeActive]'s own doc for what it does.
+  /// Session-only, same as [_straighteningActive]; turned off whenever the
+  /// Crop tool itself closes (see [_toggleCropOverlay]) so it can't stay
+  /// silently armed the next time Crop reopens.
+  bool _guidedModeActive = false;
+
+  void _toggleGuidedMode() {
+    setState(() => _guidedModeActive = !_guidedModeActive);
+  }
+
   /// True for the duration of a slider drag on one of the active mask's
   /// own values (Tone/Presence/etc., opacity, Color Range tolerance/
   /// feather) — while true, the mask overlay is hidden regardless of
@@ -3985,6 +3996,11 @@ class _EditorScreenState extends State<EditorScreen>
       if (opening && _beforeAfterMode) {
         _beforeAfterMode = false;
       }
+      // Never leave Guided mode silently armed for the next time Crop
+      // reopens — closing Crop always exits it too.
+      if (!opening) {
+        _guidedModeActive = false;
+      }
     });
     // Crop handles are placed against the fitted frame — a leftover
     // zoom/pan would put them off-screen, so snap back to Fit on open.
@@ -6212,6 +6228,7 @@ class _EditorScreenState extends State<EditorScreen>
                                   onCropTransformChangeEnd:
                                       _onCropTransformChangeEnd,
                                   straighteningActive: _straighteningActive,
+                                  guidedModeActive: _guidedModeActive,
                                   onSecondaryTapUp: _showImageContextMenu,
                                 ),
                                 // Opening a photo (RAW decode, or a
@@ -6341,6 +6358,8 @@ class _EditorScreenState extends State<EditorScreen>
                             onToggleCropOverlay: _toggleCropOverlay,
                             onResetCropTransform: _resetCropTransform,
                             onStraighteningChanged: _setStraighteningActive,
+                            guidedModeActive: _guidedModeActive,
+                            onToggleGuidedMode: _toggleGuidedMode,
                             lensCorrection: _lensCorrection,
                             onLensCorrectionChanged: _onLensCorrectionChanged,
                             onLensCorrectionChangeEnd:
@@ -6538,6 +6557,7 @@ class _ImageArea extends StatelessWidget {
     required this.onCropTransformChanged,
     required this.onCropTransformChangeEnd,
     required this.straighteningActive,
+    required this.guidedModeActive,
     required this.onSecondaryTapUp,
     required this.previewFadeGeneration,
   });
@@ -6628,6 +6648,9 @@ class _ImageArea extends StatelessWidget {
   /// True while the Straighten slider is being dragged — [CropOverlay]
   /// shows a denser guide grid while this is set (item 28).
   final bool straighteningActive;
+
+  /// See [CropOverlay.guidedModeActive].
+  final bool guidedModeActive;
 
   /// Right-click on the image — opens the copy/paste-edits context menu.
   final void Function(Offset globalPosition) onSecondaryTapUp;
@@ -6917,6 +6940,7 @@ class _ImageArea extends StatelessWidget {
                   onChanged: onCropTransformChanged,
                   onChangeEnd: onCropTransformChangeEnd,
                   straighteningActive: straighteningActive,
+                  guidedModeActive: guidedModeActive,
                 ),
               ],
             );
@@ -7813,6 +7837,8 @@ class _CropTransformPanel extends StatelessWidget {
     required this.onDone,
     required this.onReset,
     required this.onStraighteningChanged,
+    required this.guidedModeActive,
+    required this.onToggleGuidedMode,
   });
 
   final CropTransformParams params;
@@ -7830,6 +7856,10 @@ class _CropTransformPanel extends StatelessWidget {
 
   /// See [_ControlsPanel.onStraighteningChanged].
   final ValueChanged<bool> onStraighteningChanged;
+
+  /// See [CropOverlay.guidedModeActive].
+  final bool guidedModeActive;
+  final VoidCallback onToggleGuidedMode;
 
   @override
   Widget build(BuildContext context) {
@@ -7884,8 +7914,24 @@ class _CropTransformPanel extends StatelessWidget {
                   onChangeEnd(next);
                 },
               ),
+              _ToolbarSegment(
+                label: l10n.cropGuidedLabel,
+                selected: guidedModeActive,
+                tooltip: l10n.cropGuidedTooltip,
+                onTap: onToggleGuidedMode,
+              ),
             ],
           ),
+          if (guidedModeActive) ...[
+            const SizedBox(height: 8),
+            Text(
+              l10n.cropGuidedHint,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: DarkmoonColors.textMuted,
+                fontSize: 11,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           SliderRow(
             name: l10n.transformStraightenLabel,
@@ -8314,6 +8360,8 @@ class _ControlsPanel extends StatefulWidget {
     required this.onToggleCropOverlay,
     required this.onResetCropTransform,
     required this.onStraighteningChanged,
+    required this.guidedModeActive,
+    required this.onToggleGuidedMode,
     required this.lensCorrection,
     required this.onLensCorrectionChanged,
     required this.onLensCorrectionChangeEnd,
@@ -8412,6 +8460,10 @@ class _ControlsPanel extends StatefulWidget {
   /// released (false) — lets the crop overlay show a denser guide grid
   /// only while the user's actively trying to level a horizon (item 28).
   final ValueChanged<bool> onStraighteningChanged;
+
+  /// See [CropOverlay.guidedModeActive].
+  final bool guidedModeActive;
+  final VoidCallback onToggleGuidedMode;
 
   final LensCorrectionParams lensCorrection;
   final ValueChanged<LensCorrectionParams> onLensCorrectionChanged;
@@ -8722,6 +8774,8 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                           onDone: widget.onToggleCropOverlay,
                           onReset: widget.onResetCropTransform,
                           onStraighteningChanged: widget.onStraighteningChanged,
+                          guidedModeActive: widget.guidedModeActive,
+                          onToggleGuidedMode: widget.onToggleGuidedMode,
                         ),
                         const SizedBox(height: 12),
                       ],

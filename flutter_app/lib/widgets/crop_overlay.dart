@@ -66,6 +66,7 @@ class CropOverlay extends StatefulWidget {
     required this.onChangeEnd,
     required this.straighteningActive,
     this.lockedAspectRatio,
+    this.guidedModeActive = false,
   });
 
   final Size containerSize;
@@ -81,6 +82,16 @@ class CropOverlay extends StatefulWidget {
   /// easier to see whether a horizon/vertical has been leveled.
   final bool straighteningActive;
 
+  /// True while the "Guided" upright tool (PENDING.md item 27) is active —
+  /// a drag no longer touches the crop rect at all; it draws one reference
+  /// line the user is claiming should be perfectly horizontal or vertical
+  /// (whichever it's closer to), and releasing computes the
+  /// [CropTransformParams.straightenAngle] that levels it. Scoped to a
+  /// single line for v1 (2026-09-02) — PENDING.md's own Auto/Level/
+  /// Vertical/Full modes (real line-detection computer vision) and a
+  /// multi-line keystone solve are explicitly deferred, not attempted here.
+  final bool guidedModeActive;
+
   @override
   State<CropOverlay> createState() => _CropOverlayState();
 }
@@ -95,6 +106,52 @@ class _CropOverlayState extends State<CropOverlay> {
   /// [_applyDrag] call measures the *change* in that angle, not the
   /// absolute one, so the anchor doesn't jump the moment the drag starts.
   double _rotateStartAngle = 0;
+
+  /// The reference line currently being drawn in [CropOverlay.guidedModeActive]
+  /// — null outside a guided drag. Local-pixel coordinates, same space as
+  /// every other drag handler here.
+  Offset? _guideStart;
+  Offset? _guideEnd;
+
+  /// Below this drag distance (px), a guided-mode release is treated as an
+  /// accidental tap, not a real reference line — avoids a stray click
+  /// producing a wild correction from a near-zero-length line (its angle
+  /// is numerically unstable as length -> 0).
+  static const _guideMinLengthPx = 12.0;
+
+  /// The [CropTransformParams.straightenAngle] delta that would make the
+  /// line from [start] to [end] perfectly horizontal or vertical —
+  /// whichever it's already closer to. Returns 0 if the line is too short
+  /// to trust (see [_guideMinLengthPx]).
+  ///
+  /// Math: a line's angle and its angle+180° describe the same line (no
+  /// inherent direction), so first fold the raw atan2 into (-90, 90] —
+  /// that's the deviation from horizontal. If that deviation is more than
+  /// 45° (i.e. the line reads as closer to vertical), re-express it as the
+  /// deviation from vertical instead. Either way, rotating the image by
+  /// the NEGATIVE of that deviation levels the line — [rotatePoint] (see
+  /// `render/geometry.dart`) rotates by a positive angle *clockwise* in
+  /// this image's Y-down pixel space, and `crop_transform.dart`'s
+  /// `applyCropAndTransform` derives the displayed (straightened) image as
+  /// the source rotated by `+straightenAngle`, so a line tilted clockwise
+  /// (positive deviation) needs a negative straightenAngle delta to cancel.
+  double _guidedCorrectionDeg(Offset start, Offset end) {
+    final delta = end - start;
+    if (delta.distance < _guideMinLengthPx) {
+      return 0;
+    }
+    var deviation = math.atan2(delta.dy, delta.dx) * 180.0 / math.pi;
+    while (deviation > 90) {
+      deviation -= 180;
+    }
+    while (deviation <= -90) {
+      deviation += 180;
+    }
+    if (deviation.abs() > 45) {
+      deviation = deviation > 0 ? deviation - 90 : deviation + 90;
+    }
+    return -deviation;
+  }
 
   Rect _imageRect() {
     final imageAspect = widget.imageWidth / widget.imageHeight;
@@ -121,6 +178,13 @@ class _CropOverlayState extends State<CropOverlay> {
   void _handlePanStart(DragStartDetails details, Rect imageRect) {
     _dragStartLocal = details.localPosition;
     _dragStartParams = widget.params;
+    if (widget.guidedModeActive) {
+      setState(() {
+        _guideStart = details.localPosition;
+        _guideEnd = details.localPosition;
+      });
+      return;
+    }
     final cropRect = _cropRectLocal(imageRect);
     // Checked before the corners: the rotate anchor sits just outside the
     // top-right one (see _rotateHandlePosition's doc), so it needs first
@@ -285,6 +349,19 @@ class _CropOverlayState extends State<CropOverlay> {
   }
 
   void _handlePanUpdate(DragUpdateDetails details, Rect imageRect) {
+    if (widget.guidedModeActive) {
+      if (_guideStart == null) {
+        return;
+      }
+      setState(() => _guideEnd = details.localPosition);
+      final delta = _guidedCorrectionDeg(_guideStart!, details.localPosition);
+      final next = (_dragStartParams.straightenAngle + delta).clamp(
+        -45.0,
+        45.0,
+      );
+      widget.onChanged(_dragStartParams.copyWith(straightenAngle: next));
+      return;
+    }
     if (_active == null) {
       return;
     }
@@ -292,6 +369,24 @@ class _CropOverlayState extends State<CropOverlay> {
   }
 
   void _handlePanEnd() {
+    if (widget.guidedModeActive) {
+      final start = _guideStart;
+      final end = _guideEnd;
+      setState(() {
+        _guideStart = null;
+        _guideEnd = null;
+      });
+      if (start == null || end == null) {
+        return;
+      }
+      final delta = _guidedCorrectionDeg(start, end);
+      final next = (_dragStartParams.straightenAngle + delta).clamp(
+        -45.0,
+        45.0,
+      );
+      widget.onChangeEnd(_dragStartParams.copyWith(straightenAngle: next));
+      return;
+    }
     if (_active == null) {
       return;
     }
@@ -318,7 +413,12 @@ class _CropOverlayState extends State<CropOverlay> {
         painter: _CropPainter(
           imageRect: imageRect,
           cropRect: _cropRectLocal(imageRect),
-          denseGrid: widget.straighteningActive || _active == _CropHandle.rotate,
+          denseGrid:
+              widget.straighteningActive ||
+              _active == _CropHandle.rotate ||
+              widget.guidedModeActive,
+          guideStart: _guideStart,
+          guideEnd: _guideEnd,
         ),
       ),
     );
@@ -330,10 +430,17 @@ class _CropPainter extends CustomPainter {
     required this.imageRect,
     required this.cropRect,
     required this.denseGrid,
+    this.guideStart,
+    this.guideEnd,
   });
 
   final Rect imageRect;
   final Rect cropRect;
+
+  /// The "Guided" reference line currently being drawn — both null outside
+  /// a guided drag. See [CropOverlay.guidedModeActive].
+  final Offset? guideStart;
+  final Offset? guideEnd;
 
   /// True while Straighten is being dragged — swaps the default 3x3
   /// rule-of-thirds grid for a denser one (easier to spot a tilted
@@ -450,11 +557,30 @@ class _CropPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );
+
+    // "Guided" reference line — a bright yellow so it reads clearly against
+    // both the image and the white crop/grid lines above, with a small
+    // filled dot at each end (no rotate-anchor-style ring, this isn't a
+    // draggable handle once drawn).
+    final gStart = guideStart;
+    final gEnd = guideEnd;
+    if (gStart != null && gEnd != null) {
+      final guidePaint = Paint()
+        ..color = const Color(0xFFFFD54A)
+        ..strokeWidth = 2.0
+        ..strokeCap = StrokeCap.round;
+      canvas.drawLine(gStart, gEnd, guidePaint);
+      for (final p in [gStart, gEnd]) {
+        canvas.drawCircle(p, 4.0, guidePaint..style = PaintingStyle.fill);
+      }
+    }
   }
 
   @override
   bool shouldRepaint(covariant _CropPainter oldDelegate) =>
       oldDelegate.imageRect != imageRect ||
       oldDelegate.cropRect != cropRect ||
-      oldDelegate.denseGrid != denseGrid;
+      oldDelegate.denseGrid != denseGrid ||
+      oldDelegate.guideStart != guideStart ||
+      oldDelegate.guideEnd != guideEnd;
 }

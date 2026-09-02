@@ -213,6 +213,17 @@ class AppLocalizationsPt extends AppLocalizations {
   String get cropRotateRightTooltip => 'Girar 90° à direita';
 
   @override
+  String get cropGuidedLabel => 'Guiado';
+
+  @override
+  String get cropGuidedTooltip =>
+      'Desenhe uma linha que deveria ficar nivelada ou reta';
+
+  @override
+  String get cropGuidedHint =>
+      'Arraste ao longo de uma borda que deveria ficar perfeitamente horizontal ou vertical — solte para nivelar.';
+
+  @override
   String get cropDoneButton => 'OK';
 
   @override

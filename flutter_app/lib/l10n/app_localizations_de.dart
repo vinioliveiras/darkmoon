@@ -215,6 +215,17 @@ class AppLocalizationsDe extends AppLocalizations {
   String get cropRotateRightTooltip => '90° nach rechts drehen';
 
   @override
+  String get cropGuidedLabel => 'Geführt';
+
+  @override
+  String get cropGuidedTooltip =>
+      'Zeichne eine Linie, die gerade oder lotrecht sein sollte';
+
+  @override
+  String get cropGuidedHint =>
+      'Ziehe entlang einer Kante, die perfekt horizontal oder vertikal sein sollte — loslassen zum Ausrichten.';
+
+  @override
   String get cropDoneButton => 'OK';
 
   @override
