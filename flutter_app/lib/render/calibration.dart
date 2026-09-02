@@ -79,6 +79,16 @@ const double calGlobalAmountCompression = 0.3;
 const Map<String, double> calGlobalAmountCompressionOverrides = {
   'Exposure': 1.0,
   'Contrast': 0.5,
+  // Real bug found 2026-09-02: dragging the "Color Profile Contrast"
+  // slider (ColorProfileAmount) barely changed the render even across
+  // its full range, because it fell back to the global 0.3 fraction like
+  // every other slider — moving it from its default (30) to its max (60)
+  // only ever actually applied 30 + (60-30)*0.3 = 39, not 60. Undamped
+  // for the same reason Exposure/Contrast are: it's the one slider this
+  // whole 30% rule was never meant to touch that quietly, since it's
+  // itself a stand-in for a fixed baked-in curve, not a "how much of a
+  // preset's edit" knob.
+  'ColorProfileAmount': 1.0,
 };
 
 // Temperature/Tint deliberately have NO entry here, not even 1.0: they
@@ -384,7 +394,7 @@ const double calVibranceStrength = 0.5;
 ///   ↑ higher (near 1) = skin saturates right along with everything else
 ///   ↓ lower (near 0) = skin stays well protected
 /// default: 0.2
-const double calVibranceSkinDampen = 0.2;
+const double calVibranceSkinDampen = 0.6;
 
 /// **Saturation** — multiplier on top of the slider (the effect is
 /// 1 + sliderValue/100 * this number).
