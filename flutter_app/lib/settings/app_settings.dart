@@ -40,7 +40,7 @@ class AppSettings {
     this.fastPreview = true,
     this.previewResolution = defaultPreviewMaxDimension,
     this.useGpuRender = true,
-    this.dynamicFullPreview = false,
+    this.dynamicFullPreview = true,
     this.fullQualityPercent = 30,
     this.thumbnailConcurrency = 4,
     this.rawOnly = false,
@@ -88,8 +88,11 @@ class AppSettings {
   /// [previewResolution] buffer — so the on-screen image is near-full
   /// quality while editing. Live drags still use the tiny buffer. The
   /// decoded source is cached to disk so re-opening the photo skips the
-  /// slow RAW demosaic. Off by default (it's meaningful extra work per
-  /// settle).
+  /// slow RAW demosaic. On by default (2026-09-02, explicit user
+  /// request — was off, since it's meaningful extra work per settle;
+  /// see also [_EditorScreenState]'s doc on when this actually arms
+  /// itself, changed the same day to a 5s-since-open delay instead of
+  /// "the moment an edit starts").
   final bool dynamicFullPreview;
 
   /// Percent of the sensor's native resolution the full-quality editing

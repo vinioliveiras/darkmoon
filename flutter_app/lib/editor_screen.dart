@@ -983,13 +983,21 @@ class _EditorScreenState extends State<EditorScreen>
   static const _slowRenderThreshold = Duration(seconds: 3);
 
   /// Dynamic full-resolution preview (`AppSettings.dynamicFullPreview`):
-  /// after an edit settles, [_dynamicPreviewTimer] fires
-  /// [_runDynamicFullPreview] which re-renders the selected photo at the
-  /// sensor's native resolution in the background and swaps it onto the
-  /// canvas. Any new edit / photo switch cancels the timer and (via
-  /// [_renderRequestId]) discards a result already in flight.
+  /// [_dynamicPreviewTimer], armed by [_maybeArmFullQualityDecode] from
+  /// [_selectIndex] when a photo is opened, fires [_ensureFullQualitySource]
+  /// after [_dynamicPreviewOpenDelay] — decoding the photo's native-
+  /// resolution source in the background so every settled render from
+  /// then on (see [_renderPreviewInner]'s phase-2 pass) uses it instead of
+  /// the small [AppSettings.previewResolution] buffer. Switching photos
+  /// cancels the timer and (via [_renderRequestId]) discards a result
+  /// already in flight.
+  ///
+  /// Deliberately keyed off *time the photo has been open*, not "the
+  /// moment an edit settles" (2026-09-02, explicit user request, changed
+  /// from the latter) — arms the same ~5s after opening regardless of
+  /// whether the user has touched a slider yet.
   Timer? _dynamicPreviewTimer;
-  static const _dynamicPreviewDelay = Duration(milliseconds: 1400);
+  static const _dynamicPreviewOpenDelay = Duration(seconds: 5);
 
   /// The decoded native-resolution source cache — same [ThumbnailCacheManager]
   /// month-file format / sha1 key as the thumbnail and preview caches, in
@@ -1979,6 +1987,15 @@ class _EditorScreenState extends State<EditorScreen>
                 : _files[_selectedIndex!];
             if (selected != null) {
               _scheduleRender(live: false);
+              if (dynamicFullPreviewChanged && next.dynamicFullPreview) {
+                // Just turned on: nothing has armed the native-source
+                // decode for this photo yet (that only happens on
+                // _selectIndex now, not on every settled render — see
+                // _maybeArmFullQualityDecode's doc), so kick it off here
+                // too or turning the setting on mid-session would silently
+                // do nothing until the next photo switch.
+                _maybeArmFullQualityDecode(selected.path);
+              }
             }
           }
           if (previewResolutionChanged) {
@@ -2830,6 +2847,7 @@ class _EditorScreenState extends State<EditorScreen>
       unawaited(
         _loadEditSourceAndRender(files[selectedIndex].path, generation),
       );
+      _maybeArmFullQualityDecode(files[selectedIndex].path);
     }
     // Recreate the gate the preload waits on (releasing any prior waiter),
     // then start both — the preload blocks on _loadThumbnails' progress.
@@ -2987,6 +3005,7 @@ class _EditorScreenState extends State<EditorScreen>
     if (_beforeAfterMode && !_neutralPreviews.containsKey(path)) {
       unawaited(_loadNeutralPreview(path));
     }
+    _maybeArmFullQualityDecode(path);
   }
 
   /// Decodes the full editable RAW buffer for [path] (unless already
@@ -3552,13 +3571,6 @@ class _EditorScreenState extends State<EditorScreen>
       }
     }
 
-    // A settled render just landed. Arm the native-source decode a beat
-    // later — once it's available, subsequent settled renders get the
-    // phase-2 pass. Fires once per photo. (Also after an AI Denoise
-    // apply/remove, so that path engages full-quality mode too.)
-    if (!live) {
-      _maybeArmFullQualityDecode(path);
-    }
   }
 
   /// GPU / CPU-parallel / progress-tracked dispatch for one render job —
@@ -3643,7 +3655,7 @@ class _EditorScreenState extends State<EditorScreen>
     }
     _dynamicPreviewTimer?.cancel();
     _dynamicPreviewTimer = Timer(
-      _dynamicPreviewDelay,
+      _dynamicPreviewOpenDelay,
       () => unawaited(_ensureFullQualitySource(path)),
     );
   }
