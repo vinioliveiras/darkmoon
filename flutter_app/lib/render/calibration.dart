@@ -78,7 +78,15 @@ const double calGlobalAmountCompression = 0.3;
 /// reads through it for every key.
 const Map<String, double> calGlobalAmountCompressionOverrides = {
   'Exposure': 1.0,
+  'Contrast': 1.0,
 };
+
+// Temperature/Tint deliberately have NO entry here, not even 1.0: they
+// aren't in this map's lookup at all — `_withGlobalEditAmountApplied`
+// excludes them from the whole scaling loop entirely (they're not
+// naturally 0-centered deltas the way Exposure/Contrast are), so they
+// already always render at their exact stored value regardless of
+// Amount. An override entry for them would be dead code, never read.
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  WHITE BALANCE (Temperature / Tint)                                       ║
