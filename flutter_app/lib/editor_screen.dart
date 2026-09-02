@@ -3872,7 +3872,54 @@ class _EditorScreenState extends State<EditorScreen>
     _decodingFullQuality = true;
     EditSource? native;
     try {
-      native = await _loadNativeSource(path, lowPriority: true);
+      // Real bug fixed 2026-09-02 ("Colorize applies then the photo goes
+      // back to sepia"): this always called the plain _loadNativeSource,
+      // ignoring AI Enhance/Cloud AI/Colorize entirely — once Dynamic
+      // Full Resolution's native-res source landed, every settled render
+      // switched to rendering that plain (un-enhanced/un-denoised/
+      // un-colorized) buffer instead. Same routing export already uses
+      // (see _exportCurrent's own wantDenoise/wantCloudProvider/
+      // wantColorize block) — the general fix the user asked to check
+      // for, not colorize-specific.
+      final wantDenoise = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
+      final wantUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
+      final wantRawDenoise = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
+      final wantDenoiseAmount =
+          (_paramValues[_neuralDenoiseAmountKey] ?? defaultNeuralDenoiseAmount)
+              .round();
+      final wantUpscaleSharpnessAmount =
+          (_paramValues[_upscaleSharpnessAmountKey] ?? 0.0).round();
+      final wantRestoreDetail = (_paramValues[_restoreDetailKey] ?? 0.0) > 0;
+      final wantRestoreDetailAmount =
+          (_paramValues[_restoreDetailAmountKey] ?? defaultRestoreDetailAmount)
+              .round();
+      final wantCloudProvider = _cloudProviderFromIndex(
+        (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
+      );
+      final wantColorize = (_paramValues[_colorizeKey] ?? 0.0) > 0;
+      final wantColorizeIntensity =
+          (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
+              .round();
+      if (wantDenoise || wantUpscale || wantRawDenoise || wantRestoreDetail) {
+        native = await _loadEnhancedNativeSource(
+          path,
+          denoise: wantDenoise,
+          upscale: wantUpscale,
+          denoiseAmount: wantDenoiseAmount,
+          rawDenoise: wantRawDenoise,
+          upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
+          restoreDetail: wantRestoreDetail,
+          restoreDetailAmount: wantRestoreDetailAmount,
+        );
+      } else if (wantCloudProvider != null) {
+        native = await _loadCloudDenoisedNativeSource(path, wantCloudProvider);
+      } else if (wantColorize) {
+        native = await _loadColorizedNativeSource(
+          path,
+          intensityPercent: wantColorizeIntensity,
+        );
+      }
+      native ??= await _loadNativeSource(path, lowPriority: true);
     } finally {
       _decodingFullQuality = false;
     }
