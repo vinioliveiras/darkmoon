@@ -19,13 +19,27 @@ import 'libraw.dart';
 /// the value used when no explicit choice is passed, and matches the
 /// app settings' own default preview resolution (`app_settings.dart`).
 ///
-/// Raised from 1024 to 1600 (2026-09-01, real complaint: the settled view
-/// looked "blurry and blocky" — confirmed by rendering a real photo at
-/// 1024px and comparing a 1:1 crop against the native decode) — 1024 was
-/// comfortably above a typical viewport a decade ago, not against a
-/// current 1440p/4K editor panel, where the editor was stretching this
-/// buffer up rather than showing it near 1:1.
-const int defaultPreviewMaxDimension = 1600;
+/// Was raised from 1024 to 1600 (2026-09-01, real complaint: the settled
+/// view looked "blurry and blocky" at 1024 on a current 1440p/4K editor
+/// panel — confirmed by rendering a real photo and comparing a 1:1 crop).
+/// Reverted back to 1024 the next day (2026-09-02): every settled render
+/// (including one a toggle switch triggers, not just a slider) runs its
+/// ~10-stage GPU shader chain inline on the main UI isolate (`dart:ui`'s
+/// GPU primitives can't run off it — see `render_gpu.dart`'s doc
+/// comment), and that chain's cost scales with this resolution — at 1600
+/// it was consistently long enough to visibly stall the frame pump (a
+/// toggle's own Switch animation freezing instead of playing), confirmed
+/// fixed by the user dropping their own Settings value to 1024. This is a
+/// main-isolate-orchestration cost (Picture recording + rasterize +
+/// readback per stage, serialized), not raw GPU compute throughput, so a
+/// fast GPU doesn't fix it by itself. The blurry-at-1024 complaint above
+/// is still real — this is a deliberate trade back toward interaction
+/// smoothness over settled-view sharpness, not a discovery that the
+/// earlier bump was wrong. See PENDING.md / project_gpu_render_plan.md
+/// for the fuller trail; the real fix (render cheap first, then upgrade
+/// quality, the way `dynamicFullPreview` already does) would let this go
+/// back to 1600 without the stall — not done yet.
+const int defaultPreviewMaxDimension = 1024;
 
 /// A smaller version of the same buffer: used while a slider is actively
 /// being dragged so re-rendering stays fast enough to feel live, swapped
