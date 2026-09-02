@@ -416,11 +416,15 @@ PhotoCurves _withCurveCategoriesApplied(
 ///   Color profile renders the same RAW.
 /// - [pastel]/[noir] (2026-09-01): hand-authored creative per-hue grades,
 ///   not fitted against a reference — see `tool/author_color_profiles.dart`.
-///   Same undamped/Contrast-0 baseline as Vivid; only the per-hue table
-///   differs. Two sibling grades ("Golden Hour"/"Teal & Orange") shipped
-///   the same day and were removed again 2026-09-02 (explicit user request,
-///   keeping only Default/Vivid/Pastel/Noir) — see [_colorProfileModeOf]
-///   for the index-migration this left behind.
+///   Undamped like Vivid; only the per-hue table differs. Two sibling
+///   grades ("Golden Hour"/"Teal & Orange") shipped the same day and were
+///   removed again 2026-09-02 (explicit user request, keeping only
+///   Default/Vivid/Pastel/Noir) — see [_colorProfileModeOf] for the
+///   index-migration this left behind.
+///
+/// [vivid]/[pastel]/[noir] all default Contrast to 80 (2026-09-02,
+/// explicit user request, raised from 0) — [darkmoonDefault] keeps its
+/// own separate [calBaseContrast]-derived baseline.
 ///
 /// Picking any mode resets Strength to 100% and Contrast to
 /// [contrastBaseline] (2026-09-01, explicit user request — same
@@ -433,19 +437,19 @@ enum ColorProfileMode {
     profileAsset: null,
   ),
   vivid(
-    contrastBaseline: 0,
+    contrastBaseline: 80,
     dampened: false,
     usesHueProfile: true,
     profileAsset: 'darkmoon_vivid.json',
   ),
   pastel(
-    contrastBaseline: 0,
+    contrastBaseline: 80,
     dampened: false,
     usesHueProfile: true,
     profileAsset: 'darkmoon_pastel.json',
   ),
   noir(
-    contrastBaseline: 0,
+    contrastBaseline: 80,
     dampened: false,
     usesHueProfile: true,
     profileAsset: 'darkmoon_noir.json',
@@ -596,11 +600,11 @@ const _sections = <String, List<_SliderSpec>>{
   // respectively) since conceptually both describe "how much of the
   // darkmoon Color profile treatment applies," not a tone adjustment.
   'COLOR PROFILE': [
-    // Range raised 0-60 -> 0-100 (2026-09-02, explicit user request — "a
-    // boost"), now that ColorProfileAmount is undamped (see
+    // Range raised 0-60 -> 0-100 -> 0-150 (2026-09-02, explicit user
+    // request — "a boost"), now that ColorProfileAmount is undamped (see
     // calGlobalAmountCompressionOverrides) and no longer silently
     // clipped by the Amount slider's own 30% compression.
-    _SliderSpec('ColorProfileAmount', 0, 100, calBaseContrast, decimals: 0),
+    _SliderSpec('ColorProfileAmount', 0, 150, calBaseContrast, decimals: 0),
   ],
   'WHITE BALANCE': [
     _SliderSpec(
