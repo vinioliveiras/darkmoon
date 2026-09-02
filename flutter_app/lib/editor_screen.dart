@@ -550,18 +550,18 @@ const defaultFlowAmount = 10.0;
 /// continuous "how much of an effect" sliders.
 ///
 /// The blend fraction is the UI's 0-200 value scaled down by
-/// [calGlobalAmountCompression] — so the default Amount (100%, the "no-op"
-/// UI position) still damps everything to that fraction. There's no
-/// no-op fast path anymore: even the default state now scales every value.
-/// Skipped when the active [ColorProfileMode.dampened] is false (see its
-/// own doc) — an undamped profile's Strength 100% means an exact 1:1
-/// pass-through.
+/// [calGlobalAmountCompression] (or, per key, by
+/// [calGlobalAmountCompressionOverrides] instead when that key has its own
+/// entry there — e.g. Exposure stays at fraction 1.0, undamped) — so the
+/// default Amount (100%, the "no-op" UI position) still damps everything
+/// to that fraction. There's no no-op fast path anymore: even the default
+/// state now scales every value. Skipped when the active
+/// [ColorProfileMode.dampened] is false (see its own doc) — an undamped
+/// profile's Strength 100% means an exact 1:1 pass-through for every key,
+/// override or not.
 Map<String, double> _withGlobalEditAmountApplied(Map<String, double> values) {
   final amount = values[_globalEditAmountKey] ?? 100.0;
-  final compression = _colorProfileModeOf(values).dampened
-      ? calGlobalAmountCompression
-      : 1.0;
-  final fraction = amount / 100.0 * compression;
+  final dampened = _colorProfileModeOf(values).dampened;
   final defaults = _defaultParamValues();
   final scaleKeys = defaults.keys.toSet()
     ..remove('Temperature')
@@ -573,6 +573,10 @@ Map<String, double> _withGlobalEditAmountApplied(Map<String, double> values) {
     if (value == null) {
       continue;
     }
+    final compression = dampened
+        ? (calGlobalAmountCompressionOverrides[key] ?? calGlobalAmountCompression)
+        : 1.0;
+    final fraction = amount / 100.0 * compression;
     final base = defaults[key] ?? 0;
     scaled[key] = base + (value - base) * fraction;
   }

@@ -63,6 +63,23 @@ library;
 /// default: 0.3   (original/unset: 1.0 — Amount was a 1:1 pass-through)
 const double calGlobalAmountCompression = 0.3;
 
+/// Per-slider override of [calGlobalAmountCompression] — a slider key
+/// present here (matching its `_SliderSpec` name in `editor_screen.dart`,
+/// e.g. `'Exposure'`) uses this fraction instead of the global one; every
+/// other slider still falls back to [calGlobalAmountCompression]
+/// automatically. Exists because the global damping fraction was tuned
+/// against the general "everything looks too strong at its literal value"
+/// pattern, but not every slider necessarily fits that pattern — Exposure
+/// is kept at 1.0 (no damping at all) per explicit request (2026-09-02):
+/// unlike Vibrance/Saturation/Dehaze/Mixer, a damped Exposure read as too
+/// weak, not "correctly gentled." Add more entries here the same way if a
+/// future slider needs its own answer instead of the global one — no code
+/// change needed beyond this map, [_withGlobalEditAmountApplied] already
+/// reads through it for every key.
+const Map<String, double> calGlobalAmountCompressionOverrides = {
+  'Exposure': 1.0,
+};
+
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  WHITE BALANCE (Temperature / Tint)                                       ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
@@ -158,7 +175,7 @@ const double calWbAsShotTintScaleFallback = 200.0;
 /// for this — that's the decode-time exposure baseline, and re-opening
 /// it risks the whole incident history in project_darkmoon_color_profile
 /// .md; this S-curve is the safer, purely render-time lever.)
-const double calBaseContrast = 15.0;
+const double calBaseContrast = 20.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  BASIC — Exposure / Brightness / Contrast                                 ║
