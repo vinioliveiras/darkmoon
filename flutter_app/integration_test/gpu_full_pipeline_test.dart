@@ -336,6 +336,52 @@ void main() {
       );
     });
 
+    testWidgets('a small frame, where a blur rounds down to no-op', (
+      tester,
+    ) async {
+      // Regression for a GPU render that threw and therefore never
+      // appeared at all — the editor swallows the exception, so the photo
+      // just sat on its blurred thumbnail forever. Reported as "TIF photos
+      // don't open"; the format was incidental, the size was not.
+      //
+      // At a 640px long edge the renderScale is 0.625, which takes the
+      // always-on chroma smoothing's sigma down to 0.39 — and
+      // boxRadiiForGauss returns [0, 0, 0] for that. Every box pass
+      // no-ops, so runGaussianBlurGpu hands its input straight back, and
+      // the stage then disposed that input as if it had created it. The
+      // caller disposed it again and dart:ui asserted.
+      //
+      // Any frame whose long edge is well under calRadiusReferenceLongEdge
+      // reproduces it, so this needs no particular file — the 427x640 here
+      // is the reported photo's own shape.
+      const smallW = 427, smallH = 640;
+      final smallPhoto = _syntheticPhoto(smallW, smallH);
+      // Texture is left out on purpose: it carries a pre-existing
+      // full-pipeline gap of its own (see the renderScale case below), and
+      // it is not what triggers this — the always-on chroma smoothing is.
+      const params = RenderParams(
+        clarity: 30,
+        sharpen: SharpenParams(amount: 60),
+      );
+      final scaled = params.withRenderScaleFor(smallW, smallH);
+      expect(
+        scaled.renderScale,
+        lessThan(1.0),
+        reason: 'the point of this case is a below-reference frame',
+      );
+      final cpu = renderRgb(smallW, smallH, smallPhoto, scaled);
+      final gpu = await renderRgbGpu(smallW, smallH, smallPhoto, scaled);
+      expect(gpu.length, cpu.length);
+      var sum = 0.0;
+      for (var i = 0; i < cpu.length; i++) {
+        sum += (cpu[i] - gpu[i]).abs();
+      }
+      final mean = sum / cpu.length;
+      // ignore: avoid_print
+      print('[gpu_full_pipeline] small frame (${smallW}x$smallH): mean=$mean');
+      expect(mean, lessThan(3.0));
+    });
+
     testWidgets('a non-1.0 renderScale reaches both paths identically', (
       tester,
     ) async {

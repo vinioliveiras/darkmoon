@@ -22,7 +22,7 @@ Future<ui.Image> runLocalContrastGpu(
     return source;
   }
 
-  final scratch = GpuImagePool();
+  final scratch = GpuImagePool([source]);
   final luminance = scratch.add(
     await GpuPass.run(
       'shaders/luminance_extract.frag',

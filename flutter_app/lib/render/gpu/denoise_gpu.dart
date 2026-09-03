@@ -45,7 +45,7 @@ Future<ui.Image> _runAdaptiveDenoise(
   if (strength <= 0) {
     return channel;
   }
-  final scratch = GpuImagePool();
+  final scratch = GpuImagePool([channel]);
   final blurred = scratch.add(
     await runGaussianBlurGpu(channel, width, height, sigma),
   );
@@ -114,7 +114,7 @@ Future<ui.Image> runBaselineChromaSmoothingGpu(
   int height, [
   double scale = 1.0,
 ]) async {
-  final scratch = GpuImagePool();
+  final scratch = GpuImagePool([source]);
   final chroma = scratch.add(
     await GpuPass.run(
       'shaders/chroma_extract.frag',
@@ -210,7 +210,7 @@ Future<ui.Image> runAiDenoiseGpu(
   final chromaStrength = (tuning.chromaStrength * calDenoiseChromaStrengthScale)
       .clamp(0.0, 1.0);
 
-  final scratch = GpuImagePool();
+  final scratch = GpuImagePool([source]);
   final luminance = scratch.add(
     await GpuPass.run(
       'shaders/luminance_extract.frag',

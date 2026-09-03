@@ -46,7 +46,7 @@ Future<ui.Image> runSharpenGpu(
   final detailMix = params.detail / 100.0;
   final maskAmount = params.masking / 100.0;
 
-  final scratch = GpuImagePool();
+  final scratch = GpuImagePool([source]);
   final luminance = scratch.add(
     await GpuPass.run(
       'shaders/luminance_extract.frag',

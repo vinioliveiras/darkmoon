@@ -43,6 +43,11 @@ Future<ui.Image> runDehazeGpu(
     outputWidth: width,
     outputHeight: height,
   );
-  blurred.dispose();
+  // Not necessarily a new image: runGaussianBlurGpu hands its input
+  // straight back when every box radius rounds to zero, and [source]
+  // belongs to the caller.
+  if (!identical(blurred, source)) {
+    blurred.dispose();
+  }
   return result;
 }

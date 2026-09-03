@@ -103,7 +103,7 @@ Future<ui.Image> renderImageGpu(
   // midtones" weight, which reads each pixel's current luminance and
   // targets the wrong tonal range on a RAW that still needs a large
   // Exposure correction.
-  final chain = GpuImagePool();
+  final chain = GpuImagePool([source]);
   final afterExposureAndWb = chain.add(
     await _runPreDenoise(source, width, height, params),
   );

@@ -51,11 +51,41 @@ const double gpuResidualSqScale = 512.0;
 /// naturally when one of those no-op paths is taken — still disposes it
 /// exactly once.
 class GpuImagePool {
-  final Set<ui.Image> _images = Set<ui.Image>.identity();
+  /// [borrowed] are the images this stage was *handed* — its inputs. They
+  /// belong to the caller, so [add] refuses to register them however it is
+  /// called.
+  ///
+  /// That guard is the whole point, not a formality. Several helpers in
+  /// this file return their own input unchanged when they have nothing to
+  /// do, and `runGaussianBlurGpu` is one of them: `boxRadiiForGauss`
+  /// returns all-zero radii for a small enough sigma, so every box pass
+  /// no-ops and the "blurred" result *is* the input. Writing
+  /// `scratch.add(await runGaussianBlurGpu(channel, ...))` then reads as
+  /// registering a new image while actually registering the caller's, and
+  /// the stage disposes it on the way out — after which the caller
+  /// disposes it again.
+  ///
+  /// Real bug (2026-09-03): that is exactly what happened to
+  /// `_runAdaptiveDenoise` once radii started scaling with the frame. On a
+  /// 427x640 TIFF the baseline chroma smoothing's sigma fell to 0.39, its
+  /// radii came out [0, 0, 0], and every render of that photo died on a
+  /// `dart:ui` double-dispose assertion — which the editor swallows, so
+  /// the photo simply never appeared.
+  GpuImagePool([Iterable<ui.Image> borrowed = const []])
+    : _borrowed = Set<ui.Image>.identity() {
+    _borrowed.addAll(borrowed);
+  }
 
-  /// Registers [image] as this stage's to release, and returns it.
+  final Set<ui.Image> _images = Set<ui.Image>.identity();
+  final Set<ui.Image> _borrowed;
+
+  /// Registers [image] as this stage's to release, and returns it — unless
+  /// it is one of the caller's own (see the constructor), in which case it
+  /// is returned untouched.
   ui.Image add(ui.Image image) {
-    _images.add(image);
+    if (!_borrowed.contains(image)) {
+      _images.add(image);
+    }
     return image;
   }
 
