@@ -125,9 +125,19 @@ install(FILES
 # instead of naming the .onnx files directly so a future model swap
 # doesn't also require touching this file.
 file(GLOB DARKMOON_ONNX_MODELS "${CMAKE_CURRENT_SOURCE_DIR}/../native_models/*.onnx")
-install(FILES ${DARKMOON_ONNX_MODELS}
-  DESTINATION "${INSTALL_BUNDLE_LIB_DIR}/models"
-  COMPONENT Runtime)
+# Guarded: the .onnx weights are gitignored (hundreds of MB, over GitHub's
+# per-file limit — see .gitignore), so a fresh clone and every CI build has
+# an empty glob here. `install(FILES )` with no files is a hard CMake
+# error, which made the project unbuildable without them; the app itself
+# degrades gracefully (the AI features report a missing model), so a build
+# without them is legitimate.
+if(DARKMOON_ONNX_MODELS)
+  install(FILES ${DARKMOON_ONNX_MODELS}
+    DESTINATION "${INSTALL_BUNDLE_LIB_DIR}/models"
+    COMPONENT Runtime)
+else()
+  message(STATUS "darkmoon: no .onnx models in native_models/ — building without the AI feature weights")
+endif()
 
 if(PLUGIN_BUNDLED_LIBRARIES)
   install(FILES "${PLUGIN_BUNDLED_LIBRARIES}"

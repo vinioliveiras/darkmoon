@@ -1,0 +1,101 @@
+# Build and test darkmoon on all three desktop platforms.
+#
+# macOS is here for a specific reason: it is the one platform the project
+# has no hardware for. The runners are real Apple machines and are free for
+# a public repo, so this is how a macOS build gets exercised at all.
+#
+# What this does NOT produce is a *distributable* build. The ONNX model
+# weights (~1.2GB) are gitignored — over GitHub's per-file limit — so
+# nothing here bundles them, and the AI features would report a missing
+# model at runtime. Releases are still cut locally, where the weights are.
+# The point of this workflow is "does it still compile and pass its tests
+# everywhere", which is exactly what nothing was checking before.
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+# A new push to the same branch makes an in-flight run pointless.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pinned to what the project is developed against — `flutter --version`
+  # on the maintainer's machine. Floating on `stable` would turn an
+  # upstream release into a surprise CI failure unrelated to any change
+  # here.
+  FLUTTER_VERSION: 3.35.5
+
+defaults:
+  run:
+    working-directory: flutter_app
+
+jobs:
+  analyze-and-test:
+    name: Analyze + test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - name: Verify formatting
+        run: dart format --output=none --set-exit-if-changed lib test tool integration_test
+      - run: flutter analyze
+      - run: flutter test
+
+  build:
+    name: Build ${{ matrix.name }}
+    needs: analyze-and-test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing should not hide whether the others are fine —
+      # especially while macOS support is new.
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            target: macos
+            artifact: build/macos/Build/Products/Release
+          - name: Windows
+            os: windows-latest
+            target: windows
+            artifact: build/windows/x64/runner/Release
+          - name: Linux
+            os: ubuntu-latest
+            target: linux
+            artifact: build/linux/x64/release/bundle
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux build dependencies
+        if: matrix.target == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y ninja-build libgtk-3-dev
+        working-directory: .
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - run: flutter config --enable-${{ matrix.target }}-desktop
+      - run: flutter pub get
+      - run: flutter build ${{ matrix.target }} --release
+
+      - name: Upload build
+        uses: actions/upload-artifact@v4
+        with:
+          name: darkmoon-${{ matrix.target }}
+          path: flutter_app/${{ matrix.artifact }}
+          # Without the model weights these are tens of MB, not gigabytes.
+          retention-days: 14
+          if-no-files-found: error
