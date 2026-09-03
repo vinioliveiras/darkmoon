@@ -47,8 +47,8 @@ void main() {
     test('a custom-model spec keys by its full path, not just the basename '
         '— two different custom models that happen to share a filename '
         'must not collide in OnnxModel\'s session cache', () {
-      final a = OnnxModelSpec.customDenoiseModel(r'C:\a\model.onnx');
-      final b = OnnxModelSpec.customDenoiseModel(r'C:\b\model.onnx');
+      final a = OnnxModelSpec.customDenoiseModel(_path(['a', 'model.onnx']));
+      final b = OnnxModelSpec.customDenoiseModel(_path(['b', 'model.onnx']));
       expect(a.fileName, b.fileName); // same basename
       expect(a.cacheKey, isNot(equals(b.cacheKey))); // different cache entries
     });
@@ -56,7 +56,7 @@ void main() {
     test('a custom model never collides with the bundled default, even if '
         'a user happened to name their file the same as the bundled one', () {
       final custom = OnnxModelSpec.customDenoiseModel(
-        'C:\\somewhere\\${denoiseModelSpec.fileName}',
+        _path(['somewhere', denoiseModelSpec.fileName]),
       );
       expect(custom.cacheKey, isNot(equals(denoiseModelSpec.cacheKey)));
     });
