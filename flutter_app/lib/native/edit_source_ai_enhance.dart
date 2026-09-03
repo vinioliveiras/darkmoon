@@ -376,20 +376,28 @@ class _AiEnhanceDecodeIsolateArgs {
 }
 
 void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
-  final result = await _decodeAndEnhance(
-    args.path,
-    args.cacheDir,
-    args.previewMaxDimension,
-    args.enableDenoise,
-    args.enableUpscale,
-    args.enableRawDenoise,
-    args.denoiseStrengthPercent,
-    args.customDenoiseModelPath,
-    args.upscaleSharpnessAmount,
-    args.enableDetailRestore,
-    args.detailRestoreAmount,
-    (stage) => args.sendPort.send(stage),
-  );
+  final EditSourcePair? result;
+  try {
+    result = await _decodeAndEnhance(
+      args.path,
+      args.cacheDir,
+      args.previewMaxDimension,
+      args.enableDenoise,
+      args.enableUpscale,
+      args.enableRawDenoise,
+      args.denoiseStrengthPercent,
+      args.customDenoiseModelPath,
+      args.upscaleSharpnessAmount,
+      args.enableDetailRestore,
+      args.detailRestoreAmount,
+      (stage) => args.sendPort.send(stage),
+    );
+  } finally {
+    // Spawned per run and killed right after, but the sessions it loaded
+    // (denoise + upscale + whatever else the flags turned on) are native
+    // memory that would outlive it. See [OnnxModel.releaseAll].
+    OnnxModel.releaseAll();
+  }
   args.sendPort.send(result);
 }
 

@@ -10,7 +10,18 @@ bool? _cachedGpuSupport;
 /// Runs in a throwaway background isolate (via [compute]) — creating an
 /// [OnnxModel] session is blocking FFI work, same reasoning every other
 /// ONNX call in this codebase runs off the main isolate.
-bool _probeInIsolate(void _) => OnnxModel.forSpec(denoiseModelSpec).usingGpu;
+///
+/// Releases the session before returning: the isolate is thrown away
+/// immediately, but the session behind it is native memory that would
+/// outlive it (see [OnnxModel.releaseAll]) — for a probe that only ever
+/// reads one bool.
+bool _probeInIsolate(void _) {
+  try {
+    return OnnxModel.forSpec(denoiseModelSpec).usingGpu;
+  } finally {
+    OnnxModel.releaseAll();
+  }
+}
 
 /// Whether DirectML actually works for AI Enhance's models on this
 /// machine — used to show an honest "this will run on CPU and be slower"
@@ -52,8 +63,16 @@ Future<bool> probeAiEnhanceGpuSupport() async {
 /// are expected to ever actually disagree.
 bool? _cachedColorizeGpuSupport;
 
-bool _probeColorizeInIsolate(void _) =>
-    OnnxModel.forSpec(ddcolorModelSpec).usingGpu;
+/// See [_probeInIsolate] — same throwaway-isolate probe, and the same
+/// reason for releasing before returning. It matters more here:
+/// ddcolorModelSpec's graph alone is 934 MB.
+bool _probeColorizeInIsolate(void _) {
+  try {
+    return OnnxModel.forSpec(ddcolorModelSpec).usingGpu;
+  } finally {
+    OnnxModel.releaseAll();
+  }
+}
 
 /// [ColorizeDialog]'s equivalent of [probeAiEnhanceGpuSupport] — probed
 /// from the dialog's own `initState` (2026-09-01, fixed a real bug: an

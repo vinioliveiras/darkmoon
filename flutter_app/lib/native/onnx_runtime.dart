@@ -371,12 +371,8 @@ class OnnxModel {
     this.directMlError,
   );
 
-  // Never read directly, only kept alive: the env must outlive the
-  // session for the process lifetime of this singleton (there's no
-  // dispose path — same "just leak it, the process is about to exit
-  // anyway" reasoning `libraw.dart` doesn't need since it opens/closes a
-  // libraw_data_t* per call instead of holding a long-lived session).
-  // ignore: unused_field
+  // Only read by [releaseAll], which must release the env *after* the
+  // session that depends on it.
   final Pointer<OrtEnv> _env;
   final Pointer<OrtSession> _session;
   final Pointer<OrtMemoryInfo> _memoryInfo;
@@ -394,6 +390,48 @@ class OnnxModel {
   final String? directMlError;
 
   static final Map<String, OnnxModel> _instances = {};
+
+  /// Releases every session this isolate created, and empties the cache.
+  ///
+  /// [_instances] is a static field, so it is scoped to whichever isolate
+  /// is running — but the memory behind it is not. An ONNX Runtime session
+  /// is native (malloc'd, plus a DirectML device and its GPU allocations),
+  /// so it survives the isolate that created it: when a one-shot job's
+  /// isolate exits, the Dart map goes away and the session becomes
+  /// unreachable *and* unfreed, for the rest of the process's life.
+  ///
+  /// Real leak fixed 2026-09-03: every AI Enhance and every Colorize run
+  /// spawns its own isolate (`edit_source_colorize.dart`,
+  /// `ai_enhance_job.dart`) and loaded its models there, so each run leaked
+  /// a full set of sessions — including DDColor's, whose graph alone is
+  /// 934 MB. Nothing in this file ever called ReleaseSession/ReleaseEnv/
+  /// ReleaseMemoryInfo; the comment where the env is declared assumed a
+  /// process-lifetime singleton, which is only true on the main isolate.
+  ///
+  /// Every isolate entry point that touches [forSpec] must call this in a
+  /// `finally`. Safe to call more than once, and safe to call when no
+  /// model was ever loaded.
+  static void releaseAll() {
+    if (_instances.isEmpty) {
+      return;
+    }
+    final api = _OrtLib.api;
+    for (final model in _instances.values) {
+      // Order matters: the session and the memory info both belong to the
+      // env, so the env goes last.
+      api.ref.ReleaseSession.asFunction<void Function(Pointer<OrtSession>)>()(
+        model._session,
+      );
+      api.ref.ReleaseMemoryInfo
+          .asFunction<void Function(Pointer<OrtMemoryInfo>)>()(
+        model._memoryInfo,
+      );
+      api.ref.ReleaseEnv.asFunction<void Function(Pointer<OrtEnv>)>()(
+        model._env,
+      );
+    }
+    _instances.clear();
+  }
 
   /// Lazily creates (once per [spec]) and returns a shared model session.
   /// Throws [OrtException] only if *both* the GPU and CPU session-creation
@@ -773,5 +811,10 @@ bool probeOnnxAvailable(OnnxModelSpec spec) {
     return true;
   } catch (_) {
     return false;
+  } finally {
+    // The probe wants the answer, not the session — and it is documented
+    // to run on a throwaway background isolate, where a retained session
+    // would leak (see [OnnxModel.releaseAll]).
+    OnnxModel.releaseAll();
   }
 }

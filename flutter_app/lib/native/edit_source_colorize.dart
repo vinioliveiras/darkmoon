@@ -191,13 +191,21 @@ class _ColorizeIsolateArgs {
 }
 
 void _colorizeIsolateEntry(_ColorizeIsolateArgs args) async {
-  final result = await _decodeAndColorize(
-    args.path,
-    args.cacheDir,
-    args.previewMaxDimension,
-    args.intensityPercent,
-    (stage) => args.sendPort.send(stage),
-  );
+  final EditSourcePair? result;
+  try {
+    result = await _decodeAndColorize(
+      args.path,
+      args.cacheDir,
+      args.previewMaxDimension,
+      args.intensityPercent,
+      (stage) => args.sendPort.send(stage),
+    );
+  } finally {
+    // This isolate is spawned per colorize run and killed right after, but
+    // the DDColor session it loaded is native memory that would outlive it
+    // — a 934 MB graph leaked once per run. See [OnnxModel.releaseAll].
+    OnnxModel.releaseAll();
+  }
   args.sendPort.send(result);
 }
 

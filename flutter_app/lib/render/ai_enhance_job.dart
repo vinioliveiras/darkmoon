@@ -114,6 +114,10 @@ Future<AiEnhanceIsolateResult> _enhanceInternal(
     // fresh sessions, same as how LibRaw's own FFI calls work per-isolate
     // elsewhere in this codebase. Negligible next to the tiled-inference
     // time this whole call takes regardless.
+    //
+    // The cache being isolate-scoped is *not* the same as the memory being
+    // isolate-scoped: _aiEnhanceIsolateEntry releases these explicitly
+    // before the isolate exits, or they leak for the life of the process.
     final denoiseModel = OnnxModel.forSpec(denoiseModelSpec);
     final upscaleModel = OnnxModel.forSpec(upscaleModelSpec);
     final result = enhanceImage(
@@ -139,10 +143,18 @@ class _AiEnhanceIsolateArgs {
 }
 
 void _aiEnhanceIsolateEntry(_AiEnhanceIsolateArgs args) async {
-  final result = await _enhanceInternal(
-    args.request,
-    (progress) => args.sendPort.send(progress),
-  );
+  final AiEnhanceIsolateResult result;
+  try {
+    result = await _enhanceInternal(
+      args.request,
+      (progress) => args.sendPort.send(progress),
+    );
+  } finally {
+    // See _enhanceInternal's own note on the per-isolate session cache:
+    // the cache dies with this isolate, the native sessions behind it do
+    // not. See [OnnxModel.releaseAll].
+    OnnxModel.releaseAll();
+  }
   args.sendPort.send(result);
 }
 
