@@ -82,6 +82,103 @@ class RenderResult {
   final Uint8List thumbnailBytes;
 }
 
+/// [compute()] argument bundle for [encodeRenderResult] — one object
+/// because `compute()` only takes a single argument.
+class RenderEncodeRequest {
+  const RenderEncodeRequest({
+    required this.rgbBytes,
+    required this.width,
+    required this.height,
+  });
+
+  /// A finished render's pixels: packed RGB, 3 bytes/pixel, row-major.
+  final Uint8List rgbBytes;
+  final int width;
+  final int height;
+}
+
+/// Histogram + preview JPEG + filmstrip thumbnail from a finished render's
+/// pixels — the whole tail end of a render job, split out of
+/// [renderJobToJpeg] so it can be dispatched on its own.
+///
+/// Exists as a separate top-level function specifically for the GPU path
+/// (`render_job_gpu.dart`): that path *must* run its render inline on the
+/// main isolate (`dart:ui`'s GPU primitives hang inside `Isolate.run`),
+/// but this half is plain CPU work over a plain byte buffer, so it can —
+/// and must — go through `compute()` instead of blocking the UI thread.
+/// `package:image`'s JPEG encoder is pure Dart and costs hundreds of
+/// milliseconds on a full-quality frame; running it inline was what made
+/// the canvas freeze (and toggle animations stall) on every settled GPU
+/// render.
+RenderResult encodeRenderResult(RenderEncodeRequest request) {
+  final histogram = computeHistogram(request.rgbBytes);
+  final image = img.Image.fromBytes(
+    width: request.width,
+    height: request.height,
+    bytes: request.rgbBytes.buffer,
+    numChannels: 3,
+    order: img.ChannelOrder.rgb,
+  );
+  final jpegBytes = Uint8List.fromList(
+    img.encodeJpg(image, quality: 90, chroma: img.JpegChroma.yuv420),
+  );
+  final thumbnail = fitToMaxDimension(image, filmstripThumbnailMaxDimension);
+  final thumbnailBytes = Uint8List.fromList(
+    img.encodeJpg(thumbnail, quality: 85, chroma: img.JpegChroma.yuv420),
+  );
+  return RenderResult(
+    jpegBytes: jpegBytes,
+    histogram: histogram,
+    thumbnailBytes: thumbnailBytes,
+  );
+}
+
+/// True when [prepareRenderGeometry] would actually touch a pixel — i.e.
+/// a lens profile is resolved and enabled, or the crop/rotate/keystone
+/// transform is non-identity. All four of its steps return their input
+/// buffer unchanged (no copy) otherwise, so a caller that would have to
+/// pay an isolate round-trip to offload the work can skip it entirely and
+/// run the no-op inline instead.
+bool renderJobNeedsGeometryPass(RenderJob job) =>
+    (job.lensCorrection.enabled && job.lensProfile != null) ||
+    !job.cropTransform.isIdentity;
+
+/// Lens distortion -> TCA -> crop/rotate/keystone -> lens vignetting, in
+/// the order both render paths need them (see each step's own doc comment
+/// for why that order). Returns the buffer and dimensions the tone/color
+/// pipeline should run on — the job's own source buffer, uncopied, when
+/// [renderJobNeedsGeometryPass] is false.
+///
+/// Shared by [renderJobToJpeg] and `render_job_gpu.dart`'s
+/// `renderJobToJpegGpu` so CPU and GPU renders are fed pixel-identical
+/// input; also a top-level function so the GPU path can push it through
+/// `compute()` when it has real work to do.
+GeometryResult prepareRenderGeometry(RenderJob job) {
+  final undistorted = applyResolvedLensDistortion(job);
+  final dechromatized = applyResolvedLensChromaticAberration(
+    job,
+    undistorted.rgbBytes,
+    undistorted.width,
+    undistorted.height,
+  );
+  final geometry = applyCropTransform(
+    dechromatized.rgbBytes,
+    dechromatized.width,
+    dechromatized.height,
+    job.cropTransform,
+  );
+  return GeometryResult(
+    width: geometry.width,
+    height: geometry.height,
+    rgbBytes: applyResolvedLensVignette(
+      job,
+      geometry.rgbBytes,
+      geometry.width,
+      geometry.height,
+    ),
+  );
+}
+
 /// Runs [renderRgb] on the job's source, encodes the result as JPEG bytes
 /// ready for `Image.memory`, bins it into a histogram, and derives a small
 /// filmstrip thumbnail — all computed here (rather than redoing work later)
@@ -111,25 +208,8 @@ Future<RenderResult> renderJobToJpeg(
   void Function(RenderStage stage)? onStage,
   List<String>? renderTimings,
 }) async {
-  final undistorted = applyResolvedLensDistortion(job);
-  final dechromatized = applyResolvedLensChromaticAberration(
-    job,
-    undistorted.rgbBytes,
-    undistorted.width,
-    undistorted.height,
-  );
-  final geometry = applyCropTransform(
-    dechromatized.rgbBytes,
-    dechromatized.width,
-    dechromatized.height,
-    job.cropTransform,
-  );
-  final correctedRgb = applyResolvedLensVignette(
-    job,
-    geometry.rgbBytes,
-    geometry.width,
-    geometry.height,
-  );
+  final geometry = prepareRenderGeometry(job);
+  final correctedRgb = geometry.rgbBytes;
   final Uint8List rendered;
   if (job.masks.isEmpty && onStage == null) {
     rendered = await renderAdjustmentsParallel(
@@ -157,25 +237,16 @@ Future<RenderResult> renderJobToJpeg(
           );
   }
   onStage?.call(RenderStage.encoding);
-  final histogram = computeHistogram(rendered);
-  final image = img.Image.fromBytes(
-    width: geometry.width,
-    height: geometry.height,
-    bytes: rendered.buffer,
-    numChannels: 3,
-    order: img.ChannelOrder.rgb,
-  );
-  final jpegBytes = Uint8List.fromList(
-    img.encodeJpg(image, quality: 90, chroma: img.JpegChroma.yuv420),
-  );
-  final thumbnail = fitToMaxDimension(image, filmstripThumbnailMaxDimension);
-  final thumbnailBytes = Uint8List.fromList(
-    img.encodeJpg(thumbnail, quality: 85, chroma: img.JpegChroma.yuv420),
-  );
-  return RenderResult(
-    jpegBytes: jpegBytes,
-    histogram: histogram,
-    thumbnailBytes: thumbnailBytes,
+  // Already inside a `compute()` isolate (or the dedicated progress
+  // isolate) by the time this runs, so the encode happens here directly —
+  // it's the GPU path that has to hand this same function to `compute()`
+  // itself. See [encodeRenderResult].
+  return encodeRenderResult(
+    RenderEncodeRequest(
+      rgbBytes: rendered,
+      width: geometry.width,
+      height: geometry.height,
+    ),
   );
 }
 
