@@ -960,12 +960,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get colorProfileModeFlat => 'Vívido';
 
   @override
-  String get colorProfileModePastel => 'Pastel';
-
-  @override
-  String get colorProfileModeNoir => 'Noir';
-
-  @override
   String get sliderTexture => 'Textura';
 
   @override

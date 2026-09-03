@@ -970,12 +970,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get colorProfileModeFlat => 'Lebendig';
 
   @override
-  String get colorProfileModePastel => 'Pastell';
-
-  @override
-  String get colorProfileModeNoir => 'Noir';
-
-  @override
   String get sliderTexture => 'Textur';
 
   @override

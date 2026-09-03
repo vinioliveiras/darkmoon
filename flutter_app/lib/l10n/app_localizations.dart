@@ -1840,18 +1840,6 @@ abstract class AppLocalizations {
   /// **'Vivid'**
   String get colorProfileModeFlat;
 
-  /// No description provided for @colorProfileModePastel.
-  ///
-  /// In en, this message translates to:
-  /// **'Pastel'**
-  String get colorProfileModePastel;
-
-  /// No description provided for @colorProfileModeNoir.
-  ///
-  /// In en, this message translates to:
-  /// **'Noir'**
-  String get colorProfileModeNoir;
-
   /// No description provided for @sliderTexture.
   ///
   /// In en, this message translates to:

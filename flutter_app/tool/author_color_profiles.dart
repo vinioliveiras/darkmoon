@@ -57,6 +57,7 @@ double _sum(double atHue, List<(double center, double width, double amount)> bum
 /// target specific hues. See [_sum]'s doc for why this exists separately.
 double _flat(double amount) => amount;
 
+// ignore: unused_element — kept for the next hand-authored profile, see main().
 ColorProfile _build(
   String name, {
   required List<(double, double, double)> hue,
@@ -84,65 +85,12 @@ ColorProfile _build(
 }
 
 void main() {
-  // Hue landmarks (matches color_mixer.dart's own band centres): red 358,
-  // orange 25, yellow 60, green 115, aqua 180, blue 225, purple 280,
-  // magenta 330.
-  const red = 358.0, orange = 25.0;
-  const aqua = 180.0, blue = 225.0, magenta = 330.0;
-
-  // "Golden Hour"/"Teal & Orange" (2026-09-01) were removed again
-  // 2026-09-02, explicit user request — keeping only Default/Vivid/
-  // Pastel/Noir. See git history for their _build(...) calls if
-  // reviving either.
-
-  // ---- Pastel: bright and airy -- the light, soft opposite of Noir ----
-  // Uniform (satFlat/lumFlat), not per-hue bumps -- "pastel" is a global
-  // softening, not a selective grade, and see _sum's doc for why stacking
-  // 7 overlapping bumps to fake "uniform" badly overcorrected the first
-  // attempt (read as near-monochrome, not softly desaturated). Lift
-  // raised well above the desaturation this pass (2026-09-01) so it
-  // reads as "bright and soft," not just "muted" -- the clearer opposite
-  // of Noir's dark-and-desaturated below.
-  final pastel = _build(
-    'Pastel',
-    hue: [
-      (magenta, 60, 2), // barely-there warm-pink drift
-    ],
-    sat: const [],
-    lum: const [],
-    satFlat: -0.20,
-    lumFlat: 0.10,
-  );
-
-  // ---- Noir: dark, cool and heavily desaturated -- Pastel's opposite ----
-  // (No true B&W/contrast here by design -- tone stays identity, see this
-  // file's header. Reads as "cool, subdued, moody," not monochrome --
-  // same uniform-via-flat fix as Pastel, plus a couple of small
-  // selective accents layered on top for character. Pushed clearly
-  // darker/more desaturated than Pastel is bright/soft, 2026-09-01, so
-  // the two read as opposites rather than both landing on "muted.")
-  final noir = _build(
-    'Noir',
-    hue: [
-      (red, 45, 5), // reds nudged toward magenta -- cooler skin
-      (orange, 35, 6), // oranges nudged toward yellow -- less warmth
-      (blue, 45, -5), // blue nudged toward aqua -- steelier
-    ],
-    sat: const [],
-    lum: [
-      (aqua, 50, 0.04), // faint moonlit lift in the cool end
-      (blue, 45, 0.05),
-    ],
-    satFlat: -0.42,
-    lumFlat: -0.09,
-  );
-
-  final outDir = Directory('assets/color_profiles');
-  for (final profile in [pastel, noir]) {
-    final fileName =
-        'darkmoon_${profile.name.toLowerCase().replaceAll(RegExp(r'[^a-z]+'), '_')}.json';
-    final path = '${outDir.path}/$fileName';
-    File(path).writeAsStringSync(profile.encode());
-    stdout.writeln('wrote $path');
-  }
+  // Every hand-authored profile built with this tool ("Golden Hour"/"Teal
+  // & Orange" shipped 2026-09-01, removed 2026-09-02; "Pastel"/"Noir"
+  // shipped 2026-09-01, removed 2026-09-03, explicit user request) has
+  // since been removed — only the fitted Vivid profile remains active.
+  // See git history for any of their _build(...) calls if reviving one;
+  // the helpers above (_bump/_sum/_flat/_build) are unchanged and ready
+  // to reuse.
+  stdout.writeln('No hand-authored profiles defined — nothing to write.');
 }

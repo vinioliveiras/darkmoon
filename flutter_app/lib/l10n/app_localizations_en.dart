@@ -952,12 +952,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get colorProfileModeFlat => 'Vivid';
 
   @override
-  String get colorProfileModePastel => 'Pastel';
-
-  @override
-  String get colorProfileModeNoir => 'Noir';
-
-  @override
   String get sliderTexture => 'Texture';
 
   @override

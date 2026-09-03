@@ -306,8 +306,6 @@
   "sliderColorProfileAmount": "Farbprofil-Kontrast",
   "colorProfileModeDefault": "Standard",
   "colorProfileModeFlat": "Lebendig",
-  "colorProfileModePastel": "Pastell",
-  "colorProfileModeNoir": "Noir",
   "sliderTexture": "Textur",
   "sliderClarity": "Klarheit",
   "sliderDehaze": "Dunst entfernen",

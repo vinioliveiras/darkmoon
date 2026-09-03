@@ -420,21 +420,20 @@ PhotoCurves _withCurveCategoriesApplied(
 ///   "darkmoon Color" fit (see `project_darkmoon_color_profile.md`)
 ///   builds on — a faithful correction toward how Meridian's Adobe
 ///   Color profile renders the same RAW.
-/// - [pastel]/[noir] (2026-09-01): hand-authored creative per-hue grades,
-///   not fitted against a reference — see `tool/author_color_profiles.dart`.
-///   Undamped like Vivid; only the per-hue table differs. Two sibling
-///   grades ("Golden Hour"/"Teal & Orange") shipped the same day and were
-///   removed again 2026-09-02 (explicit user request, keeping only
-///   Default/Vivid/Pastel/Noir) — see [_colorProfileModeOf] for the
-///   index-migration this left behind.
+/// [pastel]/[noir] (hand-authored creative per-hue grades, shipped
+/// 2026-09-01) and their siblings "Golden Hour"/"Teal & Orange" (removed
+/// 2026-09-02) have all now been removed (2026-09-02, explicit user
+/// request) — [darkmoonDefault]/[vivid] are the only two modes left. See
+/// [_colorProfileModeOf] for the index-migration this and the earlier
+/// removal left behind; `tool/author_color_profiles.dart` still has the
+/// generation methodology if a new hand-authored profile is ever wanted.
 ///
-/// [vivid]/[pastel]/[noir] all default Contrast to [calBaseContrast]
-/// (2026-09-02, explicit user request, raised from a literal 0) — the
-/// same constant [darkmoonDefault] already used, not a separately
-/// hardcoded number, so the two families of profiles can't drift apart
-/// the next time [calBaseContrast] itself gets re-tuned (real, if
-/// currently harmless, gap found 2026-09-02: they were a hardcoded `80`
-/// literal that only coincidentally matched).
+/// [vivid] defaults Contrast to [calBaseContrast] (2026-09-02, explicit
+/// user request, raised from a literal 0) — the same constant
+/// [darkmoonDefault] already used, not a separately hardcoded number, so
+/// the two can't drift apart the next time [calBaseContrast] itself gets
+/// re-tuned (real, if currently harmless, gap found 2026-09-02: it used
+/// to be a hardcoded `80` literal that only coincidentally matched).
 ///
 /// Picking any mode resets Strength to 100% and Contrast to
 /// [contrastBaseline] (2026-09-01, explicit user request — same
@@ -451,18 +450,6 @@ enum ColorProfileMode {
     dampened: false,
     usesHueProfile: true,
     profileAsset: 'darkmoon_vivid.json',
-  ),
-  pastel(
-    contrastBaseline: calBaseContrast,
-    dampened: false,
-    usesHueProfile: true,
-    profileAsset: 'darkmoon_pastel.json',
-  ),
-  noir(
-    contrastBaseline: calBaseContrast,
-    dampened: false,
-    usesHueProfile: true,
-    profileAsset: 'darkmoon_noir.json',
   );
 
   const ColorProfileMode({
@@ -501,17 +488,16 @@ const _colorProfileModeKey = 'ColorProfileMode';
 /// place that knows how the stored double maps back to the enum.
 ColorProfileMode _colorProfileModeOf(Map<String, double> values) {
   final stored = (values[_colorProfileModeKey] ?? 0.0).toInt();
-  // Index migration (2026-09-02): goldenHour(2)/tealOrange(3) were
-  // removed from the enum, shifting pastel/noir down from 4/5 to 2/3.
-  // A pre-2026-09-02 saved photo/preset still carries the OLD index, so
-  // remap it here rather than let it silently render as whatever mode
-  // now happens to sit at that number. goldenHour/tealOrange themselves
-  // have nothing to remap to — they fall back to Default (0).
+  // Index migration: two rounds of enum trimming (2026-09-02) left old
+  // saved photos/presets carrying stale indices. Original 6-entry enum
+  // was [default, vivid, goldenHour, tealOrange, pastel, noir]; round 1
+  // removed goldenHour/tealOrange (2,3), shifting pastel/noir to 2/3;
+  // round 2 removed pastel/noir too, leaving only [default, vivid].
+  // Every removed mode falls back to Default (0) rather than silently
+  // rendering as whatever mode now happens to sit at that number.
   final index = switch (stored) {
-    4 => 2, // old pastel -> new pastel
-    5 => 3, // old noir -> new noir
-    2 || 3 => 0, // old goldenHour/tealOrange (removed) -> Default
-    _ => stored,
+    0 || 1 => stored, // default/vivid unaffected by either round
+    _ => 0, // goldenHour/tealOrange/pastel/noir (any round's index) -> Default
   };
   return ColorProfileMode
       .values[index.clamp(0, ColorProfileMode.values.length - 1)];
@@ -8591,8 +8577,6 @@ class _ControlsPanelState extends State<_ControlsPanel> {
       switch (mode) {
         ColorProfileMode.darkmoonDefault => l10n.colorProfileModeDefault,
         ColorProfileMode.vivid => l10n.colorProfileModeFlat,
-        ColorProfileMode.pastel => l10n.colorProfileModePastel,
-        ColorProfileMode.noir => l10n.colorProfileModeNoir,
       };
 
   Widget _buildWhiteBalanceModeRow(
