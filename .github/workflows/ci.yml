@@ -96,9 +96,41 @@ jobs:
           channel: stable
           cache: true
 
+      # The macOS native libraries are not committed — this project has no
+      # Mac to build them on, so they are produced here. See
+      # macos/native/README.md. Cached because building LibRaw from source
+      # is the slow part and its inputs only change when the script does.
+      - name: Cache macOS native libraries
+        if: matrix.target == 'macos'
+        id: macos-natives
+        uses: actions/cache@v4
+        with:
+          path: flutter_app/macos/native/*.dylib
+          key: macos-natives-${{ hashFiles('flutter_app/tool/fetch_macos_natives.sh') }}
+
+      - name: Fetch macOS native libraries
+        if: matrix.target == 'macos' && steps.macos-natives.outputs.cache-hit != 'true'
+        run: tool/fetch_macos_natives.sh
+
       - run: flutter config --enable-${{ matrix.target }}-desktop
       - run: flutter pub get
       - run: flutter build ${{ matrix.target }} --release
+
+      # Not a Run Script phase inside Runner.xcodeproj yet — see the script
+      # for why. Without this the .app builds but cannot open a photo.
+      - name: Bundle macOS native libraries into the .app
+        if: matrix.target == 'macos'
+        run: tool/bundle_macos_natives.sh build/macos/Build/Products/Release/darkmoon.app
+
+      # The real verification. macOS has no machine to try the GUI on, so
+      # the native layer is exercised directly, the same way the Linux
+      # build originally was. DYLD_LIBRARY_PATH points at the dylibs
+      # because `dart run` is not the .app and has no rpath into it.
+      - name: Native smoke test
+        if: matrix.target == 'macos'
+        env:
+          DYLD_LIBRARY_PATH: ${{ github.workspace }}/flutter_app/macos/native
+        run: dart run tool/native_smoke_test.dart
 
       - name: Upload build
         uses: actions/upload-artifact@v4

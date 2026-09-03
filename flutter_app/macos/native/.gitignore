@@ -1,0 +1,3 @@
+# Populated by tool/fetch_macos_natives.sh at build time — see README.md
+# for why these are not committed the way the Windows and Linux ones are.
+*.dylib
