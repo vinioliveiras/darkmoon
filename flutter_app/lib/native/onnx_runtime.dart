@@ -711,7 +711,15 @@ class OnnxModel {
         OnnxExecutionProvider.webGpu,
       ];
     }
-    if (Platform.isLinux) {
+    if (Platform.isLinux || Platform.isMacOS) {
+      // Same plugin, different backend underneath: Vulkan on Linux, Metal
+      // on macOS. Neither platform has a DirectML equivalent.
+      //
+      // macOS was missing here when the port first landed, so every model
+      // silently ran on CPU with no error to explain it — the chain simply
+      // had nothing to try. CI caught it: the smoke test reported
+      // "provider: CPU" with a null gpuError, which is the signature of a
+      // provider that was never attempted rather than one that failed.
       return const [OnnxExecutionProvider.webGpu];
     }
     return const [];
