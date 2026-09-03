@@ -74,6 +74,29 @@ class GpuImagePool {
 class GpuPass {
   GpuPass._();
 
+  /// How many shader passes have been rasterized since [resetPassCount].
+  ///
+  /// Every pass is its own `Picture.toImage()`, i.e. its own render-target
+  /// allocation and GPU submit — measured at ~27ms each on a 6 MP frame,
+  /// independent of how much math the shader does. That makes the pass
+  /// count, not the tap count, the thing worth optimizing, so it is worth
+  /// being able to read it. Incremented by [run] and by `render_gpu.dart`'s
+  /// own `_rasterize` (the two places that call `toImage`).
+  static int passCount = 0;
+
+  /// Passes broken down by shader asset — names the fusion targets.
+  static final Map<String, int> passCountByShader = {};
+
+  static void resetPassCount() {
+    passCount = 0;
+    passCountByShader.clear();
+  }
+
+  static void countPass(String assetPath) {
+    passCount++;
+    passCountByShader.update(assetPath, (v) => v + 1, ifAbsent: () => 1);
+  }
+
   static final Map<String, ui.FragmentProgram> _programCache = {};
 
   static Future<ui.FragmentProgram> loadProgram(String assetPath) async {
@@ -114,6 +137,7 @@ class GpuPass {
       ui.Paint()..shader = shader,
     );
     final picture = recorder.endRecording();
+    countPass(assetPath);
     // Both the picture and the shader hold native resources of their own,
     // released only on an explicit dispose. They are safe to drop as soon
     // as the image exists — the picture has been rasterized, and the
@@ -129,6 +153,24 @@ class GpuPass {
 /// `blur.dart`'s `boxBlurMean`, shared by every effect (Phase 3's denoise,
 /// Phase 4's Sharpen/Texture/Clarity, ...) that needs a plain box blur
 /// pass rather than the full Gaussian approximation below.
+/// Largest radius [runBoxBlurGpu] will do in a single fused 2D pass
+/// (`box_blur_2d.frag`) instead of the separable horizontal/vertical pair.
+///
+/// A pass costs ~20-25ms on a 6 MP frame no matter what it does — that is
+/// render-target allocation and GPU submit, not shader work — while the
+/// taps themselves are close to free at these counts (Clarity's 41-tap
+/// blur and Texture's 5-tap blur measured identically per pass). So one
+/// pass of (2r+1)^2 taps beats two of (2r+1) until the tap count grows
+/// enough to matter, which is what this caps.
+///
+/// Measured, not guessed: raising this to 40 (so Clarity's sigma-35 and
+/// Dehaze's sigma-40 blurs fused too, at radius ~34) took Clarity from
+/// 527ms to 1265ms and Dehaze from 501ms to 1497ms on the same 6 MP
+/// frame. Every radius this pipeline actually uses below Clarity/Dehaze
+/// is 7 or less, so anything from ~8 to ~33 behaves identically here; 16
+/// sits safely in the middle of that gap.
+const int fusedBoxBlurMaxRadius = 16;
+
 Future<ui.Image> runBoxBlurGpu(
   ui.Image source,
   int width,
@@ -137,6 +179,15 @@ Future<ui.Image> runBoxBlurGpu(
 ) async {
   if (radius <= 0) {
     return source;
+  }
+  if (radius <= fusedBoxBlurMaxRadius) {
+    return GpuPass.run(
+      'shaders/box_blur_2d.frag',
+      floats: [width.toDouble(), height.toDouble(), radius.toDouble()],
+      samplers: [source],
+      outputWidth: width,
+      outputHeight: height,
+    );
   }
   final h = await GpuPass.run(
     'shaders/box_blur_h.frag',

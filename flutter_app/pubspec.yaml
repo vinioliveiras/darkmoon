@@ -95,6 +95,7 @@ flutter:
     - shaders/_spike_passthrough.frag
     - shaders/point_ops_pre_denoise.frag
     - shaders/point_ops_post_denoise.frag
+    - shaders/box_blur_2d.frag
     - shaders/box_blur_h.frag
     - shaders/box_blur_v.frag
     - shaders/min_filter_h.frag

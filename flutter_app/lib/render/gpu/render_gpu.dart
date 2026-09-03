@@ -243,7 +243,7 @@ Future<ui.Image> _runPreDenoise(
   shader.setFloat(i++, exposureFactor);
   shader.setImageSampler(0, source);
 
-  return _rasterize(shader, width, height);
+  return _rasterize(shader, width, height, 'point_ops_pre_denoise');
 }
 
 Future<ui.Image> _runPostDenoise(
@@ -354,7 +354,7 @@ Future<ui.Image> _runPostDenoise(
   shader.setImageSampler(1, lut);
   shader.setImageSampler(2, tonalBlur ?? source);
 
-  return _rasterize(shader, width, height);
+  return _rasterize(shader, width, height, 'point_ops_post_denoise');
 }
 
 /// Fused Saturation + Vibrance + Vignette + Grain pass — see
@@ -408,13 +408,14 @@ Future<ui.Image> _runPostDehaze(
   shader.setFloat(i++, grainRoughness);
   shader.setImageSampler(0, source);
 
-  return _rasterize(shader, width, height);
+  return _rasterize(shader, width, height, 'post_dehaze');
 }
 
 Future<ui.Image> _rasterize(
   ui.FragmentShader shader,
   int width,
   int height,
+  String debugLabel,
 ) async {
   final recorder = ui.PictureRecorder();
   final canvas = ui.Canvas(recorder);
@@ -423,6 +424,7 @@ Future<ui.Image> _rasterize(
     ui.Paint()..shader = shader,
   );
   final picture = recorder.endRecording();
+  GpuPass.countPass(debugLabel);
   // Same reasoning as GpuPass.run: the picture and the shader hold native
   // resources that only an explicit dispose releases, and both are dead
   // once the image exists.
