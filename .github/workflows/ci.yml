@@ -64,7 +64,10 @@ jobs:
           - name: macOS
             os: macos-latest
             target: macos
-            artifact: build/macos/Build/Products/Release
+            # Just the .app, not the whole Products/Release directory —
+            # that also holds intermediate frameworks and dSYMs, which
+            # made the artifact 277MB against 43MB for Windows.
+            artifact: build/macos/Build/Products/Release/*.app
           - name: Windows
             # Pinned, not `windows-latest`: that image moved to Server 2025,
             # where Flutter 3.35.5's Visual Studio detection picks the
