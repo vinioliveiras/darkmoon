@@ -55,11 +55,15 @@ void main(List<String> args) {
         throw StateError('decode returned null');
       }
       if (decoded.width <= 0 || decoded.height <= 0) {
-        throw StateError('nonsense dimensions '
-            '${decoded.width}x${decoded.height}');
+        throw StateError(
+          'nonsense dimensions '
+          '${decoded.width}x${decoded.height}',
+        );
       }
-      stdout.writeln('          ${decoded.width}x${decoded.height}, '
-          '${decoded.rgbBytes.length} bytes');
+      stdout.writeln(
+        '          ${decoded.width}x${decoded.height}, '
+        '${decoded.rgbBytes.length} bytes',
+      );
     });
   } else {
     stdout.writeln('  SKIP  decode (no sample file given)');
@@ -77,15 +81,19 @@ void main(List<String> args) {
   _check('runtime loads', () {
     try {
       final model = OnnxModel.forSpec(denoiseModelSpec);
-      stdout.writeln('          provider: ${model.provider.label} '
-          '(gpu=${model.usingGpu})');
+      stdout.writeln(
+        '          provider: ${model.provider.label} '
+        '(gpu=${model.usingGpu})',
+      );
       if (model.gpuError != null) {
         stdout.writeln('          gpu unavailable: ${model.gpuError}');
       }
       OnnxModel.releaseAll();
     } on OrtException catch (e) {
-      stdout.writeln('          loaded; no session '
-          '(expected without the model weights): ${e.message}');
+      stdout.writeln(
+        '          loaded; no session '
+        '(expected without the model weights): ${e.message}',
+      );
     }
   });
 
