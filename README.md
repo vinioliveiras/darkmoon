@@ -111,6 +111,11 @@ static file, no build step — open it directly or serve `docs/` with GitHub
 Pages). It's marketing content, not part of the app, and isn't covered by
 the license below.
 
+## Donate
+
+Please help me keep this project going – it’s a one-man project
+[https://ko-fi.com/vinioliveira](https://ko-fi.com/vinioliveira)
+
 ## License
 
 The app (everything outside `docs/`) is licensed under
