@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:io' show Directory, File, Process;
+import 'dart:io' show Directory, File, Platform, Process;
 import 'dart:ui' as ui;
 import 'dart:ui' show AppExitResponse, ImageFilter;
 
@@ -742,6 +742,31 @@ Map<String, double> _defaultParamValues() {
 /// those are "what you're looking at", not "what's been done to the
 /// photo", so undoing an edit shouldn't also yank the panel to a different
 /// mask than the one the user was just looking at.
+/// True on the platform where the command modifier is Cmd rather than
+/// Ctrl.
+///
+/// Not a style preference: on macOS, Ctrl+Z is not undo — Cmd+Z is — and
+/// Ctrl+click is a right-click. An editor whose Cmd+Z does nothing reads
+/// as broken immediately, so every binding below picks the modifier by
+/// platform instead of hardcoding `control: true`.
+final bool _useCmdModifier = Platform.isMacOS;
+
+/// Whether the platform's command modifier is currently held — Cmd on
+/// macOS, Ctrl everywhere else. Used for the scroll-to-zoom gesture, which
+/// is the same idea as the keyboard bindings.
+bool get _commandModifierHeld => _useCmdModifier
+    ? HardwareKeyboard.instance.isMetaPressed
+    : HardwareKeyboard.instance.isControlPressed;
+
+/// A [SingleActivator] on the platform's command modifier.
+SingleActivator _cmdShortcut(LogicalKeyboardKey key, {bool shift = false}) =>
+    SingleActivator(
+      key,
+      control: !_useCmdModifier,
+      meta: _useCmdModifier,
+      shift: shift,
+    );
+
 /// One frame for the canvas, in whichever of the two shapes is actually
 /// available.
 ///
@@ -5131,11 +5156,11 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
-  /// Ctrl+scroll zooms (anchored at the cursor); plain scroll does nothing,
-  /// matching the Python app's wheelEvent behavior.
+  /// Ctrl+scroll (Cmd+scroll on macOS) zooms, anchored at the cursor;
+  /// plain scroll does nothing, matching the Python app's wheelEvent
+  /// behavior.
   void _handlePointerSignal(PointerSignalEvent event) {
-    if (event is! PointerScrollEvent ||
-        !HardwareKeyboard.instance.isControlPressed) {
+    if (event is! PointerScrollEvent || !_commandModifierHeld) {
       return;
     }
     final factor = event.scrollDelta.dy < 0 ? _zoomStep : 1 / _zoomStep;
@@ -6295,13 +6320,12 @@ class _EditorScreenState extends State<EditorScreen>
             _toggleBeforeAfter();
           }
         },
-        const SingleActivator(LogicalKeyboardKey.keyZ, control: true): _undo,
-        const SingleActivator(
-          LogicalKeyboardKey.keyZ,
-          control: true,
-          shift: true,
-        ): _redo,
-        const SingleActivator(LogicalKeyboardKey.keyY, control: true): _redo,
+        _cmdShortcut(LogicalKeyboardKey.keyZ): _undo,
+        _cmdShortcut(LogicalKeyboardKey.keyZ, shift: true): _redo,
+        // Ctrl+Y is a Windows convention for redo; macOS has no equivalent
+        // (Cmd+Shift+Z above is the one), but binding it costs nothing and
+        // keeps muscle memory working for anyone moving between the two.
+        _cmdShortcut(LogicalKeyboardKey.keyY): _redo,
         // Filmstrip navigation (2026-09-01, explicit user request) — a
         // focused text field (e.g. the Cloud AI token field) consumes
         // arrow keys itself for cursor movement before they ever reach
@@ -10510,10 +10534,11 @@ class _FilmstripState extends State<_Filmstrip> {
   // Mouse wheels report vertical scroll delta by default, but this list
   // scrolls horizontally — without this, plain wheel scroll over the
   // filmstrip does nothing (Flutter doesn't remap the axis on its own).
-  // Ctrl+scroll is reserved for image zoom, so this only acts without it.
+  // Ctrl+scroll (Cmd+scroll on macOS) is reserved for image zoom, so this
+  // only acts without it.
   void _handleWheel(PointerSignalEvent event) {
     if (event is! PointerScrollEvent ||
-        HardwareKeyboard.instance.isControlPressed ||
+        _commandModifierHeld ||
         !_scrollController.hasClients) {
       return;
     }

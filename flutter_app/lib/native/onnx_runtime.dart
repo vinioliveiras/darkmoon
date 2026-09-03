@@ -269,9 +269,15 @@ class _OrtLib {
   }
 
   /// Filename of the WebGPU plugin EP library, next to the runtime itself.
-  static String get _webGpuLibraryName => Platform.isWindows
-      ? 'onnxruntime_providers_webgpu.dll'
-      : 'libonnxruntime_providers_webgpu.so';
+  static String get _webGpuLibraryName {
+    if (Platform.isWindows) {
+      return 'onnxruntime_providers_webgpu.dll';
+    }
+    if (Platform.isMacOS) {
+      return 'libonnxruntime_providers_webgpu.dylib';
+    }
+    return 'libonnxruntime_providers_webgpu.so';
+  }
 
   /// Absolute path to the WebGPU plugin EP library.
   ///
@@ -288,9 +294,16 @@ class _OrtLib {
       return p.join(override, _webGpuLibraryName);
     }
     final exeDir = p.dirname(Platform.resolvedExecutable);
-    return Platform.isWindows
-        ? p.join(exeDir, _webGpuLibraryName)
-        : p.join(exeDir, 'lib', _webGpuLibraryName);
+    if (Platform.isWindows) {
+      return p.join(exeDir, _webGpuLibraryName);
+    }
+    if (Platform.isMacOS) {
+      // Contents/MacOS/<exe> -> Contents/Frameworks/<dylib>. On macOS the
+      // plugin is backed by Metal rather than Vulkan or D3D12, so it needs
+      // no system loader the way Linux needs libvulkan.so.1.
+      return p.join(exeDir, '..', 'Frameworks', _webGpuLibraryName);
+    }
+    return p.join(exeDir, 'lib', _webGpuLibraryName);
   }
 
   /// Registration name the WebGPU plugin EP library is known by inside
@@ -327,8 +340,17 @@ class _OrtLib {
       // by linux/CMakeLists.txt, same as libraw_r.so.
       return DynamicLibrary.open('libonnxruntime.so');
     }
+    if (Platform.isMacOS) {
+      final override = _nativeDirOverride;
+      if (override != null) {
+        return DynamicLibrary.open(p.join(override, 'libonnxruntime.dylib'));
+      }
+      // Copied into Contents/Frameworks/ by tool/bundle_macos_natives.sh,
+      // which is on the default rpath — see libraw.dart's own note.
+      return DynamicLibrary.open('libonnxruntime.dylib');
+    }
     throw UnsupportedError(
-      'ONNX Runtime is only wired up for Windows/Linux so far.',
+      'ONNX Runtime is only wired up for Windows/Linux/macOS so far.',
     );
   }
 
@@ -358,11 +380,20 @@ class _OrtLib {
   /// this explicit path, so nothing stops them from being organized
   /// separately. See `windows/CMakeLists.txt`/`linux/CMakeLists.txt`'s
   /// matching `DESTINATION ".../models"` install rules.
-  static String modelPath(String fileName) => p.join(
-    _nativeDirOverride ?? p.dirname(Platform.resolvedExecutable),
-    'models',
-    fileName,
-  );
+  static String modelPath(String fileName) {
+    final override = _nativeDirOverride;
+    if (override != null) {
+      return p.join(override, 'models', fileName);
+    }
+    final exeDir = p.dirname(Platform.resolvedExecutable);
+    // Contents/MacOS/<exe> -> Contents/Resources/models/, where an .app
+    // is expected to keep non-code payload. Windows and Linux both put
+    // models/ next to the executable instead; see their CMakeLists.
+    if (Platform.isMacOS) {
+      return p.join(exeDir, '..', 'Resources', 'models', fileName);
+    }
+    return p.join(exeDir, 'models', fileName);
+  }
 }
 
 /// Which execution provider a session ended up on.

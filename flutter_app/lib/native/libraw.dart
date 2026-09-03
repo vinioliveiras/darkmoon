@@ -91,7 +91,16 @@ class _Lib {
       // by linux/CMakeLists.txt.
       return DynamicLibrary.open('libraw_r.so');
     }
-    throw UnsupportedError('LibRaw is only wired up for Windows/Linux so far.');
+    if (Platform.isMacOS) {
+      // Copied into the .app's Contents/Frameworks/ by
+      // tool/bundle_macos_natives.sh, which is on the executable's default
+      // rpath (@executable_path/../Frameworks — Flutter's own
+      // FlutterMacOS.framework lives there too), so a bare name resolves.
+      return DynamicLibrary.open('libraw_r.dylib');
+    }
+    throw UnsupportedError(
+      'LibRaw is only wired up for Windows/Linux/macOS so far.',
+    );
   }
 }
 
