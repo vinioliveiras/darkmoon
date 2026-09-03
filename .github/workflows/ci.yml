@@ -126,11 +126,25 @@ jobs:
       # the native layer is exercised directly, the same way the Linux
       # build originally was. DYLD_LIBRARY_PATH points at the dylibs
       # because `dart run` is not the .app and has no rpath into it.
+      # A stand-in for the real weights, which are gitignored: an identity
+      # model shaped like the denoise one, so the smoke test can create a
+      # session, pick an execution provider and run real inference — not
+      # just prove the library opened.
+      - name: Build a stand-in ONNX model
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check onnx
+          python3 tool/make_test_onnx_model.py "${{ runner.temp }}/identity.onnx"
+
+      # The real verification. macOS has no machine to try the GUI on, so
+      # the native layer is exercised directly, the same way the Linux
+      # build originally was. Runs everywhere, not just macOS — a
+      # regression in the Windows or Linux loaders is caught here too.
+      # DYLD_LIBRARY_PATH is macOS-only and ignored elsewhere; `dart run`
+      # is not the .app and has no rpath into it.
       - name: Native smoke test
-        if: matrix.target == 'macos'
         env:
           DYLD_LIBRARY_PATH: ${{ github.workspace }}/flutter_app/macos/native
-        run: dart run tool/native_smoke_test.dart
+        run: dart run tool/native_smoke_test.dart "" "${{ runner.temp }}/identity.onnx"
 
       - name: Upload build
         uses: actions/upload-artifact@v4
