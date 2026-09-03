@@ -92,9 +92,23 @@ install(FILES
 # ONNX Runtime (+ DirectML EP) — DLLs stay next to the executable (Windows
 # resolves DynamicLibrary.open('onnxruntime.dll') by searching the exe's
 # own directory automatically; a subfolder would break that lookup).
+# The WebGPU plugin EP (onnxruntime_providers_webgpu.dll) and the two
+# DirectX shader-compiler DLLs Dawn needs to translate its shaders to
+# D3D12. Unlike the DLLs above, ORT loads this one from an explicit path
+# the app computes (onnx_runtime.dart's webGpuLibraryPath), not by OS
+# search rules — but it still lives here so both resolutions agree.
+#
+# Windows already has DirectML, which is vendor-agnostic across any DX12
+# GPU, so this is not the GPU path here: it sits behind DirectML as a
+# second chance for a model DirectML rejects outright, and as the way to
+# A/B the two (DARKMOON_ONNX_EP=webgpu). Linux is where it matters — see
+# linux/CMakeLists.txt.
 install(FILES
   "${CMAKE_CURRENT_SOURCE_DIR}/native/onnxruntime.dll"
   "${CMAKE_CURRENT_SOURCE_DIR}/native/DirectML.dll"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/onnxruntime_providers_webgpu.dll"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/dxcompiler.dll"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/dxil.dll"
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 

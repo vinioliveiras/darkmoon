@@ -268,6 +268,46 @@ class _OrtLib {
     return _apiInstance = apiPtr;
   }
 
+  /// Filename of the WebGPU plugin EP library, next to the runtime itself.
+  static String get _webGpuLibraryName => Platform.isWindows
+      ? 'onnxruntime_providers_webgpu.dll'
+      : 'libonnxruntime_providers_webgpu.so';
+
+  /// Absolute path to the WebGPU plugin EP library.
+  ///
+  /// Unlike `onnxruntime.dll`/`libonnxruntime.so` — which the OS resolves
+  /// on its own from the executable's directory or rpath — this one is
+  /// handed to ORT as a plain string, so the path has to be spelled out,
+  /// and the two bundles put their native libraries in different places:
+  /// Windows keeps DLLs next to the executable (its own loader searches
+  /// there), while the Linux bundle collects `.so` files under `lib/`
+  /// (`INSTALL_BUNDLE_LIB_DIR` in linux/CMakeLists.txt).
+  static String get webGpuLibraryPath {
+    final override = _nativeDirOverride;
+    if (override != null) {
+      return p.join(override, _webGpuLibraryName);
+    }
+    final exeDir = p.dirname(Platform.resolvedExecutable);
+    return Platform.isWindows
+        ? p.join(exeDir, _webGpuLibraryName)
+        : p.join(exeDir, 'lib', _webGpuLibraryName);
+  }
+
+  /// Registration name the WebGPU plugin EP library is known by inside
+  /// ORT — an arbitrary label chosen by the app, not an ORT constant.
+  static const webGpuRegistrationName = 'darkmoon-webgpu';
+
+  /// The EP name the WebGPU plugin reports for its devices. Fixed by the
+  /// plugin (its Python package spells the same constant in
+  /// `get_ep_name()`), not by us — [_appendWebGpuExecutionProvider]
+  /// matches on it.
+  static const webGpuEpName = 'WebGpuExecutionProvider';
+
+  /// Whether [webGpuRegistrationName] has already been registered on the
+  /// current isolate's env. ORT rejects registering the same name twice,
+  /// and a model spec creates its own env per session.
+  static final Set<int> _webGpuRegisteredEnvs = {};
+
   static DynamicLibrary _load() {
     if (Platform.isWindows) {
       final override = _nativeDirOverride;
@@ -325,6 +365,165 @@ class _OrtLib {
   );
 }
 
+/// Which execution provider a session ended up on.
+enum OnnxExecutionProvider {
+  /// ORT's own CPU provider — always available, always the last resort.
+  cpu('CPU'),
+
+  /// DirectML. Windows-only, but vendor-agnostic there (any DX12 GPU:
+  /// NVIDIA, AMD or Intel).
+  directMl('DirectML'),
+
+  /// The WebGPU plugin EP, on Dawn — Vulkan on Linux, D3D12 on Windows.
+  /// Vendor-agnostic and, unlike CUDA/ROCm, needs no vendor SDK installed
+  /// (just a system Vulkan loader on Linux). This is what gives the Linux
+  /// build GPU acceleration at all.
+  webGpu('WebGPU');
+
+  const OnnxExecutionProvider(this.label);
+
+  /// Shown in dev-mode logs and the AI dialogs' GPU hint.
+  final String label;
+
+  /// Whether this provider runs on the GPU.
+  bool get isGpu => this != OnnxExecutionProvider.cpu;
+}
+
+/// Attaches the WebGPU plugin execution provider to [options].
+///
+/// This is the Linux answer to DirectML, which is Windows-only: the
+/// WebGPU EP is a *plugin* EP (a separate shared library exporting
+/// `CreateEpFactories`, added to ORT in 1.23) built on Dawn, which
+/// dispatches to Vulkan on Linux and D3D12 on Windows. That makes it
+/// vendor-agnostic — one bundled library covers NVIDIA, AMD and Intel —
+/// and, unlike the CUDA or ROCm EPs, it needs no vendor SDK installed on
+/// the user's machine, only a system Vulkan loader on Linux. That is what
+/// keeps the Linux build's "portable tarball" promise intact.
+///
+/// Three steps, per ORT's plugin EP API:
+///   1. `RegisterExecutionProviderLibrary` loads the plugin into the env
+///      under an app-chosen name (once per env — ORT rejects a repeat).
+///   2. `GetEpDevices` enumerates every device every registered EP can
+///      run on; the WebGPU one is picked out by [_OrtLib.webGpuEpName].
+///   3. `SessionOptionsAppendExecutionProvider_V2` attaches it.
+///
+/// Throws [OrtException] on any failure, so [OnnxModel._create] can fall
+/// through to the next provider exactly as it does for DirectML.
+void _appendWebGpuExecutionProvider(
+  Pointer<OrtEnv> env,
+  Pointer<OrtSessionOptions> options,
+) {
+  final api = _OrtLib.api;
+
+  if (_OrtLib._webGpuRegisteredEnvs.add(env.address)) {
+    final regName = _OrtLib.webGpuRegistrationName.toNativeUtf8();
+    // ORT takes an ORTCHAR_T* here — wchar_t on Windows, plain UTF-8 char
+    // elsewhere. Same split the session-creation path below already
+    // handles; see its own comment for why the Dart-side types differ.
+    // Pointer<WChar> is the Windows shape of ORTCHAR_T; on Linux the same
+    // parameter is a narrow UTF-8 char* and this cast just reinterprets
+    // the buffer. Exactly what the CreateSession call below already does —
+    // see its comment for why the binding is typed this way.
+    final libPath = Platform.isWindows
+        ? _OrtLib.webGpuLibraryPath.toNativeUtf16().cast<Void>()
+        : _OrtLib.webGpuLibraryPath.toNativeUtf8().cast<Void>();
+    try {
+      _check(
+        api.ref.RegisterExecutionProviderLibrary
+            .asFunction<
+              Pointer<OrtStatus> Function(
+                Pointer<OrtEnv>,
+                Pointer<Char>,
+                Pointer<WChar>,
+              )
+            >()(env, regName.cast(), libPath.cast()),
+      );
+    } catch (_) {
+      // Registration failed — don't leave the env marked as registered, or
+      // a later attempt on the same env would skip straight to lookup and
+      // find nothing.
+      _OrtLib._webGpuRegisteredEnvs.remove(env.address);
+      rethrow;
+    } finally {
+      calloc.free(regName);
+      calloc.free(libPath);
+    }
+  }
+
+  final devicesOut = calloc<Pointer<Pointer<OrtEpDevice>>>();
+  final countOut = calloc<Size>();
+  Pointer<Pointer<OrtEpDevice>> devices;
+  int count;
+  try {
+    _check(
+      api.ref.GetEpDevices
+          .asFunction<
+            Pointer<OrtStatus> Function(
+              Pointer<OrtEnv>,
+              Pointer<Pointer<Pointer<OrtEpDevice>>>,
+              Pointer<Size>,
+            )
+          >()(env, devicesOut, countOut),
+    );
+    devices = devicesOut.value;
+    count = countOut.value;
+  } finally {
+    calloc.free(devicesOut);
+    calloc.free(countOut);
+  }
+
+  final epNameOf = api.ref.EpDevice_EpName
+      .asFunction<Pointer<Char> Function(Pointer<OrtEpDevice>)>();
+  Pointer<OrtEpDevice>? webGpuDevice;
+  final seen = <String>[];
+  for (var i = 0; i < count; i++) {
+    final device = devices[i];
+    final name = epNameOf(device);
+    if (name == nullptr) {
+      continue;
+    }
+    final epName = name.cast<Utf8>().toDartString();
+    seen.add(epName);
+    if (epName == _OrtLib.webGpuEpName) {
+      webGpuDevice = device;
+      break;
+    }
+  }
+  if (webGpuDevice == null) {
+    // Naming what *was* found, not just that the search failed: on Linux
+    // the usual cause is a missing system Vulkan loader
+    // (`libvulkan.so.1`), which leaves the plugin registered but with no
+    // device to offer, and the list is what makes that diagnosable from a
+    // log rather than a guess.
+    throw OrtException(
+      'no ${_OrtLib.webGpuEpName} device among the $count EP device(s) ORT '
+      'reported (${seen.join(", ")}) — on Linux this usually means no '
+      'system Vulkan loader (libvulkan.so.1) or no Vulkan-capable GPU',
+    );
+  }
+
+  final deviceArray = calloc<Pointer<OrtEpDevice>>();
+  deviceArray[0] = webGpuDevice;
+  try {
+    _check(
+      api.ref.SessionOptionsAppendExecutionProvider_V2
+          .asFunction<
+            Pointer<OrtStatus> Function(
+              Pointer<OrtSessionOptions>,
+              Pointer<OrtEnv>,
+              Pointer<Pointer<OrtEpDevice>>,
+              int,
+              Pointer<Pointer<Char>>,
+              Pointer<Pointer<Char>>,
+              int,
+            )
+          >()(options, env, deviceArray, 1, nullptr, nullptr, 0),
+    );
+  } finally {
+    calloc.free(deviceArray);
+  }
+}
+
 /// Throws [OrtException] with `status`'s message if it's non-null, and
 /// always releases it — the same "check return code, free unconditionally"
 /// discipline `libraw.dart` applies to LibRaw's error codes, adapted to
@@ -367,8 +566,8 @@ class OnnxModel {
     this._env,
     this._session,
     this._memoryInfo,
-    this.usingGpu,
-    this.directMlError,
+    this.provider,
+    this.gpuError,
   );
 
   // Only read by [releaseAll], which must release the env *after* the
@@ -378,16 +577,22 @@ class OnnxModel {
   final Pointer<OrtMemoryInfo> _memoryInfo;
   final OnnxModelSpec _spec;
 
-  /// True if this session is actually running on the DirectML (GPU)
-  /// execution provider; false if it fell back to plain CPU.
-  final bool usingGpu;
+  /// The execution provider this session actually ended up on.
+  final OnnxExecutionProvider provider;
 
-  /// The `OrtException.message` from the DirectML attempt, if [usingGpu]
-  /// is false because that attempt failed (null if it never ran, or if it
-  /// succeeded). Surfaced through dev-mode logging so a "why did this fall
-  /// back to CPU" bug report carries the real reason (an unsupported op,
-  /// a driver issue, etc.) instead of just the fact that it happened.
-  final String? directMlError;
+  /// True if [provider] runs on the GPU rather than the CPU.
+  bool get usingGpu => provider.isGpu;
+
+  /// Why every GPU provider was passed over, if [usingGpu] is false —
+  /// each attempted provider's own `OrtException.message`, joined. Null
+  /// when a GPU provider succeeded, or when none was even attempted (an
+  /// unsupported platform, or a `DARKMOON_ONNX_EP=cpu` override).
+  ///
+  /// Surfaced through dev-mode logging so a "why did this fall back to
+  /// CPU" bug report carries the real reason — an unsupported op, a driver
+  /// issue, a missing Vulkan loader — instead of just the fact that it
+  /// happened.
+  final String? gpuError;
 
   static final Map<String, OnnxModel> _instances = {};
 
@@ -440,32 +645,75 @@ class OnnxModel {
   static OnnxModel forSpec(OnnxModelSpec spec) =>
       _instances[spec.cacheKey] ??= _create(spec);
 
+  /// The execution providers to try, in order, before falling back to CPU.
+  ///
+  /// Windows keeps DirectML first: it is the provider this app has actually
+  /// shipped and tuned against, it is vendor-agnostic across any DX12 GPU,
+  /// and it needs no extra libraries beyond the DirectML.dll already
+  /// bundled. WebGPU sits behind it as a second chance for a model
+  /// DirectML rejects outright.
+  ///
+  /// Linux has only WebGPU. DirectML is Windows-only — the symbol is not
+  /// even exported by libonnxruntime.so, so looking it up would throw an
+  /// ArgumentError from the FFI lookup rather than an OrtException the
+  /// fallback below could catch. Until the WebGPU plugin EP existed there
+  /// was no GPU option there at all and the Linux build ran every model on
+  /// CPU; that is what this list exists to fix.
+  ///
+  /// Overridable for testing and for A/B-ing the two on Windows via the
+  /// `DARKMOON_ONNX_EP` environment variable (`webgpu`, `directml` or
+  /// `cpu`) — no UI, deliberately: it exists to answer "is WebGPU actually
+  /// faster than DirectML on this machine", not as a user-facing setting.
+  static List<OnnxExecutionProvider> get _providerChain {
+    final override = Platform.environment['DARKMOON_ONNX_EP']?.toLowerCase();
+    if (override != null && override.isNotEmpty) {
+      return switch (override) {
+        'webgpu' => const [OnnxExecutionProvider.webGpu],
+        'directml' => const [OnnxExecutionProvider.directMl],
+        'cpu' => const [],
+        _ => const [],
+      };
+    }
+    if (Platform.isWindows) {
+      return const [
+        OnnxExecutionProvider.directMl,
+        OnnxExecutionProvider.webGpu,
+      ];
+    }
+    if (Platform.isLinux) {
+      return const [OnnxExecutionProvider.webGpu];
+    }
+    return const [];
+  }
+
   static OnnxModel _create(OnnxModelSpec spec) {
-    // DirectML has no Linux equivalent, and the symbol isn't even exported
-    // by libonnxruntime.so there — looking it up would throw an ArgumentError
-    // (from the FFI symbol lookup itself, not an OrtException), which the
-    // catch below wouldn't handle. Skip straight to CPU instead of
-    // attempting-and-catching.
-    if (!Platform.isWindows) {
-      return _createSession(spec, useDirectMl: false);
+    final failures = <String>[];
+    for (final provider in _providerChain) {
+      try {
+        return _createSession(spec, provider: provider);
+      } on OrtException catch (e) {
+        // This provider is out (no capable GPU, a driver too old, a node it
+        // cannot place, a plugin library that failed to load) — try the
+        // next one, and keep the reason: it is the only place the real
+        // rejection is ever available, and "why did this fall back to CPU"
+        // is otherwise unanswerable from a bug report.
+        failures.add('${provider.label}: ${e.message}');
+      }
     }
-    try {
-      return _createSession(spec, useDirectMl: true);
-    } on OrtException catch (e) {
-      // GPU path failed (no DX12-capable GPU, driver too old, or a node
-      // DML can't run) — fall back to CPU rather than making the whole
-      // feature unavailable. If this *also* throws, the real problem is
-      // something more fundamental (missing/corrupt model file) and
-      // should propagate. Keep e.message: it's the only place the actual
-      // DirectML rejection reason is ever available.
-      return _createSession(spec, useDirectMl: false, directMlError: e.message);
-    }
+    // CPU last. If this also throws, the problem is more fundamental than
+    // provider availability (a missing or corrupt model file) and should
+    // propagate.
+    return _createSession(
+      spec,
+      provider: OnnxExecutionProvider.cpu,
+      gpuError: failures.isEmpty ? null : failures.join(' | '),
+    );
   }
 
   static OnnxModel _createSession(
     OnnxModelSpec spec, {
-    required bool useDirectMl,
-    String? directMlError,
+    required OnnxExecutionProvider provider,
+    String? gpuError,
   }) {
     final api = _OrtLib.api;
 
@@ -510,7 +758,10 @@ class OnnxModel {
     }
 
     try {
-      if (useDirectMl) {
+      if (provider == OnnxExecutionProvider.webGpu) {
+        _appendWebGpuExecutionProvider(env, options);
+      }
+      if (provider == OnnxExecutionProvider.directMl) {
         // Deliberately NOT setting session.disable_cpu_ep_fallback here —
         // tried that first (to get a hard "did GPU actually work" signal)
         // and found via VERBOSE logging that it backfires: ORT's own
@@ -534,8 +785,11 @@ class OnnxModel {
           ),
         );
       }
-      // useDirectMl == false: append nothing — ORT always registers its
-      // own CPU execution provider by default, no explicit call needed.
+      // OnnxExecutionProvider.cpu: append nothing — ORT always registers
+      // its own CPU execution provider by default, no explicit call
+      // needed. It also stays registered behind the GPU providers above,
+      // which is deliberate; see the DirectML comment for why forbidding
+      // CPU fallback backfires.
 
       // ORT's CreateSession takes an ORTCHAR_T* — wchar_t on Windows, but
       // plain (UTF-8) char on every other platform, matching ORT's own
@@ -592,14 +846,7 @@ class OnnxModel {
         calloc.free(memInfoOut);
       }
 
-      return OnnxModel._(
-        spec,
-        env,
-        session,
-        memoryInfo,
-        useDirectMl,
-        directMlError,
-      );
+      return OnnxModel._(spec, env, session, memoryInfo, provider, gpuError);
     } finally {
       api.ref.ReleaseSessionOptions
           .asFunction<void Function(Pointer<OrtSessionOptions>)>()(options);

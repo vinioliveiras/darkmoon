@@ -4730,8 +4730,8 @@ class _EditorScreenState extends State<EditorScreen>
         if (stage is ColorizeModelInfo) {
           DevLog.log(
             'Colorize model: '
-            '${stage.usingGpu ? "GPU (DirectML)" : "CPU fallback"}'
-            '${stage.directMlError == null ? "" : " — DirectML error: ${stage.directMlError}"}',
+            '${stage.usingGpu ? "GPU (${stage.providerLabel})" : "CPU fallback"}'
+            '${stage.gpuError == null ? "" : " — GPU unavailable: ${stage.gpuError}"}',
             tag: 'colorize',
           );
           if (!stage.usingGpu && !cpuWarningShown) {
@@ -4856,8 +4856,8 @@ class _EditorScreenState extends State<EditorScreen>
         } else if (stage is AiEnhanceModelInfo) {
           DevLog.log(
             'AI Enhance model ${stage.modelName}: '
-            '${stage.usingGpu ? "GPU (DirectML)" : "CPU fallback"}'
-            '${stage.directMlError == null ? "" : " — DirectML error: ${stage.directMlError}"}',
+            '${stage.usingGpu ? "GPU (${stage.providerLabel})" : "CPU fallback"}'
+            '${stage.gpuError == null ? "" : " — GPU unavailable: ${stage.gpuError}"}',
             tag: 'ai-enhance',
           );
           if (!stage.usingGpu && !cpuWarningShown) {

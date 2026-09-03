@@ -25,8 +25,9 @@ void main() {
   for (var i = 1; i <= 4; i++) {
     final model = OnnxModel.forSpec(ddcolorModelSpec);
     stdout.writeln(
-      'round $i: loaded (gpu=${model.usingGpu}) '
-      'RSS=${mb(ProcessInfo.currentRss)} MB',
+      'round $i: loaded (gpu=${model.usingGpu}, ep=${model.provider.label}) '
+      'RSS=${mb(ProcessInfo.currentRss)} MB'
+      '${model.gpuError == null ? '' : '  [gpu unavailable: ${model.gpuError}]'}',
     );
     OnnxModel.releaseAll();
     stdout.writeln('round $i: released  RSS=${mb(ProcessInfo.currentRss)} MB');

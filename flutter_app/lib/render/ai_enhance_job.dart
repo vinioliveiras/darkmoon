@@ -33,22 +33,32 @@ class AiEnhanceProgress {
 }
 
 /// Reports which execution provider `OnnxModel.forSpec` actually ended up
-/// using for one of the two models (DirectML tried first, CPU on
-/// fallback — see `OnnxModel`'s own doc) — sent once per model, right
-/// after its session is created and before any tile inference starts, so
-/// the caller can warn "this will be slower" *before* the wait, not after.
+/// using for one of the two models (see `OnnxModel._providerChain` for the
+/// order tried per platform) — sent once per model, right after its
+/// session is created and before any tile inference starts, so the caller
+/// can warn "this will be slower" *before* the wait, not after.
 /// Purely informational: never changes what runs, only what the UI shows
 /// and what dev-mode logging records.
 class AiEnhanceModelInfo {
-  const AiEnhanceModelInfo(this.modelName, this.usingGpu, this.directMlError);
+  const AiEnhanceModelInfo(
+    this.modelName,
+    this.usingGpu,
+    this.providerLabel,
+    this.gpuError,
+  );
 
   final String modelName;
   final bool usingGpu;
 
+  /// Which provider it landed on — "DirectML", "WebGPU" or "CPU". Named
+  /// rather than inferred from [usingGpu], since there is more than one
+  /// GPU provider now and which one ran is the interesting part.
+  final String providerLabel;
+
   /// The DirectML failure reason, if [usingGpu] is false because that
   /// attempt failed — null if it never ran or succeeded. See
-  /// `OnnxModel.directMlError`.
-  final String? directMlError;
+  /// `OnnxModel.gpuError`.
+  final String? gpuError;
 }
 
 /// Sent when Settings' custom denoise model ([AppSettings

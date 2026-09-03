@@ -109,13 +109,21 @@ install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/native/libraw_r.so"
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
-# ONNX Runtime (CPU-only — no DirectML equivalent on Linux, see
-# onnx_runtime.dart's _create()) for the item-13 neural Enhance models.
-# The official Linux x64 release tarball's lib/*.so, same version family
-# as windows/native/onnxruntime.dll; see native/README.md.
+# ONNX Runtime for the item-13 neural Enhance models — the official Linux
+# x64 release tarball's lib/*.so, same version as
+# windows/native/onnxruntime.dll; see native/README.md.
+#
+# Plus the WebGPU plugin EP (item 43): this is what gives the Linux build
+# GPU acceleration at all. DirectML is Windows-only, so until this the
+# Linux build ran every AI model on CPU. The plugin is built on Dawn and
+# targets Vulkan here, which makes it vendor-agnostic (NVIDIA, AMD and
+# Intel from one library) and — unlike the CUDA or ROCm EPs — needs no
+# vendor SDK installed, only a system Vulkan loader. That is what keeps
+# the portable-tarball promise intact. See native/README.md.
 install(FILES
   "${CMAKE_CURRENT_SOURCE_DIR}/native/libonnxruntime.so"
   "${CMAKE_CURRENT_SOURCE_DIR}/native/libonnxruntime_providers_shared.so"
+  "${CMAKE_CURRENT_SOURCE_DIR}/native/libonnxruntime_providers_webgpu.so"
   DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 

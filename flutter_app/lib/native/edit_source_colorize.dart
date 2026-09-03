@@ -19,10 +19,17 @@ import 'libraw.dart';
 /// pipeline, not several — sent once, right after the session is created
 /// and before inference starts.
 class ColorizeModelInfo {
-  const ColorizeModelInfo(this.usingGpu, this.directMlError);
+  const ColorizeModelInfo(this.usingGpu, this.providerLabel, this.gpuError);
 
   final bool usingGpu;
-  final String? directMlError;
+
+  /// Which provider it landed on — "DirectML", "WebGPU" or "CPU". Named
+  /// rather than inferred from [usingGpu], since there is more than one
+  /// GPU provider now and which one ran is the interesting part.
+  final String providerLabel;
+
+  /// Why the GPU providers were passed over, when [usingGpu] is false.
+  final String? gpuError;
 }
 
 /// Lets a caller stop waiting on the colorize isolate — same shape as
@@ -123,7 +130,9 @@ Future<EditSourcePair?> _decodeAndColorize(
     }
 
     final model = OnnxModel.forSpec(ddcolorModelSpec);
-    onStage(ColorizeModelInfo(model.usingGpu, model.directMlError));
+    onStage(
+      ColorizeModelInfo(model.usingGpu, model.provider.label, model.gpuError),
+    );
 
     colorizedRgb = colorizeImage(
       decoded.rgbBytes,

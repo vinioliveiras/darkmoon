@@ -5,8 +5,9 @@
 //
 // Crops a tile from a real photo, runs it through OnnxModel.forSpec(...),
 // and writes both the input and output tiles as PNGs for visual
-// comparison. Prints which execution provider actually ran (GPU/CPU —
-// see OnnxModel's DirectML-then-CPU fallback).
+// comparison. Prints which execution provider actually ran — see
+// OnnxModel._providerChain for the order tried per platform, and set
+// DARKMOON_ONNX_EP=webgpu|directml|cpu to force one.
 //
 // Usage:
 //   dart run tool/onnx_denoise_smoke_test.dart [denoise|upscale] [image] [x] [y]
@@ -88,7 +89,7 @@ void main(List<String> args) {
   // ignore: avoid_print
   print(
     'Session ready in ${loadSw.elapsedMilliseconds}ms — '
-    'running on ${model.usingGpu ? "GPU (DirectML)" : "CPU (fallback)"}',
+    'running on ${model.usingGpu ? "GPU (${model.provider.label})" : "CPU (fallback)"}',
   );
 
   final runSw = Stopwatch()..start();

@@ -167,7 +167,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
         AiEnhanceModelInfo(
           pmridDenoiseModelSpec.fileName,
           rawDenoiseModel.usingGpu,
-          rawDenoiseModel.directMlError,
+          rawDenoiseModel.provider.label,
+          rawDenoiseModel.gpuError,
         ),
       );
       rawDenoised = decodeRawImageWithPmridDenoise(
@@ -222,7 +223,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
         AiEnhanceModelInfo(
           usedSpec.fileName,
           denoiseModel.usingGpu,
-          denoiseModel.directMlError,
+          denoiseModel.provider.label,
+          denoiseModel.gpuError,
         ),
       );
     }
@@ -234,7 +236,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
         AiEnhanceModelInfo(
           ddcolorModelSpec.fileName,
           colorizeModel.usingGpu,
-          colorizeModel.directMlError,
+          colorizeModel.provider.label,
+          colorizeModel.gpuError,
         ),
       );
     }
@@ -246,7 +249,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
         AiEnhanceModelInfo(
           upscaleModelSpec.fileName,
           upscaleModel.usingGpu,
-          upscaleModel.directMlError,
+          upscaleModel.provider.label,
+          upscaleModel.gpuError,
         ),
       );
     }
@@ -263,7 +267,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
         AiEnhanceModelInfo(
           realEsrganUpscaleModelSpec.fileName,
           sharpenModel.usingGpu,
-          sharpenModel.directMlError,
+          sharpenModel.provider.label,
+          sharpenModel.gpuError,
         ),
       );
     }
@@ -282,7 +287,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
         AiEnhanceModelInfo(
           gaterV3RestoreModelSpec.fileName,
           detailRestoreModel.usingGpu,
-          detailRestoreModel.directMlError,
+          detailRestoreModel.provider.label,
+          detailRestoreModel.gpuError,
         ),
       );
     }
