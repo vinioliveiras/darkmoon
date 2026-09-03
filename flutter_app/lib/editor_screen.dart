@@ -773,6 +773,12 @@ class PreviewFrame {
   /// and a readback still has to finish reading it. Painting or reading a
   /// disposed image throws.
   ///
+  /// **Must be called while the owner still holds the image.** `clone()`
+  /// throws `StateError` on an already-disposed one, so taking the handle
+  /// late is not "slightly risky", it is broken — see
+  /// `_FadingPreviewImageState`, which takes its handle on receipt for
+  /// exactly this reason, and test/widgets/preview_frame_test.dart.
+  ///
   /// A no-op for a placeholder frame — plain bytes need no handle.
   PreviewFrame cloneHandle() =>
       image == null ? this : PreviewFrame.rendered(image!.clone());
@@ -6903,7 +6909,7 @@ class _ImageArea extends StatelessWidget {
   /// soft/low-quality render.
   Widget _fadingImage(PreviewFrame frame) {
     return Builder(
-      builder: (context) => _FadingPreviewImage(
+      builder: (context) => FadingPreviewImage(
         frame: frame,
         fadeGeneration: previewFadeGeneration,
         duration: AnimationsConfig.duration(
@@ -7002,7 +7008,7 @@ class _ImageArea extends StatelessWidget {
     // Prefer the full RAW decode; fall back to the fast embedded thumbnail
     // while it's still decoding, so something appears immediately (the
     // blurry-to-sharp jump this produces is now a fade, not a pop — see
-    // _fadingImage/_FadingPreviewImage).
+    // _fadingImage/FadingPreviewImage).
     final rendered = preview;
     final placeholder = thumbnail;
     final PreviewFrame frame;
@@ -7246,8 +7252,15 @@ class _ImageArea extends StatelessWidget {
 /// through for a moment, reading as a "blink". Here the previous frame
 /// stays fully opaque as a base layer the whole time; only the new
 /// frame fades in on top of it, so the canvas is never exposed.
-class _FadingPreviewImage extends StatefulWidget {
-  const _FadingPreviewImage({
+/// Cross-fades the canvas from one [PreviewFrame] to the next.
+///
+/// Public only so test/widgets/fading_preview_image_test.dart can mount it
+/// directly — the frame-ownership contract it implements (see
+/// [_FadingPreviewImageState._currentFrame]) is subtle enough that it
+/// needs a regression test that actually drives the widget.
+class FadingPreviewImage extends StatefulWidget {
+  const FadingPreviewImage({
+    super.key,
     required this.frame,
     required this.fadeGeneration,
     required this.duration,
@@ -7260,18 +7273,33 @@ class _FadingPreviewImage extends StatefulWidget {
   final Duration duration;
 
   @override
-  State<_FadingPreviewImage> createState() => _FadingPreviewImageState();
+  State<FadingPreviewImage> createState() => _FadingPreviewImageState();
 }
 
-class _FadingPreviewImageState extends State<_FadingPreviewImage>
+class _FadingPreviewImageState extends State<FadingPreviewImage>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
 
-  /// The previous frame (+ whether it was itself a placeholder, so it
-  /// keeps its own blur), kept as a fully-opaque base layer only while
+  /// This widget's own handle on the frame it is painting — taken with
+  /// [PreviewFrame.cloneHandle] the moment `widget.frame` arrives, never
+  /// later.
+  ///
+  /// The editor's preview map disposes a frame synchronously the instant
+  /// its replacement lands (inside `setState`, before this widget is even
+  /// rebuilt), so by the time `didUpdateWidget` runs, the frame it is
+  /// handed as `old.frame` is already dead. Cloning it *there* — which is
+  /// what this did until 2026-09-03 — throws `StateError`, which Flutter
+  /// turns into an `ErrorWidget`: a plain grey rectangle over the whole
+  /// canvas, on every settled edit, in release builds. Holding the handle
+  /// from the start means the outgoing frame below is one this widget
+  /// already owns and is guaranteed still alive.
+  late PreviewFrame _currentFrame;
+
+  /// The outgoing frame, kept as a fully-opaque base layer only while
   /// [_controller] is actively fading the new one in on top of it —
-  /// cleared once the fade completes (or immediately, for an instant/
-  /// live-drag update) so a stale frame doesn't linger in the tree.
+  /// released once the fade completes (or immediately, for an instant/
+  /// live-drag update) so a stale frame doesn't linger in the tree, and
+  /// its handle doesn't keep a full-size image alive for no reason.
   PreviewFrame? _previousFrame;
 
   bool get _shouldAnimate => widget.duration > Duration.zero;
@@ -7279,6 +7307,7 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
   @override
   void initState() {
     super.initState();
+    _currentFrame = widget.frame.cloneHandle();
     // The very first frame shown for a freshly-opened photo fades in
     // from nothing too (see _EditorScreenState._buildContent, which
     // shows a "decoding…" placeholder — not a previous image — until
@@ -7307,27 +7336,31 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
   }
 
   @override
-  void didUpdateWidget(_FadingPreviewImage old) {
+  void didUpdateWidget(FadingPreviewImage old) {
     super.didUpdateWidget(old);
+    final frameChanged = !identical(widget.frame, old.frame);
     if (widget.fadeGeneration != old.fadeGeneration && _shouldAnimate) {
-      // The outgoing frame is one the editor's preview map has already
-      // replaced — and replacing disposes. Take an independent handle so
-      // it stays paintable for the length of the fade (see
-      // PreviewFrame.cloneHandle); released when the fade completes, when
-      // it's superseded below, or in dispose().
       setState(() {
+        // The handle this widget already held becomes the outgoing layer —
+        // still alive even though the editor's map has disposed the image
+        // behind it. Never cloned from old.frame here; see _currentFrame.
         _previousFrame?.disposeHandle();
-        _previousFrame = old.frame.cloneHandle();
+        _previousFrame = _currentFrame;
+        _currentFrame = widget.frame.cloneHandle();
       });
       _controller
         ..duration = widget.duration
         ..forward(from: 0);
     } else {
       // A live drag frame, or animations are off — swap instantly.
-      if (_previousFrame != null) {
+      if (frameChanged || _previousFrame != null) {
         setState(() {
-          _previousFrame!.disposeHandle();
+          _previousFrame?.disposeHandle();
           _previousFrame = null;
+          if (frameChanged) {
+            _currentFrame.disposeHandle();
+            _currentFrame = widget.frame.cloneHandle();
+          }
         });
       }
       _controller.value = 1.0;
@@ -7337,6 +7370,7 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
   @override
   void dispose() {
     _previousFrame?.disposeHandle();
+    _currentFrame.disposeHandle();
     _controller.dispose();
     super.dispose();
   }
@@ -7390,7 +7424,7 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
       fit: StackFit.expand,
       children: [
         if (previous != null) _layer(previous),
-        FadeTransition(opacity: _controller, child: _layer(widget.frame)),
+        FadeTransition(opacity: _controller, child: _layer(_currentFrame)),
       ],
     );
   }
