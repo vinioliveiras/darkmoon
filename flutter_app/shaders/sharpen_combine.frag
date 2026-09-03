@@ -15,9 +15,11 @@
 // which has no such natural-zero-cancellation and needs explicit flags).
 
 uniform vec2 uSize;
-uniform float uStrength;   // amount / 100
+uniform float uStrength;   // amount / 100 * calSharpenStrength
 uniform float uDetailMix;  // detail / 100
 uniform float uMaskAmount; // masking / 100
+uniform float uDetailMixStrength; // calSharpenDetailMix
+uniform float uEdgeThresholdVar;  // (calSharpenEdgeThreshold/255)^2
 uniform sampler2D uSource;
 uniform sampler2D uLuminance;
 uniform sampler2D uBlurred;
@@ -26,12 +28,6 @@ uniform sampler2D uEdgeStrength;
 uniform sampler2D uNoiseVar;
 
 out vec4 fragColor;
-
-// sharpen.dart's edgeThreshold=6.0 is calibrated on the 0-255 scale;
-// rescaled to this shader's 0..1 working space (magnitude / 255, then
-// squared) to keep edgeWeight's ratio identical.
-const float kEdgeThreshold = 6.0 / 255.0;
-const float kEdgeThresholdVar = kEdgeThreshold * kEdgeThreshold;
 
 void main() {
   vec2 uv = FlutterFragCoord().xy / uSize;
@@ -44,10 +40,10 @@ void main() {
 
   float residual = luminance - blurred;
   float fineResidual = luminance - fineBlurred;
-  residual = residual * (1.0 - uDetailMix * 0.6) + fineResidual * uDetailMix;
+  residual = residual * (1.0 - uDetailMix * uDetailMixStrength) + fineResidual * uDetailMix;
 
   float edgeSq = edge * edge;
-  float edgeWeight = edgeSq / (edgeSq + noiseVar + kEdgeThresholdVar);
+  float edgeWeight = edgeSq / (edgeSq + noiseVar + uEdgeThresholdVar);
   float factor = uStrength * (1.0 - uMaskAmount * (1.0 - edgeWeight));
 
   float delta = residual * factor;

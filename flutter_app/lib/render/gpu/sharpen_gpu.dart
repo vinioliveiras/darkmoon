@@ -67,6 +67,8 @@ Future<ui.Image> runSharpenGpu(
   );
   final noiseVar = await runBoxBlurGpu(residualSq, width, height, 6);
 
+  final edgeThreshold = calSharpenEdgeThreshold / 255.0;
+  final edgeThresholdVar = edgeThreshold * edgeThreshold;
   return GpuPass.run(
     'shaders/sharpen_combine.frag',
     floats: [
@@ -75,6 +77,8 @@ Future<ui.Image> runSharpenGpu(
       strength,
       detailMix,
       maskAmount,
+      calSharpenDetailMix,
+      edgeThresholdVar,
     ],
     samplers: [source, luminance, blurred, fineBlurred, edgeStrength, noiseVar],
     outputWidth: width,

@@ -267,7 +267,7 @@ Future<ui.Image> _runPostDenoise(
   var i = 0;
   shader.setFloat(i++, width.toDouble());
   shader.setFloat(i++, height.toDouble());
-  shader.setFloat(i++, params.brightness / 20.0);
+  shader.setFloat(i++, params.brightness / calBrightnessUnitsPerStop);
   shader.setFloat(i++, contrastGamma);
   shader.setFloat(i++, shadowsAdd);
   shader.setFloat(i++, highlightsAdd);
@@ -276,6 +276,13 @@ Future<ui.Image> _runPostDenoise(
   shader.setFloat(i++, calHighlightsStrength);
   shader.setFloat(i++, calShadowsAmountScale);
   shader.setFloat(i++, calBlacksAmountScale);
+  shader.setFloat(i++, calBrightnessMidtoneStrength);
+  shader.setFloat(i++, calWhitesMaskLow);
+  shader.setFloat(i++, calWhitesLevelCoeff);
+  shader.setFloat(i++, calShadowsFalloff);
+  shader.setFloat(i++, calBlacksFalloff);
+  shader.setFloat(i++, calShadowBlacksStretch);
+  shader.setFloat(i++, calShadowBlacksContrastMix);
   shader.setFloat(i++, calMixerHueStrength);
   shader.setFloat(i++, calMixerBandSharpness);
   shader.setFloat(i++, calMixerSaturationStrength);
@@ -338,7 +345,7 @@ Future<ui.Image> _runPostDehaze(
   final shader = program.fragmentShader();
 
   final vignette = params.vignette;
-  final vignetteStrength = vignette.amount / 100.0 * 0.8;
+  final vignetteStrength = vignette.amount / 100.0 * calVignetteStrength;
   final vignetteStart = (vignette.midpoint / 100.0).clamp(0.0, 1.0);
   final vignetteFeatherWidth = (vignette.feather / 100.0).clamp(0.02, 1.0);
 

@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import '../ai_denoise.dart';
+import '../calibration.dart';
 import 'gpu_pass.dart';
 
 /// GPU counterpart to `baseline_chroma.dart`/`ai_denoise.dart` — see
@@ -161,6 +162,13 @@ Future<ui.Image> runAiDenoiseGpu(
     return source;
   }
   final tuning = aiDenoiseTuning[level]!;
+  // calibration.dart global scale on top of the per-level table — matches
+  // ai_denoise.dart's applyAiDenoise exactly (real bug found 2026-09-03:
+  // this scale was never applied on GPU at all, only the raw table value).
+  final lumaStrength =
+      (tuning.lumaStrength * calDenoiseLumaStrengthScale).clamp(0.0, 1.0);
+  final chromaStrength =
+      (tuning.chromaStrength * calDenoiseChromaStrengthScale).clamp(0.0, 1.0);
 
   final luminance = await GpuPass.run(
     'shaders/luminance_extract.frag',
@@ -182,14 +190,14 @@ Future<ui.Image> runAiDenoiseGpu(
     width,
     height,
     tuning.lumaSigma,
-    tuning.lumaStrength,
+    lumaStrength,
   );
   final denoisedChroma = await _runAdaptiveDenoise(
     chroma,
     width,
     height,
     tuning.chromaSigma,
-    tuning.chromaStrength,
+    chromaStrength,
     isChroma: true,
   );
 

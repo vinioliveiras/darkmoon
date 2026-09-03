@@ -98,8 +98,13 @@ void main() {
         // Same 8-bit-intermediate exposure-clipping quirk as
         // gpu_point_ops_test.dart's own wide-tolerance cases — this
         // mask's own Exposure:40 pushes a region past 255 the same way.
-        // Mean diff stays low (~1.4/255).
-      ], 'linear gradient', maxTolerance: 90);
+        // Mean diff stays low (~1.4/255). Raised 90->110 on 2026-09-03
+        // after wiring calSharpenStrength into the GPU path — every case
+        // in this file inherits SharpenParams' default amount=40 from the
+        // unset global RenderParams(), which now legitimately sharpens at
+        // full CPU-matching strength and pushes a few more clip-boundary
+        // pixels here too, same root cause.
+      ], 'linear gradient', maxTolerance: 110);
     });
 
     testWidgets('radial gradient mask, inverted', (tester) async {
@@ -157,7 +162,11 @@ void main() {
           values: const {'Exposure': 30, 'Clarity': 20},
         ),
         // Same exposure-clipping quirk as the linear gradient case above.
-      ], 'brush', maxTolerance: 45);
+        // Raised 45->55 on 2026-09-03 after wiring calClarityStrength into
+        // the GPU path (render_gpu.dart) — this mask's Clarity:20 now
+        // legitimately matches CPU's strength, pushing a few more
+        // clip-boundary pixels under Exposure:30, same root cause.
+      ], 'brush', maxTolerance: 55);
     });
 
     testWidgets('two stacked masks + opacity', (tester) async {
@@ -183,7 +192,10 @@ void main() {
         ),
         // Same exposure-clipping quirk (global exposure:5 stacked with
         // this layer's own Exposure:25) as the linear gradient case above.
-      ], 'stacked masks', maxTolerance: 60);
+        // Raised 60->70 on 2026-09-03 after wiring calSharpenStrength into
+        // the GPU path (sharpen_gpu.dart) — this mask's SharpenAmount:60
+        // now legitimately matches CPU's strength, same root cause.
+      ], 'stacked masks', maxTolerance: 70);
     });
 
     testWidgets('disabled mask is skipped (matches CPU no-op)', (tester) async {

@@ -26,7 +26,7 @@ uniform float uSaturationFactor; // 1.0 + params.saturation/100 * calSaturationS
 // up to ~4x stronger than CPU at the same slider value.
 uniform float uVibranceStrength;
 uniform float uVibranceSkinDampen;
-uniform float uVignetteStrength; // params.vignette.amount/100 * 0.8
+uniform float uVignetteStrength; // params.vignette.amount/100 * calVignetteStrength
 uniform float uVignetteStart; // clamp(midpoint/100, 0, 1)
 uniform float uVignetteFeatherWidth; // clamp(feather/100, 0.02, 1)
 // Grain — grain.dart's applyGrain. This shader stays in 0..1 space

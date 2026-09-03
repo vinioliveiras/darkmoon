@@ -42,6 +42,26 @@ uniform float uHighlightsStrength;
 uniform float uShadowsAmountScale;
 uniform float uBlacksAmountScale;
 
+// calBrightnessMidtoneStrength / calWhitesMaskLow / calWhitesLevelCoeff /
+// calShadowsFalloff / calBlacksFalloff / calShadowBlacksStretch /
+// calShadowBlacksContrastMix (calibration.dart) — real bug found
+// 2026-09-03: these were hardcoded literals duplicated inline in
+// rapidBrightness/rapidWhiteMask/rapidWhites/rapidShadowsBlacks below
+// (a comment even warned "change them here too" if calibration.dart
+// changes) rather than uniforms, so every one of them silently stopped
+// tracking calibration.dart the moment it was next tuned. They
+// happened to still match when found, but the same landmine already
+// caused real bugs for Highlights/Blacks (see uHighlightsStrength's
+// own comment above) and Sharpen/Texture/Clarity (calSharpenStrength
+// etc., render_gpu.dart) earlier the same day.
+uniform float uBrightnessMidtoneStrength;
+uniform float uWhitesMaskLow;
+uniform float uWhitesLevelCoeff;
+uniform float uShadowsFalloff;
+uniform float uBlacksFalloff;
+uniform float uShadowBlacksStretch;
+uniform float uShadowBlacksContrastMix;
+
 // Color Mixer calibration — must match lib/render/calibration.dart's
 // calMixerHueStrength / calMixerBandSharpness / calMixerSaturationStrength
 // / calMixerLuminanceStrength (the CPU path reads them from there; this
@@ -185,7 +205,7 @@ vec3 rapidBrightness(vec3 color, float amount) {
     srgbToLinear(color.b)
   );
   const float rationalMix = 0.95;
-  const float midtoneStrength = 1.2;
+  float midtoneStrength = uBrightnessMidtoneStrength;
   const float topAnchor = 1.06;
   float originalLuma = dot(color, vec3(0.2126, 0.7152, 0.0722));
   if (abs(originalLuma) < 0.00001) return color;
@@ -210,14 +230,9 @@ vec3 rapidBrightness(vec3 color, float amount) {
   );
 }
 
-// Meridian-feel calibration (item 7) — these literals must match
-// lib/render/calibration.dart's calWhitesMaskLow / calWhitesLevelCoeff /
-// calBlacksAmountScale / calBlacksFalloff. The CPU path reads them from
-// that file; this shader (GPU render, opt-in) has them inline, so if you
-// tune calibration.dart and use the GPU path, change them here too.
 float rapidWhiteMask(float luma) {
   float whiteInput = tanh(max(luma, 0.0001) * 1.5);
-  return smoothstep(0.26, 0.98, whiteInput);
+  return smoothstep(uWhitesMaskLow, 0.98, whiteInput);
 }
 
 vec3 rapidHighlights(vec3 color, float amount) {
@@ -245,7 +260,7 @@ vec3 rapidWhites(vec3 color, float amount) {
   );
   float luma = dot(max(linearColor, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722));
   float mask = rapidWhiteMask(luma);
-  float level = 1.0 - amount * 0.40;
+  float level = 1.0 - amount * uWhitesLevelCoeff;
   float multiplier = 1.0 / max(mix(1.0, level, mask), 0.01);
   linearColor *= multiplier;
   return vec3(
@@ -266,12 +281,12 @@ vec3 rapidShadowsBlacks(
   );
   float luma = dot(max(linearColor, vec3(0.0)), vec3(0.2126, 0.7152, 0.0722));
   float t = pow(max(luma, 0.0001), 0.4545);
-  float shadowLift = shadows * uShadowsAmountScale * t * pow(max(1.0 - t, 0.0), 4.5);
-  float blackLift = blacks * uBlacksAmountScale * t * pow(max(1.0 - t, 0.0), 9.0);
+  float shadowLift = shadows * uShadowsAmountScale * t * pow(max(1.0 - t, 0.0), uShadowsFalloff);
+  float blackLift = blacks * uBlacksAmountScale * t * pow(max(1.0 - t, 0.0), uBlacksFalloff);
   float lift = max(shadowLift + blackLift, 0.0);
   float curved = max(t + shadowLift + blackLift, 0.0);
-  float contrasted = 0.2 + (curved - 0.2) * (1.0 + lift * 1.3);
-  float finalT = max(mix(curved, contrasted, 0.85), 0.0);
+  float contrasted = 0.2 + (curved - 0.2) * (1.0 + lift * uShadowBlacksStretch);
+  float finalT = max(mix(curved, contrasted, uShadowBlacksContrastMix), 0.0);
   float newLuma = pow(finalT, 2.2);
   float lumaRatio = newLuma / max(luma, 0.0001);
   float detail = clamp(t / max(pow(max(blurredLuma, 0.0001), 0.4545), 0.0001), 0.8, 1.25);
