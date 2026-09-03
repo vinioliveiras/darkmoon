@@ -11,6 +11,8 @@ uniform sampler2D uTexture;
 out vec4 fragColor;
 
 const int kMaxRadius = 128;
+// Widest window the loop below can walk, in taps minus one.
+const int kMaxSpan = 2 * kMaxRadius;
 
 void main() {
   vec2 p = floor(FlutterFragCoord().xy);
@@ -20,10 +22,11 @@ void main() {
     return;
   }
   vec3 sum = vec3(0.0);
-  for (int k = -kMaxRadius; k <= kMaxRadius; k++) {
-    if (k < -radius || k > radius) continue;
-    float y = clamp(p.y + float(k), 0.0, uSize.y - 1.0);
+  int span = radius * 2;
+  for (int k = 0; k <= kMaxSpan; k++) {
+    if (k > span) break;
+    float y = clamp(p.y + float(k - radius), 0.0, uSize.y - 1.0);
     sum += texture(uTexture, (vec2(p.x, y) + 0.5) / uSize).rgb;
   }
-  fragColor = vec4(sum / float(radius * 2 + 1), 1.0);
+  fragColor = vec4(sum / float(span + 1), 1.0);
 }

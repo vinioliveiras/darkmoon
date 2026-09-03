@@ -20,13 +20,19 @@
 // back 0.5 before dividing by size, or bilinear sampling reads from a
 // texel's edge instead of its center.
 //
-// The loop bound below is a compile-time constant (kMaxRadius), not
+// The loop bound below is a compile-time constant (kMaxSpan), not
 // int(uRadius) directly — Skia's runtime-effect SkSL compiler rejects a
 // uniform-derived loop bound ("loop index must be compared with a
-// constant expression"). kMaxRadius=128 comfortably covers every radius
-// this pipeline needs (Clarity's Gaussian-approx box radii are the
-// largest, well under 100); iterations beyond the real radius are
-// skipped via `continue`, not computed.
+// constant expression"). It is written to `break` out at the real span
+// rather than `continue` past the unused iterations: `continue` still
+// runs every one of the 2*kMaxRadius+1 iterations (the compiler cannot
+// shorten a loop whose real length is a uniform), so a radius-2 blur was
+// paying ~50x the loop overhead it needed. `break` is uniform across the
+// wave — radius is the same for every fragment — so the whole wave exits
+// at the real span instead. Same taps, same order, same result.
+//
+// kMaxRadius=128 comfortably covers every radius this pipeline needs
+// (Clarity's Gaussian-approx box radii are the largest, well under 100).
 
 uniform vec2 uSize;
 uniform float uRadius;
@@ -35,6 +41,8 @@ uniform sampler2D uTexture;
 out vec4 fragColor;
 
 const int kMaxRadius = 128;
+// Widest window the loop below can walk, in taps minus one.
+const int kMaxSpan = 2 * kMaxRadius;
 
 void main() {
   vec2 p = floor(FlutterFragCoord().xy);
@@ -44,10 +52,11 @@ void main() {
     return;
   }
   vec3 sum = vec3(0.0);
-  for (int k = -kMaxRadius; k <= kMaxRadius; k++) {
-    if (k < -radius || k > radius) continue;
-    float x = clamp(p.x + float(k), 0.0, uSize.x - 1.0);
+  int span = radius * 2;
+  for (int k = 0; k <= kMaxSpan; k++) {
+    if (k > span) break;
+    float x = clamp(p.x + float(k - radius), 0.0, uSize.x - 1.0);
     sum += texture(uTexture, (vec2(x, p.y) + 0.5) / uSize).rgb;
   }
-  fragColor = vec4(sum / float(radius * 2 + 1), 1.0);
+  fragColor = vec4(sum / float(span + 1), 1.0);
 }
