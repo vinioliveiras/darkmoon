@@ -61,7 +61,7 @@ library;
 ///     values
 ///   ↓ lower  = default Amount (100%) renders gentler
 /// default: 0.3   (original/unset: 1.0 — Amount was a 1:1 pass-through)
-const double calGlobalAmountCompression = 0.3;
+const double calGlobalAmountCompression = 0.35;
 
 /// Per-slider override of [calGlobalAmountCompression] — a slider key
 /// present here (matching its `_SliderSpec` name in `editor_screen.dart`,
@@ -77,8 +77,8 @@ const double calGlobalAmountCompression = 0.3;
 /// change needed beyond this map, [_withGlobalEditAmountApplied] already
 /// reads through it for every key.
 const Map<String, double> calGlobalAmountCompressionOverrides = {
-  'Exposure': 1.0,
-  'Contrast': 0.5,
+  'Exposure': 2.0,
+  'Contrast': 1.0,
   // Real bug found 2026-09-02: dragging the "Color Profile Contrast"
   // slider (ColorProfileAmount) barely changed the render even across
   // its full range, because it fell back to the global 0.3 fraction like
@@ -107,7 +107,7 @@ const Map<String, double> calGlobalAmountCompressionOverrides = {
 ///   ↑ higher = more aggressive Tint (green/magenta shows up faster)
 ///   ↓ lower  = gentler Tint
 /// default: 0.35   (the old model used 0.25; raised toward Meridian)
-const double calWbTintStrength = 0.35;
+const double calWbTintStrength = 0.30;
 
 /// Working-space gamma the WB gains are applied in.
 /// This is technical — only change it if you know why. Changing it throws
@@ -309,19 +309,19 @@ const double calTextureSigma = 3.5;
 ///   ↑ higher = stronger Texture     ↓ lower = weaker
 /// default: 3.0   (user raised to 2.0, then 2.3, then 2.7, then asked
 /// for more — 2026-09-02)
-const double calTextureStrength = 3.0;
+const double calTextureStrength = 5.0;
 
 /// **Clarity** — radius (in pixels) of the local contrast. Deliberately
 /// large (mid-range contrast, more like "definition").
 ///   ↑ higher = wider effect/bigger "halo"
 ///   ↓ lower  = more localized effect
 /// default: 25.0
-const double calClaritySigma = 25.0;
+const double calClaritySigma = 35.0;
 
 /// **Clarity** — strength multiplier on top of the slider.
 ///   ↑ higher = stronger Clarity     ↓ lower = weaker
 /// default: 0.65   (2026-09-01: raised from 0.5, explicit user request)
-const double calClarityStrength = 0.65;
+const double calClarityStrength = 0.75;
 
 /// **Dehaze +** — how hard the positive slider pulls transmission down (=
 /// removes haze). This is the main control over Dehaze strength.
@@ -389,7 +389,7 @@ const double calDehazeAddMix = 0.18;
 /// Vibrance +100 barely perceptible (closer to "off" than "gentler").
 /// Weakened again 2026-09-01 (user: "still a bit strong"). Raised back up
 /// 2026-09-02 (explicit user request — wanted it stronger again).
-const double calVibranceStrength = 0.7;
+const double calVibranceStrength = 1.0;
 
 /// **Vibrance** — how much it HOLDS BACK the effect on skin tones (so faces
 /// don't turn orange). 1.0 = holds back nothing; 0.0 = zeroes out on skin.
@@ -408,7 +408,7 @@ const double calVibranceSkinDampen = 0.6;
 /// +100 as only a ~1.01x multiplier, effectively disabling the slider
 /// rather than just softening it. Weakened again 2026-09-01. Weakened
 /// further 2026-09-02 (explicit user request).
-const double calSaturationStrength = 0.10;
+const double calSaturationStrength = 0.3;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  COLOR — Color Mixer / HSL (8 bands)                                      ║
@@ -425,7 +425,7 @@ const double calSaturationStrength = 0.10;
 ///   ↓ lower  = rotates less (0.6 = original Solstice behavior)
 /// ⚠️ changes older presets that touched Mixer Hue (they'll rotate further).
 /// default: 1.0   (original Solstice: 0.6)   [also on GPU: point_ops_post_denoise.frag]
-const double calMixerHueStrength = 1.0;
+const double calMixerHueStrength = 0.8;
 
 /// **Mixer → effective band width** — the "sharpness" of the gaussian that
 /// decides how much each band (Red, Orange…) influences a pixel of a given
@@ -472,7 +472,7 @@ const double calMixerLuminanceStrength = 0.5;
 ///   ↑ higher = stronger Sharpen at the same value
 ///   ↓ lower  = gentler
 /// default: 1.0
-const double calSharpenStrength = 1.0;
+const double calSharpenStrength = 2.0;
 
 /// **Sharpen → Detail** — how much the Detail slider injects the finest
 /// detail (vs. the coarser edges).
