@@ -1,12 +1,24 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:path/path.dart' as p;
 
 import 'package:darkmoon/native/onnx_runtime.dart';
+
+// Paths are built with p.join rather than written out, so they use the
+// running platform's own separator. These used to be Windows literals
+// (r'D:\models\DRUNet.onnx'), which quietly made two of these tests
+// Windows-only: OnnxModelSpec.fileName goes through package:path's
+// basename, and on Linux a backslash is an ordinary filename character,
+// so the "basename" of that literal is the whole string. Caught the
+// moment CI first ran the suite on Linux.
+String _path(List<String> parts) => p.joinAll(parts);
 
 void main() {
   group('OnnxModelSpec.customDenoiseModel', () {
     test('matches denoiseModelSpec\'s tile geometry exactly — a deliberate '
         'drop-in replacement, not a generically-introspected model', () {
-      final custom = OnnxModelSpec.customDenoiseModel(r'D:\models\DRUNet.onnx');
+      final custom = OnnxModelSpec.customDenoiseModel(
+        _path(['models', 'DRUNet.onnx']),
+      );
       expect(custom.inputTileSize, denoiseModelSpec.inputTileSize);
       expect(custom.scaleFactor, denoiseModelSpec.scaleFactor);
       expect(custom.channels, denoiseModelSpec.channels);
@@ -14,14 +26,15 @@ void main() {
 
     test('fileName is the basename, not the full path', () {
       final custom = OnnxModelSpec.customDenoiseModel(
-        r'D:\models\subdir\DRUNet.onnx',
+        _path(['models', 'subdir', 'DRUNet.onnx']),
       );
       expect(custom.fileName, 'DRUNet.onnx');
     });
 
     test('customAbsolutePath carries the exact path given', () {
-      final custom = OnnxModelSpec.customDenoiseModel(r'D:\models\DRUNet.onnx');
-      expect(custom.customAbsolutePath, r'D:\models\DRUNet.onnx');
+      final given = _path(['models', 'DRUNet.onnx']);
+      final custom = OnnxModelSpec.customDenoiseModel(given);
+      expect(custom.customAbsolutePath, given);
     });
   });
 
