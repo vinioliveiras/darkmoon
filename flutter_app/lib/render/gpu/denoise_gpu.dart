@@ -44,29 +44,38 @@ Future<ui.Image> _runAdaptiveDenoise(
   if (strength <= 0) {
     return channel;
   }
-  final blurred = await runGaussianBlurGpu(channel, width, height, sigma);
-  final residualSq = await GpuPass.run(
-    'shaders/residual_sq.frag',
-    floats: [width.toDouble(), height.toDouble(), isChroma ? 1.0 : 0.0],
-    samplers: [channel, blurred],
-    outputWidth: width,
-    outputHeight: height,
+  final scratch = GpuImagePool();
+  final blurred = scratch.add(
+    await runGaussianBlurGpu(channel, width, height, sigma),
   );
-  var noiseVar = await GpuPass.run(
-    'shaders/box_blur_h.frag',
-    floats: [width.toDouble(), height.toDouble(), noiseRadius.toDouble()],
-    samplers: [residualSq],
-    outputWidth: width,
-    outputHeight: height,
+  final residualSq = scratch.add(
+    await GpuPass.run(
+      'shaders/residual_sq.frag',
+      floats: [width.toDouble(), height.toDouble(), isChroma ? 1.0 : 0.0],
+      samplers: [channel, blurred],
+      outputWidth: width,
+      outputHeight: height,
+    ),
   );
-  noiseVar = await GpuPass.run(
-    'shaders/box_blur_v.frag',
-    floats: [width.toDouble(), height.toDouble(), noiseRadius.toDouble()],
-    samplers: [noiseVar],
-    outputWidth: width,
-    outputHeight: height,
+  var noiseVar = scratch.add(
+    await GpuPass.run(
+      'shaders/box_blur_h.frag',
+      floats: [width.toDouble(), height.toDouble(), noiseRadius.toDouble()],
+      samplers: [residualSq],
+      outputWidth: width,
+      outputHeight: height,
+    ),
   );
-  return GpuPass.run(
+  noiseVar = scratch.add(
+    await GpuPass.run(
+      'shaders/box_blur_v.frag',
+      floats: [width.toDouble(), height.toDouble(), noiseRadius.toDouble()],
+      samplers: [noiseVar],
+      outputWidth: width,
+      outputHeight: height,
+    ),
+  );
+  final result = await GpuPass.run(
     'shaders/denoise_combine.frag',
     floats: [
       width.toDouble(),
@@ -78,6 +87,9 @@ Future<ui.Image> _runAdaptiveDenoise(
     outputWidth: width,
     outputHeight: height,
   );
+  // [channel] belongs to the caller and was never registered here.
+  scratch.disposeAllExcept();
+  return result;
 }
 
 /// GPU port of `baseline_chroma.dart`'s `applyBaselineChromaSmoothing` —
@@ -91,60 +103,71 @@ Future<ui.Image> runBaselineChromaSmoothingGpu(
   int width,
   int height,
 ) async {
-  final chroma = await GpuPass.run(
-    'shaders/chroma_extract.frag',
-    floats: [width.toDouble(), height.toDouble()],
-    samplers: [source],
-    outputWidth: width,
-    outputHeight: height,
+  final scratch = GpuImagePool();
+  final chroma = scratch.add(
+    await GpuPass.run(
+      'shaders/chroma_extract.frag',
+      floats: [width.toDouble(), height.toDouble()],
+      samplers: [source],
+      outputWidth: width,
+      outputHeight: height,
+    ),
   );
 
   final smallWidth = (width / _chromaDownsampleFactor).ceil();
   final smallHeight = (height / _chromaDownsampleFactor).ceil();
-  final small = await GpuPass.run(
-    'shaders/downsample_box.frag',
-    floats: [
-      smallWidth.toDouble(),
-      smallHeight.toDouble(),
-      width.toDouble(),
-      height.toDouble(),
-      _chromaDownsampleFactor.toDouble(),
-    ],
-    samplers: [chroma],
-    outputWidth: smallWidth,
-    outputHeight: smallHeight,
+  final small = scratch.add(
+    await GpuPass.run(
+      'shaders/downsample_box.frag',
+      floats: [
+        smallWidth.toDouble(),
+        smallHeight.toDouble(),
+        width.toDouble(),
+        height.toDouble(),
+        _chromaDownsampleFactor.toDouble(),
+      ],
+      samplers: [chroma],
+      outputWidth: smallWidth,
+      outputHeight: smallHeight,
+    ),
   );
 
-  final denoisedSmall = await _runAdaptiveDenoise(
-    small,
-    smallWidth,
-    smallHeight,
-    _baselineChromaSigma / _chromaDownsampleFactor,
-    _baselineChromaStrength,
-    isChroma: true,
+  final denoisedSmall = scratch.add(
+    await _runAdaptiveDenoise(
+      small,
+      smallWidth,
+      smallHeight,
+      _baselineChromaSigma / _chromaDownsampleFactor,
+      _baselineChromaStrength,
+      isChroma: true,
+    ),
   );
 
-  final denoisedChroma = await GpuPass.run(
-    'shaders/upsample.frag',
-    floats: [
-      width.toDouble(),
-      height.toDouble(),
-      smallWidth.toDouble(),
-      smallHeight.toDouble(),
-      _chromaDownsampleFactor.toDouble(),
-    ],
-    samplers: [denoisedSmall],
-    outputWidth: width,
-    outputHeight: height,
+  final denoisedChroma = scratch.add(
+    await GpuPass.run(
+      'shaders/upsample.frag',
+      floats: [
+        width.toDouble(),
+        height.toDouble(),
+        smallWidth.toDouble(),
+        smallHeight.toDouble(),
+        _chromaDownsampleFactor.toDouble(),
+      ],
+      samplers: [denoisedSmall],
+      outputWidth: width,
+      outputHeight: height,
+    ),
   );
 
-  return GpuPass.run(
+  final result = await GpuPass.run(
     'shaders/chroma_recombine.frag',
     floats: [width.toDouble(), height.toDouble()],
     samplers: [source, denoisedChroma],
     outputWidth: width,
     outputHeight: height,
   );
+  scratch.disposeAllExcept();
+  return result;
 }
 
 /// GPU port of `ai_denoise.dart`'s `applyAiDenoise` — the one-shot AI
@@ -165,47 +188,58 @@ Future<ui.Image> runAiDenoiseGpu(
   // calibration.dart global scale on top of the per-level table — matches
   // ai_denoise.dart's applyAiDenoise exactly (real bug found 2026-09-03:
   // this scale was never applied on GPU at all, only the raw table value).
-  final lumaStrength =
-      (tuning.lumaStrength * calDenoiseLumaStrengthScale).clamp(0.0, 1.0);
-  final chromaStrength =
-      (tuning.chromaStrength * calDenoiseChromaStrengthScale).clamp(0.0, 1.0);
+  final lumaStrength = (tuning.lumaStrength * calDenoiseLumaStrengthScale)
+      .clamp(0.0, 1.0);
+  final chromaStrength = (tuning.chromaStrength * calDenoiseChromaStrengthScale)
+      .clamp(0.0, 1.0);
 
-  final luminance = await GpuPass.run(
-    'shaders/luminance_extract.frag',
-    floats: [width.toDouble(), height.toDouble()],
-    samplers: [source],
-    outputWidth: width,
-    outputHeight: height,
+  final scratch = GpuImagePool();
+  final luminance = scratch.add(
+    await GpuPass.run(
+      'shaders/luminance_extract.frag',
+      floats: [width.toDouble(), height.toDouble()],
+      samplers: [source],
+      outputWidth: width,
+      outputHeight: height,
+    ),
   );
-  final chroma = await GpuPass.run(
-    'shaders/chroma_extract.frag',
-    floats: [width.toDouble(), height.toDouble()],
-    samplers: [source],
-    outputWidth: width,
-    outputHeight: height,
-  );
-
-  final denoisedLuma = await _runAdaptiveDenoise(
-    luminance,
-    width,
-    height,
-    tuning.lumaSigma,
-    lumaStrength,
-  );
-  final denoisedChroma = await _runAdaptiveDenoise(
-    chroma,
-    width,
-    height,
-    tuning.chromaSigma,
-    chromaStrength,
-    isChroma: true,
+  final chroma = scratch.add(
+    await GpuPass.run(
+      'shaders/chroma_extract.frag',
+      floats: [width.toDouble(), height.toDouble()],
+      samplers: [source],
+      outputWidth: width,
+      outputHeight: height,
+    ),
   );
 
-  return GpuPass.run(
+  final denoisedLuma = scratch.add(
+    await _runAdaptiveDenoise(
+      luminance,
+      width,
+      height,
+      tuning.lumaSigma,
+      lumaStrength,
+    ),
+  );
+  final denoisedChroma = scratch.add(
+    await _runAdaptiveDenoise(
+      chroma,
+      width,
+      height,
+      tuning.chromaSigma,
+      chromaStrength,
+      isChroma: true,
+    ),
+  );
+
+  final result = await GpuPass.run(
     'shaders/luma_chroma_recombine.frag',
     floats: [width.toDouble(), height.toDouble()],
     samplers: [denoisedLuma, denoisedChroma],
     outputWidth: width,
     outputHeight: height,
   );
+  scratch.disposeAllExcept();
+  return result;
 }

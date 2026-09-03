@@ -29,47 +29,52 @@ Future<ui.Image> runSharpenGpu(
   final detailMix = params.detail / 100.0;
   final maskAmount = params.masking / 100.0;
 
-  final luminance = await GpuPass.run(
-    'shaders/luminance_extract.frag',
-    floats: [width.toDouble(), height.toDouble()],
-    samplers: [source],
-    outputWidth: width,
-    outputHeight: height,
+  final scratch = GpuImagePool();
+  final luminance = scratch.add(
+    await GpuPass.run(
+      'shaders/luminance_extract.frag',
+      floats: [width.toDouble(), height.toDouble()],
+      samplers: [source],
+      outputWidth: width,
+      outputHeight: height,
+    ),
   );
-  final blurred = await runGaussianBlurGpu(luminance, width, height, sigma);
-  final fineBlurred = await runGaussianBlurGpu(
-    luminance,
-    width,
-    height,
-    sigma * 0.5,
+  final blurred = scratch.add(
+    await runGaussianBlurGpu(luminance, width, height, sigma),
   );
-
-  final absResidual = await GpuPass.run(
-    'shaders/abs_residual.frag',
-    floats: [width.toDouble(), height.toDouble()],
-    samplers: [luminance, blurred],
-    outputWidth: width,
-    outputHeight: height,
-  );
-  final edgeStrength = await runGaussianBlurGpu(
-    absResidual,
-    width,
-    height,
-    sigma,
+  final fineBlurred = scratch.add(
+    await runGaussianBlurGpu(luminance, width, height, sigma * 0.5),
   );
 
-  final residualSq = await GpuPass.run(
-    'shaders/residual_sq.frag',
-    floats: [width.toDouble(), height.toDouble(), 0.0],
-    samplers: [luminance, blurred],
-    outputWidth: width,
-    outputHeight: height,
+  final absResidual = scratch.add(
+    await GpuPass.run(
+      'shaders/abs_residual.frag',
+      floats: [width.toDouble(), height.toDouble()],
+      samplers: [luminance, blurred],
+      outputWidth: width,
+      outputHeight: height,
+    ),
   );
-  final noiseVar = await runBoxBlurGpu(residualSq, width, height, 6);
+  final edgeStrength = scratch.add(
+    await runGaussianBlurGpu(absResidual, width, height, sigma),
+  );
+
+  final residualSq = scratch.add(
+    await GpuPass.run(
+      'shaders/residual_sq.frag',
+      floats: [width.toDouble(), height.toDouble(), 0.0],
+      samplers: [luminance, blurred],
+      outputWidth: width,
+      outputHeight: height,
+    ),
+  );
+  final noiseVar = scratch.add(
+    await runBoxBlurGpu(residualSq, width, height, 6),
+  );
 
   final edgeThreshold = calSharpenEdgeThreshold / 255.0;
   final edgeThresholdVar = edgeThreshold * edgeThreshold;
-  return GpuPass.run(
+  final result = await GpuPass.run(
     'shaders/sharpen_combine.frag',
     floats: [
       width.toDouble(),
@@ -84,4 +89,6 @@ Future<ui.Image> runSharpenGpu(
     outputWidth: width,
     outputHeight: height,
   );
+  scratch.disposeAllExcept();
+  return result;
 }

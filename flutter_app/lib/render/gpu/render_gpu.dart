@@ -36,8 +36,20 @@ Future<Uint8List> renderRgbaGpu(
   RenderParams params,
 ) async {
   final source = await decodeRgbImage(sourceRgb, width, height);
-  final result = await renderImageGpu(source, width, height, params);
-  final byteData = await result.toByteData(format: ui.ImageByteFormat.rawRgba);
+  final ui.Image result;
+  try {
+    result = await renderImageGpu(source, width, height, params);
+  } finally {
+    source.dispose();
+  }
+  final ByteData? byteData;
+  try {
+    byteData = await result.toByteData(format: ui.ImageByteFormat.rawRgba);
+  } finally {
+    // Everything this render allocated is gone by here: renderImageGpu
+    // released its own chain, and this is the one image it handed back.
+    result.dispose();
+  }
   if (byteData == null) {
     throw StateError('renderRgbaGpu: toByteData returned null');
   }
@@ -65,6 +77,12 @@ Future<Uint8List> renderRgbGpu(
 /// layer and each mask layer's own independent render straight from one
 /// `ui.Image` to the next, without a wasted Uint8List readback/re-upload
 /// round trip between them.
+///
+/// Owns every image it creates and releases them before returning, keeping
+/// only the frame it hands back (see [GpuImagePool] for why that matters
+/// — this chain alone is a dozen full-size RGBA textures, and the stages
+/// it calls allocate several times that between them). [source] belongs to
+/// the caller and is never disposed here.
 Future<ui.Image> renderImageGpu(
   ui.Image source,
   int width,
@@ -84,60 +102,61 @@ Future<ui.Image> renderImageGpu(
   // midtones" weight, which reads each pixel's current luminance and
   // targets the wrong tonal range on a RAW that still needs a large
   // Exposure correction.
-  final afterExposureAndWb = await _runPreDenoise(
-    source,
-    width,
-    height,
-    params,
+  final chain = GpuImagePool();
+  final afterExposureAndWb = chain.add(
+    await _runPreDenoise(source, width, height, params),
   );
-  final afterChromaSmoothing = await runBaselineChromaSmoothingGpu(
-    afterExposureAndWb,
-    width,
-    height,
+  final afterChromaSmoothing = chain.add(
+    await runBaselineChromaSmoothingGpu(afterExposureAndWb, width, height),
   );
-  final afterAiDenoise = await runAiDenoiseGpu(
-    afterChromaSmoothing,
-    width,
-    height,
-    params.aiDenoise,
+  final afterAiDenoise = chain.add(
+    await runAiDenoiseGpu(
+      afterChromaSmoothing,
+      width,
+      height,
+      params.aiDenoise,
+    ),
   );
-  final tonalBlur =
-      (params.shadows == 0 && params.blacks == 0 && params.whites == 0)
-      ? null
-      : await runGaussianBlurGpu(
-          await GpuPass.run(
-            'shaders/srgb_to_linear.frag',
-            floats: [width.toDouble(), height.toDouble()],
-            samplers: [afterAiDenoise],
-            outputWidth: width,
-            outputHeight: height,
-          ),
-          width,
-          height,
-          3.5,
-        );
-  final lut = await _buildLutImage(params.curves, params.parametricCurve);
-  final afterSharpen = await runSharpenGpu(
-    afterAiDenoise,
-    width,
-    height,
-    params.sharpen,
+  final ui.Image? tonalBlur;
+  if (params.shadows == 0 && params.blacks == 0 && params.whites == 0) {
+    tonalBlur = null;
+  } else {
+    final linear = chain.add(
+      await GpuPass.run(
+        'shaders/srgb_to_linear.frag',
+        floats: [width.toDouble(), height.toDouble()],
+        samplers: [afterAiDenoise],
+        outputWidth: width,
+        outputHeight: height,
+      ),
+    );
+    tonalBlur = chain.add(await runGaussianBlurGpu(linear, width, height, 3.5));
+  }
+  final lut = chain.add(
+    await _buildLutImage(params.curves, params.parametricCurve),
   );
-  final afterTexture = await runLocalContrastGpu(
-    afterSharpen,
-    width,
-    height,
-    params.texture * calTextureStrength,
-    calTextureSigma,
-    noiseAware: true,
+  final afterSharpen = chain.add(
+    await runSharpenGpu(afterAiDenoise, width, height, params.sharpen),
   );
-  final afterClarity = await runLocalContrastGpu(
-    afterTexture,
-    width,
-    height,
-    params.clarity * calClarityStrength,
-    calClaritySigma,
-    protectMidtones: true,
+  final afterTexture = chain.add(
+    await runLocalContrastGpu(
+      afterSharpen,
+      width,
+      height,
+      params.texture * calTextureStrength,
+      calTextureSigma,
+      noiseAware: true,
+    ),
+  );
+  final afterClarity = chain.add(
+    await runLocalContrastGpu(
+      afterTexture,
+      width,
+      height,
+      params.clarity * calClarityStrength,
+      calClaritySigma,
+      protectMidtones: true,
+    ),
   );
 
   // "darkmoon Color" profile stage — the fixed base-contrast S-curve
@@ -153,29 +172,25 @@ Future<ui.Image> renderImageGpu(
       : math
             .pow(2.0, params.baseContrast / 100.0 * calContrastStrength)
             .toDouble();
-  final afterColorProfile = await runColorProfileGpu(
-    afterClarity,
-    width,
-    height,
-    params.colorProfile,
-    params.colorProfileStrength,
-    baseContrastGamma,
+  final afterColorProfile = chain.add(
+    await runColorProfileGpu(
+      afterClarity,
+      width,
+      height,
+      params.colorProfile,
+      params.colorProfileStrength,
+      baseContrastGamma,
+    ),
   );
-  final afterDehaze = await runDehazeGpu(
-    afterColorProfile,
-    width,
-    height,
-    params.dehaze,
+  final afterDehaze = chain.add(
+    await runDehazeGpu(afterColorProfile, width, height, params.dehaze),
   );
-  final afterTone = await _runPostDenoise(
-    afterDehaze,
-    lut,
-    tonalBlur,
-    width,
-    height,
-    params,
+  final afterTone = chain.add(
+    await _runPostDenoise(afterDehaze, lut, tonalBlur, width, height, params),
   );
-  return _runPostDehaze(afterTone, width, height, params);
+  final result = await _runPostDehaze(afterTone, width, height, params);
+  chain.disposeAllExcept();
+  return result;
 }
 
 ui.FragmentProgram? _preDenoiseProgram;
@@ -421,7 +436,13 @@ Future<ui.Image> _rasterize(
     ui.Paint()..shader = shader,
   );
   final picture = recorder.endRecording();
-  return picture.toImage(width, height);
+  // Same reasoning as GpuPass.run: the picture and the shader hold native
+  // resources that only an explicit dispose releases, and both are dead
+  // once the image exists.
+  final image = await picture.toImage(width, height);
+  picture.dispose();
+  shader.dispose();
+  return image;
 }
 
 /// Identity mapping (lut[i] == i) — used in place of [buildToneCurveLut]'s

@@ -21,14 +21,19 @@ Future<ui.Image> runLocalContrastGpu(
     return source;
   }
 
-  final luminance = await GpuPass.run(
-    'shaders/luminance_extract.frag',
-    floats: [width.toDouble(), height.toDouble()],
-    samplers: [source],
-    outputWidth: width,
-    outputHeight: height,
+  final scratch = GpuImagePool();
+  final luminance = scratch.add(
+    await GpuPass.run(
+      'shaders/luminance_extract.frag',
+      floats: [width.toDouble(), height.toDouble()],
+      samplers: [source],
+      outputWidth: width,
+      outputHeight: height,
+    ),
   );
-  final blurred = await runGaussianBlurGpu(luminance, width, height, sigma);
+  final blurred = scratch.add(
+    await runGaussianBlurGpu(luminance, width, height, sigma),
+  );
 
   // Always computed (cheap relative to the blur chain above) rather than
   // gated on `noiseAware`, since local_contrast_combine.frag's uNoiseVar
@@ -36,19 +41,21 @@ Future<ui.Image> runLocalContrastGpu(
   // substituted as an unused placeholder when `noiseAware` is off.
   ui.Image noiseVar;
   if (noiseAware) {
-    final residualSq = await GpuPass.run(
-      'shaders/residual_sq.frag',
-      floats: [width.toDouble(), height.toDouble(), 0.0],
-      samplers: [luminance, blurred],
-      outputWidth: width,
-      outputHeight: height,
+    final residualSq = scratch.add(
+      await GpuPass.run(
+        'shaders/residual_sq.frag',
+        floats: [width.toDouble(), height.toDouble(), 0.0],
+        samplers: [luminance, blurred],
+        outputWidth: width,
+        outputHeight: height,
+      ),
     );
-    noiseVar = await runBoxBlurGpu(residualSq, width, height, 6);
+    noiseVar = scratch.add(await runBoxBlurGpu(residualSq, width, height, 6));
   } else {
     noiseVar = blurred;
   }
 
-  return GpuPass.run(
+  final result = await GpuPass.run(
     'shaders/local_contrast_combine.frag',
     floats: [
       width.toDouble(),
@@ -61,4 +68,6 @@ Future<ui.Image> runLocalContrastGpu(
     outputWidth: width,
     outputHeight: height,
   );
+  scratch.disposeAllExcept();
+  return result;
 }

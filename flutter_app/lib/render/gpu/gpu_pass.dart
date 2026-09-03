@@ -15,6 +15,45 @@ import '../blur.dart' show boxRadiiForGauss;
 /// **Must run on the main isolate** — see `render_gpu.dart`'s doc comment
 /// (Phase 0 confirmed `dart:ui`'s GPU primitives hang inside
 /// `Isolate.run`).
+/// Holds the intermediate `ui.Image`s one stage of the GPU pipeline
+/// creates, so they can be released as soon as that stage is done with
+/// them.
+///
+/// Every pass rasterizes into a brand-new full-size RGBA image, and a full
+/// render runs 50+ passes — at full-quality resolution that is well over a
+/// gigabyte of GPU-side texture per render. `ui.Image` releases that only
+/// on an explicit `dispose()`: the finalizer exists but runs late and
+/// unpredictably, which is what let a long editing session drift into
+/// multi-gigabyte memory use.
+///
+/// Batched per stage rather than "dispose the previous image as you go"
+/// because several helpers return their *input* unchanged when they have
+/// nothing to do (`runBoxBlurGpu` at radius 0, `runSharpenGpu` on identity
+/// params, …), so the previous image is not reliably dead. An identity
+/// [Set] backs it, so registering the same image twice — which happens
+/// naturally when one of those no-op paths is taken — still disposes it
+/// exactly once.
+class GpuImagePool {
+  final Set<ui.Image> _images = Set<ui.Image>.identity();
+
+  /// Registers [image] as this stage's to release, and returns it.
+  ui.Image add(ui.Image image) {
+    _images.add(image);
+    return image;
+  }
+
+  /// Disposes everything registered except [keep] — the image whose
+  /// ownership passes to the caller. Leaves the pool empty.
+  void disposeAllExcept([ui.Image? keep]) {
+    for (final image in _images) {
+      if (!identical(image, keep)) {
+        image.dispose();
+      }
+    }
+    _images.clear();
+  }
+}
+
 class GpuPass {
   GpuPass._();
 
@@ -58,7 +97,14 @@ class GpuPass {
       ui.Paint()..shader = shader,
     );
     final picture = recorder.endRecording();
-    return picture.toImage(outputWidth, outputHeight);
+    // Both the picture and the shader hold native resources of their own,
+    // released only on an explicit dispose. They are safe to drop as soon
+    // as the image exists — the picture has been rasterized, and the
+    // shader was only ever referenced by the paint inside it.
+    final image = await picture.toImage(outputWidth, outputHeight);
+    picture.dispose();
+    shader.dispose();
+    return image;
   }
 }
 
@@ -82,13 +128,17 @@ Future<ui.Image> runBoxBlurGpu(
     outputWidth: width,
     outputHeight: height,
   );
-  return GpuPass.run(
+  final result = await GpuPass.run(
     'shaders/box_blur_v.frag',
     floats: [width.toDouble(), height.toDouble(), radius.toDouble()],
     samplers: [h],
     outputWidth: width,
     outputHeight: height,
   );
+  // The horizontal half is dead the moment the vertical one has consumed
+  // it; [source] belongs to the caller and is never touched here.
+  h.dispose();
+  return result;
 }
 
 /// Separable min filter (H then V pass) over a `size x size` window — the
@@ -112,13 +162,15 @@ Future<ui.Image> runMinFilterGpu(
     outputWidth: width,
     outputHeight: height,
   );
-  return GpuPass.run(
+  final result = await GpuPass.run(
     'shaders/min_filter_v.frag',
     floats: [width.toDouble(), height.toDouble(), radius.toDouble()],
     samplers: [h],
     outputWidth: width,
     outputHeight: height,
   );
+  h.dispose();
+  return result;
 }
 
 /// GPU port of `blur.dart`'s `gaussianBlurChannel` — 3-pass box-blur
@@ -135,7 +187,14 @@ Future<ui.Image> runGaussianBlurGpu(
 ) async {
   var current = source;
   for (final radius in boxRadiiForGauss(sigma, 3)) {
-    current = await runBoxBlurGpu(current, width, height, radius);
+    final next = await runBoxBlurGpu(current, width, height, radius);
+    // Each pass's input dies with it — except [source], which belongs to
+    // the caller, and except the no-op case (radius 0) where runBoxBlurGpu
+    // hands the very same image straight back.
+    if (!identical(current, source) && !identical(current, next)) {
+      current.dispose();
+    }
+    current = next;
   }
   return current;
 }

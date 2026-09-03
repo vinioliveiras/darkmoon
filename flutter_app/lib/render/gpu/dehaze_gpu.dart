@@ -24,7 +24,7 @@ Future<ui.Image> runDehazeGpu(
   final strength = amount / 100.0;
   final blurred = await runGaussianBlurGpu(source, width, height, 40.0);
 
-  return GpuPass.run(
+  final result = await GpuPass.run(
     'shaders/dehaze_apply.frag',
     floats: [
       width.toDouble(),
@@ -39,4 +39,6 @@ Future<ui.Image> runDehazeGpu(
     outputWidth: width,
     outputHeight: height,
   );
+  blurred.dispose();
+  return result;
 }

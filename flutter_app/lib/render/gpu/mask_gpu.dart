@@ -33,6 +33,7 @@ Future<Uint8List> renderRgbaWithMasksGpu(
 ) async {
   final source = await decodeRgbImage(sourceRgb, width, height);
   var current = await renderImageGpu(source, width, height, globalParams);
+  source.dispose();
 
   for (final mask in masks) {
     // Same no-op skip as renderRgbWithMasks — a disabled mask, or one with
@@ -82,16 +83,28 @@ Future<Uint8List> renderRgbaWithMasksGpu(
       layerParams,
     );
 
-    current = await GpuPass.run(
+    final blended = await GpuPass.run(
       'shaders/mask_blend.frag',
       floats: [width.toDouble(), height.toDouble()],
       samplers: [current, layerImage, alphaImage],
       outputWidth: width,
       outputHeight: height,
     );
+    // This layer's inputs are dead once it has been blended in — released
+    // per iteration rather than in one batch at the end so a photo with
+    // several masks doesn't hold every layer's full-size frame at once.
+    current.dispose();
+    layerImage.dispose();
+    alphaImage.dispose();
+    current = blended;
   }
 
-  final byteData = await current.toByteData(format: ui.ImageByteFormat.rawRgba);
+  final ByteData? byteData;
+  try {
+    byteData = await current.toByteData(format: ui.ImageByteFormat.rawRgba);
+  } finally {
+    current.dispose();
+  }
   if (byteData == null) {
     throw StateError('renderRgbaWithMasksGpu: toByteData returned null');
   }
