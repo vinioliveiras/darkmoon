@@ -290,7 +290,12 @@ vec3 rapidShadowsBlacks(
   float newLuma = pow(finalT, 2.2);
   float lumaRatio = newLuma / max(luma, 0.0001);
   float detail = clamp(t / max(pow(max(blurredLuma, 0.0001), 0.4545), 0.0001), 0.8, 1.25);
-  float noiseProtection = smoothstep(0.0, 0.1, pow(max(blurredLuma, 0.0001), 0.4545));
+  // A linear ramp, not a smoothstep: render.dart's _applyRapidShadowsBlacks
+  // uses `(blurredT / 0.1).clamp(0.0, 1.0)`. The cubic smoothstep applies
+  // on top diverged from it across the whole shadow range (at
+  // blurredT = 0.025 it gives 0.156 where the CPU gives 0.25).
+  float noiseProtection =
+      clamp(pow(max(blurredLuma, 0.0001), 0.4545) / 0.1, 0.0, 1.0);
   float detailAmp = 1.0 + lift * 1.2 * noiseProtection;
   float detailCorrection = pow(detail, detailAmp) / detail;
   linearColor *= lumaRatio * pow(detailCorrection, 2.2);

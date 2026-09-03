@@ -117,21 +117,6 @@ Future<ui.Image> renderImageGpu(
       params.aiDenoise,
     ),
   );
-  final ui.Image? tonalBlur;
-  if (params.shadows == 0 && params.blacks == 0 && params.whites == 0) {
-    tonalBlur = null;
-  } else {
-    final linear = chain.add(
-      await GpuPass.run(
-        'shaders/srgb_to_linear.frag',
-        floats: [width.toDouble(), height.toDouble()],
-        samplers: [afterAiDenoise],
-        outputWidth: width,
-        outputHeight: height,
-      ),
-    );
-    tonalBlur = chain.add(await runGaussianBlurGpu(linear, width, height, 3.5));
-  }
   final lut = chain.add(
     await _buildLutImage(params.curves, params.parametricCurve),
   );
@@ -185,6 +170,34 @@ Future<ui.Image> renderImageGpu(
   final afterDehaze = chain.add(
     await runDehazeGpu(afterColorProfile, width, height, params.dehaze),
   );
+  // The sigma-3.5 tonal blur behind Shadows/Blacks' detail preservation,
+  // taken from the post-Dehaze buffer because that is where the CPU takes
+  // it: render.dart computes it at the top of applyPostDenoisePointOps,
+  // which runs after applyColorProfileStage and applyDehazeStage.
+  //
+  // Real GPU/CPU divergence fixed 2026-09-03: this used to be computed
+  // from afterAiDenoise, i.e. before Sharpen, Texture, Clarity, the colour
+  // profile and Dehaze. calBaseContrast is 80 and always on, so the
+  // profile's S-curve alone put the blurred luminance the shader reads in
+  // a completely different tonal range from the CPU's — which then fed
+  // rapidShadowsBlacks' detailRatio, noiseProtection and detailExponent.
+  // Same class of bug as the base-contrast ordering fixed 2026-09-02.
+  final ui.Image? tonalBlur;
+  if (params.shadows == 0 && params.blacks == 0 && params.whites == 0) {
+    tonalBlur = null;
+  } else {
+    final linear = chain.add(
+      await GpuPass.run(
+        'shaders/srgb_to_linear.frag',
+        floats: [width.toDouble(), height.toDouble()],
+        samplers: [afterDehaze],
+        outputWidth: width,
+        outputHeight: height,
+      ),
+    );
+    tonalBlur = chain.add(await runGaussianBlurGpu(linear, width, height, 3.5));
+  }
+
   final afterTone = chain.add(
     await _runPostDenoise(afterDehaze, lut, tonalBlur, width, height, params),
   );
