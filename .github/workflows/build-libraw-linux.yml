@@ -1,15 +1,26 @@
 # Rebuilds linux/native/libraw_r.so against an old glibc, on demand.
 #
 # The committed one was built in WSL on Ubuntu 26.04 and needs GLIBC_2.43,
-# so it will not load on Ubuntu 24.04 LTS or Debian stable — which is most
-# of the machines anyone would actually run this on. CI found that; see
+# so it will not load on Ubuntu 24.04 LTS or Debian stable — most of the
+# machines anyone would actually run this on. CI found that; see
 # tool/native_smoke_test.dart.
 #
 # Everything else in the Linux bundle already tops out at GLIBC_2.34 (the
 # app binary itself; the Flutter engine needs 2.18 and ONNX Runtime 2.27),
-# so LibRaw is the only thing raising the floor. Building it on Debian
-# bullseye (glibc 2.31) puts it below that, making the app binary the
-# limit again.
+# so LibRaw is the only thing raising the floor.
+#
+# The base image also decides which libjpeg SONAME it asks for, which
+# matters as much as glibc: Ubuntu ships libjpeg.so.8, Debian
+# libjpeg.so.62, and a build wanting the wrong one simply will not load. A
+# first attempt on Debian bullseye fixed the glibc and broke Ubuntu.
+# Ubuntu 22.04 is the base because Ubuntu is what this app's Linux users
+# are overwhelmingly on; its glibc 2.35 leaves LibRaw one version above
+# the app binary's own floor, against 2.43 today.
+#
+# It also builds a variant with libjpeg/lcms2/zlib linked statically,
+# which would remove the SONAME question altogether if their static
+# archives are -fPIC. Both are reported and uploaded, so one run answers
+# which to take.
 #
 # Manual, not on push: the result is a committed binary. Run this, download
 # the artifact, replace linux/native/libraw_r.so, commit.
@@ -25,18 +36,19 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # glibc 2.31 — comfortably under the 2.34 the rest of the bundle needs.
-    container: debian:bullseye
+    # glibc 2.35, and libjpeg.so.8 — the SONAME Ubuntu actually has.
+    container: ubuntu:22.04
     steps:
       - name: Install the build toolchain
         run: |
+          export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install -y --no-install-recommends \
             git ca-certificates build-essential autoconf automake libtool \
             pkg-config libjpeg-dev zlib1g-dev liblcms2-dev binutils
           ldd --version | head -1
 
-      - name: Build LibRaw ${{ inputs.libraw_version }}
+      - name: Build LibRaw (dynamic deps)
         run: |
           git clone --depth 1 --branch ${{ inputs.libraw_version }} \
             https://github.com/LibRaw/LibRaw.git /tmp/LibRaw
@@ -47,28 +59,37 @@ jobs:
           CC=gcc CXX=g++ ./configure --disable-examples
           make -j"$(nproc)"
           cp lib/.libs/libraw_r.so.*.*.* /tmp/libraw_r.so
-          # Keep the SONAME the loader asks for; DynamicLibrary.open uses
-          # the bare filename.
-          patchelf --version >/dev/null 2>&1 || true
 
-      - name: Report what it needs
+      - name: Build a variant with libjpeg/lcms2/zlib linked statically
+        continue-on-error: true
+        run: |
+          cd /tmp/LibRaw
+          make clean >/dev/null
+          CC=gcc CXX=g++ ./configure --disable-examples \
+            LIBS="/usr/lib/x86_64-linux-gnu/libjpeg.a /usr/lib/x86_64-linux-gnu/liblcms2.a /usr/lib/x86_64-linux-gnu/libz.a"
+          make -j"$(nproc)"
+          cp lib/.libs/libraw_r.so.*.*.* /tmp/libraw_r_static.so
+
+      - name: Report what each variant needs
         run: |
           cd /tmp
-          echo "SONAME: $(objdump -p libraw_r.so | awk '/SONAME/{print $2}')"
-          echo "highest GLIBC symbol: $(objdump -T libraw_r.so \
-            | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -u -t. -k1,1V -k2,2V | tail -1)"
-          echo "links against:"
-          objdump -p libraw_r.so | awk '/NEEDED/{print "  " $2}'
+          for f in libraw_r.so libraw_r_static.so; do
+            if [ ! -f "$f" ]; then echo "=== $f: not built ==="; continue; fi
+            echo "=== $f ==="
+            echo "  SONAME: $(objdump -p $f | awk '/SONAME/{print $2}')"
+            echo "  highest GLIBC: $(objdump -T $f | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -u -t. -k1,1V -k2,2V | tail -1)"
+            echo "  NEEDED:"
+            objdump -p $f | awk '/NEEDED/{print "    " $2}'
+          done
 
-      - name: Fail if it still needs a new glibc
+      - name: Fail if the dynamic build still needs a new glibc
         run: |
           cd /tmp
-          max=$(objdump -T libraw_r.so | grep -oE 'GLIBC_[0-9]+\.[0-9]+' \
-            | sort -u -t. -k1,1V -k2,2V | tail -1)
-          # 2.34 is the floor the rest of the bundle already sets, so
-          # anything at or under it means LibRaw is no longer the limit.
+          max=$(objdump -T libraw_r.so | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -u -t. -k1,1V -k2,2V | tail -1)
+          # Anything at or under 2.35 is a decade's worth of distros better
+          # than the 2.43 we ship today.
           case "$max" in
-            GLIBC_2.3|GLIBC_2.[0-9]|GLIBC_2.1[0-9]|GLIBC_2.2[0-9]|GLIBC_2.3[0-4])
+            GLIBC_2.[0-9]|GLIBC_2.1[0-9]|GLIBC_2.2[0-9]|GLIBC_2.3[0-5])
               echo "OK: $max" ;;
             *)
               echo "still too new: $max"; exit 1 ;;
@@ -77,5 +98,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: libraw_r-linux-x64
-          path: /tmp/libraw_r.so
+          path: |
+            /tmp/libraw_r.so
+            /tmp/libraw_r_static.so
           if-no-files-found: error
