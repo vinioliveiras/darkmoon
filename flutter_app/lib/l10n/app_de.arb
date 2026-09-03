@@ -1,22 +1,17 @@
 {
   "@@locale": "de",
-
   "menuFile": "Datei",
   "menuOpenFile": "Datei öffnen",
   "menuOpenFolder": "Ordner hinzufügen",
   "menuSettings": "Einstellungen",
   "menuAbout": "Über",
-
   "aboutDialogTitle": "Über darkmoon",
   "aboutCredits": "Entwickelt von Vini",
-
   "splashLicense": "GNU Affero General Public License v3.0",
   "splashCopyright": "© 2026 Vini. Lizenziert unter GNU AGPL v3.0.",
   "splashLoading": "Bibliothek wird geladen…",
-
   "dialogOpenFolderTitle": "Ordner hinzufügen",
   "dialogOpenFileTitle": "RAW-Datei öffnen",
-
   "loadingFolder": "Ordner wird geladen...",
   "loadingPhotos": "Fotos werden geladen... ({loaded}/{total})",
   "loadingImage": "{name} wird geladen...",
@@ -52,7 +47,6 @@
   "presetSelectTooltip": "Vorgaben auswählen",
   "presetSelectAllTooltip": "Alle auswählen",
   "presetSelectedCount": "{count} ausgewählt",
-
   "beforeLabel": "Vorher",
   "afterLabel": "Nachher",
   "zoomFit": "Einpassen",
@@ -137,7 +131,6 @@
   "aiDenoiseEnhanceStageDetailSharpen": "Details werden geschärft",
   "aiDenoiseEnhanceStageSharpen": "Schärfung",
   "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
-
   "exportPanelButton": "Exportieren",
   "exportingButton": "Wird exportiert...",
   "exportStageDecoding": "RAW wird dekodiert...",
@@ -160,9 +153,7 @@
   "exportFailedStatus": "Export fehlgeschlagen",
   "aiDenoiseEnhanceFailedStatus": "KI-Enhance fehlgeschlagen",
   "exportFailureMessage": "Export fehlgeschlagen: {error}",
-
   "resetTooltip": "Zurücksetzen",
-
   "settingsDialogTitle": "Einstellungen",
   "settingsTabGeneral": "Allgemein",
   "settingsTabPerformance": "Leistung",
@@ -185,6 +176,7 @@
   "settingsDynamicFullPreviewLabel": "Dynamische Vorschau in voller Auflösung",
   "settingsDynamicFullPreviewHint": "Kurz nachdem sich eine Bearbeitung gesetzt hat, wird in der nativen Sensorauflösung neu gerendert, damit eine gezoomte Ansicht schärfer wird. Dekodierte Quellen werden auf der Festplatte zwischengespeichert.",
   "settingsFullQualityScaleLabel": "Vorschauauflösung",
+  "settingsFullQualityFloorHint": "Durch die Bearbeitungsvorschau begrenzt ({previewPx} px) — bei diesem Wert kein Gewinn.",
   "settingsThumbnailThreadsLabel": "Threads für das Laden von Miniaturansichten",
   "settingsCustomDenoiseModelLabel": "Benutzerdefiniertes Entrauschungsmodell",
   "settingsCustomDenoiseModelHint": "Ersetzt das On-Device-Denoise-Modell im Enhance-Tab des KI-Entrauschungsdialogs. Muss ein direkter Ersatz sein: 3-Kanal-RGB, gleiche Auflösung bei Ein-/Ausgabe, Tensor-Namen \"input\"/\"output\", [0,1]-normalisiert — ein Modell, das nicht passt, führt zu einem Fehler oder sichtbar falschem Ergebnis, nicht zu einem sauberen Fehlschlag.",
@@ -206,11 +198,14 @@
   "confirmPruneMissingMessage": "Dadurch werden gespeicherte Bearbeitungen, Kurven, Masken, Vorgaben und Einträge zuletzt verwendeter Dateien für Fotos entfernt, die nicht mehr auf der Festplatte vorhanden sind. Dies kann nicht rückgängig gemacht werden.",
   "pruneMissingResultMessage": "{count, plural, =0{Keine fehlenden Fotos gefunden} =1{1 fehlendes Foto aus dem Katalog entfernt} other{{count} fehlende Fotos aus dem Katalog entfernt}}",
   "@pruneMissingResultMessage": {
-    "placeholders": { "count": {"type": "int"} }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "clearButton": "Leeren",
   "closeButton": "Schließen",
-
   "filmstripResetEditsAction": "Alle Bearbeitungen zurücksetzen",
   "filmstripShowOnDiskAction": "Im Explorer anzeigen",
   "filmstripDeleteAction": "Löschen",
@@ -221,7 +216,6 @@
   "filmstripDeleteConfirmTitle": "Foto löschen?",
   "filmstripDeleteConfirmMessage": "Dadurch wird \"{name}\" in den Papierkorb verschoben und die gespeicherten Bearbeitungen werden gelöscht. Du kannst das Foto aus dem Papierkorb wiederherstellen, aber nicht die Bearbeitungen.",
   "filmstripDeleteFailedMessage": "\"{name}\" konnte nicht gelöscht werden: {error}",
-
   "sectionColorProfile": "FARBPROFIL",
   "sectionWhiteBalance": "WEISSABGLEICH",
   "sectionTone": "TONWERTE",
@@ -234,7 +228,6 @@
   "sectionEffects": "EFFEKTE",
   "gradeRangeMidtones": "Mitteltöne",
   "gradeRangeGlobal": "Global",
-
   "maskImageLayer": "Ganzes Bild",
   "maskLinearGradient": "Linearer Verlauf",
   "maskRadialGradient": "Radialer Verlauf",
@@ -283,7 +276,6 @@
   "mixerLuminanceLabel": "Luminanz",
   "mixerModeMixerLabel": "Mischer",
   "mixerModeHslLabel": "HSL",
-
   "sliderTemperature": "Temperatur",
   "sliderTint": "Tönung",
   "wbModeAsShot": "Wie aufgenommen",
@@ -311,12 +303,10 @@
   "sliderDehaze": "Dunst entfernen",
   "sliderVibrance": "Dynamik",
   "sliderSaturation": "Sättigung",
-
   "sliderSharpenAmount": "Schärfen",
   "sliderSharpenRadius": "Radius",
   "sliderSharpenDetail": "Detail",
   "sliderSharpenMasking": "Maskierung",
-
   "sliderVignetteAmount": "Vignette-Stärke",
   "sliderVignetteMidpoint": "Vignette-Mittelpunkt",
   "sliderVignetteFeather": "Vignette-Weichzeichnung",

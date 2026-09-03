@@ -1,41 +1,55 @@
 {
   "@@locale": "en",
-
   "menuFile": "File",
   "menuOpenFile": "Open File",
   "menuOpenFolder": "Add Folder",
   "menuSettings": "Settings",
   "menuAbout": "About",
-
   "aboutDialogTitle": "About darkmoon",
   "aboutCredits": "Developed by Vini",
-
   "splashLicense": "GNU Affero General Public License v3.0",
   "splashCopyright": "© 2026 Vini. Licensed under GNU AGPL v3.0.",
   "splashLoading": "Loading your library…",
-
   "dialogOpenFolderTitle": "Add Folder",
   "dialogOpenFileTitle": "Open RAW File",
-
   "loadingFolder": "Loading folder...",
   "loadingPhotos": "Loading photos... ({loaded}/{total})",
   "@loadingPhotos": {
-    "placeholders": { "loaded": {"type": "int"}, "total": {"type": "int"} }
+    "placeholders": {
+      "loaded": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      }
+    }
   },
   "loadingImage": "Loading {name}...",
   "@loadingImage": {
-    "placeholders": { "name": {"type": "String"} }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "applyingAdjustments": "Applying adjustments...",
   "emptyStateOpenFolder": "Open a folder with RAW files to get started",
   "noFolderOpen": "No folder open",
   "decodingPhoto": "{name}\n(decoding...)",
   "@decodingPhoto": {
-    "placeholders": { "name": {"type": "String"} }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "photoNotFoundMessage": "{name}\ncan't be found — it may have been moved, renamed or deleted outside darkmoon",
   "@photoNotFoundMessage": {
-    "placeholders": { "name": {"type": "String"} }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "sidebarRecentFilesSection": "RECENT FILES",
   "sidebarFoldersSection": "FOLDERS",
@@ -48,7 +62,11 @@
   "presetEmptyHint": "No presets yet",
   "presetAmountDialogTitle": "Apply \"{name}\"",
   "@presetAmountDialogTitle": {
-    "placeholders": { "name": {"type": "String"} }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "presetAmountLabel": "Color Profile Strength",
   "presetAmountApplyButton": "Apply",
@@ -64,19 +82,30 @@
   "presetImportDialogTitle": "Import presets",
   "presetDeleteConfirmMessage": "Delete the preset \"{name}\"? This can't be undone.",
   "@presetDeleteConfirmMessage": {
-    "placeholders": { "name": {"type": "String"} }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "presetDeleteManyConfirmMessage": "Delete {count} presets? This can't be undone.",
   "@presetDeleteManyConfirmMessage": {
-    "placeholders": { "count": {"type": "int"} }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "presetSelectTooltip": "Select presets",
   "presetSelectAllTooltip": "Select all",
   "presetSelectedCount": "{count} selected",
   "@presetSelectedCount": {
-    "placeholders": { "count": {"type": "int"} }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
-
   "beforeLabel": "Before",
   "afterLabel": "After",
   "zoomFit": "Fit",
@@ -135,7 +164,9 @@
   "aiDenoiseCloudFailedMessage": "Cloud AI denoise failed: {error}",
   "@aiDenoiseCloudFailedMessage": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "aiDenoiseCloudFailedStatus": "Cloud denoise failed",
@@ -157,7 +188,9 @@
   "aiDenoiseCustomModelFallbackMessage": "Your custom denoise model couldn't be used ({error}) — used the default model instead.",
   "@aiDenoiseCustomModelFallbackMessage": {
     "placeholders": {
-      "error": {"type": "String"}
+      "error": {
+        "type": "String"
+      }
     }
   },
   "aiDenoiseCustomModelFallbackStatus": "Custom model failed, used default",
@@ -173,11 +206,14 @@
   "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
   "@aiDenoiseEnhanceTileProgress": {
     "placeholders": {
-      "stage": {"type": "String"},
-      "percent": {"type": "int"}
+      "stage": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
     }
   },
-
   "exportPanelButton": "Export",
   "exportingButton": "Exporting...",
   "exportStageDecoding": "Decoding RAW...",
@@ -190,7 +226,14 @@
   "exportRapidScaleLabel": "Resolution",
   "exportRapidScaleResultLabel": "≈ {width} × {height} px",
   "@exportRapidScaleResultLabel": {
-    "placeholders": { "width": {"type": "int"}, "height": {"type": "int"} }
+    "placeholders": {
+      "width": {
+        "type": "int"
+      },
+      "height": {
+        "type": "int"
+      }
+    }
   },
   "exportFormatLabel": "Format",
   "exportQualityLabel": "Quality",
@@ -200,18 +243,24 @@
   "hideButton": "Hide",
   "exportSuccessMessage": "Exported to {path}",
   "@exportSuccessMessage": {
-    "placeholders": { "path": {"type": "String"} }
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
   },
   "exportDoneStatus": "Done!",
   "exportFailedStatus": "Export failed",
   "aiDenoiseEnhanceFailedStatus": "AI Enhance failed",
   "exportFailureMessage": "Export failed: {error}",
   "@exportFailureMessage": {
-    "placeholders": { "error": {"type": "String"} }
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   },
-
   "resetTooltip": "Reset",
-
   "settingsDialogTitle": "Settings",
   "settingsTabGeneral": "General",
   "settingsTabPerformance": "Performance",
@@ -234,6 +283,14 @@
   "settingsDynamicFullPreviewLabel": "Dynamic full-resolution preview",
   "settingsDynamicFullPreviewHint": "A moment after an edit settles, re-render at the sensor's native resolution so a zoomed-in view sharpens up. Decoded sources are cached to disk.",
   "settingsFullQualityScaleLabel": "Preview resolution",
+  "settingsFullQualityFloorHint": "Capped by the editing preview ({previewPx} px) — no gain at this value.",
+  "@settingsFullQualityFloorHint": {
+    "placeholders": {
+      "previewPx": {
+        "type": "int"
+      }
+    }
+  },
   "settingsThumbnailThreadsLabel": "Thumbnail loading threads",
   "settingsCustomDenoiseModelLabel": "Custom denoise model",
   "settingsCustomDenoiseModelHint": "Replaces the on-device Denoise model in the AI Denoise dialog's Enhance tab. Must be a drop-in replacement: 3-channel RGB, same-resolution in/out, \"input\"/\"output\" tensor names, [0,1]-normalized — a model that doesn't match will error or produce visibly wrong output, not a clean failure.",
@@ -255,11 +312,14 @@
   "confirmPruneMissingMessage": "This removes saved edits, curves, masks, presets, and recent-file entries for photos that no longer exist on disk. This can't be undone.",
   "pruneMissingResultMessage": "{count, plural, =0{No missing photos found} =1{Removed 1 missing photo from the catalog} other{Removed {count} missing photos from the catalog}}",
   "@pruneMissingResultMessage": {
-    "placeholders": { "count": {"type": "int"} }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "clearButton": "Clear",
   "closeButton": "Close",
-
   "filmstripResetEditsAction": "Reset all edits",
   "filmstripShowOnDiskAction": "Show on disk",
   "filmstripDeleteAction": "Delete",
@@ -268,18 +328,32 @@
   "filmstripResetEditsConfirmTitle": "Reset all edits?",
   "filmstripResetEditsConfirmMessage": "This resets \"{name}\" back to its untouched state — every adjustment, curve, and mask. This can't be undone.",
   "@filmstripResetEditsConfirmMessage": {
-    "placeholders": { "name": {"type": "String"} }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "filmstripDeleteConfirmTitle": "Delete photo?",
   "filmstripDeleteConfirmMessage": "This sends \"{name}\" to the Recycle Bin and deletes its saved edits. You can restore the photo from the Recycle Bin, but not its edits.",
   "@filmstripDeleteConfirmMessage": {
-    "placeholders": { "name": {"type": "String"} }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
   },
   "filmstripDeleteFailedMessage": "Couldn't delete \"{name}\": {error}",
   "@filmstripDeleteFailedMessage": {
-    "placeholders": { "name": {"type": "String"}, "error": {"type": "String"} }
+    "placeholders": {
+      "name": {
+        "type": "String"
+      },
+      "error": {
+        "type": "String"
+      }
+    }
   },
-
   "sectionColorProfile": "COLOR PROFILE",
   "sectionWhiteBalance": "WHITE BALANCE",
   "sectionTone": "TONE",
@@ -292,7 +366,6 @@
   "sectionEffects": "EFFECTS",
   "gradeRangeMidtones": "Midtones",
   "gradeRangeGlobal": "Global",
-
   "maskImageLayer": "Full Image",
   "maskLinearGradient": "Linear Gradient",
   "maskRadialGradient": "Radial Gradient",
@@ -341,7 +414,6 @@
   "mixerLuminanceLabel": "Luminance",
   "mixerModeMixerLabel": "Mixer",
   "mixerModeHslLabel": "HSL",
-
   "sliderTemperature": "Temperature",
   "sliderTint": "Tint",
   "wbModeAsShot": "As Shot",
@@ -369,12 +441,10 @@
   "sliderDehaze": "Dehaze",
   "sliderVibrance": "Vibrance",
   "sliderSaturation": "Saturation",
-
   "sliderSharpenAmount": "Sharpening",
   "sliderSharpenRadius": "Radius",
   "sliderSharpenDetail": "Detail",
   "sliderSharpenMasking": "Masking",
-
   "sliderVignetteAmount": "Vignette Amount",
   "sliderVignetteMidpoint": "Vignette Midpoint",
   "sliderVignetteFeather": "Vignette Feather",

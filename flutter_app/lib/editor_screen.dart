@@ -2205,20 +2205,14 @@ class _EditorScreenState extends State<EditorScreen>
               (dynamicFullPreviewChanged && next.dynamicFullPreview)) {
             // Turned on (or changed the resolution) — kick a settled render
             // so full-quality mode re-engages for the open photo.
+            // _scheduleRender re-arms the native-source decode itself, so
+            // both cases are covered whether or not this photo already had
+            // one in hand.
             final selected = _selectedIndex == null
                 ? null
                 : _files[_selectedIndex!];
             if (selected != null) {
               _scheduleRender(live: false);
-              if (dynamicFullPreviewChanged && next.dynamicFullPreview) {
-                // Just turned on: nothing has armed the native-source
-                // decode for this photo yet (that only happens on
-                // _selectIndex now, not on every settled render — see
-                // _maybeArmFullQualityDecode's doc), so kick it off here
-                // too or turning the setting on mid-session would silently
-                // do nothing until the next photo switch.
-                _maybeArmFullQualityDecode(selected.path);
-              }
             }
           }
           if (previewResolutionChanged) {
@@ -3834,25 +3828,20 @@ class _EditorScreenState extends State<EditorScreen>
 
   /// Working resolution (long edge, px) full-quality settled renders run
   /// at — `AppSettings.fullQualityPercent` of the sensor's native long
-  /// edge (60% by default), never below [AppSettings.previewResolution]
-  /// (so it's never *worse* than the normal preview). Not zoom-dependent:
+  /// edge (40% by default), never below [AppSettings.previewResolution]
+  /// (so it's never *worse* than the normal preview — but also never
+  /// *better* than it when the percentage lands under that floor, which is
+  /// what Settings' own resulting-size readout exists to make visible).
+  /// Not zoom-dependent:
   /// once full-quality mode kicks in you're editing the near-full RAW, so
   /// re-rendering on every zoom change wasn't worth the jank. 100% renders
   /// the full sensor on every settle — sharp everywhere, but each settle
   /// pays a longer inline JPEG encode (see `render_job_gpu.dart`).
-  int _fullQualityWorkingRes(EditSource native) {
-    final nativeLong = native.width > native.height
-        ? native.width
-        : native.height;
-    var target = (nativeLong * _settings.fullQualityPercent / 100).round();
-    if (target < _settings.previewResolution) {
-      target = _settings.previewResolution;
-    }
-    if (target > nativeLong) {
-      target = nativeLong;
-    }
-    return target;
-  }
+  int _fullQualityWorkingRes(EditSource native) => fullQualityWorkingLongEdge(
+    nativeLongEdge: native.width > native.height ? native.width : native.height,
+    fullQualityPercent: _settings.fullQualityPercent,
+    previewResolution: _settings.previewResolution,
+  ).longEdge;
 
   /// The native source downscaled to [_fullQualityWorkingRes] once, then
   /// reused for every settled render of this photo (the working res is
@@ -5963,8 +5952,18 @@ class _EditorScreenState extends State<EditorScreen>
       return;
     }
     _renderDebounceTimer?.cancel();
-    // A fresh edit invalidates any pending / in-flight full-res upgrade.
-    _dynamicPreviewTimer?.cancel();
+    // Push the pending full-resolution upgrade back rather than killing
+    // it. The native decode is expensive and shouldn't compete with an
+    // active edit — but it decodes the *source*, which no edit
+    // invalidates, and nothing else re-arms it.
+    //
+    // Real bug fixed 2026-09-03: this used to be a bare
+    // `_dynamicPreviewTimer?.cancel()`. Since arming only happens in
+    // _selectIndex, touching any slider within the ~5s open delay killed
+    // the upgrade permanently for that photo — the whole Dynamic Full
+    // Resolution setting silently did nothing unless you opened a photo
+    // and left it completely alone for five seconds first.
+    _maybeArmFullQualityDecode(selected.path);
     _renderDebounceTimer = Timer(_renderDebounce, () {
       unawaited(_renderPreview(selected.path, live: live));
     });

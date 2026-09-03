@@ -1,22 +1,17 @@
 {
   "@@locale": "pt",
-
   "menuFile": "Arquivo",
   "menuOpenFile": "Abrir arquivo",
   "menuOpenFolder": "Adicionar pasta",
   "menuSettings": "Configurações",
   "menuAbout": "Sobre",
-
   "aboutDialogTitle": "Sobre o darkmoon",
   "aboutCredits": "Desenvolvido por Vini",
-
   "splashLicense": "GNU Affero General Public License v3.0",
   "splashCopyright": "© 2026 Vini. Licenciado sob GNU AGPL v3.0.",
   "splashLoading": "Carregando sua biblioteca…",
-
   "dialogOpenFolderTitle": "Adicionar pasta",
   "dialogOpenFileTitle": "Abrir arquivo RAW",
-
   "loadingFolder": "Carregando pasta...",
   "loadingPhotos": "Carregando fotos... ({loaded}/{total})",
   "loadingImage": "Carregando {name}...",
@@ -52,7 +47,6 @@
   "presetSelectTooltip": "Selecionar presets",
   "presetSelectAllTooltip": "Selecionar tudo",
   "presetSelectedCount": "{count} selecionado(s)",
-
   "beforeLabel": "Antes",
   "afterLabel": "Depois",
   "zoomFit": "Ajustar",
@@ -139,11 +133,14 @@
   "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
   "@aiDenoiseEnhanceTileProgress": {
     "placeholders": {
-      "stage": {"type": "String"},
-      "percent": {"type": "int"}
+      "stage": {
+        "type": "String"
+      },
+      "percent": {
+        "type": "int"
+      }
     }
   },
-
   "exportPanelButton": "Exportar",
   "exportingButton": "Exportando...",
   "exportStageDecoding": "Decodificando RAW...",
@@ -166,9 +163,7 @@
   "exportDoneStatus": "Pronto!",
   "exportFailedStatus": "Falha ao exportar",
   "aiDenoiseEnhanceFailedStatus": "AI Enhance falhou",
-
   "resetTooltip": "Redefinir ajustes",
-
   "settingsDialogTitle": "Configurações",
   "settingsTabGeneral": "Geral",
   "settingsTabPerformance": "Performance",
@@ -191,6 +186,7 @@
   "settingsDynamicFullPreviewLabel": "Preview dinâmico em resolução total",
   "settingsDynamicFullPreviewHint": "Um instante depois que a edição assenta, re-renderiza na resolução nativa do sensor pra imagem ampliada ficar nítida. As fontes decodificadas ficam em cache no disco.",
   "settingsFullQualityScaleLabel": "Resolução do preview",
+  "settingsFullQualityFloorHint": "Limitado pelo preview de edição ({previewPx} px) — sem ganho neste valor.",
   "settingsThumbnailThreadsLabel": "Threads de carregamento de miniaturas",
   "settingsCustomDenoiseModelLabel": "Modelo de denoise customizado",
   "settingsCustomDenoiseModelHint": "Substitui o modelo de Denoise on-device na aba Enhance do diálogo AI Denoise. Precisa ser um substituto direto: RGB 3 canais, mesma resolução de entrada/saída, nomes de tensor \"input\"/\"output\", valores normalizados [0,1] — um modelo que não seguir isso vai dar erro ou produzir um resultado visivelmente errado, não uma falha limpa.",
@@ -212,11 +208,14 @@
   "confirmPruneMissingMessage": "Isso remove edições, curvas, máscaras, presets e itens de arquivos recentes salvos de fotos que não existem mais no disco. Essa ação não pode ser desfeita.",
   "pruneMissingResultMessage": "{count, plural, =0{Nenhuma foto ausente encontrada} =1{1 foto ausente removida do catálogo} other{{count} fotos ausentes removidas do catálogo}}",
   "@pruneMissingResultMessage": {
-    "placeholders": { "count": {"type": "int"} }
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
   },
   "clearButton": "Limpar",
   "closeButton": "Fechar",
-
   "filmstripResetEditsAction": "Resetar todas as edições",
   "filmstripShowOnDiskAction": "Mostrar no disco",
   "filmstripDeleteAction": "Excluir",
@@ -227,7 +226,6 @@
   "filmstripDeleteConfirmTitle": "Excluir foto?",
   "filmstripDeleteConfirmMessage": "Isso envia \"{name}\" para a Lixeira e apaga suas edições salvas. Você pode restaurar a foto pela Lixeira, mas não as edições.",
   "filmstripDeleteFailedMessage": "Não foi possível excluir \"{name}\": {error}",
-
   "sectionColorProfile": "PERFIL DE COR",
   "sectionWhiteBalance": "BALANÇO DE BRANCO",
   "sectionTone": "TOM",
@@ -240,7 +238,6 @@
   "sectionEffects": "EFEITOS",
   "gradeRangeMidtones": "Meios-tons",
   "gradeRangeGlobal": "Global",
-
   "maskImageLayer": "Imagem Completa",
   "maskLinearGradient": "Gradiente Linear",
   "maskRadialGradient": "Gradiente Radial",
@@ -289,7 +286,6 @@
   "mixerLuminanceLabel": "Luminância",
   "mixerModeMixerLabel": "Mixer",
   "mixerModeHslLabel": "HSL",
-
   "sliderTemperature": "Temperatura",
   "sliderTint": "Matiz",
   "wbModeAsShot": "Como capturada",
@@ -317,12 +313,10 @@
   "sliderDehaze": "Remoção de Neblina",
   "sliderVibrance": "Vibração",
   "sliderSaturation": "Saturação",
-
   "sliderSharpenAmount": "Nitidez",
   "sliderSharpenRadius": "Raio",
   "sliderSharpenDetail": "Detalhe",
   "sliderSharpenMasking": "Máscara de Bordas",
-
   "sliderVignetteAmount": "Quantidade da Vinheta",
   "sliderVignetteMidpoint": "Ponto Médio da Vinheta",
   "sliderVignetteFeather": "Suavização da Vinheta",

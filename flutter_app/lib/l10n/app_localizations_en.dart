@@ -588,6 +588,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsFullQualityScaleLabel => 'Preview resolution';
 
   @override
+  String settingsFullQualityFloorHint(int previewPx) {
+    return 'Capped by the editing preview ($previewPx px) — no gain at this value.';
+  }
+
+  @override
   String get settingsThumbnailThreadsLabel => 'Thumbnail loading threads';
 
   @override

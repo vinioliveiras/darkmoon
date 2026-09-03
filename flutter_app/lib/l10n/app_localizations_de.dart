@@ -597,6 +597,11 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsFullQualityScaleLabel => 'Vorschauauflösung';
 
   @override
+  String settingsFullQualityFloorHint(int previewPx) {
+    return 'Durch die Bearbeitungsvorschau begrenzt ($previewPx px) — bei diesem Wert kein Gewinn.';
+  }
+
+  @override
   String get settingsThumbnailThreadsLabel =>
       'Threads für das Laden von Miniaturansichten';
 

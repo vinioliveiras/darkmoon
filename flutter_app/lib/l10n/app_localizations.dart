@@ -1156,6 +1156,12 @@ abstract class AppLocalizations {
   /// **'Preview resolution'**
   String get settingsFullQualityScaleLabel;
 
+  /// No description provided for @settingsFullQualityFloorHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Capped by the editing preview ({previewPx} px) — no gain at this value.'**
+  String settingsFullQualityFloorHint(int previewPx);
+
   /// No description provided for @settingsThumbnailThreadsLabel.
   ///
   /// In en, this message translates to:

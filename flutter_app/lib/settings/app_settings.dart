@@ -31,6 +31,30 @@ const _maxRecentFiles = 15;
 /// render speed, never final output quality.
 const List<int> previewResolutionOptions = [512, 768, 1024, 1280, 1600, 2048];
 
+/// The long-edge resolution a full-quality settled render actually runs
+/// at for a photo whose native long edge is [nativeLongEdge] — and whether
+/// [previewResolution], not [fullQualityPercent], is what decided it.
+///
+/// The floor is why this is worth naming: a full-quality render is never
+/// allowed to come out *worse* than the ordinary editing preview, so a low
+/// percentage on a low-megapixel photo produces exactly the preview
+/// resolution and the whole feature is a silent no-op. Settings surfaces
+/// [cappedByPreview] so that is visible instead of the user concluding the
+/// setting is broken (which is what happened, 2026-09-03).
+({int longEdge, bool cappedByPreview}) fullQualityWorkingLongEdge({
+  required int nativeLongEdge,
+  required int fullQualityPercent,
+  required int previewResolution,
+}) {
+  final requested = (nativeLongEdge * fullQualityPercent / 100).round();
+  final cappedByPreview = requested < previewResolution;
+  var target = cappedByPreview ? previewResolution : requested;
+  if (target > nativeLongEdge) {
+    target = nativeLongEdge;
+  }
+  return (longEdge: target, cappedByPreview: cappedByPreview);
+}
+
 /// App-wide settings, mirroring the Python app's `DEFAULT_SETTINGS` (minus
 /// the thumbnail disk cache setting, since this port's cache doesn't have
 /// a size/eviction knob yet to expose).
@@ -41,7 +65,7 @@ class AppSettings {
     this.previewResolution = defaultPreviewMaxDimension,
     this.useGpuRender = true,
     this.dynamicFullPreview = true,
-    this.fullQualityPercent = 30,
+    this.fullQualityPercent = 40,
     this.thumbnailConcurrency = 4,
     this.rawOnly = false,
     this.includeSubfolders = false,
@@ -96,8 +120,15 @@ class AppSettings {
   final bool dynamicFullPreview;
 
   /// Percent of the sensor's native resolution the full-quality editing
-  /// preview ([dynamicFullPreview]) renders at — 30 by default, 100 for a
+  /// preview ([dynamicFullPreview]) renders at — 40 by default, 100 for a
   /// true full-resolution render on every settle. Clamped to [25, 100].
+  ///
+  /// The effective working resolution is never allowed below
+  /// [previewResolution] (see `_EditorScreenState._fullQualityWorkingRes`),
+  /// so a low percentage on a low-megapixel camera can land at or under
+  /// that floor and do nothing at all. Raised from 30 to 40 on 2026-09-03
+  /// for that reason; Settings shows the real resulting size, and says so
+  /// when the floor is what's deciding it.
   final int fullQualityPercent;
 
   /// How many thumbnails to decode concurrently when a folder is opened.

@@ -231,8 +231,7 @@ class _SettingsDialogState extends State<SettingsDialog>
               style: _labelStyle,
             ),
             value: _settings.includeSubfolders,
-            onChanged: (v) =>
-                _update(_settings.copyWith(includeSubfolders: v)),
+            onChanged: (v) => _update(_settings.copyWith(includeSubfolders: v)),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -341,24 +340,54 @@ class _SettingsDialogState extends State<SettingsDialog>
                   ),
                 ),
                 if (widget.nativeWidth != null && widget.nativeHeight != null)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: Text(
-                        l10n.exportRapidScaleResultLabel(
-                          (widget.nativeWidth! *
-                                  _settings.fullQualityPercent /
-                                  100)
-                              .round(),
-                          (widget.nativeHeight! *
-                                  _settings.fullQualityPercent /
-                                  100)
-                              .round(),
+                  Builder(
+                    builder: (context) {
+                      // The size actually rendered, not the raw percentage
+                      // of native. _fullQualityWorkingRes floors the long
+                      // edge at the editing preview resolution, so a low
+                      // percentage on a low-megapixel photo can come out
+                      // identical to the plain preview — i.e. the setting
+                      // does nothing. Showing the naive percentage here
+                      // (as this did until 2026-09-03) hid that completely.
+                      final nativeWidth = widget.nativeWidth!;
+                      final nativeHeight = widget.nativeHeight!;
+                      final nativeLong = nativeWidth > nativeHeight
+                          ? nativeWidth
+                          : nativeHeight;
+                      final working = fullQualityWorkingLongEdge(
+                        nativeLongEdge: nativeLong,
+                        fullQualityPercent: _settings.fullQualityPercent,
+                        previewResolution: _settings.previewResolution,
+                      );
+                      final floored = working.cappedByPreview;
+                      final scale = working.longEdge / nativeLong;
+                      return Align(
+                        alignment: Alignment.centerRight,
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 2),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Text(
+                                l10n.exportRapidScaleResultLabel(
+                                  (nativeWidth * scale).round(),
+                                  (nativeHeight * scale).round(),
+                                ),
+                                style: _hintStyle,
+                              ),
+                              if (floored)
+                                Text(
+                                  l10n.settingsFullQualityFloorHint(
+                                    _settings.previewResolution,
+                                  ),
+                                  style: _hintStyle,
+                                  textAlign: TextAlign.end,
+                                ),
+                            ],
+                          ),
                         ),
-                        style: _hintStyle,
-                      ),
-                    ),
+                      );
+                    },
                   ),
               ],
             ],
