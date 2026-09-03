@@ -49,8 +49,15 @@ void main() {
     final meanDiff = sumDiff / cpu.length;
     // ignore: avoid_print
     print('[gpu_local_contrast] $label: mean=$meanDiff max=$maxDiff');
-    expect(meanDiff, lessThan(4.0), reason: '$label: mean diff $meanDiff');
-    expect(maxDiff, lessThan(24), reason: '$label: max diff $maxDiff');
+    // Tightened from 4.0/24 once residual_sq.frag stopped quantizing the
+    // local noise variance to zero (2026-09-03) — that bug alone was worth
+    // ~1.4 mean / 5 max on the noiseAware (Texture) cases, and the old
+    // headroom was wide enough to hide it completely. Measured worst case
+    // across these four cases is now 0.50 mean / 3 max; this keeps roughly
+    // 2x of that, enough for driver-to-driver rounding without leaving
+    // room for a regression of the same class to slip through again.
+    expect(meanDiff, lessThan(1.2), reason: '$label: mean diff $meanDiff');
+    expect(maxDiff, lessThan(8), reason: '$label: max diff $maxDiff');
   }
 
   void runCase(

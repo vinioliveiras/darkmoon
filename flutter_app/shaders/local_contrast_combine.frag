@@ -14,6 +14,9 @@ uniform vec2 uSize;
 uniform float uAmount;          // amount / 100
 uniform float uProtectMidtones; // 0 or 1
 uniform float uNoiseAware;      // 0 or 1
+// gpuResidualSqScale — uNoiseVar arrives pre-multiplied by it (see
+// residual_sq.frag) and is divided back out below.
+uniform float uResidualSqScale;
 uniform sampler2D uSource;
 uniform sampler2D uLuminance;
 uniform sampler2D uBlurred;
@@ -31,7 +34,7 @@ void main() {
   vec3 source = texture(uSource, uv).rgb;
   float luminance = texture(uLuminance, uv).r;
   float blurred = texture(uBlurred, uv).r;
-  float noiseVar = texture(uNoiseVar, uv).r;
+  float noiseVar = texture(uNoiseVar, uv).r / uResidualSqScale;
 
   float highFreq = luminance - blurred;
   if (uProtectMidtones > 0.5) {

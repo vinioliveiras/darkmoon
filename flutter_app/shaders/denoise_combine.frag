@@ -16,6 +16,9 @@
 uniform vec2 uSize;
 uniform float uIsChroma;
 uniform float uStrength;
+// gpuResidualSqScale — uNoiseVar arrives pre-multiplied by it (see
+// residual_sq.frag for why) and is divided back out below.
+uniform float uResidualSqScale;
 uniform sampler2D uChannel;
 uniform sampler2D uBlurred;
 uniform sampler2D uNoiseVar;
@@ -28,7 +31,7 @@ void main() {
   vec2 uv = FlutterFragCoord().xy / uSize;
   vec3 chRaw = texture(uChannel, uv).rgb;
   vec3 blRaw = texture(uBlurred, uv).rgb;
-  vec3 noiseVar = texture(uNoiseVar, uv).rgb;
+  vec3 noiseVar = texture(uNoiseVar, uv).rgb / uResidualSqScale;
   vec3 ch = uIsChroma > 0.5 ? (chRaw * 2.0 - 1.0) : chRaw;
   vec3 bl = uIsChroma > 0.5 ? (blRaw * 2.0 - 1.0) : blRaw;
 

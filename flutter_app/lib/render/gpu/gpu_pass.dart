@@ -15,6 +15,23 @@ import '../blur.dart' show boxRadiiForGauss;
 /// **Must run on the main isolate** — see `render_gpu.dart`'s doc comment
 /// (Phase 0 confirmed `dart:ui`'s GPU primitives hang inside
 /// `Isolate.run`).
+/// Gain applied to `shaders/residual_sq.frag`'s output before it is
+/// written to an 8-bit render target, and divided back out by every
+/// consumer (`denoise_combine.frag`, `local_contrast_combine.frag`,
+/// `sharpen_combine.frag`).
+///
+/// A squared residual for photographic noise is on the order of 1e-4 in
+/// this pipeline's 0..1 working space, well under an 8-bit target's
+/// 1/255 quantization step — without a gain it rounds to zero and the
+/// local noise variance every consumer reads is zero almost everywhere.
+/// See residual_sq.frag's own comment for what that broke.
+///
+/// 512 puts the resolution at ~0.5 of the CPU path's own 0-255 variance
+/// units and only saturates above ~127 of them (a residual around 11
+/// levels), which is deep into real-edge territory where saturating is
+/// the harmless direction — see residual_sq.frag.
+const double gpuResidualSqScale = 512.0;
+
 /// Holds the intermediate `ui.Image`s one stage of the GPU pipeline
 /// creates, so they can be released as soon as that stage is done with
 /// them.

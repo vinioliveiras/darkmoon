@@ -57,8 +57,15 @@ void main() {
     // times however many baseline/AI stages run), each an 8-bit texture
     // round trip, so quantization compounds more than any single primitive
     // test saw.
-    expect(meanDiff, lessThan(4.0), reason: '$label: mean diff $meanDiff');
-    expect(maxDiff, lessThan(20), reason: '$label: max diff $maxDiff');
+    //
+    // Tightened from 4.0/20 once residual_sq.frag stopped quantizing the
+    // local noise variance to zero (2026-09-03). That bug made the GPU
+    // denoise roughly half as strong as the CPU's — worth up to 2.77 mean
+    // / 7 max here — and the old headroom hid it entirely. Measured worst
+    // case across these four cases is now 0.66 mean / 3 max; this keeps
+    // roughly 2x of that.
+    expect(meanDiff, lessThan(1.4), reason: '$label: mean diff $meanDiff');
+    expect(maxDiff, lessThan(8), reason: '$label: max diff $maxDiff');
   }
 
   testWidgets(

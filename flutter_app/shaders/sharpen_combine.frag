@@ -20,6 +20,9 @@ uniform float uDetailMix;  // detail / 100
 uniform float uMaskAmount; // masking / 100
 uniform float uDetailMixStrength; // calSharpenDetailMix
 uniform float uEdgeThresholdVar;  // (calSharpenEdgeThreshold/255)^2
+// gpuResidualSqScale — uNoiseVar arrives pre-multiplied by it (see
+// residual_sq.frag) and is divided back out below.
+uniform float uResidualSqScale;
 uniform sampler2D uSource;
 uniform sampler2D uLuminance;
 uniform sampler2D uBlurred;
@@ -36,7 +39,7 @@ void main() {
   float blurred = texture(uBlurred, uv).r;
   float fineBlurred = texture(uFineBlurred, uv).r;
   float edge = texture(uEdgeStrength, uv).r;
-  float noiseVar = texture(uNoiseVar, uv).r;
+  float noiseVar = texture(uNoiseVar, uv).r / uResidualSqScale;
 
   float residual = luminance - blurred;
   float fineResidual = luminance - fineBlurred;

@@ -51,7 +51,12 @@ Future<ui.Image> _runAdaptiveDenoise(
   final residualSq = scratch.add(
     await GpuPass.run(
       'shaders/residual_sq.frag',
-      floats: [width.toDouble(), height.toDouble(), isChroma ? 1.0 : 0.0],
+      floats: [
+        width.toDouble(),
+        height.toDouble(),
+        isChroma ? 1.0 : 0.0,
+        gpuResidualSqScale,
+      ],
       samplers: [channel, blurred],
       outputWidth: width,
       outputHeight: height,
@@ -82,6 +87,7 @@ Future<ui.Image> _runAdaptiveDenoise(
       height.toDouble(),
       isChroma ? 1.0 : 0.0,
       strength,
+      gpuResidualSqScale,
     ],
     samplers: [channel, blurred, noiseVar],
     outputWidth: width,

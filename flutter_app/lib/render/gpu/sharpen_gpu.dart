@@ -62,7 +62,12 @@ Future<ui.Image> runSharpenGpu(
   final residualSq = scratch.add(
     await GpuPass.run(
       'shaders/residual_sq.frag',
-      floats: [width.toDouble(), height.toDouble(), 0.0],
+      floats: [
+        width.toDouble(),
+        height.toDouble(),
+        0.0,
+        gpuResidualSqScale,
+      ],
       samplers: [luminance, blurred],
       outputWidth: width,
       outputHeight: height,
@@ -84,6 +89,7 @@ Future<ui.Image> runSharpenGpu(
       maskAmount,
       calSharpenDetailMix,
       edgeThresholdVar,
+      gpuResidualSqScale,
     ],
     samplers: [source, luminance, blurred, fineBlurred, edgeStrength, noiseVar],
     outputWidth: width,
