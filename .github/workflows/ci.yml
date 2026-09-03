@@ -132,7 +132,11 @@ jobs:
       # just prove the library opened.
       - name: Build a stand-in ONNX model
         run: |
-          python3 -m pip install --quiet --disable-pip-version-check onnx
+          # --break-system-packages because the runners' Python is
+          # PEP 668 externally-managed and refuses a plain install. Safe
+          # here in a way it would not be on a real machine: the runner is
+          # thrown away at the end of the job.
+          python3 -m pip install --quiet --disable-pip-version-check             --break-system-packages onnx
           python3 tool/make_test_onnx_model.py "${{ runner.temp }}/identity.onnx"
 
       # The real verification. macOS has no machine to try the GUI on, so
