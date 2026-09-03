@@ -66,7 +66,13 @@ jobs:
             target: macos
             artifact: build/macos/Build/Products/Release
           - name: Windows
-            os: windows-latest
+            # Pinned, not `windows-latest`: that image moved to Server 2025,
+            # where Flutter 3.35.5's Visual Studio detection picks the
+            # "Visual Studio 16 2019" CMake generator and then cannot find
+            # an instance of it. Same reasoning as pinning the Flutter
+            # version — CI should fail because of a change here, not
+            # because a hosted image rolled forward.
+            os: windows-2022
             target: windows
             artifact: build/windows/x64/runner/Release
           - name: Linux
