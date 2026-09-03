@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import '../blur.dart' show scaledNoiseRadius;
 import '../calibration.dart';
 import '../color_grading.dart';
 import '../render_params.dart';
@@ -107,7 +108,12 @@ Future<ui.Image> renderImageGpu(
     await _runPreDenoise(source, width, height, params),
   );
   final afterChromaSmoothing = chain.add(
-    await runBaselineChromaSmoothingGpu(afterExposureAndWb, width, height),
+    await runBaselineChromaSmoothingGpu(
+      afterExposureAndWb,
+      width,
+      height,
+      params.renderScale,
+    ),
   );
   final afterAiDenoise = chain.add(
     await runAiDenoiseGpu(
@@ -115,13 +121,20 @@ Future<ui.Image> renderImageGpu(
       width,
       height,
       params.aiDenoise,
+      params.renderScale,
     ),
   );
   final lut = chain.add(
     await _buildLutImage(params.curves, params.parametricCurve),
   );
   final afterSharpen = chain.add(
-    await runSharpenGpu(afterAiDenoise, width, height, params.sharpen),
+    await runSharpenGpu(
+      afterAiDenoise,
+      width,
+      height,
+      params.sharpen,
+      params.renderScale,
+    ),
   );
   final afterTexture = chain.add(
     await runLocalContrastGpu(
@@ -129,8 +142,9 @@ Future<ui.Image> renderImageGpu(
       width,
       height,
       params.texture * calTextureStrength,
-      calTextureSigma,
+      calTextureSigma * params.renderScale,
       noiseAware: true,
+      noiseRadius: scaledNoiseRadius(params.renderScale),
     ),
   );
   final afterClarity = chain.add(
@@ -139,7 +153,7 @@ Future<ui.Image> renderImageGpu(
       width,
       height,
       params.clarity * calClarityStrength,
-      calClaritySigma,
+      calClaritySigma * params.renderScale,
       protectMidtones: true,
     ),
   );
@@ -168,7 +182,13 @@ Future<ui.Image> renderImageGpu(
     ),
   );
   final afterDehaze = chain.add(
-    await runDehazeGpu(afterColorProfile, width, height, params.dehaze),
+    await runDehazeGpu(
+      afterColorProfile,
+      width,
+      height,
+      params.dehaze,
+      params.renderScale,
+    ),
   );
   // The sigma-3.5 tonal blur behind Shadows/Blacks' detail preservation,
   // taken from the post-Dehaze buffer because that is where the CPU takes
@@ -195,7 +215,9 @@ Future<ui.Image> renderImageGpu(
         outputHeight: height,
       ),
     );
-    tonalBlur = chain.add(await runGaussianBlurGpu(linear, width, height, 3.5));
+    tonalBlur = chain.add(
+      await runGaussianBlurGpu(linear, width, height, 3.5 * params.renderScale),
+    );
   }
 
   final afterTone = chain.add(

@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import '../ai_denoise.dart';
+import '../blur.dart' show scaledNoiseRadius;
 import '../calibration.dart';
 import 'gpu_pass.dart';
 
@@ -104,11 +105,15 @@ Future<ui.Image> _runAdaptiveDenoise(
 /// `_downsampleFactor*3` px) — not implemented here since real photos and
 /// GPU test buffers are always comfortably larger than that; would need
 /// adding if this is ever fed a tiny image directly.
+/// [scale] is [RenderParams.renderScale] — this stage has no slider but is
+/// still a fixed-pixel blur, so it has to grow with the frame like every
+/// other one. See `calibration.dart`'s `calRadiusReferenceLongEdge`.
 Future<ui.Image> runBaselineChromaSmoothingGpu(
   ui.Image source,
   int width,
-  int height,
-) async {
+  int height, [
+  double scale = 1.0,
+]) async {
   final scratch = GpuImagePool();
   final chroma = scratch.add(
     await GpuPass.run(
@@ -143,9 +148,12 @@ Future<ui.Image> runBaselineChromaSmoothingGpu(
       small,
       smallWidth,
       smallHeight,
-      _baselineChromaSigma / _chromaDownsampleFactor,
+      _baselineChromaSigma * scale / _chromaDownsampleFactor,
       _baselineChromaStrength,
       isChroma: true,
+      // Applied at the downsampled resolution, so the base stays the 6
+      // this pass has always used and only renderScale multiplies it.
+      noiseRadius: scaledNoiseRadius(scale),
     ),
   );
 
@@ -180,12 +188,15 @@ Future<ui.Image> runBaselineChromaSmoothingGpu(
 /// Denoise toolbar action's classical (non-neural) algorithm. Returns
 /// [source] unchanged when [params] is off, matching the CPU function's
 /// own early return.
+/// [scale] is [RenderParams.renderScale] — the per-level sigmas are quoted
+/// in pixels. See `calibration.dart`'s `calRadiusReferenceLongEdge`.
 Future<ui.Image> runAiDenoiseGpu(
   ui.Image source,
   int width,
   int height,
-  AiDenoiseParams params,
-) async {
+  AiDenoiseParams params, [
+  double scale = 1.0,
+]) async {
   final level = params.level;
   if (level == null) {
     return source;
@@ -224,8 +235,9 @@ Future<ui.Image> runAiDenoiseGpu(
       luminance,
       width,
       height,
-      tuning.lumaSigma,
+      tuning.lumaSigma * scale,
       lumaStrength,
+      noiseRadius: scaledNoiseRadius(scale),
     ),
   );
   final denoisedChroma = scratch.add(
@@ -233,9 +245,10 @@ Future<ui.Image> runAiDenoiseGpu(
       chroma,
       width,
       height,
-      tuning.chromaSigma,
+      tuning.chromaSigma * scale,
       chromaStrength,
       isChroma: true,
+      noiseRadius: scaledNoiseRadius(scale),
     ),
   );
 

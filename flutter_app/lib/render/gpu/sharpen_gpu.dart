@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 
+import '../blur.dart' show scaledNoiseRadius;
 import '../calibration.dart';
 import '../sharpen.dart';
 import 'gpu_pass.dart';
@@ -32,13 +33,15 @@ Future<ui.Image> runSharpenGpu(
   ui.Image source,
   int width,
   int height,
-  SharpenParams params,
-) async {
+  SharpenParams params, [
+  double scale = 1.0,
+]) async {
   if (params.isIdentity) {
     return source;
   }
 
-  final sigma = params.radius.clamp(0.5, 3.0);
+  final sigma = params.radius.clamp(0.5, 3.0) * scale;
+  final noiseRadius = scaledNoiseRadius(scale);
   final strength = params.amount / 100.0 * calSharpenStrength;
   final detailMix = params.detail / 100.0;
   final maskAmount = params.masking / 100.0;
@@ -87,7 +90,9 @@ Future<ui.Image> runSharpenGpu(
         outputHeight: height,
       ),
     );
-    noiseVar = scratch.add(await runBoxBlurGpu(residualSq, width, height, 6));
+    noiseVar = scratch.add(
+      await runBoxBlurGpu(residualSq, width, height, noiseRadius),
+    );
   }
 
   final edgeThreshold = calSharpenEdgeThreshold / 255.0;

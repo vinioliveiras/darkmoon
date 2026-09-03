@@ -12,17 +12,21 @@ import 'gpu_pass.dart';
 /// structure_blur_view) plus one per-pixel apply pass, both fully on GPU.
 ///
 /// **Must run on the main isolate** — see `render_gpu.dart`'s doc comment.
+/// [scale] is [RenderParams.renderScale] — the sigma-40 "regional" blur is
+/// a fixed pixel radius, so it has to grow with the frame. See
+/// `calibration.dart`'s `calRadiusReferenceLongEdge`.
 Future<ui.Image> runDehazeGpu(
   ui.Image source,
   int width,
   int height,
-  double amount,
-) async {
+  double amount, [
+  double scale = 1.0,
+]) async {
   if (amount == 0) {
     return source;
   }
   final strength = amount / 100.0;
-  final blurred = await runGaussianBlurGpu(source, width, height, 40.0);
+  final blurred = await runGaussianBlurGpu(source, width, height, 40.0 * scale);
 
   final result = await GpuPass.run(
     'shaders/dehaze_apply.frag',

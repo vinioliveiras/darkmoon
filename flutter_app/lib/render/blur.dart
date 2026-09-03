@@ -199,6 +199,20 @@ Float32List minFilter(Float32List channel, int width, int height, int size) {
 /// [strength] (0..1) is the overall blend amount, same convention as every
 /// other adjustment; [noiseRadius] sets how wide a neighborhood the local
 /// noise floor is estimated over.
+/// The local-variance window radius at a given [RenderParams.renderScale].
+///
+/// The 6px default is quoted at [calRadiusReferenceLongEdge] like every
+/// other radius in the pipeline, so it has to grow with the frame or the
+/// noise-floor estimate would be measured over a different fraction of the
+/// scene at each render resolution — the whole point of renderScale. Never
+/// drops below 1: a zero-radius window is a single pixel, which makes the
+/// estimated variance identically zero and switches the adaptive blend off
+/// entirely.
+int scaledNoiseRadius(double scale, [int base = 6]) {
+  final scaled = (base * scale).round();
+  return scaled < 1 ? 1 : scaled;
+}
+
 Float32List adaptiveDenoiseChannel(
   Float32List channel,
   int width,

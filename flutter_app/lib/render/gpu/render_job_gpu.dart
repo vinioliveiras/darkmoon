@@ -37,18 +37,23 @@ Future<RenderResult> renderJobToJpegGpu(RenderJob job) async {
       ? await compute(prepareRenderGeometry, job)
       : prepareRenderGeometry(job);
 
+  // Same as the CPU path: every neighbourhood radius scales with the frame
+  // this render actually runs on, so the quick preview, the full-quality
+  // preview and the export all apply the same fraction of the scene. Set
+  // here because crop and lens geometry are what settle the dimensions.
+  final params = job.params.withRenderScaleFor(geometry.width, geometry.height);
   final rendered = job.masks.isEmpty
       ? await renderRgbaGpu(
           geometry.width,
           geometry.height,
           geometry.rgbBytes,
-          job.params,
+          params,
         )
       : await renderRgbaWithMasksGpu(
           geometry.width,
           geometry.height,
           geometry.rgbBytes,
-          job.params,
+          params,
           job.masks,
         );
 

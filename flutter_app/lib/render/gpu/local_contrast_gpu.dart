@@ -16,6 +16,7 @@ Future<ui.Image> runLocalContrastGpu(
   double sigma, {
   bool protectMidtones = false,
   bool noiseAware = false,
+  int noiseRadius = 6,
 }) async {
   if (amount == 0) {
     return source;
@@ -50,7 +51,9 @@ Future<ui.Image> runLocalContrastGpu(
         outputHeight: height,
       ),
     );
-    noiseVar = scratch.add(await runBoxBlurGpu(residualSq, width, height, 6));
+    noiseVar = scratch.add(
+      await runBoxBlurGpu(residualSq, width, height, noiseRadius),
+    );
   } else {
     noiseVar = blurred;
   }

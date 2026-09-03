@@ -26,11 +26,16 @@ import 'luminance.dart';
 ///
 /// Designed to run via `compute()`: pure function over simple, isolate-
 /// transferable data (same as the rest of render.dart).
+/// [scale] is [RenderParams.renderScale] — see
+/// [calRadiusReferenceLongEdge]. This stage has no slider, but it is still
+/// a fixed-pixel blur, so without it the always-on smoothing covers a
+/// different fraction of the scene in the preview than in the export.
 void applyBaselineChromaSmoothing(
   Float32List img,
   int width,
   int height, {
   int rowOffset = 0,
+  double scale = 1.0,
 }) {
   if (width < 3 || height < 3) {
     return;
@@ -49,7 +54,7 @@ void applyBaselineChromaSmoothing(
     chromaB[p] = img[i + 2] - l;
   }
 
-  const sigma = 2.5;
+  final sigma = 2.5 * scale;
   const strength = 0.4;
   // Chroma tolerates heavy spatial subsampling far better than luminance
   // does — the same reason JPEG/video encoding downsample color 2x-4x
@@ -66,6 +71,7 @@ void applyBaselineChromaSmoothing(
     sigma,
     strength,
     rowOffset,
+    scaledNoiseRadius(scale),
   );
   final denoisedG = _denoiseChromaChannel(
     chromaG,
@@ -74,6 +80,7 @@ void applyBaselineChromaSmoothing(
     sigma,
     strength,
     rowOffset,
+    scaledNoiseRadius(scale),
   );
   final denoisedB = _denoiseChromaChannel(
     chromaB,
@@ -82,6 +89,7 @@ void applyBaselineChromaSmoothing(
     sigma,
     strength,
     rowOffset,
+    scaledNoiseRadius(scale),
   );
 
   for (var p = 0; p < pixelCount; p++) {
@@ -111,9 +119,21 @@ Float32List _denoiseChromaChannel(
   double sigma,
   double strength,
   int rowOffset,
+  // Applied at the *downsampled* resolution, so its base stays the 6 this
+  // pass has always used and only renderScale multiplies it — keeping the
+  // reference-size render byte-identical while larger ones grow with the
+  // frame, same as [sigma] does.
+  int noiseRadius,
 ) {
   if (width < _downsampleFactor * 3 || height < _downsampleFactor * 3) {
-    return adaptiveDenoiseChannel(chroma, width, height, sigma, strength);
+    return adaptiveDenoiseChannel(
+      chroma,
+      width,
+      height,
+      sigma,
+      strength,
+      noiseRadius: noiseRadius,
+    );
   }
   final small = downsampleChannel(
     chroma,
@@ -128,6 +148,7 @@ Float32List _denoiseChromaChannel(
     small.height,
     sigma / _downsampleFactor,
     strength,
+    noiseRadius: noiseRadius,
   );
   return upsampleChannelBilinear(
     denoisedSmall,

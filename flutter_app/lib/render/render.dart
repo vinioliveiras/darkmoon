@@ -94,6 +94,9 @@ Uint8List renderRgbWithMasks(
         // layer re-runs the pipeline over the already-profiled buffer, so
         // letting it apply again would double the contrast under the mask.
         baseContrast: 0,
+        // Inherited, never re-derived: a mask layer renders over the same
+        // frame as the global layer, so its radii must scale identically.
+        renderScale: globalParams.renderScale,
       ),
     );
     final alpha = computeMaskAlpha(
@@ -135,6 +138,8 @@ enum RenderStage { denoising, adjusting, encoding }
 // layers on top. Padding a band by less than the true reach would blur in
 // wrong (or missing/zero) data near the seam; padding by more only costs
 // a little redundant computation, never correctness — so these round up.
+// All four are quoted at [calRadiusReferenceLongEdge]; every use below
+// multiplies by `params.renderScale`, exactly as the radii they bound do.
 const int _chromaSmoothingHaloPx =
     40; // always active, downsampled 4x internally
 const int _sharpenHaloPx = 30; // radius up to 3.0 + a 6px noise window
@@ -164,34 +169,38 @@ int _localContrastHaloPx(double sigma) => (sigma * 4.5).ceil() + 15;
 /// active, so an untouched photo's halo stays small and most of a band's
 /// height goes toward real parallel work instead of overlap.
 int localAdjustmentHaloPx(RenderParams params) {
-  var halo = _chromaSmoothingHaloPx;
+  final scale = params.renderScale;
+  var halo = _chromaSmoothingHaloPx * scale;
   if (!params.sharpen.isIdentity) {
-    halo += _sharpenHaloPx;
+    halo += _sharpenHaloPx * scale;
   }
   if (!params.aiDenoise.isIdentity) {
-    halo += _aiDenoiseHaloPx;
+    halo += _aiDenoiseHaloPx * scale;
   }
   if (params.texture != 0) {
-    halo += _localContrastHaloPx(calTextureSigma);
+    halo += _localContrastHaloPx(calTextureSigma * scale);
   }
   if (params.clarity != 0) {
-    halo += _localContrastHaloPx(calClaritySigma);
+    halo += _localContrastHaloPx(calClaritySigma * scale);
   }
   if (params.shadows != 0 || params.blacks != 0 || params.whites != 0) {
-    halo += _tonalBlurHaloPx;
+    halo += _tonalBlurHaloPx * scale;
   }
-  return halo;
+  return halo.ceil();
 }
 
 /// Halo (px) [applyDehazeStage] needs when run on a horizontal band — the
 /// reach of Dehaze's sigma-40 "structure" Gaussian (3-pass box, ~4.5·sigma),
 /// 0 when Dehaze is off.
-int dehazeHaloPx(RenderParams params) => params.dehaze != 0 ? 180 : 0;
+int dehazeHaloPx(RenderParams params) =>
+    params.dehaze != 0 ? (180 * params.renderScale).ceil() : 0;
 
 /// Halo (px) [applyGlobalPointOps] needs on a band — just the sigma-3.5
 /// tonal blur behind Shadows/Whites/Blacks.
 int globalPointOpsHaloPx(RenderParams params) =>
-    (params.shadows != 0 || params.blacks != 0 || params.whites != 0) ? 24 : 0;
+    (params.shadows != 0 || params.blacks != 0 || params.whites != 0)
+    ? (24 * params.renderScale).ceil()
+    : 0;
 
 void _applyAdjustmentSteps(
   Float32List buffer,
@@ -264,23 +273,36 @@ void applyLocalAdjustmentSteps(
   // smoothing. Matches Meridian's own ordering: its noise reduction is
   // one of the first things applied to the raw sensor data, well before
   // Basic panel tone adjustments.
-  applyBaselineChromaSmoothing(buffer, width, height, rowOffset: rowOffset);
-  applyAiDenoise(buffer, width, height, params.aiDenoise);
-  applySharpen(buffer, width, height, params.sharpen);
+  applyBaselineChromaSmoothing(
+    buffer,
+    width,
+    height,
+    rowOffset: rowOffset,
+    scale: params.renderScale,
+  );
+  applyAiDenoise(
+    buffer,
+    width,
+    height,
+    params.aiDenoise,
+    scale: params.renderScale,
+  );
+  applySharpen(buffer, width, height, params.sharpen, params.renderScale);
   applyLocalContrast(
     buffer,
     width,
     height,
     params.texture * calTextureStrength,
-    calTextureSigma,
+    calTextureSigma * params.renderScale,
     noiseAware: true,
+    noiseRadius: scaledNoiseRadius(params.renderScale),
   );
   applyLocalContrast(
     buffer,
     width,
     height,
     params.clarity * calClarityStrength,
-    calClaritySigma,
+    calClaritySigma * params.renderScale,
     protectMidtones: true,
   );
 }
@@ -316,7 +338,7 @@ void applyPostDenoisePointOps(
           _luminanceChannel(buffer, pixelCount),
           width,
           height,
-          3.5,
+          3.5 * params.renderScale,
         );
   mark('tonalBlur');
   _applyRapidBrightness(buffer, params.brightness);
@@ -417,7 +439,7 @@ void applyDehazeStage(
   int height,
   RenderParams params,
 ) {
-  applyDehaze(buffer, width, height, params.dehaze);
+  applyDehaze(buffer, width, height, params.dehaze, params.renderScale);
 }
 
 /// [rowOffset]/[fullHeight]: when [buffer] is one horizontal band of a

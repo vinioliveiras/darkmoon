@@ -257,13 +257,19 @@ Future<RenderResult> renderJobToJpeg(
 }) async {
   final geometry = prepareRenderGeometry(job);
   final correctedRgb = geometry.rgbBytes;
+  // Every neighbourhood-based radius scales with the frame this render is
+  // actually running on, so the same slider value covers the same fraction
+  // of the scene in the editing preview, the full-quality preview and the
+  // export. Set here rather than by the caller: crop and lens geometry are
+  // what settle the real dimensions, and they only just did.
+  final params = job.params.withRenderScaleFor(geometry.width, geometry.height);
   final Uint8List rendered;
   if (job.masks.isEmpty && onStage == null) {
     rendered = await renderAdjustmentsParallel(
       geometry.width,
       geometry.height,
       correctedRgb,
-      job.params,
+      params,
       timings: renderTimings,
     );
   } else {
@@ -272,14 +278,14 @@ Future<RenderResult> renderJobToJpeg(
             geometry.width,
             geometry.height,
             correctedRgb,
-            job.params,
+            params,
             onStage: onStage,
           )
         : renderRgbWithMasks(
             geometry.width,
             geometry.height,
             correctedRgb,
-            job.params,
+            params,
             job.masks,
           );
   }

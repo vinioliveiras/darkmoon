@@ -57,12 +57,17 @@ class SharpenParams {
 /// noise floor). This avoids amplifying sensor noise the way a plain
 /// unsharp mask does. The result is added equally to R, G, B to keep
 /// chroma stable.
+/// [scale] is [RenderParams.renderScale]: [SharpenParams.radius] is quoted
+/// in pixels at [calRadiusReferenceLongEdge], so it has to grow with the
+/// frame or the same slider value sharpens a different scale of detail in
+/// the preview than in the export.
 void applySharpen(
   Float32List img,
   int width,
   int height,
-  SharpenParams params,
-) {
+  SharpenParams params, [
+  double scale = 1.0,
+]) {
   if (params.isIdentity || width < 3 || height < 3) {
     return;
   }
@@ -70,7 +75,8 @@ void applySharpen(
   final luminance = Float32List(pixelCount);
   extractLuminance(img, luminance);
 
-  final sigma = params.radius.clamp(0.5, 3.0);
+  final sigma = params.radius.clamp(0.5, 3.0) * scale;
+  final noiseRadius = scaledNoiseRadius(scale);
   final strength = params.amount / 100.0 * calSharpenStrength;
   final maskAmount = params.masking / 100.0;
 
@@ -103,7 +109,12 @@ void applySharpen(
     for (var p = 0; p < pixelCount; p++) {
       residualSq[p] = highFreq[p] * highFreq[p];
     }
-    localNoiseVar = localVarianceFromResidualSq(residualSq, width, height, 6);
+    localNoiseVar = localVarianceFromResidualSq(
+      residualSq,
+      width,
+      height,
+      noiseRadius,
+    );
   }
 
   // 0-255 scale: edge magnitude above which we treat detail as a real edge

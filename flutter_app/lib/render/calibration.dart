@@ -195,6 +195,30 @@ const double calWbAsShotTintScaleFallback = 200.0;
 /// exposure baseline, and re-opening it risks the whole incident history
 /// in project_darkmoon_color_profile.md; this S-curve is the safer,
 /// purely render-time lever.)
+/// Long edge (px) every neighbourhood-based radius/sigma in this file is
+/// expressed against.
+///
+/// Sharpen, Texture, Clarity, Dehaze, the tonal blur and the always-on
+/// chroma smoothing all measure their reach in pixels, so the same slider
+/// value covered a different fraction of the scene at each of the three
+/// resolutions an edit is rendered at — the editing preview, the dynamic
+/// full-quality preview, and the export. A sigma-35 Clarity spanned 3.4%
+/// of a 1024px frame and 0.45% of a 7728px one, which is why an edit
+/// visibly changed strength when the full-quality pass replaced the quick
+/// one, and why the preview never predicted the export. Grain and Vignette
+/// already normalised this way (against 1080); these did not.
+///
+/// [RenderParams.renderScale] is `frameLongEdge / this`, and every such
+/// radius is multiplied by it.
+///
+/// 1024 specifically, not Grain's 1080: it is [defaultPreviewMaxDimension],
+/// so the editing preview at the default setting renders at scale 1.0 —
+/// exactly what it rendered before this existed. Every constant below
+/// therefore keeps the meaning it was hand-tuned to, and it is the
+/// full-quality preview and the export that move to match the preview
+/// rather than the other way round.
+const double calRadiusReferenceLongEdge = 1024.0;
+
 const double calBaseContrast = 80.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗

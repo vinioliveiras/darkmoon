@@ -92,17 +92,23 @@ class AiDenoiseParams {
 /// local contrast don't amplify noise this pass never got a chance to
 /// remove — matching how Meridian's own noise reduction happens before
 /// tone/presence adjustments rather than after them.
+/// [scale] is [RenderParams.renderScale] — the per-level sigmas below are
+/// quoted in pixels at [calRadiusReferenceLongEdge]. See that constant.
 void applyAiDenoise(
   Float32List img,
   int width,
   int height,
-  AiDenoiseParams params,
-) {
+  AiDenoiseParams params, {
+  double scale = 1.0,
+}) {
   final level = params.level;
   if (level == null || width < 3 || height < 3) {
     return;
   }
   final tuning = aiDenoiseTuning[level]!;
+  final lumaSigma = tuning.lumaSigma * scale;
+  final chromaSigma = tuning.chromaSigma * scale;
+  final noiseRadius = scaledNoiseRadius(scale);
   // calibration.dart global scale on top of the per-level table.
   final lumaStrength = (tuning.lumaStrength * calDenoiseLumaStrengthScale)
       .clamp(0.0, 1.0);
@@ -126,29 +132,33 @@ void applyAiDenoise(
     luminance,
     width,
     height,
-    tuning.lumaSigma,
+    lumaSigma,
     lumaStrength,
+    noiseRadius: noiseRadius,
   );
   final denoisedR = adaptiveDenoiseChannel(
     chromaR,
     width,
     height,
-    tuning.chromaSigma,
+    chromaSigma,
     chromaStrength,
+    noiseRadius: noiseRadius,
   );
   final denoisedG = adaptiveDenoiseChannel(
     chromaG,
     width,
     height,
-    tuning.chromaSigma,
+    chromaSigma,
     chromaStrength,
+    noiseRadius: noiseRadius,
   );
   final denoisedB = adaptiveDenoiseChannel(
     chromaB,
     width,
     height,
-    tuning.chromaSigma,
+    chromaSigma,
     chromaStrength,
+    noiseRadius: noiseRadius,
   );
 
   for (var p = 0; p < pixelCount; p++) {

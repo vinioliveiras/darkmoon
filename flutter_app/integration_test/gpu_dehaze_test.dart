@@ -61,20 +61,20 @@ void main() {
     expect(maxDiff, lessThan(28), reason: '$label: max diff $maxDiff');
   }
 
-  void runCase(String label, double amount) {
+  void runCase(String label, double amount, {double scale = 1.0}) {
     testWidgets(label, (tester) async {
       final buffer = Float32List(photo.length);
       for (var i = 0; i < photo.length; i++) {
         buffer[i] = photo[i].toDouble();
       }
-      applyDehaze(buffer, width, height, amount);
+      applyDehaze(buffer, width, height, amount, scale);
       final cpu = Uint8List(buffer.length);
       for (var i = 0; i < buffer.length; i++) {
         cpu[i] = buffer[i].clamp(0.0, 255.0).round();
       }
 
       final source = await decodeRgbImage(photo, width, height);
-      final gpuImage = await runDehazeGpu(source, width, height, amount);
+      final gpuImage = await runDehazeGpu(source, width, height, amount, scale);
       final byteData = await gpuImage.toByteData(
         format: ui.ImageByteFormat.rawRgba,
       );
@@ -87,6 +87,16 @@ void main() {
   runCase('haze removal (positive amount)', 60);
   runCase('strong haze removal', 100);
   runCase('haze addition (negative amount)', -50);
+  // The structure blur's sigma is multiplied by RenderParams.renderScale
+  // so Dehaze covers the same fraction of the scene at every render
+  // resolution (2026-09-03). Asserted here rather than in
+  // gpu_full_pipeline_test: there, Dehaze's own contribution is small
+  // enough next to the rest of the chain that un-scaling it on one path
+  // moves the whole-frame mean by less than the noise floor — verified by
+  // deliberately breaking it, which that test did not catch and this one
+  // does.
+  runCase('haze removal at renderScale 2', 60, scale: 2.0);
+  runCase('haze removal at renderScale 0.5', 60, scale: 0.5);
 
   testWidgets('amount 0 is a no-op', (tester) async {
     final source = await decodeRgbImage(photo, width, height);

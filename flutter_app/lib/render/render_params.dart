@@ -40,6 +40,7 @@ class RenderParams {
     this.sharpen = const SharpenParams(),
     this.vignette = const VignetteParams(),
     this.grain = const GrainParams(),
+    this.renderScale = 1.0,
   });
 
   /// Builds params from the editor's flat `{sliderName: value}` map, using
@@ -56,6 +57,7 @@ class RenderParams {
     double baseContrast = calBaseContrast,
     ColorProfile? colorProfile,
     double colorProfileStrength = 1.0,
+    double renderScale = 1.0,
   }) {
     const defaults = RenderParams();
     return RenderParams(
@@ -66,6 +68,7 @@ class RenderParams {
       baseContrast: baseContrast,
       colorProfile: colorProfile,
       colorProfileStrength: colorProfileStrength,
+      renderScale: renderScale,
       exposure: values['Exposure'] ?? defaults.exposure,
       brightness: values['Brightness'] ?? defaults.brightness,
       contrast: values['Contrast'] ?? defaults.contrast,
@@ -143,4 +146,63 @@ class RenderParams {
   final SharpenParams sharpen;
   final VignetteParams vignette;
   final GrainParams grain;
+
+  /// Multiplier applied to every neighbourhood-based radius/sigma —
+  /// `frameLongEdge / calRadiusReferenceLongEdge`.
+  ///
+  /// Set once per render from the *full frame's* long edge, never from a
+  /// band's own height (`render_parallel.dart` splits the image into bands
+  /// but every band must scale identically), and carried unchanged into
+  /// each mask layer's own params.
+  ///
+  /// 1.0 means "render at the reference size", which is what the editing
+  /// preview does at its default resolution — see
+  /// [calRadiusReferenceLongEdge] for why the whole thing exists.
+  final double renderScale;
+
+  /// Every field carried across unchanged except [renderScale]. Written
+  /// out rather than generated because this class is a plain value type
+  /// with no code generation in the project; adding a field here without
+  /// adding it below would silently reset it on any scaled render.
+  RenderParams _copyWithRenderScale(double scale) => RenderParams(
+    temperature: temperature,
+    tint: tint,
+    asShotKelvin: asShotKelvin,
+    asShotTint: asShotTint,
+    baseContrast: baseContrast,
+    colorProfile: colorProfile,
+    colorProfileStrength: colorProfileStrength,
+    exposure: exposure,
+    brightness: brightness,
+    contrast: contrast,
+    highlights: highlights,
+    shadows: shadows,
+    whites: whites,
+    blacks: blacks,
+    texture: texture,
+    clarity: clarity,
+    dehaze: dehaze,
+    vibrance: vibrance,
+    saturation: saturation,
+    curves: curves,
+    parametricCurve: parametricCurve,
+    colorMixer: colorMixer,
+    colorGrading: colorGrading,
+    aiDenoise: aiDenoise,
+    sharpen: sharpen,
+    vignette: vignette,
+    grain: grain,
+    renderScale: scale,
+  );
+
+  /// A copy of these params with [renderScale] derived from the frame this
+  /// render will actually run on.
+  ///
+  /// Set by the render entry points, after crop/lens geometry has settled
+  /// the real dimensions — the editor cannot compute it when it builds the
+  /// params, since a crop changes them.
+  RenderParams withRenderScaleFor(int frameWidth, int frameHeight) {
+    final longEdge = frameWidth > frameHeight ? frameWidth : frameHeight;
+    return _copyWithRenderScale(longEdge / calRadiusReferenceLongEdge);
+  }
 }

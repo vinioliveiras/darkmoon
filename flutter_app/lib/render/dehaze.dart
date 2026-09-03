@@ -52,7 +52,17 @@ double _min3(double a, double b, double c) => math.min(a, math.min(b, c));
 /// the rest of Solstice's tonal pipeline.
 ///
 /// Operates in place on a packed RGB [Float32List] (3 values/pixel, 0-255).
-void applyDehaze(Float32List img, int width, int height, double amount) {
+/// [scale] is [RenderParams.renderScale]: [_structureBlurSigma] is a fixed
+/// pixel radius, so the "regional" dark channel it estimates would cover a
+/// different fraction of the scene at each render resolution without it.
+/// See [calRadiusReferenceLongEdge].
+void applyDehaze(
+  Float32List img,
+  int width,
+  int height,
+  double amount, [
+  double scale = 1.0,
+]) {
   if (amount == 0) {
     return;
   }
@@ -78,19 +88,19 @@ void applyDehaze(Float32List img, int width, int height, double amount) {
     rChannel,
     width,
     height,
-    _structureBlurSigma,
+    _structureBlurSigma * scale,
   );
   final blurredG = gaussianBlurChannel(
     gChannel,
     width,
     height,
-    _structureBlurSigma,
+    _structureBlurSigma * scale,
   );
   final blurredB = gaussianBlurChannel(
     bChannel,
     width,
     height,
-    _structureBlurSigma,
+    _structureBlurSigma * scale,
   );
 
   for (var p = 0; p < pixelCount; p++) {

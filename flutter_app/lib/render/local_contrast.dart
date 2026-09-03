@@ -21,6 +21,7 @@ void applyLocalContrast(
   double sigma, {
   bool protectMidtones = false,
   bool noiseAware = false,
+  int noiseRadius = 6,
 }) {
   if (amount == 0) {
     return;
@@ -47,7 +48,12 @@ void applyLocalContrast(
       final residual = luminance[p] - blurred[p];
       residualSq[p] = residual * residual;
     }
-    localNoiseVar = localVarianceFromResidualSq(residualSq, width, height, 6);
+    localNoiseVar = localVarianceFromResidualSq(
+      residualSq,
+      width,
+      height,
+      noiseRadius,
+    );
   }
 
   final delta = Float32List(pixelCount);

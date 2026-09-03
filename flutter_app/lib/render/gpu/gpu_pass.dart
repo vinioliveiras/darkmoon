@@ -171,6 +171,36 @@ class GpuPass {
 /// sits safely in the middle of that gap.
 const int fusedBoxBlurMaxRadius = 16;
 
+/// Largest radius `box_blur_h.frag`/`box_blur_v.frag` can actually apply —
+/// their loop bound has to be a compile-time constant (Skia's SkSL rejects
+/// a uniform-derived one), so a larger radius would be silently truncated
+/// to this and produce a quietly wrong blur.
+///
+/// Reachable now that radii scale with the frame
+/// ([RenderParams.renderScale]): Dehaze's sigma-40 blur needs radius 121
+/// at a 40% full-quality preview of a 7728px sensor, and 302 at 100%.
+/// [gpuCanRenderAtScale] is what keeps that from happening — the render
+/// falls back to the CPU path, which has no such cap, rather than
+/// rendering something wrong.
+const int gpuMaxBoxBlurRadius = 128;
+
+/// Whether the GPU pipeline can render correctly at [renderScale].
+///
+/// The widest blur in the pipeline is Dehaze's sigma-40 "regional" one;
+/// `boxRadiiForGauss`'s largest box radius for a 3-pass approximation of
+/// sigma s is very close to s itself, so the check is effectively
+/// "does 40 * scale fit in [gpuMaxBoxBlurRadius]".
+bool gpuCanRenderAtScale(double renderScale) {
+  const widestSigma = 40.0;
+  final radii = boxRadiiForGauss(widestSigma * renderScale, 3);
+  for (final r in radii) {
+    if (r > gpuMaxBoxBlurRadius) {
+      return false;
+    }
+  }
+  return true;
+}
+
 Future<ui.Image> runBoxBlurGpu(
   ui.Image source,
   int width,
@@ -180,6 +210,11 @@ Future<ui.Image> runBoxBlurGpu(
   if (radius <= 0) {
     return source;
   }
+  assert(
+    radius <= gpuMaxBoxBlurRadius,
+    'box_blur_h/v silently truncate above $gpuMaxBoxBlurRadius; this render '
+    'should have fallen back to CPU (see gpuCanRenderAtScale)',
+  );
   if (radius <= fusedBoxBlurMaxRadius) {
     return GpuPass.run(
       'shaders/box_blur_2d.frag',

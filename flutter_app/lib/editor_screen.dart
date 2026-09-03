@@ -57,6 +57,7 @@ import 'render/lens_correction.dart';
 import 'render/luminance.dart' show luminanceRgb;
 import 'render/mask.dart';
 import 'render/gpu/gpu_capability.dart';
+import 'render/gpu/gpu_pass.dart' show gpuCanRenderAtScale;
 import 'render/gpu/render_job_gpu.dart';
 import 'render/render.dart' show RenderStage;
 import 'render/render_job.dart';
@@ -3828,7 +3829,21 @@ class _EditorScreenState extends State<EditorScreen>
     // slower than it needed to be.
     final profile = job.params.colorProfile;
     final gpuMissingToneCurve = profile != null && !profile.toneIsIdentity;
-    if (allowGpu && !gpuMissingToneCurve && _settings.useGpuRender) {
+    // Radii scale with the frame now (RenderParams.renderScale), and the
+    // GPU's box-blur shaders have a fixed maximum radius they would
+    // silently truncate past — so a large enough full-quality render has
+    // to go to the CPU, which has no such cap. Uses the source's own
+    // dimensions: a crop only ever makes the rendered frame smaller, so
+    // this errs toward CPU rather than toward a wrong blur.
+    final gpuScaleOk = gpuCanRenderAtScale(
+      job.params
+          .withRenderScaleFor(job.source.width, job.source.height)
+          .renderScale,
+    );
+    if (allowGpu &&
+        !gpuMissingToneCurve &&
+        gpuScaleOk &&
+        _settings.useGpuRender) {
       // Probed once at launch (see initState), so this is settled by the
       // time any render runs — read synchronously to avoid awaiting a
       // known answer, which would push the render into the next microtask

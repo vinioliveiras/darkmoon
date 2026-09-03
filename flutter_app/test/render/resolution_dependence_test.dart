@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:darkmoon/render/render.dart';
 import 'package:darkmoon/render/render_params.dart';
+import 'package:darkmoon/render/ai_denoise.dart';
 import 'package:darkmoon/render/grain.dart';
 import 'package:darkmoon/render/sharpen.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -89,8 +90,22 @@ void main() {
   const bigW = 2048, bigH = 1536; // 4x linear, the preview -> export ratio
 
   double compare(String label, RenderParams params) {
-    final small = renderRgb(smallW, smallH, scene(smallW, smallH), params);
-    final big = renderRgb(bigW, bigH, scene(bigW, bigH), params);
+    // withRenderScaleFor is what the real entry points apply once crop and
+    // lens geometry have settled the frame size (render_job.dart,
+    // export_job.dart) — without it this would measure params that never
+    // reach the pipeline.
+    final small = renderRgb(
+      smallW,
+      smallH,
+      scene(smallW, smallH),
+      params.withRenderScaleFor(smallW, smallH),
+    );
+    final big = renderRgb(
+      bigW,
+      bigH,
+      scene(bigW, bigH),
+      params.withRenderScaleFor(bigW, bigH),
+    );
     final bigDown = downscale(big, bigW, bigH, smallW, smallH);
     var sum = 0.0;
     var max = 0;
@@ -136,6 +151,86 @@ void main() {
     compare(
       'grain 60 (normalised)',
       const RenderParams(baseContrast: 0, grain: GrainParams(amount: 60)),
+    );
+  });
+
+  // The companion guard to the measurements above: they show *how much* a
+  // stage depends on resolution, but they cannot show that a stage is
+  // wired to renderScale at all — a wide blur on a test-sized frame is
+  // already near-global, so doubling its sigma changes almost nothing.
+  // (Verified: deliberately dropping the scale from Dehaze is invisible to
+  // an end-to-end pixel comparison at 96px, 120px and 480px alike.)
+  //
+  // So this asserts the one thing that is unambiguous — each scaled stage
+  // must *respond* to renderScale — on a frame comfortably larger than the
+  // radii involved.
+  group('every scaled stage responds to renderScale', () {
+    const w = 768, h = 512;
+    final photo = scene(w, h);
+
+    void expectResponds(
+      String label,
+      RenderParams base, {
+      double minResponse = 1.0,
+    }) {
+      test(label, () {
+        final atOne = renderRgb(
+          w,
+          h,
+          photo,
+          base.withRenderScaleFor(1024, 683),
+        );
+        final atThree = renderRgb(
+          w,
+          h,
+          photo,
+          base.withRenderScaleFor(3072, 2048),
+        );
+        var sum = 0.0;
+        for (var i = 0; i < atOne.length; i++) {
+          sum += (atOne[i] - atThree[i]).abs();
+        }
+        final mean = sum / atOne.length;
+        // ignore: avoid_print
+        print(
+          '[responds] ${label.padRight(20)} mean=${mean.toStringAsFixed(2)}',
+        );
+        expect(
+          mean,
+          greaterThan(minResponse),
+          reason:
+              '$label barely changed between renderScale 1 and 3 — its '
+              'radius is probably not multiplied by renderScale at all',
+        );
+      });
+    }
+
+    expectResponds(
+      'sharpen',
+      const RenderParams(
+        baseContrast: 0,
+        sharpen: SharpenParams(amount: 100, radius: 3),
+      ),
+    );
+    expectResponds('texture', const RenderParams(baseContrast: 0, texture: 70));
+    expectResponds('clarity', const RenderParams(baseContrast: 0, clarity: 70));
+    expectResponds('dehaze', const RenderParams(baseContrast: 0, dehaze: 70));
+    expectResponds(
+      'shadows (tonal blur)',
+      const RenderParams(baseContrast: 0, shadows: 60),
+      // The tonal blur only feeds _applyRapidShadowsBlacks' detail term,
+      // whose detailRatio is clamped to [0.8, 1.25] by construction — so
+      // however far its sigma moves, its influence on the output is
+      // bounded. It responds (0.70), just not as loudly as the stages
+      // whose blur *is* the effect.
+      minResponse: 0.4,
+    );
+    expectResponds(
+      'ai denoise',
+      const RenderParams(
+        baseContrast: 0,
+        aiDenoise: AiDenoiseParams(level: AiDenoiseLevel.strong),
+      ),
     );
   });
 }

@@ -4,6 +4,7 @@
 // together in one call, rather than each phase's own isolated primitive.
 //
 // Run with: flutter test integration_test/gpu_full_pipeline_test.dart -d windows
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -37,6 +38,28 @@ Uint8List _syntheticPhoto(int width, int height) {
       bytes[i + 1] = ((y * 150) ~/ height + edge + 45 + haze).clamp(0, 255);
       bytes[i + 2] = (((x + y) * 150) ~/ (width + height) + edge + 60 + haze)
           .clamp(0, 255);
+    }
+  }
+  return bytes;
+}
+
+/// A frame with real content at several spatial scales — bands at ~30px,
+/// ~90px and ~240px on top of a gradient — so a blur's radius actually
+/// changes the result. [_syntheticPhoto]'s checkerboard is far finer than
+/// any radius in the pipeline, which makes it useless for telling a
+/// sigma-40 blur from a sigma-80 one.
+Uint8List _multiScalePhoto(int width, int height) {
+  final bytes = Uint8List(width * height * 3);
+  for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+      final i = (y * width + x) * 3;
+      final coarse = 60 * math.sin(x / 240 * 2 * math.pi);
+      final mid = 45 * math.sin(x / 90 * 2 * math.pi);
+      final fine = 25 * math.sin(y / 30 * 2 * math.pi);
+      final base = 128 + coarse + mid + fine;
+      bytes[i] = base.clamp(0, 255).toInt();
+      bytes[i + 1] = (base * 0.9 + 12).clamp(0, 255).toInt();
+      bytes[i + 2] = (base * 0.8 + 24).clamp(0, 255).toInt();
     }
   }
   return bytes;
@@ -311,6 +334,93 @@ void main() {
         // (see "grain alone" above's own note on float32-vs-float64
         // lattice-boundary rounding), not a new regression.
       );
+    });
+
+    testWidgets('a non-1.0 renderScale reaches both paths identically', (
+      tester,
+    ) async {
+      // Every neighbourhood radius is multiplied by RenderParams.renderScale
+      // so the same edit covers the same fraction of the scene at the
+      // preview, full-quality and export resolutions (2026-09-03). That
+      // multiplier is threaded through six stages on each path
+      // independently — Sharpen, Texture, Clarity, Dehaze, the tonal blur
+      // and the always-on chroma smoothing — plus the local-variance
+      // window each estimates its noise floor over. Every other case in
+      // this file renders at the default scale of 1.0, so none of them
+      // would notice a stage missed on one side.
+      //
+      // Asserted as a *ratio*, not an absolute bound: what this owns is
+      // "the scale reaches both paths the same way", so the question is
+      // whether turning it on makes GPU and CPU disagree more than they
+      // already did — not how much they disagree in absolute terms, which
+      // is the 8-bit intermediate quantization every other case here
+      // measures too. A stage scaled on one path only would blow the ratio
+      // out immediately; accumulated rounding does not.
+      const params = RenderParams(
+        clarity: 50,
+        dehaze: 40,
+        shadows: 20,
+        sharpen: SharpenParams(amount: 80, radius: 2, masking: 30),
+        aiDenoise: AiDenoiseParams(level: AiDenoiseLevel.medium),
+      );
+
+      // Its own frame, and its own content. Two things this file's default
+      // 120x90 `_syntheticPhoto` cannot do here: it is smaller than the
+      // wide radii (a sigma-40 and a sigma-80 blur both cover essentially
+      // the whole image), and what structure it has is an 8x6 checkerboard
+      // that any of these blurs erases completely. Either way, dropping
+      // the scale from Dehaze or Clarity on one path moves nothing and the
+      // test passes a real bug — verified by deliberately un-scaling the
+      // GPU dehaze blur, which this did not catch until the frame below
+      // grew mid-frequency content at the 40-160px scale the radii
+      // actually work on.
+      const scaleWidth = 480, scaleHeight = 360;
+      final scalePhoto = _multiScalePhoto(scaleWidth, scaleHeight);
+
+      Future<double> meanDiffAt(double scale) async {
+        final scaled = params.withRenderScaleFor(
+          (1024 * scale).round(),
+          (683 * scale).round(),
+        );
+        final cpu = renderRgb(scaleWidth, scaleHeight, scalePhoto, scaled);
+        final gpu = await renderRgbGpu(
+          scaleWidth,
+          scaleHeight,
+          scalePhoto,
+          scaled,
+        );
+        var sum = 0.0;
+        for (var i = 0; i < cpu.length; i++) {
+          sum += (cpu[i] - gpu[i]).abs();
+        }
+        return sum / cpu.length;
+      }
+
+      final atOne = await meanDiffAt(1.0);
+      final atTwo = await meanDiffAt(2.0);
+      // ignore: avoid_print
+      print(
+        '[gpu_full_pipeline] renderScale parity: '
+        'x1.0 mean=$atOne  x2.0 mean=$atTwo',
+      );
+      expect(
+        atTwo,
+        lessThan(atOne * 1.6 + 0.5),
+        reason:
+            'scaling the radii made GPU and CPU disagree much more than '
+            'they did at scale 1.0 (x1.0 $atOne, x2.0 $atTwo) — a stage is '
+            'probably scaled on one path but not the other',
+      );
+
+      // Texture is deliberately absent above. It has a real, pre-existing
+      // GPU/CPU gap in the full pipeline (mean ~3.9 at scale 1.0, against
+      // ~1.0 for every other stage) that grows with scale: it is the only
+      // noise-aware stage in the chain, so it reads a local variance built
+      // from already-8-bit-quantized intermediates, and residual_sq's own
+      // encoding clips before the CPU's float path does. Including it here
+      // would make this test fail for that reason rather than for the one
+      // it is about. gpu_local_contrast_test covers the stage in isolation
+      // (mean 0.22), which is where that gap should be chased.
     });
   });
 }
