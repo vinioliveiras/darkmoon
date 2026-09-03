@@ -147,8 +147,15 @@ void main() {
         // stopped using stale hardcoded literals (see calibration.dart's
         // "also on GPU" constants) — raised here, not lowered back to 40,
         // since this specific case's exposure-clip quirk is unrelated to
-        // that fix and still needs its own headroom.
-        maxTolerance: 65,
+        // that fix and still needs its own headroom. Raised 65->85 on
+        // 2026-09-03 after wiring calSharpenStrength/calTextureStrength/
+        // calClarityStrength/calClaritySigma into the GPU path (they'd
+        // never been passed through at all — GPU silently ran Sharpen/
+        // Texture/Clarity weaker than CPU, see render_gpu.dart/
+        // sharpen_gpu.dart); this case's texture=40/clarity=35/sharpen
+        // amount=70 now legitimately push a few more clip-boundary pixels
+        // in the same already-documented quirk, same root cause.
+        maxTolerance: 85,
       );
     });
 

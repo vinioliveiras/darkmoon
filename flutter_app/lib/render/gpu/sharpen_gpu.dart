@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 
+import '../calibration.dart';
 import '../sharpen.dart';
 import 'gpu_pass.dart';
 
@@ -24,7 +25,7 @@ Future<ui.Image> runSharpenGpu(
   }
 
   final sigma = params.radius.clamp(0.5, 3.0);
-  final strength = params.amount / 100.0;
+  final strength = params.amount / 100.0 * calSharpenStrength;
   final detailMix = params.detail / 100.0;
   final maskAmount = params.masking / 100.0;
 

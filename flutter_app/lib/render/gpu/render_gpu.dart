@@ -106,16 +106,16 @@ Future<ui.Image> renderImageGpu(
     afterSharpen,
     width,
     height,
-    params.texture,
-    3,
+    params.texture * calTextureStrength,
+    calTextureSigma,
     noiseAware: true,
   );
   final afterClarity = await runLocalContrastGpu(
     afterTexture,
     width,
     height,
-    params.clarity,
-    25,
+    params.clarity * calClarityStrength,
+    calClaritySigma,
     protectMidtones: true,
   );
 
