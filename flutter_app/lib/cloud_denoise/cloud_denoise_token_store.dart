@@ -78,10 +78,7 @@ class CloudDenoiseTokenStore {
   /// denoise choice itself (the caller already has the plaintext key in
   /// memory for this run regardless); it just means the key won't be
   /// remembered next time the dialog opens.
-  static Future<void> write(
-    CloudDenoiseProviderKind kind,
-    String token,
-  ) async {
+  static Future<void> write(CloudDenoiseProviderKind kind, String token) async {
     try {
       final encrypted = _protect(Uint8List.fromList(utf8.encode(token)));
       if (encrypted == null) {

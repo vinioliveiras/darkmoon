@@ -62,7 +62,11 @@ void main() {
   });
 
   test('export carries the structural attributes Meridian expects', () {
-    const preset = Preset(id: 'preset_abc', name: 'Warm', values: {'Contrast': 10});
+    const preset = Preset(
+      id: 'preset_abc',
+      name: 'Warm',
+      values: {'Contrast': 10},
+    );
     final xml = xmpFromPreset(preset);
 
     // XMP packet wrapper (Adobe writes this around every exported .xmp).
@@ -91,13 +95,17 @@ void main() {
   });
 
   test('the exported UUID is stable across repeated exports of a preset', () {
-    const preset = Preset(id: 'preset_stable', name: 'S', values: {'Clarity': 5});
-    final first = RegExp(r'crs:UUID="([0-9A-F]+)"')
-        .firstMatch(xmpFromPreset(preset))
-        ?.group(1);
-    final second = RegExp(r'crs:UUID="([0-9A-F]+)"')
-        .firstMatch(xmpFromPreset(preset))
-        ?.group(1);
+    const preset = Preset(
+      id: 'preset_stable',
+      name: 'S',
+      values: {'Clarity': 5},
+    );
+    final first = RegExp(
+      r'crs:UUID="([0-9A-F]+)"',
+    ).firstMatch(xmpFromPreset(preset))?.group(1);
+    final second = RegExp(
+      r'crs:UUID="([0-9A-F]+)"',
+    ).firstMatch(xmpFromPreset(preset))?.group(1);
     expect(first, isNotNull);
     expect(first!.length, 32);
     expect(first, second);

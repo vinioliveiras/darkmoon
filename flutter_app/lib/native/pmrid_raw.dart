@@ -79,9 +79,16 @@ Float32List packBayerToRggb01(
       final col = offset.col + bx * 2;
       final o = (by * outW + bx) * 4;
       out[o] = ((bayer[row * width + col] - black[0]) / denom).clamp(0.0, 1.0);
-      out[o + 1] = ((bayer[row * width + col + 1] - black[1]) / denom).clamp(0.0, 1.0);
-      out[o + 2] = ((bayer[rowBelow * width + col] - black[3]) / denom).clamp(0.0, 1.0);
-      out[o + 3] = ((bayer[rowBelow * width + col + 1] - black[2]) / denom).clamp(0.0, 1.0);
+      out[o + 1] = ((bayer[row * width + col + 1] - black[1]) / denom).clamp(
+        0.0,
+        1.0,
+      );
+      out[o + 2] = ((bayer[rowBelow * width + col] - black[3]) / denom).clamp(
+        0.0,
+        1.0,
+      );
+      out[o + 3] = ((bayer[rowBelow * width + col + 1] - black[2]) / denom)
+          .clamp(0.0, 1.0);
     }
   }
   return out;
@@ -116,7 +123,11 @@ void unpackRggbIntoBayer(
       bayer[row * width + col] = _toRawValue(rggb[o], denom, black[0]);
       bayer[row * width + col + 1] = _toRawValue(rggb[o + 1], denom, black[1]);
       bayer[rowBelow * width + col] = _toRawValue(rggb[o + 2], denom, black[3]);
-      bayer[rowBelow * width + col + 1] = _toRawValue(rggb[o + 3], denom, black[2]);
+      bayer[rowBelow * width + col + 1] = _toRawValue(
+        rggb[o + 3],
+        denom,
+        black[2],
+      );
     }
   }
 }

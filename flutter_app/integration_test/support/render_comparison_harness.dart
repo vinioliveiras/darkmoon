@@ -49,7 +49,17 @@ Uint8List buildComparisonHarnessPhoto(int width, int height) {
   // Hue (degrees) + a short label for each of the 9 color patches, in
   // display order left-to-right. Saturation/value chosen so each patch
   // reads clearly as its intended hue without clipping to pure black/white.
-  const patchHues = [358.0, 25.0, 25.0, 60.0, 115.0, 180.0, 225.0, 280.0, 330.0];
+  const patchHues = [
+    358.0,
+    25.0,
+    25.0,
+    60.0,
+    115.0,
+    180.0,
+    225.0,
+    280.0,
+    330.0,
+  ];
   const patchSats = [0.9, 0.9, 0.45, 0.9, 0.85, 0.85, 0.9, 0.85, 0.85];
   const patchVals = [0.75, 0.7, 0.65, 0.75, 0.6, 0.65, 0.7, 0.65, 0.7];
 

@@ -59,32 +59,31 @@ void main() {
     },
   );
 
-  testWidgets(
-    'two quick clicks near the same spot reset to defaultValue',
-    (tester) async {
-      final changed = <double>[];
-      final changedEnd = <double>[];
-      await pumpSlider(
-        tester,
-        value: 10,
-        defaultValue: 77,
-        onChanged: changed.add,
-        onChangeEnd: changedEnd.add,
-      );
+  testWidgets('two quick clicks near the same spot reset to defaultValue', (
+    tester,
+  ) async {
+    final changed = <double>[];
+    final changedEnd = <double>[];
+    await pumpSlider(
+      tester,
+      value: 10,
+      defaultValue: 77,
+      onChanged: changed.add,
+      onChangeEnd: changedEnd.add,
+    );
 
-      final trackRect = tester.getRect(find.byKey(const Key('sliderRowTrack')));
-      final tapPoint = Offset(trackRect.center.dx, trackRect.center.dy);
-      await tester.tapAt(tapPoint);
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.tapAt(tapPoint);
-      await tester.pump();
+    final trackRect = tester.getRect(find.byKey(const Key('sliderRowTrack')));
+    final tapPoint = Offset(trackRect.center.dx, trackRect.center.dy);
+    await tester.tapAt(tapPoint);
+    await tester.pump(const Duration(milliseconds: 50));
+    await tester.tapAt(tapPoint);
+    await tester.pump();
 
-      // The first tap is a no-op (click-to-jump disabled); the second,
-      // within the window and same spot, resets to defaultValue.
-      expect(changed, [77.0]);
-      expect(changedEnd, [77.0]);
-    },
-  );
+    // The first tap is a no-op (click-to-jump disabled); the second,
+    // within the window and same spot, resets to defaultValue.
+    expect(changed, [77.0]);
+    expect(changedEnd, [77.0]);
+  });
 
   // A "two clicks far apart in real time are independent jumps, not a
   // reset" case is deliberately not covered here: the production code

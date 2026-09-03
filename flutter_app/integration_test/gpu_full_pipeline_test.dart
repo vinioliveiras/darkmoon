@@ -283,9 +283,7 @@ void main() {
       );
     });
 
-    testWidgets('grain combined with tone edits and vignette', (
-      tester,
-    ) async {
+    testWidgets('grain combined with tone edits and vignette', (tester) async {
       await expectMatchesCpu(
         const RenderParams(
           exposure: 10,

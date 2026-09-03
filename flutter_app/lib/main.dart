@@ -32,9 +32,7 @@ Future<void> _initDevLog() async {
     // before onnxruntime.dll (or any other native library) is ever
     // touched, which only happens later, from a background isolate.
     final dir = await resolveDevLogDir();
-    redirectNativeStderrToFileForDevMode(
-      p.join(dir.path, 'native-stderr.log'),
-    );
+    redirectNativeStderrToFileForDevMode(p.join(dir.path, 'native-stderr.log'));
   }
 
   final defaultOnError = FlutterError.onError;

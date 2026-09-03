@@ -269,11 +269,9 @@ class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
                         imageRect,
                       ),
                       radiusXPx: mask.radial.radius * imageRect.width,
-                      radiusYPx:
-                          mask.radial.effectiveRadiusY * imageRect.width,
+                      radiusYPx: mask.radial.effectiveRadiusY * imageRect.width,
                       angle: mask.radial.angle,
-                      innerFraction:
-                          1.0 - mask.radial.feather.clamp(0.0, 1.0),
+                      innerFraction: 1.0 - mask.radial.feather.clamp(0.0, 1.0),
                       shadeAlpha: widget.overlayOpacity,
                       scale: _s,
                     ),

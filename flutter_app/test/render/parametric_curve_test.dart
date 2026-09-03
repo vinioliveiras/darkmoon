@@ -37,9 +37,11 @@ void main() {
       1,
       2,
       _solid(40),
-      RenderParams(parametricCurve: ParametricCurve.fromValues(
-        const {'ParamCurveShadows': 80},
-      )),
+      RenderParams(
+        parametricCurve: ParametricCurve.fromValues(const {
+          'ParamCurveShadows': 80,
+        }),
+      ),
     );
     expect(_luma(lifted.sublist(0, 3)), greaterThan(_luma(base.sublist(0, 3))));
   });
@@ -50,9 +52,11 @@ void main() {
       1,
       2,
       _solid(220),
-      RenderParams(parametricCurve: ParametricCurve.fromValues(
-        const {'ParamCurveHighlights': -80},
-      )),
+      RenderParams(
+        parametricCurve: ParametricCurve.fromValues(const {
+          'ParamCurveHighlights': -80,
+        }),
+      ),
     );
     expect(_luma(pulled.sublist(0, 3)), lessThan(_luma(base.sublist(0, 3))));
   });

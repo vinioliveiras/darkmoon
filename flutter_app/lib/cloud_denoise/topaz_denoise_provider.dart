@@ -32,20 +32,18 @@ class TopazDenoiseProvider extends CloudDenoiseProvider {
     void Function(String stage)? onStage,
   }) async {
     onStage?.call('uploading');
-    final submitRequest = http.MultipartRequest(
-      'POST',
-      Uri.parse('$_baseUrl/denoise/async'),
-    )
-      ..headers['X-API-Key'] = apiKey
-      ..fields['model'] = 'Normal'
-      ..fields['output_format'] = 'png'
-      ..files.add(
-        http.MultipartFile.fromBytes(
-          'image',
-          imageBytes,
-          filename: 'photo.jpg',
-        ),
-      );
+    final submitRequest =
+        http.MultipartRequest('POST', Uri.parse('$_baseUrl/denoise/async'))
+          ..headers['X-API-Key'] = apiKey
+          ..fields['model'] = 'Normal'
+          ..fields['output_format'] = 'png'
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'image',
+              imageBytes,
+              filename: 'photo.jpg',
+            ),
+          );
     final submitResponse = await http.Response.fromStream(
       await submitRequest.send(),
     );
@@ -92,7 +90,8 @@ class TopazDenoiseProvider extends CloudDenoiseProvider {
       Uri.parse('$_baseUrl/download/$processId'),
       headers: {'X-API-Key': apiKey},
     );
-    if (downloadResponse.statusCode < 200 || downloadResponse.statusCode >= 300) {
+    if (downloadResponse.statusCode < 200 ||
+        downloadResponse.statusCode >= 300) {
       throw CloudDenoiseException(httpErrorMessage('Topaz', downloadResponse));
     }
     final downloadUrl =

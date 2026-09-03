@@ -116,9 +116,10 @@ void applyDehaze(Float32List img, int width, int height, double amount) {
         math.max(bg, 0.0),
         math.max(bb, 0.0),
       );
-      final edgeDiff = (math.sqrt(math.max(pixelLuma, 0.0)) -
-              math.sqrt(math.max(blurredLuma, 0.0)))
-          .abs();
+      final edgeDiff =
+          (math.sqrt(math.max(pixelLuma, 0.0)) -
+                  math.sqrt(math.max(blurredLuma, 0.0)))
+              .abs();
       final haloProtection = _smoothstep(0.02, 0.15, edgeDiff);
       final spatialDark =
           regionalDark + (pixelDark - regionalDark) * haloProtection;

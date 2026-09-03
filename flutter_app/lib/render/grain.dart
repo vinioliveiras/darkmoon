@@ -16,11 +16,7 @@ import 'calibration.dart';
 /// "Size" looks the same on the downscaled edit preview and the full-res
 /// export.
 class GrainParams {
-  const GrainParams({
-    this.amount = 0,
-    this.size = 25,
-    this.roughness = 50,
-  });
+  const GrainParams({this.amount = 0, this.size = 25, this.roughness = 50});
 
   /// Builds params from the editor's flat `{sliderName: value}` map —
   /// keyed `'Grain' + <Amount|Size|Roughness>`, same convention as every
@@ -135,7 +131,8 @@ double _gradientNoise(_GradientLattice lattice, double px, double py) {
       lattice.gradX(ix + 1, iy) * (fx - 1.0) + lattice.gradY(ix + 1, iy) * fy;
   final dot01 =
       lattice.gradX(ix, iy + 1) * fx + lattice.gradY(ix, iy + 1) * (fy - 1.0);
-  final dot11 = lattice.gradX(ix + 1, iy + 1) * (fx - 1.0) +
+  final dot11 =
+      lattice.gradX(ix + 1, iy + 1) * (fx - 1.0) +
       lattice.gradY(ix + 1, iy + 1) * (fy - 1.0);
 
   final bottom = dot00 + (dot10 - dot00) * ux;
@@ -169,11 +166,11 @@ void applyGrain(
   final frameHeight = fullHeight ?? height;
   // Solstice: amount = grain_amount * 0.5 (its buffer is 0..1); ours is
   // 0..255, so the * 255 folds the space conversion in.
-  final amount =
-      (params.amount / 100.0) * 0.5 * calGrainStrength * 255.0;
+  final amount = (params.amount / 100.0) * 0.5 * calGrainStrength * 255.0;
   final roughness = (params.roughness / 100.0).clamp(0.0, 1.0);
 
-  final grainSizePx = calGrainSizePxAt0 +
+  final grainSizePx =
+      calGrainSizePxAt0 +
       (params.size / 100.0).clamp(0.0, 1.0) *
           (calGrainSizePxAt100 - calGrainSizePxAt0);
   // Keep the grain the same relative size regardless of render resolution
@@ -201,18 +198,20 @@ void applyGrain(
     for (var x = 0; x < width; x++) {
       final i = (y * width + x) * 3;
       final luma =
-          (0.2126 * img[i] + 0.7152 * img[i + 1] + 0.0722 * img[i + 2]) /
-              255.0;
+          (0.2126 * img[i] + 0.7152 * img[i + 1] + 0.0722 * img[i + 2]) / 255.0;
       if (luma <= 0.0) {
         continue;
       }
-      final lumaMask = _smoothstep(0.0, 0.15, luma) *
-          (1.0 - _smoothstep(0.6, 1.0, luma));
+      final lumaMask =
+          _smoothstep(0.0, 0.15, luma) * (1.0 - _smoothstep(0.6, 1.0, luma));
       if (lumaMask <= 0.0) {
         continue;
       }
-      final noiseBase =
-          _gradientNoise(baseLattice, x * frequency, ay * frequency);
+      final noiseBase = _gradientNoise(
+        baseLattice,
+        x * frequency,
+        ay * frequency,
+      );
       final noiseRough = _gradientNoise(
         roughLattice,
         x * roughFrequency + 5.2,

@@ -219,10 +219,7 @@ Future<ExportResult> _exportPhotoInternal(
     onStage?.call(ExportStage.writing);
     File(request.destPath).writeAsBytesSync(bytes);
     mark('write');
-    return ExportResult.success(
-      request.destPath,
-      timings: timings.join(' · '),
-    );
+    return ExportResult.success(request.destPath, timings: timings.join(' · '));
   } catch (e) {
     return ExportResult.failure(e.toString());
   }

@@ -41,9 +41,7 @@ void main() {
     test('radiusY stretches only the Y axis', () {
       // 50 px wide, 20 px tall.
       final alpha = computeMaskAlpha(
-        radial(
-          const RadialGradientGeometry(radiusY: 0.1, feather: 0),
-        ),
+        radial(const RadialGradientGeometry(radiusY: 0.1, feather: 0)),
         width,
         height,
       );
@@ -58,11 +56,7 @@ void main() {
       // and the vertical one that was outside falls in.
       final alpha = computeMaskAlpha(
         radial(
-          RadialGradientGeometry(
-            radiusY: 0.1,
-            angle: math.pi / 2,
-            feather: 0,
-          ),
+          RadialGradientGeometry(radiusY: 0.1, angle: math.pi / 2, feather: 0),
         ),
         width,
         height,

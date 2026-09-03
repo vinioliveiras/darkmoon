@@ -9,7 +9,9 @@ void main() {
     late Directory tempDir;
 
     setUp(() async {
-      tempDir = await Directory.systemTemp.createTemp('darkmoon_migration_test');
+      tempDir = await Directory.systemTemp.createTemp(
+        'darkmoon_migration_test',
+      );
     });
 
     tearDown(() async {

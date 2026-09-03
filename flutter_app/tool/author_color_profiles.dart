@@ -44,7 +44,10 @@ double _bump(double atHue, double centerHue, double width, double amount) {
 /// exactly what made the first Pastel attempt read as near-monochrome
 /// instead of softly desaturated. Uniform, non-selective adjustments use
 /// [_flat] instead, not a wall of overlapping bumps.
-double _sum(double atHue, List<(double center, double width, double amount)> bumps) {
+double _sum(
+  double atHue,
+  List<(double center, double width, double amount)> bumps,
+) {
   var total = 0.0;
   for (final (center, width, amount) in bumps) {
     total += _bump(atHue, center, width, amount);

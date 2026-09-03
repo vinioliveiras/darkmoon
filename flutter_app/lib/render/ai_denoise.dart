@@ -104,10 +104,10 @@ void applyAiDenoise(
   }
   final tuning = aiDenoiseTuning[level]!;
   // calibration.dart global scale on top of the per-level table.
-  final lumaStrength =
-      (tuning.lumaStrength * calDenoiseLumaStrengthScale).clamp(0.0, 1.0);
-  final chromaStrength =
-      (tuning.chromaStrength * calDenoiseChromaStrengthScale).clamp(0.0, 1.0);
+  final lumaStrength = (tuning.lumaStrength * calDenoiseLumaStrengthScale)
+      .clamp(0.0, 1.0);
+  final chromaStrength = (tuning.chromaStrength * calDenoiseChromaStrengthScale)
+      .clamp(0.0, 1.0);
   final pixelCount = width * height;
   final luminance = Float32List(pixelCount);
   final chromaR = Float32List(pixelCount);

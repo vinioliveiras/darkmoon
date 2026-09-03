@@ -131,7 +131,8 @@ class _SliderRowState extends State<SliderRow> {
   // steps by 0.1/pixel instead.
   double get _unitsPerPixel {
     final range = widget.max - widget.min;
-    final precise = range / (_referenceTrackWidth * math.pow(10, widget.decimals));
+    final precise =
+        range / (_referenceTrackWidth * math.pow(10, widget.decimals));
     // ...but never so fine that a full-range drag exceeds the cap.
     return math.max(precise, range / widget.maxFullRangeDragPixels);
   }
@@ -247,7 +248,8 @@ class _SliderRowState extends State<SliderRow> {
 
   void _onTrackTap(double localX, double boxWidth) {
     final now = DateTime.now();
-    final isDoubleTap = widget.defaultValue != null &&
+    final isDoubleTap =
+        widget.defaultValue != null &&
         _lastTapTime != null &&
         now.difference(_lastTapTime!) < _doubleTapTimeout &&
         _lastTapX != null &&

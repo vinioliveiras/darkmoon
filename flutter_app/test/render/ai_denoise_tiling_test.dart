@@ -5,104 +5,94 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:darkmoon/render/ai_denoise_tiling.dart';
 
 void main() {
-  test(
-    'identity processTile round-trips the image unchanged '
-    '(proves the split/crop geometry and blend weights are correct, '
-    'independent of any real model)',
-    () {
-      const width = 100;
-      const height = 70;
-      final rgb = Float32List(width * height * 3);
-      for (var i = 0; i < rgb.length; i++) {
-        // Deterministic but non-trivial content — not a flat image, so a
-        // geometry bug (off-by-one tile placement, wrong crop) would show
-        // up as a real mismatch rather than trivially matching by luck.
-        rgb[i] = ((i * 37) % 256) / 255.0;
-      }
+  test('identity processTile round-trips the image unchanged '
+      '(proves the split/crop geometry and blend weights are correct, '
+      'independent of any real model)', () {
+    const width = 100;
+    const height = 70;
+    final rgb = Float32List(width * height * 3);
+    for (var i = 0; i < rgb.length; i++) {
+      // Deterministic but non-trivial content — not a flat image, so a
+      // geometry bug (off-by-one tile placement, wrong crop) would show
+      // up as a real mismatch rather than trivially matching by luck.
+      rgb[i] = ((i * 37) % 256) / 255.0;
+    }
 
-      final result = denoiseTiled(
-        rgb,
-        width,
-        height,
-        inputTileSize: 32,
-        overlap: 8,
-        scaleFactor: 1,
-        processTile: (tile) => tile,
-      );
+    final result = denoiseTiled(
+      rgb,
+      width,
+      height,
+      inputTileSize: 32,
+      overlap: 8,
+      scaleFactor: 1,
+      processTile: (tile) => tile,
+    );
 
-      expect(result.length, rgb.length);
-      for (var i = 0; i < rgb.length; i++) {
-        expect(
-          result[i],
-          closeTo(rgb[i], 1e-4),
-          reason: 'mismatch at index $i',
-        );
-      }
-    },
-  );
+    expect(result.length, rgb.length);
+    for (var i = 0; i < rgb.length; i++) {
+      expect(result[i], closeTo(rgb[i], 1e-4), reason: 'mismatch at index $i');
+    }
+  });
 
-  test(
-    'overlapping tiles cross-fade smoothly — no hard seam at a tile '
-    'boundary',
-    () {
-      // Wide enough for exactly two tile steps (32 input tile, 8 overlap
-      // -> step 24: tiles at x0=0 and x0=24, sharing input columns
-      // [24,32)), short enough to keep the test fast/obvious.
-      const width = 56;
-      const height = 32;
-      final rgb = Float32List(width * height * 3);
+  test('overlapping tiles cross-fade smoothly — no hard seam at a tile '
+      'boundary', () {
+    // Wide enough for exactly two tile steps (32 input tile, 8 overlap
+    // -> step 24: tiles at x0=0 and x0=24, sharing input columns
+    // [24,32)), short enough to keep the test fast/obvious.
+    const width = 56;
+    const height = 32;
+    final rgb = Float32List(width * height * 3);
 
-      var callCount = 0;
-      Float32List distinctFlatPerTile(Float32List tile) {
-        // Each tile call returns a flat color unrelated to its input and
-        // distinct from the previous tile's — if the seam weren't
-        // blended, crossing from one tile's region to the next would jump
-        // straight from one flat value to the other in a single pixel.
-        final value = (callCount++) * 0.4;
-        return Float32List(tile.length)..fillRange(0, tile.length, value);
-      }
+    var callCount = 0;
+    Float32List distinctFlatPerTile(Float32List tile) {
+      // Each tile call returns a flat color unrelated to its input and
+      // distinct from the previous tile's — if the seam weren't
+      // blended, crossing from one tile's region to the next would jump
+      // straight from one flat value to the other in a single pixel.
+      final value = (callCount++) * 0.4;
+      return Float32List(tile.length)..fillRange(0, tile.length, value);
+    }
 
-      final result = denoiseTiled(
-        rgb,
-        width,
-        height,
-        inputTileSize: 32,
-        overlap: 8,
-        scaleFactor: 1,
-        processTile: distinctFlatPerTile,
-      );
+    final result = denoiseTiled(
+      rgb,
+      width,
+      height,
+      inputTileSize: 32,
+      overlap: 8,
+      scaleFactor: 1,
+      processTile: distinctFlatPerTile,
+    );
 
-      // Sample the red channel along the row through the overlap band
-      // (output columns 24..31, tile size 1:1 since scaleFactor is 1) and
-      // confirm it's a monotonic ramp between the two tiles' flat values,
-      // not a single-pixel step.
-      const y = 16;
-      final samples = <double>[
-        for (var x = 24; x < 32; x++) result[(y * width + x) * 3],
-      ];
-      for (var i = 1; i < samples.length; i++) {
-        expect(
-          samples[i],
-          greaterThanOrEqualTo(samples[i - 1] - 1e-6),
-          reason: 'blend ramp should be monotonic, got $samples',
-        );
-      }
-      // A real cross-fade spans more than just the two endpoints — assert
-      // at least one interior sample sits strictly between them (a hard
-      // seam would jump directly from the first tile's flat value to the
-      // second's with nothing in between).
-      final first = samples.first;
-      final last = samples.last;
-      final hasIntermediate = samples.any(
-        (v) => v > first + 1e-6 && v < last - 1e-6,
-      );
+    // Sample the red channel along the row through the overlap band
+    // (output columns 24..31, tile size 1:1 since scaleFactor is 1) and
+    // confirm it's a monotonic ramp between the two tiles' flat values,
+    // not a single-pixel step.
+    const y = 16;
+    final samples = <double>[
+      for (var x = 24; x < 32; x++) result[(y * width + x) * 3],
+    ];
+    for (var i = 1; i < samples.length; i++) {
       expect(
-        hasIntermediate,
-        isTrue,
-        reason: 'expected a smooth ramp between $first and $last, got $samples',
+        samples[i],
+        greaterThanOrEqualTo(samples[i - 1] - 1e-6),
+        reason: 'blend ramp should be monotonic, got $samples',
       );
-    },
-  );
+    }
+    // A real cross-fade spans more than just the two endpoints — assert
+    // at least one interior sample sits strictly between them (a hard
+    // seam would jump directly from the first tile's flat value to the
+    // second's with nothing in between).
+    final first = samples.first;
+    final last = samples.last;
+    final hasIntermediate = samples.any(
+      (v) => v > first + 1e-6 && v < last - 1e-6,
+    );
+    expect(
+      hasIntermediate,
+      isTrue,
+      reason: 'expected a smooth ramp between $first and $last, got $samples',
+    );
+  });
 
   test('scaleFactor 2 (upscale) produces a correctly-sized, sane output', () {
     const width = 48;
@@ -168,41 +158,38 @@ void main() {
     );
   });
 
-  test(
-    'channels: 4 (PMRID\'s packed RGGB layout) round-trips identically to '
-    'the default 3-channel case — proves the generalization from a '
-    'hardcoded RGB assumption to an arbitrary channel count preserved the '
-    'exact same tiling/blend geometry',
-    () {
-      const width = 64;
-      const height = 48;
-      const channels = 4;
-      final image = Float32List(width * height * channels);
-      for (var i = 0; i < image.length; i++) {
-        image[i] = ((i * 41) % 256) / 255.0;
-      }
+  test('channels: 4 (PMRID\'s packed RGGB layout) round-trips identically to '
+      'the default 3-channel case — proves the generalization from a '
+      'hardcoded RGB assumption to an arbitrary channel count preserved the '
+      'exact same tiling/blend geometry', () {
+    const width = 64;
+    const height = 48;
+    const channels = 4;
+    final image = Float32List(width * height * channels);
+    for (var i = 0; i < image.length; i++) {
+      image[i] = ((i * 41) % 256) / 255.0;
+    }
 
-      final result = denoiseTiled(
-        image,
-        width,
-        height,
-        inputTileSize: 32,
-        overlap: 8,
-        scaleFactor: 1,
-        channels: channels,
-        processTile: (tile) => tile,
+    final result = denoiseTiled(
+      image,
+      width,
+      height,
+      inputTileSize: 32,
+      overlap: 8,
+      scaleFactor: 1,
+      channels: channels,
+      processTile: (tile) => tile,
+    );
+
+    expect(result.length, image.length);
+    for (var i = 0; i < image.length; i++) {
+      expect(
+        result[i],
+        closeTo(image[i], 1e-4),
+        reason: 'mismatch at index $i',
       );
-
-      expect(result.length, image.length);
-      for (var i = 0; i < image.length; i++) {
-        expect(
-          result[i],
-          closeTo(image[i], 1e-4),
-          reason: 'mismatch at index $i',
-        );
-      }
-    },
-  );
+    }
+  });
 
   test('reports progress once per tile', () {
     const width = 56;

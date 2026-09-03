@@ -102,13 +102,13 @@ class LensCorrectionParams {
       // [lensProfileKeyHash], which never returns exactly 0), not a real
       // hash value that needs looking up.
       manualProfileKeyHash: (hash == null || hash == 0.0) ? null : hash,
-      distortionAmount: values['LensCorrectionDistortionAmount'] ??
-          d.distortionAmount,
+      distortionAmount:
+          values['LensCorrectionDistortionAmount'] ?? d.distortionAmount,
       vignetteAmount:
           values['LensCorrectionVignetteAmount'] ?? d.vignetteAmount,
       chromaticAberrationAmount:
           values['LensCorrectionChromaticAberrationAmount'] ??
-              d.chromaticAberrationAmount,
+          d.chromaticAberrationAmount,
     );
   }
 
@@ -255,7 +255,6 @@ double lensProfileKeyHash(String key) {
   return (hash == 0 ? 1 : hash).toDouble();
 }
 
-
 /// Loads and caches assets/lens_profiles/lensfun_db.json.
 class LensProfileDatabase {
   LensProfileDatabase._();
@@ -337,7 +336,6 @@ class LensProfileDatabase {
     );
   }
 }
-
 
 /// Lowercases, collapses whitespace, and strips punctuation/common noise
 /// words cameras pad lens names with (marketing suffixes that vary
@@ -426,8 +424,7 @@ LensProfile? matchLensProfile(
   var bestScore = 0.0;
   for (final profile in profiles) {
     final profileMaker = _normalizeLensText(profile.maker);
-    final profileText =
-        _normalizeLensText('${profile.maker} ${profile.model}');
+    final profileText = _normalizeLensText('${profile.maker} ${profile.model}');
     if (profileText.contains(lensText) || lensText.contains(profileText)) {
       return profile;
     }
@@ -548,7 +545,6 @@ LensProfile? resolveLensProfile(
   }
   return matchLensProfileByCameraModel(profiles, metadata);
 }
-
 
 /// Linearly interpolates (or clamps to the nearest end) [profile]'s
 /// distortion calibration points to [focalLengthMm] — a zoom lens is

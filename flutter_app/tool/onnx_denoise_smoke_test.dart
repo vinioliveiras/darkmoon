@@ -22,7 +22,9 @@ void main(List<String> args) {
   final spec = switch (which) {
     'denoise' => denoiseModelSpec,
     'upscale' => upscaleModelSpec,
-    _ => throw ArgumentError('first arg must be "denoise" or "upscale", got "$which"'),
+    _ => throw ArgumentError(
+      'first arg must be "denoise" or "upscale", got "$which"',
+    ),
   };
   final imagePath = args.length > 1 ? args[1] : 'assets/splash/featured.jpg';
 
@@ -35,12 +37,21 @@ void main(List<String> args) {
   final full = decoded.convert(format: img.Format.uint8, numChannels: 3);
 
   final tileSize = spec.inputTileSize;
-  final defaultX = ((full.width - tileSize) / 2).floor().clamp(0, full.width - tileSize);
-  final defaultY = ((full.height - tileSize) / 2).floor().clamp(0, full.height - tileSize);
+  final defaultX = ((full.width - tileSize) / 2).floor().clamp(
+    0,
+    full.width - tileSize,
+  );
+  final defaultY = ((full.height - tileSize) / 2).floor().clamp(
+    0,
+    full.height - tileSize,
+  );
   final x = args.length > 2 ? int.parse(args[2]) : defaultX;
   final y = args.length > 3 ? int.parse(args[3]) : defaultY;
 
-  if (x < 0 || y < 0 || x + tileSize > full.width || y + tileSize > full.height) {
+  if (x < 0 ||
+      y < 0 ||
+      x + tileSize > full.width ||
+      y + tileSize > full.height) {
     stderr.writeln(
       'Tile ($x,$y) ${tileSize}x$tileSize does not fit in '
       '${full.width}x${full.height} image',

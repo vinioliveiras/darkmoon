@@ -44,12 +44,7 @@ Future<ui.Image> runLocalContrastGpu(
     final residualSq = scratch.add(
       await GpuPass.run(
         'shaders/residual_sq.frag',
-        floats: [
-          width.toDouble(),
-          height.toDouble(),
-          0.0,
-          gpuResidualSqScale,
-        ],
+        floats: [width.toDouble(), height.toDouble(), 0.0, gpuResidualSqScale],
         samplers: [luminance, blurred],
         outputWidth: width,
         outputHeight: height,

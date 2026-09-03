@@ -9,7 +9,8 @@ const int _threadPriorityBelowNormal = -1;
 
 typedef _GetCurrentThreadNative = IntPtr Function();
 typedef _GetCurrentThreadDart = int Function();
-typedef _SetThreadPriorityNative = Int32 Function(IntPtr hThread, Int32 priority);
+typedef _SetThreadPriorityNative =
+    Int32 Function(IntPtr hThread, Int32 priority);
 typedef _SetThreadPriorityDart = int Function(int hThread, int priority);
 
 /// Drops the calling isolate's OS thread to below-normal priority so

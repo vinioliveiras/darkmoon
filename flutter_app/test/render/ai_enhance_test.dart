@@ -75,67 +75,64 @@ void main() {
     expect(stages, ['denoise', 'upscale']);
   });
 
-  test(
-    'round-trips byte values through the [0,1] float conversion cleanly '
-    '(identity denoise + a 1:1 "upscale" fake) — catches an off-by-one or '
-    'rounding bug in the byte<->float conversion',
-    () {
-      const width = 64;
-      const height = 64;
-      final rgb = Uint8List(width * height * 3);
-      for (var i = 0; i < rgb.length; i++) {
-        rgb[i] = (i * 53) % 256;
-      }
+  test('round-trips byte values through the [0,1] float conversion cleanly '
+      '(identity denoise + a 1:1 "upscale" fake) — catches an off-by-one or '
+      'rounding bug in the byte<->float conversion', () {
+    const width = 64;
+    const height = 64;
+    final rgb = Uint8List(width * height * 3);
+    for (var i = 0; i < rgb.length; i++) {
+      rgb[i] = (i * 53) % 256;
+    }
 
-      // A 1:1 "upscale" that just repeats each pixel scaleFactor^2 times —
-      // lets this test check exact byte values survive the round trip
-      // (a real 2x model wouldn't preserve input values exactly, so this
-      // fake stands in specifically to isolate the conversion math).
-      Float32List identityUpscale(Float32List tile) {
-        final inSize = upscaleModelSpec.inputTileSize;
-        final scale = upscaleModelSpec.scaleFactor;
-        final outSize = inSize * scale;
-        final out = Float32List(outSize * outSize * 3);
-        for (var y = 0; y < inSize; y++) {
-          for (var x = 0; x < inSize; x++) {
-            final srcI = (y * inSize + x) * 3;
-            for (var dy = 0; dy < scale; dy++) {
-              for (var dx = 0; dx < scale; dx++) {
-                final dstI = ((y * scale + dy) * outSize + (x * scale + dx)) * 3;
-                out[dstI] = tile[srcI];
-                out[dstI + 1] = tile[srcI + 1];
-                out[dstI + 2] = tile[srcI + 2];
-              }
+    // A 1:1 "upscale" that just repeats each pixel scaleFactor^2 times —
+    // lets this test check exact byte values survive the round trip
+    // (a real 2x model wouldn't preserve input values exactly, so this
+    // fake stands in specifically to isolate the conversion math).
+    Float32List identityUpscale(Float32List tile) {
+      final inSize = upscaleModelSpec.inputTileSize;
+      final scale = upscaleModelSpec.scaleFactor;
+      final outSize = inSize * scale;
+      final out = Float32List(outSize * outSize * 3);
+      for (var y = 0; y < inSize; y++) {
+        for (var x = 0; x < inSize; x++) {
+          final srcI = (y * inSize + x) * 3;
+          for (var dy = 0; dy < scale; dy++) {
+            for (var dx = 0; dx < scale; dx++) {
+              final dstI = ((y * scale + dy) * outSize + (x * scale + dx)) * 3;
+              out[dstI] = tile[srcI];
+              out[dstI + 1] = tile[srcI + 1];
+              out[dstI + 2] = tile[srcI + 2];
             }
           }
         }
-        return out;
       }
+      return out;
+    }
 
-      final result = enhanceImage(
-        rgb,
-        width,
-        height,
-        denoise: _identityDenoise,
-        upscale: identityUpscale,
-      );
+    final result = enhanceImage(
+      rgb,
+      width,
+      height,
+      denoise: _identityDenoise,
+      upscale: identityUpscale,
+    );
 
-      final scale = upscaleModelSpec.scaleFactor;
-      for (var y = 0; y < height; y++) {
-        for (var x = 0; x < width; x++) {
-          final srcI = (y * width + x) * 3;
-          final dstI = ((y * scale) * (width * scale) + (x * scale)) * 3;
-          for (var c = 0; c < 3; c++) {
-            expect(
-              result.rgbBytes[dstI + c],
-              closeTo(rgb[srcI + c].toDouble(), 1),
-              reason: 'pixel ($x,$y) channel $c',
-            );
-          }
+    final scale = upscaleModelSpec.scaleFactor;
+    for (var y = 0; y < height; y++) {
+      for (var x = 0; x < width; x++) {
+        final srcI = (y * width + x) * 3;
+        final dstI = ((y * scale) * (width * scale) + (x * scale)) * 3;
+        for (var c = 0; c < 3; c++) {
+          expect(
+            result.rgbBytes[dstI + c],
+            closeTo(rgb[srcI + c].toDouble(), 1),
+            reason: 'pixel ($x,$y) channel $c',
+          );
         }
       }
-    },
-  );
+    }
+  });
 
   group('denoiseStrength (NAFNet-SIDD has no strength control of its own — '
       'see enhanceImage\'s doc — so this blend is the only way to make it '

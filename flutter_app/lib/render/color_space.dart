@@ -10,9 +10,8 @@ import 'dart:typed_data';
 /// lerp is ~15× cheaper than `pow`.
 const int _lutSize = 4096;
 
-double _srgbToLinearExact(double c) => c <= 0.04045
-    ? c / 12.92
-    : math.pow((c + 0.055) / 1.055, 2.4).toDouble();
+double _srgbToLinearExact(double c) =>
+    c <= 0.04045 ? c / 12.92 : math.pow((c + 0.055) / 1.055, 2.4).toDouble();
 
 double _linearToSrgbExact(double c) => c <= 0.0031308
     ? c * 12.92
@@ -60,19 +59,17 @@ double srgbToLinear(double value) => _lookup(_srgbToLinearLut, value);
 double linearToSrgb(double value) => _lookup(_linearToSrgbLut, value);
 
 /// `pow(value, 1/2.2)` — clamped to [0, 1].
-double perceptualEncode(double value) =>
-    _lookup(_perceptualEncodeLut, value);
+double perceptualEncode(double value) => _lookup(_perceptualEncodeLut, value);
 
 /// `pow(value, 2.2)` — clamped to [0, 1].
-double perceptualDecode(double value) =>
-    _lookup(_perceptualDecodeLut, value);
+double perceptualDecode(double value) => _lookup(_perceptualDecodeLut, value);
 
 /// Converts packed RGB bytes to normalized scene-linear RGB values.
 List<double> rgbBytesToLinear(List<int> bytes) => [
-      for (final value in bytes) srgbToLinear(value / 255.0),
-    ];
+  for (final value in bytes) srgbToLinear(value / 255.0),
+];
 
 /// Converts normalized scene-linear RGB values to packed RGB bytes.
 List<int> linearToRgbBytes(List<double> values) => [
-      for (final value in values) (linearToSrgb(value) * 255.0).round(),
-    ];
+  for (final value in values) (linearToSrgb(value) * 255.0).round(),
+];

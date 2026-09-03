@@ -36,7 +36,9 @@ void main(List<String> args) {
     'isBayerCfa=${meta.isBayerCfa}',
   );
   if (!meta.isBayerCfa) {
-    stderr.writeln('Not a Bayer RAW — PMRID raw denoise cannot run on this file.');
+    stderr.writeln(
+      'Not a Bayer RAW — PMRID raw denoise cannot run on this file.',
+    );
     exit(2);
   }
 

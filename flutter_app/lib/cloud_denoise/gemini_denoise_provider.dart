@@ -55,10 +55,7 @@ class GeminiDenoiseProvider extends CloudDenoiseProvider {
     onStage?.call('processing');
     final response = await http.post(
       Uri.parse(_endpoint),
-      headers: {
-        'x-goog-api-key': apiKey,
-        'Content-Type': 'application/json',
-      },
+      headers: {'x-goog-api-key': apiKey, 'Content-Type': 'application/json'},
       body: body,
     );
     if (response.statusCode < 200 || response.statusCode >= 300) {
@@ -67,8 +64,8 @@ class GeminiDenoiseProvider extends CloudDenoiseProvider {
 
     final decoded = jsonDecode(response.body) as Map<String, dynamic>;
     final outputImage =
-        (decoded['interaction'] as Map<String, dynamic>?)?['output_image']
-            ?? decoded['output_image'];
+        (decoded['interaction'] as Map<String, dynamic>?)?['output_image'] ??
+        decoded['output_image'];
     final data = (outputImage is Map) ? outputImage['data'] as String? : null;
     if (data == null) {
       throw const CloudDenoiseException(

@@ -6,7 +6,16 @@ import 'dart:io';
 
 import 'package:darkmoon/native/libraw.dart';
 
-const _rawExt = {'.raf', '.cr2', '.cr3', '.nef', '.arw', '.dng', '.rw2', '.orf'};
+const _rawExt = {
+  '.raf',
+  '.cr2',
+  '.cr3',
+  '.nef',
+  '.arw',
+  '.dng',
+  '.rw2',
+  '.orf',
+};
 
 void main(List<String> args) {
   if (args.isEmpty) {
@@ -27,7 +36,8 @@ void main(List<String> args) {
     if (!_rawExt.any(ext.endsWith)) continue;
     final m = readCamMul(e.path);
     if (m == null) continue;
-    final line = '${e.uri.pathSegments.last}: '
+    final line =
+        '${e.uri.pathSegments.last}: '
         '[${m.map((v) => v.toStringAsFixed(0)).join(', ')}]';
     if (match == null || line.toLowerCase().contains(match)) {
       // ignore: avoid_print

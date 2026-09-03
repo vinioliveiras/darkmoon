@@ -544,11 +544,7 @@ class _CropPainter extends CustomPainter {
         ..color = Colors.white.withValues(alpha: 0.7)
         ..strokeWidth = 1.5,
     );
-    canvas.drawCircle(
-      rotateAt,
-      handleRadius,
-      Paint()..color = Colors.black54,
-    );
+    canvas.drawCircle(rotateAt, handleRadius, Paint()..color = Colors.black54);
     canvas.drawCircle(
       rotateAt,
       handleRadius,

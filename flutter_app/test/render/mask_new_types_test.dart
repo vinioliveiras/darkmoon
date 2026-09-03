@@ -21,7 +21,11 @@ void main() {
         id: 'm',
         name: 'Mask',
         type: MaskType.luminance,
-        luminance: LuminanceGeometry(targetLuma: 200, tolerance: 10, feather: 0),
+        luminance: LuminanceGeometry(
+          targetLuma: 200,
+          tolerance: 10,
+          feather: 0,
+        ),
       );
       final rgb = grayRgb([200, 0]);
       final alpha = computeMaskAlpha(mask, 2, 1, sourceForColorRange: rgb);

@@ -214,7 +214,14 @@ class BrushGeometry {
 /// shares [MaskLayer.brush]'s [BrushGeometry]/stroke storage entirely
 /// rather than getting its own field (see [BrushStroke.flow]'s doc for
 /// why).
-enum MaskType { linearGradient, radialGradient, brush, colorRange, luminance, flow }
+enum MaskType {
+  linearGradient,
+  radialGradient,
+  brush,
+  colorRange,
+  luminance,
+  flow,
+}
 
 /// One mask "layer": how its region is defined ([type] + geometry), its
 /// own independent slider values (same flat `{sliderName: value}` shape

@@ -83,11 +83,7 @@ void main() {
 
     test('grayWorldTempTint on a neutral image returns ~as-shot', () {
       final rgb = Uint8List(300)..fillRange(0, 300, 128);
-      final res = grayWorldTempTint(
-        rgb,
-        asShotKelvin: 5200,
-        asShotTint: 4,
-      );
+      final res = grayWorldTempTint(rgb, asShotKelvin: 5200, asShotTint: 4);
       expect(res.kelvin, closeTo(5200, 50));
       expect(res.tint, closeTo(4, 2));
     });
@@ -120,14 +116,18 @@ void main() {
     }
 
     test('a bluer as-shot (cool scene) reads warmer Kelvin', () {
-      final cool = wbMultipliersToKelvinTint(
-        [640.0, 302.0, 360.0, 0.0],
-        camXyz: fujiCamXyz,
-      );
-      final warm = wbMultipliersToKelvinTint(
-        [360.0, 302.0, 640.0, 0.0],
-        camXyz: fujiCamXyz,
-      );
+      final cool = wbMultipliersToKelvinTint([
+        640.0,
+        302.0,
+        360.0,
+        0.0,
+      ], camXyz: fujiCamXyz);
+      final warm = wbMultipliersToKelvinTint([
+        360.0,
+        302.0,
+        640.0,
+        0.0,
+      ], camXyz: fujiCamXyz);
       expect(cool.kelvin, greaterThan(warm.kelvin));
     });
 

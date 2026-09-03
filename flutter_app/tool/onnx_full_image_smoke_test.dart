@@ -68,7 +68,11 @@ void main(List<String> args) {
 
   final outWidth = full.width * spec.scaleFactor;
   final outHeight = full.height * spec.scaleFactor;
-  final outImage = img.Image(width: outWidth, height: outHeight, numChannels: 3);
+  final outImage = img.Image(
+    width: outWidth,
+    height: outHeight,
+    numChannels: 3,
+  );
   for (var y = 0; y < outHeight; y++) {
     for (var x = 0; x < outWidth; x++) {
       final i = (y * outWidth + x) * 3;

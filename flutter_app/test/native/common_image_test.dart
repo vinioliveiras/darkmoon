@@ -95,7 +95,9 @@ void main() {
 
     test('a missing file returns null', () {
       expect(
-        () => decodeCommonImage('${Directory.systemTemp.path}/does_not_exist.png'),
+        () => decodeCommonImage(
+          '${Directory.systemTemp.path}/does_not_exist.png',
+        ),
         throwsA(isA<PathNotFoundException>()),
       );
     });

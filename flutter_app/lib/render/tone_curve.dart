@@ -85,13 +85,13 @@ double _evaluateCurve(List<CurvePoint> points, double x) {
     var tangentAtP1 = i == 0
         ? deltaCurrent
         : (deltaBefore * deltaCurrent <= 0
-            ? 0.0
-            : (deltaBefore + deltaCurrent) / 2.0);
+              ? 0.0
+              : (deltaBefore + deltaCurrent) / 2.0);
     var tangentAtP2 = i + 1 == lastIndex
         ? deltaCurrent
         : (deltaCurrent * deltaAfter <= 0
-            ? 0.0
-            : (deltaCurrent + deltaAfter) / 2.0);
+              ? 0.0
+              : (deltaCurrent + deltaAfter) / 2.0);
     if (deltaCurrent != 0) {
       final alpha = tangentAtP1 / deltaCurrent;
       final beta = tangentAtP2 / deltaCurrent;
@@ -102,8 +102,13 @@ double _evaluateCurve(List<CurvePoint> points, double x) {
         tangentAtP2 *= tau;
       }
     }
-    return _interpolateCubicHermite(x, p1, p2, tangentAtP1, tangentAtP2)
-        .clamp(0.0, 1.0);
+    return _interpolateCubicHermite(
+      x,
+      p1,
+      p2,
+      tangentAtP1,
+      tangentAtP2,
+    ).clamp(0.0, 1.0);
   }
   return points.last.y;
 }
@@ -266,10 +271,7 @@ List<CurvePoint> parametricCurvePoints(ParametricCurve p) {
     1.0,
   ];
 
-  return [
-    for (var i = 0; i < 7; i++)
-      CurvePoint(xs[i], ys[i].clamp(0.0, 1.0)),
-  ];
+  return [for (var i = 0; i < 7; i++) CurvePoint(xs[i], ys[i].clamp(0.0, 1.0))];
 }
 
 /// Every curve for one photo, bundled together for [RenderParams] and

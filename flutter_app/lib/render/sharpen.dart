@@ -115,7 +115,8 @@ void applySharpen(
     if (fineBlurred != null) {
       final fineResidual = luminance[p] - fineBlurred[p];
       final detailMix = params.detail / 100.0;
-      residual = residual * (1 - detailMix * calSharpenDetailMix) +
+      residual =
+          residual * (1 - detailMix * calSharpenDetailMix) +
           fineResidual * detailMix;
     }
     var factor = strength;

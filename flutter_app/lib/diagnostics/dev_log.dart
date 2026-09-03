@@ -55,10 +55,7 @@ class DevLog {
 
   /// Convenience for catch blocks and global error handlers.
   static void logError(String context, Object error, [StackTrace? stack]) {
-    log(
-      '$context: $error${stack == null ? '' : '\n$stack'}',
-      tag: 'error',
-    );
+    log('$context: $error${stack == null ? '' : '\n$stack'}', tag: 'error');
   }
 
   static Future<void> _append(String line) async {

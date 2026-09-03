@@ -66,9 +66,8 @@ void redirectNativeStderrToFileForDevMode(String targetPath) {
   }
   try {
     final kernel32 = DynamicLibrary.open('kernel32.dll');
-    final createFileW = kernel32.lookupFunction<_CreateFileWNative, _CreateFileWDart>(
-      'CreateFileW',
-    );
+    final createFileW = kernel32
+        .lookupFunction<_CreateFileWNative, _CreateFileWDart>('CreateFileW');
     final setStdHandle = kernel32
         .lookupFunction<_SetStdHandleNative, _SetStdHandleDart>('SetStdHandle');
 

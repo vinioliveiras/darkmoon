@@ -204,9 +204,7 @@ void main() {
           mount: null,
           cropFactor: 1.0,
           distortionModel: 'ptlens',
-          distortion: [
-            const LensDistortionPoint(focal: 150, a: 0, b: 0, c: 0),
-          ],
+          distortion: [const LensDistortionPoint(focal: 150, a: 0, b: 0, c: 0)],
           vignettingModel: null,
           vignetting: const [],
         ),
@@ -237,17 +235,19 @@ void main() {
       vignetting: const [],
     );
 
-    test('matchLensProfileByCameraModel matches X100VI to X100V & compatibles',
-        () {
-      final metadata = _metadata(
-        cameraMake: 'Fujifilm',
-        cameraModel: 'X100VI',
-      );
-      expect(
-        matchLensProfileByCameraModel([x100vProfile], metadata),
-        same(x100vProfile),
-      );
-    });
+    test(
+      'matchLensProfileByCameraModel matches X100VI to X100V & compatibles',
+      () {
+        final metadata = _metadata(
+          cameraMake: 'Fujifilm',
+          cameraModel: 'X100VI',
+        );
+        expect(
+          matchLensProfileByCameraModel([x100vProfile], metadata),
+          same(x100vProfile),
+        );
+      },
+    );
 
     test('resolveLensProfile falls back to camera-model match when '
         'lensModel is empty', () {
@@ -256,21 +256,16 @@ void main() {
         cameraModel: 'X100VI',
         lensModel: '',
       );
-      final resolved =
-          resolveLensProfile([x100vProfile], metadata, null);
+      final resolved = resolveLensProfile([x100vProfile], metadata, null);
       expect(resolved, same(x100vProfile));
     });
 
     test('does not match a different maker\'s camera body', () {
-      final metadata = _metadata(
-        cameraMake: 'Sony',
-        cameraModel: 'X100VI',
-      );
+      final metadata = _metadata(cameraMake: 'Sony', cameraModel: 'X100VI');
       expect(matchLensProfileByCameraModel([x100vProfile], metadata), isNull);
     });
 
-    test('ignores ordinary interchangeable-lens entries (no "&" in model)',
-        () {
+    test('ignores ordinary interchangeable-lens entries (no "&" in model)', () {
       final canon2470 = LensProfile(
         maker: 'Canon',
         model: 'Canon EF 24-70mm f/2.8L II USM',

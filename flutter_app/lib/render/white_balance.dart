@@ -117,7 +117,10 @@ enum WbMode {
   if (k >= 4000.0) {
     cx = k <= 7000.0
         ? -4.6070e9 / (k * k * k) + 2.9678e6 / (k * k) + 99.11e0 / k + 0.244063
-        : -2.0064e9 / (k * k * k) + 1.9018e6 / (k * k) + 247.48e0 / k + 0.237040;
+        : -2.0064e9 / (k * k * k) +
+              1.9018e6 / (k * k) +
+              247.48e0 / k +
+              0.237040;
     cy = -3.0 * cx * cx + 2.870 * cx - 0.275;
   } else {
     final uv = _planckianUv(k);
@@ -177,8 +180,7 @@ const _xyzToRgb = [
 }
 
 List<double> _mul3(List<List<double>> m, List<double> v) => [
-  for (var i = 0; i < 3; i++)
-    m[i][0] * v[0] + m[i][1] * v[1] + m[i][2] * v[2],
+  for (var i = 0; i < 3; i++) m[i][0] * v[0] + m[i][1] * v[1] + m[i][2] * v[2],
 ];
 
 List<List<double>> _matMul(List<List<double>> a, List<List<double>> b) => [
@@ -296,10 +298,7 @@ const double _wbTintScale = calWbAsShotTintScaleFallback;
   List<List<double>> camXyz = const [],
   List<List<double>> wbctCoeffs = const [],
 }) {
-  if (camMul.length < 3 ||
-      camMul[0] <= 0 ||
-      camMul[1] <= 0 ||
-      camMul[2] <= 0) {
+  if (camMul.length < 3 || camMul[0] <= 0 || camMul[1] <= 0 || camMul[2] <= 0) {
     return (kelvin: wbDefaultKelvin, tint: wbDefaultTint);
   }
 
@@ -376,8 +375,10 @@ const double _wbTintScale = calWbAsShotTintScaleFallback;
   }
   final loMired = 1.0e6 / lo.k;
   final hiMired = 1.0e6 / hi.k;
-  final kelvin = (1.0e6 / (loMired + (hiMired - loMired) * t))
-      .clamp(2000.0, 50000.0);
+  final kelvin = (1.0e6 / (loMired + (hiMired - loMired) * t)).clamp(
+    2000.0,
+    50000.0,
+  );
 
   // Tint: extra combined R+B gain vs the on-locus multipliers at this key.
   final locusR = lo.r + (hi.r - lo.r) * t;
@@ -452,8 +453,10 @@ const double _wbTintScale = calWbAsShotTintScaleFallback;
       final segLen2 = sx * sx + sy * sy;
       final t = segLen2 < 1e-18
           ? 0.0
-          : (((pu - prev.u) * sx + (pv - prev.v) * sy) / segLen2)
-                .clamp(0.0, 1.0);
+          : (((pu - prev.u) * sx + (pv - prev.v) * sy) / segLen2).clamp(
+              0.0,
+              1.0,
+            );
       final fu = prev.u + sx * t;
       final fv = prev.v + sy * t;
       final d2 = (pu - fu) * (pu - fu) + (pv - fv) * (pv - fv);
@@ -471,8 +474,7 @@ const double _wbTintScale = calWbAsShotTintScaleFallback;
   // Green side -> negative Tint, matching Meridian's convention.
   final duv = (bestCross >= 0 ? 1.0 : -1.0) * math.sqrt(bestD2);
   final tint = ((duv + _wbDuvBias) * _wbTintPerDuv).clamp(-150.0, 150.0);
-  final kelvin =
-      (1.0e6 / (bestMired - _wbCctMiredBias)).clamp(2000.0, 50000.0);
+  final kelvin = (1.0e6 / (bestMired - _wbCctMiredBias)).clamp(2000.0, 50000.0);
   return (kelvin: kelvin, tint: tint);
 }
 

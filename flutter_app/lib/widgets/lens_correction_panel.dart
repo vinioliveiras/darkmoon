@@ -100,7 +100,9 @@ class LensCorrectionPanel extends StatelessWidget {
           onChanged: (key) {
             final next = key == null
                 ? params.copyWith(clearManualProfile: true)
-                : params.copyWith(manualProfileKeyHash: lensProfileKeyHash(key));
+                : params.copyWith(
+                    manualProfileKeyHash: lensProfileKeyHash(key),
+                  );
             onChangeEnd(next);
           },
         ),
@@ -112,10 +114,8 @@ class LensCorrectionPanel extends StatelessWidget {
           value: params.distortionAmount,
           decimals: 0,
           defaultValue: 0,
-          onChanged: (v) =>
-              onChanged(params.copyWith(distortionAmount: v)),
-          onChangeEnd: (v) =>
-              onChangeEnd(params.copyWith(distortionAmount: v)),
+          onChanged: (v) => onChanged(params.copyWith(distortionAmount: v)),
+          onChangeEnd: (v) => onChangeEnd(params.copyWith(distortionAmount: v)),
         ),
         const SizedBox(height: 10),
         SliderRow(

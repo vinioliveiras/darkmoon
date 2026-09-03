@@ -43,8 +43,18 @@ void main() {
   test('grain is deterministic — same input, same output', () {
     final a = _flatMidGray(24, 24);
     final b = _flatMidGray(24, 24);
-    applyGrain(a, 24, 24, const GrainParams(amount: 50, size: 30, roughness: 40));
-    applyGrain(b, 24, 24, const GrainParams(amount: 50, size: 30, roughness: 40));
+    applyGrain(
+      a,
+      24,
+      24,
+      const GrainParams(amount: 50, size: 30, roughness: 40),
+    );
+    applyGrain(
+      b,
+      24,
+      24,
+      const GrainParams(amount: 50, size: 30, roughness: 40),
+    );
     expect(a, b);
   });
 

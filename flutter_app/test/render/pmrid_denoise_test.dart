@@ -14,55 +14,53 @@ Float32List _identity(Float32List tile) => tile;
 Float32List _zero(Float32List tile) => Float32List(tile.length);
 
 void main() {
+  test('identity model round-trips the RGGB buffer through the anchor-scale '
+      'multiply/divide unchanged', () {
+    const width = 40; // smaller than one tile — exercises the edge-clamp
+    const height = 30; // padding path, not just a single full tile.
+    final rggb = Float32List(width * height * 4);
+    for (var i = 0; i < rggb.length; i++) {
+      rggb[i] = ((i * 29) % 100) / 100.0;
+    }
+
+    final result = denoisePmridRggb(rggb, width, height, denoise: _identity);
+
+    expect(result.length, rggb.length);
+    for (var i = 0; i < rggb.length; i++) {
+      expect(result[i], closeTo(rggb[i], 1e-4), reason: 'mismatch at $i');
+    }
+  });
+
   test(
-    'identity model round-trips the RGGB buffer through the anchor-scale '
-    'multiply/divide unchanged',
+    'a model that zeroes every tile produces an all-zero result (no blend step, unlike sRGB denoise)',
     () {
-      const width = 40; // smaller than one tile — exercises the edge-clamp
-      const height = 30; // padding path, not just a single full tile.
+      const width = 32;
+      const height = 32;
       final rggb = Float32List(width * height * 4);
       for (var i = 0; i < rggb.length; i++) {
-        rggb[i] = ((i * 29) % 100) / 100.0;
+        rggb[i] = 0.5;
       }
 
-      final result = denoisePmridRggb(
-        rggb,
-        width,
-        height,
-        denoise: _identity,
-      );
+      final result = denoisePmridRggb(rggb, width, height, denoise: _zero);
 
-      expect(result.length, rggb.length);
-      for (var i = 0; i < rggb.length; i++) {
-        expect(result[i], closeTo(rggb[i], 1e-4), reason: 'mismatch at $i');
+      for (final v in result) {
+        expect(v, 0.0);
       }
     },
   );
 
-  test('a model that zeroes every tile produces an all-zero result (no blend step, unlike sRGB denoise)', () {
-    const width = 32;
-    const height = 32;
-    final rggb = Float32List(width * height * 4);
-    for (var i = 0; i < rggb.length; i++) {
-      rggb[i] = 0.5;
-    }
+  test(
+    'output stays same resolution as the input (no scale factor, unlike upscale)',
+    () {
+      const width = 48;
+      const height = 64;
+      final rggb = Float32List(width * height * 4);
 
-    final result = denoisePmridRggb(rggb, width, height, denoise: _zero);
+      final result = denoisePmridRggb(rggb, width, height, denoise: _identity);
 
-    for (final v in result) {
-      expect(v, 0.0);
-    }
-  });
-
-  test('output stays same resolution as the input (no scale factor, unlike upscale)', () {
-    const width = 48;
-    const height = 64;
-    final rggb = Float32List(width * height * 4);
-
-    final result = denoisePmridRggb(rggb, width, height, denoise: _identity);
-
-    expect(result.length, width * height * 4);
-  });
+      expect(result.length, width * height * 4);
+    },
+  );
 
   test('forwards per-tile progress', () {
     const width = 40;
@@ -82,8 +80,11 @@ void main() {
     expect(calls.last.$1, calls.last.$2);
   });
 
-  test('uses pmridDenoiseModelSpec\'s tile geometry (4 channels, no upscale)', () {
-    expect(pmridDenoiseModelSpec.channels, 4);
-    expect(pmridDenoiseModelSpec.scaleFactor, 1);
-  });
+  test(
+    'uses pmridDenoiseModelSpec\'s tile geometry (4 channels, no upscale)',
+    () {
+      expect(pmridDenoiseModelSpec.channels, 4);
+      expect(pmridDenoiseModelSpec.scaleFactor, 1);
+    },
+  );
 }

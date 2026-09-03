@@ -69,7 +69,15 @@ void main() {
       final cblack = [0, 0, 0, 0];
       const white = 4095.0;
 
-      final rggb = packBayerToRggb01(bayer, width, height, _rggb, black, cblack, white);
+      final rggb = packBayerToRggb01(
+        bayer,
+        width,
+        height,
+        _rggb,
+        black,
+        cblack,
+        white,
+      );
 
       // 2x2 output blocks, 4 floats/pixel (R, G, G2, B).
       expect(rggb.length, 2 * 2 * 4);
@@ -81,32 +89,63 @@ void main() {
       expect(rggb[3], closeTo(4000 / white, 1e-6)); // B
 
       final restored = Uint16List(width * height);
-      unpackRggbIntoBayer(rggb, 2, 2, restored, width, _rggb, black, cblack, white);
+      unpackRggbIntoBayer(
+        rggb,
+        2,
+        2,
+        restored,
+        width,
+        _rggb,
+        black,
+        cblack,
+        white,
+      );
       for (var i = 0; i < bayer.length; i++) {
         expect(restored[i], bayer[i], reason: 'mismatch at index $i');
       }
     });
 
-    test('black level is subtracted before normalizing, and restored on unpack', () {
-      const width = 2;
-      const height = 2;
-      final bayer = Uint16List.fromList([1100, 1200, 1300, 1400]);
-      const black = 1000;
-      final cblack = [0, 0, 0, 0];
-      const white = 5095.0; // black + 4095, matching a real 12-bit sensor
+    test(
+      'black level is subtracted before normalizing, and restored on unpack',
+      () {
+        const width = 2;
+        const height = 2;
+        final bayer = Uint16List.fromList([1100, 1200, 1300, 1400]);
+        const black = 1000;
+        final cblack = [0, 0, 0, 0];
+        const white = 5095.0; // black + 4095, matching a real 12-bit sensor
 
-      final rggb = packBayerToRggb01(bayer, width, height, _rggb, black, cblack, white);
-      expect(rggb[0], closeTo(100 / 4095.0, 1e-6));
-      expect(rggb[1], closeTo(200 / 4095.0, 1e-6));
-      expect(rggb[2], closeTo(300 / 4095.0, 1e-6));
-      expect(rggb[3], closeTo(400 / 4095.0, 1e-6));
+        final rggb = packBayerToRggb01(
+          bayer,
+          width,
+          height,
+          _rggb,
+          black,
+          cblack,
+          white,
+        );
+        expect(rggb[0], closeTo(100 / 4095.0, 1e-6));
+        expect(rggb[1], closeTo(200 / 4095.0, 1e-6));
+        expect(rggb[2], closeTo(300 / 4095.0, 1e-6));
+        expect(rggb[3], closeTo(400 / 4095.0, 1e-6));
 
-      final restored = Uint16List(width * height);
-      unpackRggbIntoBayer(rggb, 1, 1, restored, width, _rggb, black, cblack, white);
-      for (var i = 0; i < bayer.length; i++) {
-        expect(restored[i], closeTo(bayer[i].toDouble(), 1));
-      }
-    });
+        final restored = Uint16List(width * height);
+        unpackRggbIntoBayer(
+          rggb,
+          1,
+          1,
+          restored,
+          width,
+          _rggb,
+          black,
+          cblack,
+          white,
+        );
+        for (var i = 0; i < bayer.length; i++) {
+          expect(restored[i], closeTo(bayer[i].toDouble(), 1));
+        }
+      },
+    );
 
     test('values below black clamp to 0, not negative', () {
       const width = 2;
@@ -118,64 +157,77 @@ void main() {
       final cblack = [0, 0, 0, 0];
       const white = 5095.0;
 
-      final rggb = packBayerToRggb01(bayer, width, height, _rggb, black, cblack, white);
+      final rggb = packBayerToRggb01(
+        bayer,
+        width,
+        height,
+        _rggb,
+        black,
+        cblack,
+        white,
+      );
       for (final v in rggb) {
         expect(v, 0.0);
       }
     });
 
-    test(
-      'BGGR (not already RGGB-aligned) crops a 1-pixel edge and leaves it '
-      'untouched by unpack',
-      () {
-        const width = 4;
-        const height = 4;
-        final bayer = Uint16List.fromList([
-          100, 101, 102, 103, //
-          104, 105, 106, 107, //
-          108, 109, 110, 111, //
-          112, 113, 114, 115, //
-        ]);
-        const black = 0;
-        final cblack = [0, 0, 0, 0];
-        const white = 255.0;
+    test('BGGR (not already RGGB-aligned) crops a 1-pixel edge and leaves it '
+        'untouched by unpack', () {
+      const width = 4;
+      const height = 4;
+      final bayer = Uint16List.fromList([
+        100, 101, 102, 103, //
+        104, 105, 106, 107, //
+        108, 109, 110, 111, //
+        112, 113, 114, 115, //
+      ]);
+      const black = 0;
+      final cblack = [0, 0, 0, 0];
+      const white = 255.0;
 
-        final offset = rggbAlignmentOffset(_bggr);
-        expect(offset, (row: 1, col: 1));
-        final rggb = packBayerToRggb01(bayer, width, height, _bggr, black, cblack, white);
-        // Output is 1 row/col smaller than a fully-aligned sensor would
-        // give at this size (3x3 active area after the 1-row/1-col crop,
-        // not 4x4) -> floor((4-1)/2) = 1 block per axis.
-        final outW = (width - offset.col) ~/ 2;
-        final outH = (height - offset.row) ~/ 2;
-        expect(rggb.length, outW * outH * 4);
+      final offset = rggbAlignmentOffset(_bggr);
+      expect(offset, (row: 1, col: 1));
+      final rggb = packBayerToRggb01(
+        bayer,
+        width,
+        height,
+        _bggr,
+        black,
+        cblack,
+        white,
+      );
+      // Output is 1 row/col smaller than a fully-aligned sensor would
+      // give at this size (3x3 active area after the 1-row/1-col crop,
+      // not 4x4) -> floor((4-1)/2) = 1 block per axis.
+      final outW = (width - offset.col) ~/ 2;
+      final outH = (height - offset.row) ~/ 2;
+      expect(rggb.length, outW * outH * 4);
 
-        // Start from a COPY of the original buffer (unpack only touches
-        // the aligned window) and confirm the untouched edge (row 0, and
-        // column 0) keeps its original values.
-        final restored = Uint16List.fromList(bayer);
-        unpackRggbIntoBayer(
-          rggb,
-          outW,
-          outH,
-          restored,
-          width,
-          _bggr,
-          black,
-          cblack,
-          white,
+      // Start from a COPY of the original buffer (unpack only touches
+      // the aligned window) and confirm the untouched edge (row 0, and
+      // column 0) keeps its original values.
+      final restored = Uint16List.fromList(bayer);
+      unpackRggbIntoBayer(
+        rggb,
+        outW,
+        outH,
+        restored,
+        width,
+        _bggr,
+        black,
+        cblack,
+        white,
+      );
+      for (var x = 0; x < width; x++) {
+        expect(restored[x], bayer[x], reason: 'row 0 should be untouched');
+      }
+      for (var y = 0; y < height; y++) {
+        expect(
+          restored[y * width],
+          bayer[y * width],
+          reason: 'column 0 should be untouched',
         );
-        for (var x = 0; x < width; x++) {
-          expect(restored[x], bayer[x], reason: 'row 0 should be untouched');
-        }
-        for (var y = 0; y < height; y++) {
-          expect(
-            restored[y * width],
-            bayer[y * width],
-            reason: 'column 0 should be untouched',
-          );
-        }
-      },
-    );
+      }
+    });
   });
 }

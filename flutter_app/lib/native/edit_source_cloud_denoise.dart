@@ -193,7 +193,9 @@ class _CloudDenoiseDecodeIsolateArgs {
   final SendPort sendPort;
 }
 
-void _cloudDenoiseDecodeIsolateEntry(_CloudDenoiseDecodeIsolateArgs args) async {
+void _cloudDenoiseDecodeIsolateEntry(
+  _CloudDenoiseDecodeIsolateArgs args,
+) async {
   try {
     final result = await _decodeAndCloudDenoise(
       args.path,
@@ -307,7 +309,9 @@ Future<CloudDenoiseResult> decodeEditSourcesWithCloudDenoise(
 
     final cancellation = cancellationToken == null
         ? Completer<CloudDenoiseResult>().future
-        : cancellationToken.cancelled.then((_) => const CloudDenoiseCancelled());
+        : cancellationToken.cancelled.then(
+            (_) => const CloudDenoiseCancelled(),
+          );
     return await Future.any([receiveResult(), cancellation]);
   } finally {
     receivePort.close();
