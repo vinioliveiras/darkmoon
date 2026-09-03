@@ -24,7 +24,7 @@ import 'render_gpu.dart';
 /// (uploaded as a texture) and the blend itself run on GPU.
 ///
 /// **Must run on the main isolate** — see `render_gpu.dart`'s doc comment.
-Future<Uint8List> renderRgbWithMasksGpu(
+Future<Uint8List> renderRgbaWithMasksGpu(
   int width,
   int height,
   Uint8List sourceRgb,
@@ -93,10 +93,22 @@ Future<Uint8List> renderRgbWithMasksGpu(
 
   final byteData = await current.toByteData(format: ui.ImageByteFormat.rawRgba);
   if (byteData == null) {
-    throw StateError('renderRgbWithMasksGpu: toByteData returned null');
+    throw StateError('renderRgbaWithMasksGpu: toByteData returned null');
   }
-  return rgbaToRgb(byteData.buffer.asUint8List());
+  return byteData.buffer.asUint8List();
 }
+
+/// [renderRgbaWithMasksGpu] narrowed to packed RGB — see [renderRgbGpu]'s
+/// own doc comment for why this exists only for the integration tests.
+Future<Uint8List> renderRgbWithMasksGpu(
+  int width,
+  int height,
+  Uint8List sourceRgb,
+  RenderParams globalParams,
+  List<MaskLayer> masks,
+) async => rgbaToRgb(
+  await renderRgbaWithMasksGpu(width, height, sourceRgb, globalParams, masks),
+);
 
 /// Uploads a single-channel 0..1 alpha buffer as an RGBA `ui.Image` (value
 /// replicated across R/G/B, matching every other single-channel texture in

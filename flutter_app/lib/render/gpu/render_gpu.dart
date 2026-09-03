@@ -29,20 +29,36 @@ import 'sharpen_gpu.dart';
 /// (`integration_test/gpu_spike_test.dart`) that `dart:ui`'s GPU-backed
 /// primitives hang (not throw) inside `Isolate.run`/`compute()`. Do not
 /// call this from a background isolate.
-Future<Uint8List> renderRgbGpu(
+Future<Uint8List> renderRgbaGpu(
   int width,
   int height,
   Uint8List sourceRgb,
   RenderParams params,
 ) async {
-  final source = await _decodeRgbImage(sourceRgb, width, height);
+  final source = await decodeRgbImage(sourceRgb, width, height);
   final result = await renderImageGpu(source, width, height, params);
   final byteData = await result.toByteData(format: ui.ImageByteFormat.rawRgba);
   if (byteData == null) {
-    throw StateError('renderRgbGpu: toByteData returned null');
+    throw StateError('renderRgbaGpu: toByteData returned null');
   }
-  return _rgbaToRgb(byteData.buffer.asUint8List());
+  return byteData.buffer.asUint8List();
 }
+
+/// [renderRgbaGpu] narrowed to the CPU pipeline's own packed-RGB shape, so
+/// `integration_test/gpu_*` can compare a GPU render against `renderRgb`'s
+/// output byte for byte.
+///
+/// Not what the app itself renders through: `render_job_gpu.dart` wants
+/// the RGBA readback as-is (that is the format the canvas uploads from —
+/// see `render_job.dart`'s `RenderResult.previewRgba`), and narrowing it
+/// here only to widen it right back again was a pair of pointless
+/// full-buffer passes on the main isolate.
+Future<Uint8List> renderRgbGpu(
+  int width,
+  int height,
+  Uint8List sourceRgb,
+  RenderParams params,
+) async => rgbaToRgb(await renderRgbaGpu(width, height, sourceRgb, params));
 
 /// The `ui.Image`-in/`ui.Image`-out core of [renderRgbGpu], split out so
 /// `mask_gpu.dart`'s `renderRgbWithMasksGpu` (Phase 7) can chain the global
@@ -68,7 +84,12 @@ Future<ui.Image> renderImageGpu(
   // midtones" weight, which reads each pixel's current luminance and
   // targets the wrong tonal range on a RAW that still needs a large
   // Exposure correction.
-  final afterExposureAndWb = await _runPreDenoise(source, width, height, params);
+  final afterExposureAndWb = await _runPreDenoise(
+    source,
+    width,
+    height,
+    params,
+  );
   final afterChromaSmoothing = await runBaselineChromaSmoothingGpu(
     afterExposureAndWb,
     width,
@@ -129,7 +150,9 @@ Future<ui.Image> renderImageGpu(
   // a real GPU/CPU order divergence at odds with the comment above.
   final baseContrastGamma = params.baseContrast == 0
       ? 1.0
-      : math.pow(2.0, params.baseContrast / 100.0 * calContrastStrength).toDouble();
+      : math
+            .pow(2.0, params.baseContrast / 100.0 * calContrastStrength)
+            .toDouble();
   final afterColorProfile = await runColorProfileGpu(
     afterClarity,
     width,
@@ -198,8 +221,9 @@ Future<ui.Image> _runPreDenoise(
   final normalizedRGain = wb.r;
   final gGain = wb.g;
   final normalizedBGain = wb.b;
-  final exposureFactor =
-      math.pow(2.0, params.exposure / calExposureUnitsPerStop).toDouble();
+  final exposureFactor = math
+      .pow(2.0, params.exposure / calExposureUnitsPerStop)
+      .toDouble();
 
   var i = 0;
   shader.setFloat(i++, width.toDouble());
@@ -362,8 +386,7 @@ Future<ui.Image> _runPostDehaze(
       (grain.size / 100.0).clamp(0.0, 1.0) *
           (calGrainSizePxAt100 - calGrainSizePxAt0);
   final grainRefScale = math.max(0.1, math.min(width, height) / 1080.0);
-  final grainFrequency =
-      (1.0 / math.max(grainSizePx, 0.1)) / grainRefScale;
+  final grainFrequency = (1.0 / math.max(grainSizePx, 0.1)) / grainRefScale;
   final grainRoughFrequency = grainFrequency * calGrainRoughCoordScale;
   final grainRoughness = (grain.roughness / 100.0).clamp(0.0, 1.0);
 
@@ -462,40 +485,4 @@ Future<ui.Image> _buildLutImage(
     completer.complete(image);
   });
   return completer.future;
-}
-
-/// Packed RGB (3 bytes/pixel) -> RGBA `ui.Image`, since `dart:ui` has no
-/// 3-channel pixel format to decode directly.
-Future<ui.Image> _decodeRgbImage(Uint8List rgb, int width, int height) async {
-  final rgba = Uint8List(width * height * 4);
-  var src = 0;
-  for (var dst = 0; dst < rgba.length; dst += 4, src += 3) {
-    rgba[dst] = rgb[src];
-    rgba[dst + 1] = rgb[src + 1];
-    rgba[dst + 2] = rgb[src + 2];
-    rgba[dst + 3] = 255;
-  }
-  final completer = Completer<ui.Image>();
-  ui.decodeImageFromPixels(rgba, width, height, ui.PixelFormat.rgba8888, (
-    image,
-  ) {
-    completer.complete(image);
-  });
-  return completer.future;
-}
-
-/// The inverse of [_decodeRgbImage] — strips alpha from a GPU readback so
-/// the result matches `renderRgb`/`renderAdjustmentsParallel`'s packed-RGB
-/// `Uint8List` shape, keeping every downstream caller
-/// (`render_job.dart`'s histogram/JPEG-encode/thumbnail) unchanged.
-Uint8List _rgbaToRgb(Uint8List rgba) {
-  final pixelCount = rgba.length ~/ 4;
-  final rgb = Uint8List(pixelCount * 3);
-  var src = 0;
-  for (var dst = 0; dst < rgb.length; dst += 3, src += 4) {
-    rgb[dst] = rgba[src];
-    rgb[dst + 1] = rgba[src + 1];
-    rgb[dst + 2] = rgba[src + 2];
-  }
-  return rgb;
 }

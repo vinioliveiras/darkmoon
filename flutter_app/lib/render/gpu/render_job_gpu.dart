@@ -6,7 +6,7 @@ import 'render_gpu.dart';
 
 /// GPU counterpart to `render_job.dart`'s `renderJobToJpeg` — same crop/
 /// render/histogram/JPEG/thumbnail-encode shape and the same [RenderResult]
-/// output, but calls [renderRgbGpu]/[renderRgbWithMasksGpu] instead of the
+/// output, but calls [renderRgbaGpu]/[renderRgbaWithMasksGpu] instead of the
 /// CPU pipeline (dispatched on whether [RenderJob.masks] is empty, same as
 /// `renderJobToJpeg`'s own CPU dispatch).
 ///
@@ -38,13 +38,13 @@ Future<RenderResult> renderJobToJpegGpu(RenderJob job) async {
       : prepareRenderGeometry(job);
 
   final rendered = job.masks.isEmpty
-      ? await renderRgbGpu(
+      ? await renderRgbaGpu(
           geometry.width,
           geometry.height,
           geometry.rgbBytes,
           job.params,
         )
-      : await renderRgbWithMasksGpu(
+      : await renderRgbaWithMasksGpu(
           geometry.width,
           geometry.height,
           geometry.rgbBytes,
@@ -52,12 +52,19 @@ Future<RenderResult> renderJobToJpegGpu(RenderJob job) async {
           job.masks,
         );
 
-  return compute(
-    encodeRenderResult,
+  final sidecar = await compute(
+    computeRenderSidecar,
     RenderEncodeRequest(
-      rgbBytes: rendered,
+      rgbaBytes: rendered,
       width: geometry.width,
       height: geometry.height,
     ),
+  );
+  return RenderResult(
+    previewRgba: rendered,
+    previewWidth: geometry.width,
+    previewHeight: geometry.height,
+    histogram: sidecar.histogram,
+    thumbnailBytes: sidecar.thumbnailBytes,
   );
 }

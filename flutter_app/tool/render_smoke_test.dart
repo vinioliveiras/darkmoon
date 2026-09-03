@@ -5,6 +5,8 @@
 // Usage: dart run tool/render_smoke_test.dart <raw-file> [out-prefix]
 import 'dart:io';
 
+import 'package:image/image.dart' as img;
+
 import 'package:darkmoon/native/edit_source.dart';
 import 'package:darkmoon/render/render_job.dart';
 import 'package:darkmoon/render/render_params.dart';
@@ -38,11 +40,24 @@ Future<void> main(List<String> args) async {
       RenderJob(source: sources.preview, params: params),
     );
     watch.stop();
+    // The render pipeline no longer emits a preview JPEG (the canvas
+    // paints its pixels directly — see RenderResult.previewRgba), so this
+    // smoke test encodes one itself just to have something to eyeball.
     final outPath = '${outPrefix}_$label.jpg';
-    File(outPath).writeAsBytesSync(result.jpegBytes);
+    final jpeg = img.encodeJpg(
+      img.Image.fromBytes(
+        width: result.previewWidth,
+        height: result.previewHeight,
+        bytes: result.previewRgba.buffer,
+        numChannels: 4,
+        order: img.ChannelOrder.rgba,
+      ),
+      quality: 90,
+    );
+    File(outPath).writeAsBytesSync(jpeg);
     // ignore: avoid_print
     print(
-      '$label: ${result.jpegBytes.length} JPEG bytes '
+      '$label: ${jpeg.length} JPEG bytes '
       '(hist max r=${result.histogram.red.reduce((a, b) => a > b ? a : b)}) '
       'in ${watch.elapsedMilliseconds}ms -> $outPath',
     );

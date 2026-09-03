@@ -68,69 +68,116 @@ class RenderJob {
 
 class RenderResult {
   const RenderResult({
-    required this.jpegBytes,
+    required this.previewRgba,
+    required this.previewWidth,
+    required this.previewHeight,
     required this.histogram,
     required this.thumbnailBytes,
   });
 
-  final Uint8List jpegBytes;
+  /// The finished render's own pixels: packed RGBA, 4 bytes/pixel,
+  /// row-major, alpha always 255.
+  ///
+  /// This used to be a JPEG (`jpegBytes`) that the canvas handed to
+  /// `Image.memory`, which meant every settled render encoded the frame
+  /// with `package:image`'s pure-Dart JPEG encoder and then had Flutter
+  /// decode that same JPEG straight back — hundreds of milliseconds of
+  /// round trip, plus a needless lossy generation, to display pixels the
+  /// pipeline already had in hand. The canvas now uploads these directly
+  /// (`ui.decodeImageFromPixels` -> `RawImage`), so no encode or decode
+  /// happens on the display path at all.
+  ///
+  /// RGBA rather than the CPU pipeline's own packed RGB because that is
+  /// what both consumers want: `decodeImageFromPixels` has no 3-channel
+  /// format, and the GPU path's readback is natively RGBA (it used to be
+  /// narrowed to RGB by a full-buffer loop purely to match the CPU
+  /// pipeline's shape, then widened right back again for display).
+  final Uint8List previewRgba;
+  final int previewWidth;
+  final int previewHeight;
+
   final Histogram histogram;
 
   /// A small (~200px) JPEG of the same rendered result, for the filmstrip —
   /// so the thumbnail reflects the current edit instead of staying frozen
-  /// at the camera-original preview.
+  /// at the camera-original preview. Still a JPEG (unlike [previewRgba]):
+  /// it is small, and it is written to the on-disk thumbnail cache.
   final Uint8List thumbnailBytes;
 }
 
-/// [compute()] argument bundle for [encodeRenderResult] — one object
+/// The two derived products a finished render needs beyond its own pixels
+/// — see [computeRenderSidecar].
+class RenderSidecar {
+  const RenderSidecar({required this.histogram, required this.thumbnailBytes});
+
+  final Histogram histogram;
+  final Uint8List thumbnailBytes;
+}
+
+/// [compute()] argument bundle for [computeRenderSidecar] — one object
 /// because `compute()` only takes a single argument.
 class RenderEncodeRequest {
   const RenderEncodeRequest({
-    required this.rgbBytes,
+    required this.rgbaBytes,
     required this.width,
     required this.height,
   });
 
-  /// A finished render's pixels: packed RGB, 3 bytes/pixel, row-major.
-  final Uint8List rgbBytes;
+  /// A finished render's pixels: packed RGBA, 4 bytes/pixel, row-major.
+  final Uint8List rgbaBytes;
   final int width;
   final int height;
 }
 
-/// Histogram + preview JPEG + filmstrip thumbnail from a finished render's
-/// pixels — the whole tail end of a render job, split out of
-/// [renderJobToJpeg] so it can be dispatched on its own.
+/// Histogram + filmstrip thumbnail from a finished render's pixels — the
+/// tail end of a render job, split out of [renderJobToJpeg] so it can be
+/// dispatched on its own.
 ///
 /// Exists as a separate top-level function specifically for the GPU path
 /// (`render_job_gpu.dart`): that path *must* run its render inline on the
 /// main isolate (`dart:ui`'s GPU primitives hang inside `Isolate.run`),
 /// but this half is plain CPU work over a plain byte buffer, so it can —
 /// and must — go through `compute()` instead of blocking the UI thread.
-/// `package:image`'s JPEG encoder is pure Dart and costs hundreds of
-/// milliseconds on a full-quality frame; running it inline was what made
-/// the canvas freeze (and toggle animations stall) on every settled GPU
-/// render.
-RenderResult encodeRenderResult(RenderEncodeRequest request) {
-  final histogram = computeHistogram(request.rgbBytes);
+///
+/// Deliberately does NOT return the preview itself: the frame's own pixels
+/// go straight to the canvas (see [RenderResult.previewRgba]), so the only
+/// JPEG left here is the ~200px filmstrip thumbnail, which is small and
+/// has to be a JPEG anyway for the on-disk thumbnail cache. Encoding the
+/// full-size preview as a JPEG only to have Flutter decode it right back
+/// used to cost hundreds of milliseconds per settled render.
+RenderSidecar computeRenderSidecar(RenderEncodeRequest request) {
+  final histogram = computeHistogram(request.rgbaBytes, channels: 4);
   final image = img.Image.fromBytes(
     width: request.width,
     height: request.height,
-    bytes: request.rgbBytes.buffer,
-    numChannels: 3,
-    order: img.ChannelOrder.rgb,
-  );
-  final jpegBytes = Uint8List.fromList(
-    img.encodeJpg(image, quality: 90, chroma: img.JpegChroma.yuv420),
+    bytes: request.rgbaBytes.buffer,
+    numChannels: 4,
+    order: img.ChannelOrder.rgba,
   );
   final thumbnail = fitToMaxDimension(image, filmstripThumbnailMaxDimension);
   final thumbnailBytes = Uint8List.fromList(
     img.encodeJpg(thumbnail, quality: 85, chroma: img.JpegChroma.yuv420),
   );
-  return RenderResult(
-    jpegBytes: jpegBytes,
-    histogram: histogram,
-    thumbnailBytes: thumbnailBytes,
-  );
+  return RenderSidecar(histogram: histogram, thumbnailBytes: thumbnailBytes);
+}
+
+/// Widens the CPU pipeline's packed RGB (3 bytes/pixel) to the packed RGBA
+/// (4 bytes/pixel, alpha 255) [RenderResult.previewRgba] is defined in —
+/// the format `ui.decodeImageFromPixels` needs to upload the frame to the
+/// canvas without a decode step. Always called from inside a background
+/// isolate (see [renderJobToJpeg]); the GPU path never needs it, since its
+/// own readback is already RGBA.
+Uint8List rgbToRgba(Uint8List rgb) {
+  final pixelCount = rgb.length ~/ 3;
+  final rgba = Uint8List(pixelCount * 4);
+  var src = 0;
+  for (var dst = 0; dst < rgba.length; dst += 4, src += 3) {
+    rgba[dst] = rgb[src];
+    rgba[dst + 1] = rgb[src + 1];
+    rgba[dst + 2] = rgb[src + 2];
+    rgba[dst + 3] = 255;
+  }
+  return rgba;
 }
 
 /// True when [prepareRenderGeometry] would actually touch a pixel — i.e.
@@ -238,15 +285,23 @@ Future<RenderResult> renderJobToJpeg(
   }
   onStage?.call(RenderStage.encoding);
   // Already inside a `compute()` isolate (or the dedicated progress
-  // isolate) by the time this runs, so the encode happens here directly —
-  // it's the GPU path that has to hand this same function to `compute()`
-  // itself. See [encodeRenderResult].
-  return encodeRenderResult(
+  // isolate) by the time this runs, so both the widening and the sidecar
+  // happen here directly — it's the GPU path that has to hand
+  // [computeRenderSidecar] to `compute()` itself.
+  final previewRgba = rgbToRgba(rendered);
+  final sidecar = computeRenderSidecar(
     RenderEncodeRequest(
-      rgbBytes: rendered,
+      rgbaBytes: previewRgba,
       width: geometry.width,
       height: geometry.height,
     ),
+  );
+  return RenderResult(
+    previewRgba: previewRgba,
+    previewWidth: geometry.width,
+    previewHeight: geometry.height,
+    histogram: sidecar.histogram,
+    thumbnailBytes: sidecar.thumbnailBytes,
   );
 }
 

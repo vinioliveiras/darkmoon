@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io' show Directory, File, Process;
+import 'dart:ui' as ui;
 import 'dart:ui' show AppExitResponse, ImageFilter;
 
 import 'package:file_picker/file_picker.dart';
@@ -8,7 +9,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image/image.dart' as img;
 import 'package:path/path.dart' as p;
 
 import 'animations_config.dart';
@@ -499,8 +499,10 @@ ColorProfileMode _colorProfileModeOf(Map<String, double> values) {
     0 || 1 => stored, // default/vivid unaffected by either round
     _ => 0, // goldenHour/tealOrange/pastel/noir (any round's index) -> Default
   };
-  return ColorProfileMode
-      .values[index.clamp(0, ColorProfileMode.values.length - 1)];
+  return ColorProfileMode.values[index.clamp(
+    0,
+    ColorProfileMode.values.length - 1,
+  )];
 }
 
 /// Storage key for the global Amount slider (below the preset list) —
@@ -577,7 +579,8 @@ Map<String, double> _withGlobalEditAmountApplied(Map<String, double> values) {
       continue;
     }
     final compression = dampened
-        ? (calGlobalAmountCompressionOverrides[key] ?? calGlobalAmountCompression)
+        ? (calGlobalAmountCompressionOverrides[key] ??
+              calGlobalAmountCompression)
         : 1.0;
     final fraction = amount / 100.0 * compression;
     final base = defaults[key] ?? 0;
@@ -725,6 +728,70 @@ Map<String, double> _defaultParamValues() {
 /// those are "what you're looking at", not "what's been done to the
 /// photo", so undoing an edit shouldn't also yank the panel to a different
 /// mask than the one the user was just looking at.
+/// One frame for the canvas, in whichever of the two shapes is actually
+/// available.
+///
+/// [image] is a finished render's own pixels, uploaded straight from the
+/// pipeline's output buffer — no JPEG encode on the way out and no decode
+/// on the way in (see `render_job.dart`'s `RenderResult.previewRgba` for
+/// what that round trip used to cost). [jpegBytes] is the small filmstrip
+/// thumbnail standing in while that render is still pending; it stays a
+/// JPEG because that is what the on-disk thumbnail cache holds.
+@immutable
+class PreviewFrame {
+  const PreviewFrame.rendered(ui.Image this.image) : jpegBytes = null;
+
+  const PreviewFrame.placeholder(Uint8List this.jpegBytes) : image = null;
+
+  final ui.Image? image;
+  final Uint8List? jpegBytes;
+
+  /// True while this is the thumbnail stand-in rather than a real render —
+  /// the canvas blurs it so it visibly reads as "not the real thing yet".
+  bool get isPlaceholder => image == null;
+
+  /// A copy holding its own handle on the same pixels.
+  ///
+  /// `ui.Image.clone()` keeps the underlying image alive until every
+  /// handle is disposed, which is exactly what anything outliving the
+  /// editor's own ownership needs: [_EditorScreenState._setPreviewImage]
+  /// disposes a frame the moment its replacement lands, while the canvas
+  /// cross-fade still has to paint the outgoing one for another ~220ms,
+  /// and a readback still has to finish reading it. Painting or reading a
+  /// disposed image throws.
+  ///
+  /// A no-op for a placeholder frame — plain bytes need no handle.
+  PreviewFrame cloneHandle() =>
+      image == null ? this : PreviewFrame.rendered(image!.clone());
+
+  /// Releases a handle taken by [cloneHandle]. Only ever call this on a
+  /// frame [cloneHandle] returned — on a borrowed one it would dispose the
+  /// editor's own image out from under the canvas.
+  void disposeHandle() => image?.dispose();
+}
+
+/// Paints a [PreviewFrame] — [RawImage] for a rendered frame (the pixels
+/// are already a `ui.Image`), [Image.memory] for the thumbnail stand-in.
+Widget _previewFrameWidget(PreviewFrame frame, {BoxFit? fit}) {
+  final image = frame.image;
+  if (image != null) {
+    // RawImage does not own the image it paints, so it must not dispose
+    // it — the editor's own preview maps do that (see
+    // _EditorScreenState._setPreviewImage).
+    //
+    // filterQuality is set explicitly to match what Image.memory used to
+    // resolve to here: the canvas almost always scales the render to fit
+    // the viewport, and RawImage's own default is not guaranteed to stay
+    // the same as the Image widget's.
+    return RawImage(
+      image: image,
+      fit: fit,
+      filterQuality: FilterQuality.medium,
+    );
+  }
+  return Image.memory(frame.jpegBytes!, fit: fit, gaplessPlayback: true);
+}
+
 class _EditSnapshot {
   const _EditSnapshot({
     required this.paramValues,
@@ -796,19 +863,87 @@ class _EditorScreenState extends State<EditorScreen>
   /// The light preview-resolution render per photo — kept fresh by every
   /// settled render (phase 1). What the canvas shows when the dynamic
   /// full-quality preview is off.
-  final Map<String, Uint8List> _renderedPreviews = {};
+  ///
+  /// A decoded `ui.Image` rather than JPEG bytes: the render pipeline
+  /// already produces pixels, so encoding them and having Flutter decode
+  /// them straight back was pure overhead on every settled render. Every
+  /// map here owns its images — replace or remove an entry only through
+  /// [_setPreviewImage] / [_disposePreviewsFor] / [_disposeAllPreviews],
+  /// which dispose the outgoing one.
+  final Map<String, ui.Image> _renderedPreviews = {};
 
   /// The full-quality render per photo (phase 2), when the dynamic preview
   /// is on. Invalidated the moment a new edit's phase-1 render lands, so a
   /// present entry is always current. Kept separate from [_renderedPreviews]
   /// so toggling the setting just switches which one the canvas reads —
   /// nothing has to be re-rendered.
-  final Map<String, Uint8List> _fullQualityPreviews = {};
+  final Map<String, ui.Image> _fullQualityPreviews = {};
   final Map<String, Histogram> _histograms = {};
+
+  /// Stores [image] as [path]'s entry in [map], disposing whatever it
+  /// replaces. A `ui.Image` holds GPU-side memory that is only reclaimed
+  /// on an explicit `dispose()` (the finalizer runs late and unreliably),
+  /// and these are full frames — tens of megabytes each at full-quality
+  /// resolution — replaced on every settled render.
+  void _setPreviewImage(
+    Map<String, ui.Image> map,
+    String path,
+    ui.Image? image,
+  ) {
+    final previous = map[path];
+    if (identical(previous, image)) {
+      return;
+    }
+    previous?.dispose();
+    if (image == null) {
+      map.remove(path);
+    } else {
+      map[path] = image;
+    }
+  }
+
+  /// Drops (and disposes) every cached render of [path] — used when the
+  /// photo leaves the filmstrip.
+  void _disposePreviewsFor(String path) {
+    _renderedPreviews.remove(path)?.dispose();
+    _fullQualityPreviews.remove(path)?.dispose();
+    _neutralPreviews.remove(path)?.dispose();
+  }
+
+  /// [_disposePreviewsFor] for every photo at once — used when the whole
+  /// filmstrip is replaced (folder change, close, refresh).
+  void _disposeAllPreviews() {
+    for (final map in [
+      _renderedPreviews,
+      _fullQualityPreviews,
+      _neutralPreviews,
+    ]) {
+      for (final image in map.values) {
+        image.dispose();
+      }
+      map.clear();
+    }
+  }
+
+  /// Uploads a finished render's pixels as a `ui.Image` the canvas can
+  /// paint directly. `decodeImageFromPixels` is not a decode in the
+  /// codec sense — there is no entropy coding to undo, just an upload —
+  /// which is the whole point of [RenderResult.previewRgba].
+  Future<ui.Image> _decodePreviewImage(RenderResult result) {
+    final completer = Completer<ui.Image>();
+    ui.decodeImageFromPixels(
+      result.previewRgba,
+      result.previewWidth,
+      result.previewHeight,
+      ui.PixelFormat.rgba8888,
+      completer.complete,
+    );
+    return completer.future;
+  }
 
   /// The render to show on the canvas for [path]: the full-quality one
   /// when the dynamic preview is on and it exists, else the light preview.
-  Uint8List? _displayPreview(String path) {
+  ui.Image? _displayPreview(String path) {
     if (_settings.dynamicFullPreview) {
       final fq = _fullQualityPreviews[path];
       if (fq != null) {
@@ -874,7 +1009,8 @@ class _EditorScreenState extends State<EditorScreen>
   /// slider, and subject to the same Amount-slider scaling
   /// ([_effectiveParamValues]).
   double get _effectiveBaseContrast =>
-      (_effectiveColorProfile != null && !_effectiveColorProfile!.toneIsIdentity)
+      (_effectiveColorProfile != null &&
+          !_effectiveColorProfile!.toneIsIdentity)
       ? 0.0
       : _effectiveParamValues()['ColorProfileAmount'] ?? calBaseContrast;
 
@@ -901,7 +1037,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// Unedited render of whichever photos have had Before/After turned on,
   /// computed lazily (only when first needed) since most photos are never
   /// compared this way.
-  final Map<String, Uint8List> _neutralPreviews = {};
+  final Map<String, ui.Image> _neutralPreviews = {};
   bool _beforeAfterMode = false;
 
   /// Whether the Crop Overlay's draggable rectangle is shown over the
@@ -1454,9 +1590,7 @@ class _EditorScreenState extends State<EditorScreen>
         continue;
       }
       try {
-        final raw = await rootBundle.loadString(
-          'assets/color_profiles/$asset',
-        );
+        final raw = await rootBundle.loadString('assets/color_profiles/$asset');
         loaded[mode] = ColorProfile.decode(raw);
       } catch (_) {
         // Not bundled — fine, that mode just renders with no correction.
@@ -1991,6 +2125,9 @@ class _EditorScreenState extends State<EditorScreen>
               // Keep the decoded native source, just re-scale it next
               // render at the new percentage.
               _fullQualityScaled = null;
+              for (final image in _fullQualityPreviews.values) {
+                image.dispose();
+              }
               _fullQualityPreviews.clear();
             }
           });
@@ -2363,11 +2500,9 @@ class _EditorScreenState extends State<EditorScreen>
         _currentFolder = null;
         _thumbnails.clear();
         _editSources.clear();
-        _renderedPreviews.clear();
-        _fullQualityPreviews.clear();
+        _disposeAllPreviews();
         _histograms.clear();
         _metadata.clear();
-        _neutralPreviews.clear();
         _beforeAfterMode = false;
       }
     });
@@ -2628,11 +2763,9 @@ class _EditorScreenState extends State<EditorScreen>
       ];
       _thumbnails.remove(path);
       _editSources.remove(path);
-      _renderedPreviews.remove(path);
-      _fullQualityPreviews.remove(path);
+      _disposePreviewsFor(path);
       _histograms.remove(path);
       _metadata.remove(path);
-      _neutralPreviews.remove(path);
       _edits.remove(path);
       _photoCurves.remove(path);
 
@@ -2700,11 +2833,9 @@ class _EditorScreenState extends State<EditorScreen>
         _currentSingleFile = null;
         _thumbnails.clear();
         _editSources.clear();
-        _renderedPreviews.clear();
-        _fullQualityPreviews.clear();
+        _disposeAllPreviews();
         _histograms.clear();
         _metadata.clear();
-        _neutralPreviews.clear();
         _beforeAfterMode = false;
       }
     });
@@ -2772,11 +2903,9 @@ class _EditorScreenState extends State<EditorScreen>
       _loading = true;
       _thumbnails.clear();
       _editSources.clear();
-      _renderedPreviews.clear();
-      _fullQualityPreviews.clear();
+      _disposeAllPreviews();
       _histograms.clear();
       _metadata.clear();
-      _neutralPreviews.clear();
       _beforeAfterMode = false;
       _thumbnailsLoaded = 0;
       _thumbnailsTotal = 0;
@@ -3535,9 +3664,16 @@ class _EditorScreenState extends State<EditorScreen>
     if (!mounted || requestId != _renderRequestId) {
       return;
     }
+    final firstImage = await _decodePreviewImage(firstResult);
+    if (!mounted || requestId != _renderRequestId) {
+      // Superseded while the upload was in flight — nothing will ever
+      // paint this frame, and nothing else owns it yet.
+      firstImage.dispose();
+      return;
+    }
     setState(() {
       _isRenderingSlow = false;
-      _renderedPreviews[path] = firstResult.jpegBytes;
+      _setPreviewImage(_renderedPreviews, path, firstImage);
       // Fade in a settled render (applied edit/preset/reset/undo/redo, or
       // a freshly-decoded photo's first frame) — never a live drag frame.
       if (!live) {
@@ -3546,7 +3682,7 @@ class _EditorScreenState extends State<EditorScreen>
       // This phase-1 render is newer than any full-quality one on file for
       // this photo — drop the stale full render so the canvas shows this
       // one until phase 2 (if any) replaces it.
-      _fullQualityPreviews.remove(path);
+      _setPreviewImage(_fullQualityPreviews, path, null);
       _histograms[path] = firstResult.histogram;
       // Keeps the filmstrip thumbnail in sync with the current edit —
       // only on the settled render (a live tick's thumbnail is superseded
@@ -3575,19 +3711,21 @@ class _EditorScreenState extends State<EditorScreen>
             buildJob(fqSource),
             allowGpu: true,
           );
+          final fqImage = await _decodePreviewImage(fqResult);
           if (mounted && requestId == _renderRequestId) {
             setState(() {
-              _fullQualityPreviews[path] = fqResult.jpegBytes;
+              _setPreviewImage(_fullQualityPreviews, path, fqImage);
               _histograms[path] = fqResult.histogram;
               _thumbnails[path] = fqResult.thumbnailBytes;
             });
+          } else {
+            fqImage.dispose();
           }
         } catch (e) {
           debugPrint('full-quality render failed: $e');
         }
       }
     }
-
   }
 
   /// GPU / CPU-parallel / progress-tracked dispatch for one render job —
@@ -3960,10 +4098,12 @@ class _EditorScreenState extends State<EditorScreen>
         ),
       ),
     );
+    final image = await _decodePreviewImage(result);
     if (!mounted) {
+      image.dispose();
       return;
     }
-    setState(() => _neutralPreviews[path] = result.jpegBytes);
+    setState(() => _setPreviewImage(_neutralPreviews, path, image));
   }
 
   void _toggleBeforeAfter() {
@@ -5457,28 +5597,17 @@ class _EditorScreenState extends State<EditorScreen>
   /// Samples the currently-rendered preview at normalized ([nx], [ny]) and
   /// sets its luma as the active Luminance mask's target — mirrors
   /// [_onSampleMaskColor] but reduces the sampled pixel to brightness.
-  void _onSampleMaskLuminance(double nx, double ny) {
+  Future<void> _onSampleMaskLuminance(double nx, double ny) async {
     final mask = _activeMask;
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
     if (mask == null || mask.type != MaskType.luminance || selected == null) {
       return;
     }
-    final bytes = _displayPreview(selected.path);
-    if (bytes == null) {
+    final pixel = await _samplePreviewPixel(selected.path, nx, ny);
+    if (pixel == null || !mounted) {
       return;
     }
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) {
-      return;
-    }
-    final px = (nx * (decoded.width - 1)).round().clamp(0, decoded.width - 1);
-    final py = (ny * (decoded.height - 1)).round().clamp(0, decoded.height - 1);
-    final pixel = decoded.getPixel(px, py);
-    final luma = luminanceRgb(
-      pixel.r.toDouble(),
-      pixel.g.toDouble(),
-      pixel.b.toDouble(),
-    );
+    final luma = luminanceRgb(pixel.r, pixel.g, pixel.b);
     _updateActiveMask(
       (m) => m.copyWith(luminance: m.luminance.copyWith(targetLuma: luma)),
     );
@@ -5490,35 +5619,65 @@ class _EditorScreenState extends State<EditorScreen>
   /// Samples the currently-rendered preview at normalized ([nx], [ny]) and
   /// sets it as the active Color Range mask's reference color — "what you
   /// see is what you pick", matching the eyedropper's own preview surface.
-  void _onSampleMaskColor(double nx, double ny) {
+  Future<void> _onSampleMaskColor(double nx, double ny) async {
     final mask = _activeMask;
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
     if (mask == null || mask.type != MaskType.colorRange || selected == null) {
       return;
     }
-    final bytes = _displayPreview(selected.path);
-    if (bytes == null) {
+    final pixel = await _samplePreviewPixel(selected.path, nx, ny);
+    if (pixel == null || !mounted) {
       return;
     }
-    final decoded = img.decodeImage(bytes);
-    if (decoded == null) {
-      return;
-    }
-    final px = (nx * (decoded.width - 1)).round().clamp(0, decoded.width - 1);
-    final py = (ny * (decoded.height - 1)).round().clamp(0, decoded.height - 1);
-    final pixel = decoded.getPixel(px, py);
     _updateActiveMask(
       (m) => m.copyWith(
-        colorRange: m.colorRange.copyWith(
-          r: pixel.r.toDouble(),
-          g: pixel.g.toDouble(),
-          b: pixel.b.toDouble(),
-        ),
+        colorRange: m.colorRange.copyWith(r: pixel.r, g: pixel.g, b: pixel.b),
       ),
     );
     _pushHistory();
     _scheduleRender(live: false);
     _scheduleCatalogSave();
+  }
+
+  /// One pixel (0-255 per channel) of [path]'s currently-displayed render,
+  /// at normalized image coordinates ([nx], [ny]).
+  ///
+  /// Reads straight off the `ui.Image` the canvas is painting. Both mask
+  /// eyedroppers used to decode the preview's JPEG with `package:image`
+  /// for this; there is no preview JPEG any more (see `render_job.dart`'s
+  /// `RenderResult.previewRgba`), and a readback is both cheaper than a
+  /// full JPEG decode and exact — "what you see is what you pick" is
+  /// literally true now, with no lossy generation in between.
+  Future<({double r, double g, double b})?> _samplePreviewPixel(
+    String path,
+    double nx,
+    double ny,
+  ) async {
+    final displayed = _displayPreview(path);
+    if (displayed == null) {
+      return null;
+    }
+    // Own a handle for the duration of the readback: a render landing
+    // mid-await would otherwise dispose this image out from under it.
+    final image = displayed.clone();
+    final ByteData? byteData;
+    try {
+      byteData = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    } finally {
+      image.dispose();
+    }
+    if (byteData == null) {
+      return null;
+    }
+    final rgba = byteData.buffer.asUint8List();
+    final px = (nx * (image.width - 1)).round().clamp(0, image.width - 1);
+    final py = (ny * (image.height - 1)).round().clamp(0, image.height - 1);
+    final i = (py * image.width + px) * 4;
+    return (
+      r: rgba[i].toDouble(),
+      g: rgba[i + 1].toDouble(),
+      b: rgba[i + 2].toDouble(),
+    );
   }
 
   /// The camera as-shot white balance for [path] (5500/0 for non-RAW or
@@ -6280,9 +6439,11 @@ class _EditorScreenState extends State<EditorScreen>
                             onChanged: _onActiveChanged,
                             onChangeEnd: _onActiveChangeEnd,
                             onReset: _resetActive,
-                            presetAmount: _paramValues[_globalEditAmountKey] ?? 100.0,
+                            presetAmount:
+                                _paramValues[_globalEditAmountKey] ?? 100.0,
                             onPresetAmountChanged: _onGlobalEditAmountChanged,
-                            onPresetAmountChangeEnd: _onGlobalEditAmountChangeEnd,
+                            onPresetAmountChangeEnd:
+                                _onGlobalEditAmountChangeEnd,
                             colorProfileMode: _colorProfileModeOf(_paramValues),
                             onColorProfileModeChanged: _applyColorProfileMode,
                             onWhiteBalanceMode: _applyWbMode,
@@ -6561,8 +6722,12 @@ class _ImageArea extends StatelessWidget {
   final bool fileMissing;
 
   final Uint8List? thumbnail;
-  final Uint8List? preview;
-  final Uint8List? neutralPreview;
+
+  /// The current render for [selected], already uploaded as a `ui.Image`
+  /// (see [PreviewFrame]) — null while it is still being produced, in
+  /// which case [thumbnail] stands in.
+  final ui.Image? preview;
+  final ui.Image? neutralPreview;
   final bool beforeAfterMode;
   final TransformationController viewController;
   final GlobalKey viewportKey;
@@ -6666,15 +6831,14 @@ class _ImageArea extends StatelessWidget {
   /// intermediate methods (`_zoomableImage`/`_fittedImage`/…) — any
   /// descendant context works for [AnimationsConfig.of].
   ///
-  /// [isPlaceholder] marks [bytes] as the small filmstrip thumbnail
-  /// standing in for [preview] while it's still decoding — blurred so it
-  /// visibly reads as "not the real thing yet" rather than a soft/
-  /// low-quality render.
-  Widget _fadingImage(Uint8List bytes, {required bool isPlaceholder}) {
+  /// A [PreviewFrame] whose `isPlaceholder` is set is the small filmstrip
+  /// thumbnail standing in for [preview] while it's still rendering —
+  /// blurred so it visibly reads as "not the real thing yet" rather than a
+  /// soft/low-quality render.
+  Widget _fadingImage(PreviewFrame frame) {
     return Builder(
       builder: (context) => _FadingPreviewImage(
-        bytes: bytes,
-        isPlaceholder: isPlaceholder,
+        frame: frame,
         fadeGeneration: previewFadeGeneration,
         duration: AnimationsConfig.duration(
           context,
@@ -6773,8 +6937,14 @@ class _ImageArea extends StatelessWidget {
     // while it's still decoding, so something appears immediately (the
     // blurry-to-sharp jump this produces is now a fade, not a pop — see
     // _fadingImage/_FadingPreviewImage).
-    final bytes = preview ?? thumbnail;
-    if (bytes == null) {
+    final rendered = preview;
+    final placeholder = thumbnail;
+    final PreviewFrame frame;
+    if (rendered != null) {
+      frame = PreviewFrame.rendered(rendered);
+    } else if (placeholder != null) {
+      frame = PreviewFrame.placeholder(placeholder);
+    } else {
       return Text(
         l10n.decodingPhoto(selected!.name),
         textAlign: TextAlign.center,
@@ -6792,18 +6962,20 @@ class _ImageArea extends StatelessWidget {
           Expanded(
             child: _zoomableLabeledImage(
               l10n.beforeLabel,
-              neutralPreview ?? bytes,
+              neutralPreview == null
+                  ? frame
+                  : PreviewFrame.rendered(neutralPreview!),
             ),
           ),
           Container(width: 1, color: DarkmoonColors.divider),
-          Expanded(child: _zoomableLabeledImage(l10n.afterLabel, bytes)),
+          Expanded(child: _zoomableLabeledImage(l10n.afterLabel, frame)),
         ],
       );
     }
-    return _zoomableImage(bytes);
+    return _zoomableImage(frame);
   }
 
-  Widget _zoomableImage(Uint8List bytes) {
+  Widget _zoomableImage(PreviewFrame frame) {
     // Double-click zooms in (Meridian/Photoshop-style, centered on the
     // click point) if not already zoomed in, or back out to Fit if it is
     // — but not while a mode with its own tap handling is active (mask
@@ -6836,17 +7008,17 @@ class _ImageArea extends StatelessWidget {
           // scroll regardless of Ctrl, since that gesture never goes
           // through onPointerSignal at all. Panning (drag) stays enabled.
           scaleEnabled: false,
-          child: _fittedImage(bytes),
+          child: _fittedImage(frame),
         ),
       ),
     );
   }
 
-  Widget _zoomableLabeledImage(String label, Uint8List bytes) {
+  Widget _zoomableLabeledImage(String label, PreviewFrame frame) {
     return Stack(
       fit: StackFit.expand,
       children: [
-        _zoomableImage(bytes),
+        _zoomableImage(frame),
         Positioned(
           left: 8,
           top: 8,
@@ -6873,12 +7045,9 @@ class _ImageArea extends StatelessWidget {
   // drag is a different pixel size than the full-res one), so BoxFit.contain
   // always fits against the same fixed box — without this, the displayed
   // image visibly shrank and grew back as the source resolution changed.
-  Widget _fittedImage(Uint8List bytes) {
+  Widget _fittedImage(PreviewFrame frame) {
     final mask = editingMask;
     final source = editingSource;
-    // The real decoded preview isn't ready yet — [bytes] is standing in
-    // with the small filmstrip thumbnail (see _buildContent).
-    final isPlaceholder = preview == null;
     if (wbEyedropperActive && source != null) {
       return SizedBox.expand(
         child: LayoutBuilder(
@@ -6886,7 +7055,7 @@ class _ImageArea extends StatelessWidget {
             return Stack(
               fit: StackFit.expand,
               children: [
-                _fadingImage(bytes, isPlaceholder: isPlaceholder),
+                _fadingImage(frame),
                 WhiteBalanceEyedropperOverlay(
                   containerSize: Size(
                     constraints.maxWidth,
@@ -6920,7 +7089,7 @@ class _ImageArea extends StatelessWidget {
             return Stack(
               fit: StackFit.expand,
               children: [
-                _fadingImage(bytes, isPlaceholder: isPlaceholder),
+                _fadingImage(frame),
                 CropOverlay(
                   containerSize: containerSize,
                   imageWidth: frameWidth,
@@ -6941,7 +7110,7 @@ class _ImageArea extends StatelessWidget {
     final noOverlay = mask == null || source == null;
     return SizedBox.expand(
       child: noOverlay
-          ? _fadingImage(bytes, isPlaceholder: isPlaceholder)
+          ? _fadingImage(frame)
           : LayoutBuilder(
               builder: (context, constraints) {
                 final containerSize = Size(
@@ -6951,11 +7120,7 @@ class _ImageArea extends StatelessWidget {
                 return Stack(
                   fit: StackFit.expand,
                   children: [
-                    Image.memory(
-                      bytes,
-                      fit: BoxFit.contain,
-                      gaplessPlayback: true,
-                    ),
+                    _previewFrameWidget(frame, fit: BoxFit.contain),
                     if (mask.type == MaskType.brush ||
                         mask.type == MaskType.flow)
                       BrushMaskOverlay(
@@ -6983,7 +7148,7 @@ class _ImageArea extends StatelessWidget {
                             ? onSampleLuminance
                             : onSampleColor,
                         mask: mask,
-                        previewJpegBytes: bytes,
+                        previewImage: frame.image,
                         showOverlay: maskOverlayVisible,
                         overlayOpacity: maskOverlayOpacity[mask.type]!,
                       )
@@ -7017,17 +7182,14 @@ class _ImageArea extends StatelessWidget {
 /// frame fades in on top of it, so the canvas is never exposed.
 class _FadingPreviewImage extends StatefulWidget {
   const _FadingPreviewImage({
-    required this.bytes,
-    required this.isPlaceholder,
+    required this.frame,
     required this.fadeGeneration,
     required this.duration,
   });
 
-  final Uint8List bytes;
-
-  /// See `_ImageArea._fadingImage`'s doc — true while [bytes] is the
-  /// small filmstrip thumbnail standing in for the real preview.
-  final bool isPlaceholder;
+  /// The frame to paint — see [PreviewFrame], whose `isPlaceholder` says
+  /// whether this is the real render or the thumbnail standing in for it.
+  final PreviewFrame frame;
   final int fadeGeneration;
   final Duration duration;
 
@@ -7044,8 +7206,7 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
   /// [_controller] is actively fading the new one in on top of it —
   /// cleared once the fade completes (or immediately, for an instant/
   /// live-drag update) so a stale frame doesn't linger in the tree.
-  Uint8List? _previousBytes;
-  bool _previousIsPlaceholder = false;
+  PreviewFrame? _previousFrame;
 
   bool get _shouldAnimate => widget.duration > Duration.zero;
 
@@ -7061,14 +7222,17 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
       value: _shouldAnimate ? 0.0 : 1.0,
       duration: widget.duration,
     );
-    // Without this, _previousBytes stayed set forever after the very
+    // Without this, _previousFrame stayed set forever after the very
     // first fade — invisible while the new (sharp, opaque) layer fully
     // covers it, but exposed as a lingering blurred halo wherever
     // BoxFit.contain letterboxes the new layer without fully covering
     // the old one's own footprint underneath.
     _controller.addStatusListener((status) {
-      if (status == AnimationStatus.completed && _previousBytes != null) {
-        setState(() => _previousBytes = null);
+      if (status == AnimationStatus.completed && _previousFrame != null) {
+        setState(() {
+          _previousFrame!.disposeHandle();
+          _previousFrame = null;
+        });
       }
     });
     if (_shouldAnimate) {
@@ -7080,17 +7244,25 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
   void didUpdateWidget(_FadingPreviewImage old) {
     super.didUpdateWidget(old);
     if (widget.fadeGeneration != old.fadeGeneration && _shouldAnimate) {
+      // The outgoing frame is one the editor's preview map has already
+      // replaced — and replacing disposes. Take an independent handle so
+      // it stays paintable for the length of the fade (see
+      // PreviewFrame.cloneHandle); released when the fade completes, when
+      // it's superseded below, or in dispose().
       setState(() {
-        _previousBytes = old.bytes;
-        _previousIsPlaceholder = old.isPlaceholder;
+        _previousFrame?.disposeHandle();
+        _previousFrame = old.frame.cloneHandle();
       });
       _controller
         ..duration = widget.duration
         ..forward(from: 0);
     } else {
       // A live drag frame, or animations are off — swap instantly.
-      if (_previousBytes != null) {
-        setState(() => _previousBytes = null);
+      if (_previousFrame != null) {
+        setState(() {
+          _previousFrame!.disposeHandle();
+          _previousFrame = null;
+        });
       }
       _controller.value = 1.0;
     }
@@ -7098,15 +7270,16 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
 
   @override
   void dispose() {
+    _previousFrame?.disposeHandle();
     _controller.dispose();
     super.dispose();
   }
 
-  /// Blurred while [placeholder] — visibly reads as "not the real thing
-  /// yet" rather than just a soft/low-quality render.
-  Widget _layer(Uint8List bytes, bool placeholder) {
-    if (!placeholder) {
-      return Image.memory(bytes, fit: BoxFit.contain, gaplessPlayback: true);
+  /// Blurred while the frame is a placeholder — visibly reads as "not the
+  /// real thing yet" rather than just a soft/low-quality render.
+  Widget _layer(PreviewFrame frame) {
+    if (!frame.isPlaceholder) {
+      return _previewFrameWidget(frame, fit: BoxFit.contain);
     }
     // Blur the image at its own intrinsic size (letting it lay out
     // unconstrained inside FittedBox) instead of stretched to the full
@@ -7138,7 +7311,7 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
             sigmaY: 4,
             tileMode: TileMode.clamp,
           ),
-          child: Image.memory(bytes, gaplessPlayback: true),
+          child: _previewFrameWidget(frame),
         ),
       ),
     );
@@ -7146,15 +7319,12 @@ class _FadingPreviewImageState extends State<_FadingPreviewImage>
 
   @override
   Widget build(BuildContext context) {
-    final previous = _previousBytes;
+    final previous = _previousFrame;
     return Stack(
       fit: StackFit.expand,
       children: [
-        if (previous != null) _layer(previous, _previousIsPlaceholder),
-        FadeTransition(
-          opacity: _controller,
-          child: _layer(widget.bytes, widget.isPlaceholder),
-        ),
+        if (previous != null) _layer(previous),
+        FadeTransition(opacity: _controller, child: _layer(widget.frame)),
       ],
     );
   }

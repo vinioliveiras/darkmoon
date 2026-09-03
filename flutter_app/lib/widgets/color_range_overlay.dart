@@ -2,9 +2,9 @@ import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
-import 'package:image/image.dart' as img;
 
 import '../render/mask.dart';
+import '../render/preview_pixels.dart';
 import '../theme.dart';
 
 /// Tap-to-sample surface for a Color Range mask — clicking anywhere on the
@@ -22,7 +22,7 @@ class ColorRangeOverlay extends StatefulWidget {
     required this.imageHeight,
     required this.onSample,
     this.mask,
-    this.previewJpegBytes,
+    this.previewImage,
     this.showOverlay = true,
     this.overlayOpacity = 0.5,
   });
@@ -34,12 +34,19 @@ class ColorRangeOverlay extends StatefulWidget {
   /// Normalized (0..1) image coordinates of the tapped point.
   final void Function(double nx, double ny) onSample;
 
-  /// The mask being edited, and the currently-rendered preview (same JPEG
-  /// bytes the image itself displays) to sample its color-distance alpha
+  /// The mask being edited, and the currently-rendered preview (the very
+  /// `ui.Image` the canvas is painting) to sample its color-distance alpha
   /// from — null while either isn't available yet, in which case no
   /// shading is drawn, only tap-to-sample still works.
+  ///
+  /// This used to be the preview's JPEG bytes, decoded here with
+  /// `package:image`. The render pipeline no longer produces a preview
+  /// JPEG at all (see `render_job.dart`'s `RenderResult.previewRgba`), and
+  /// reading the pixels back off the image itself is both cheaper and
+  /// exact — no lossy generation between what the canvas shows and what
+  /// the color distance is measured against.
   final MaskLayer? mask;
-  final Uint8List? previewJpegBytes;
+  final ui.Image? previewImage;
 
   /// Whether the shaded selection overlay should be drawn — a toggle the
   /// user controls, same as the other mask overlays' visibility.
@@ -57,12 +64,12 @@ class _ColorRangeOverlayState extends State<ColorRangeOverlay> {
   ui.Image? _alphaImage;
   int _requestId = 0;
 
-  // Cached decode of [widget.previewJpegBytes] — a mask's tolerance/
-  // feather sliders change (and so trigger a rebuild) far more often than
-  // the preview itself re-renders, so re-decoding the JPEG on every slider
-  // tick would be wasteful; only [computeMaskAlpha] (cheap) needs to rerun
-  // that often.
-  Uint8List? _decodedForBytes;
+  // Cached readback of [widget.previewImage] — a mask's tolerance/feather
+  // sliders change (and so trigger a rebuild) far more often than the
+  // preview itself re-renders, so pulling the pixels back off the GPU on
+  // every slider tick would be wasteful; only [computeMaskAlpha] (cheap)
+  // needs to rerun that often.
+  ui.Image? _decodedForImage;
   Float32List? _decodedRgb;
   int _decodedWidth = 0;
   int _decodedHeight = 0;
@@ -78,7 +85,7 @@ class _ColorRangeOverlayState extends State<ColorRangeOverlay> {
     super.didUpdateWidget(oldWidget);
     if (widget.showOverlay &&
         (!identical(widget.mask, oldWidget.mask) ||
-            !identical(widget.previewJpegBytes, oldWidget.previewJpegBytes) ||
+            !identical(widget.previewImage, oldWidget.previewImage) ||
             widget.imageWidth != oldWidget.imageWidth ||
             widget.imageHeight != oldWidget.imageHeight ||
             widget.overlayOpacity != oldWidget.overlayOpacity)) {
@@ -94,26 +101,32 @@ class _ColorRangeOverlayState extends State<ColorRangeOverlay> {
     super.dispose();
   }
 
-  void _scheduleRebuild() {
+  Future<void> _scheduleRebuild() async {
     final mask = widget.mask;
-    final jpegBytes = widget.previewJpegBytes;
-    if (!widget.showOverlay || mask == null || jpegBytes == null) {
+    final previewImage = widget.previewImage;
+    if (!widget.showOverlay || mask == null || previewImage == null) {
       return;
     }
-    if (!identical(_decodedForBytes, jpegBytes)) {
-      final decoded = img.decodeImage(jpegBytes);
-      if (decoded == null) {
+    if (!identical(_decodedForImage, previewImage)) {
+      // Own a handle for the duration of the readback — the editor
+      // disposes a preview the moment its replacement lands, and reading
+      // a disposed image throws.
+      final handle = previewImage.clone();
+      final Float32List? rgb;
+      try {
+        rgb = await rgbFloatsFromImage(handle);
+      } finally {
+        handle.dispose();
+      }
+      // Another rebuild may have landed (and cached its own readback)
+      // while this one was in flight, or the widget may be gone.
+      if (rgb == null || !mounted || widget.previewImage != previewImage) {
         return;
       }
-      final rgbBytes = decoded.getBytes(order: img.ChannelOrder.rgb);
-      final rgb = Float32List(rgbBytes.length);
-      for (var i = 0; i < rgbBytes.length; i++) {
-        rgb[i] = rgbBytes[i].toDouble();
-      }
-      _decodedForBytes = jpegBytes;
+      _decodedForImage = previewImage;
       _decodedRgb = rgb;
-      _decodedWidth = decoded.width;
-      _decodedHeight = decoded.height;
+      _decodedWidth = previewImage.width;
+      _decodedHeight = previewImage.height;
     }
     final rgb = _decodedRgb;
     if (rgb == null) {
