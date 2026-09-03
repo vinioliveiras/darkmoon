@@ -1,17 +1,19 @@
 # Vendored native library (Linux)
 
-`libraw_r.so` — built from LibRaw 0.22.0 (the same version
-`third_party/libraw_headers/` was generated from) via the upstream
-autotools build, on Ubuntu 26.04 (WSL):
+`libraw_r.so` — built from LibRaw's **master** branch (which self-reports
+0.22.0-Release; note this is *not* the 0.22.0 tag, whose SONAME is
+`libraw_r.so.24` against master's `.so.26`) via the upstream autotools
+build.
 
-```sh
-git clone https://github.com/LibRaw/LibRaw.git
-cd LibRaw
-autoreconf -fiv
-CC=gcc CXX=g++ ./configure --disable-examples
-make -j"$(nproc)"
-# lib/.libs/libraw_r.so.<version> -> copy here as libraw_r.so
-```
+**Build it with `.github/workflows/build-libraw-linux.yml`, not locally.**
+Building it in WSL on Ubuntu 26.04 — which is what the instructions here
+used to say — produced a library requiring **GLIBC_2.43**, so it would not
+load on Ubuntu 24.04 LTS or Debian stable. Nothing else in the bundle comes
+close: the app binary needs 2.34, the Flutter engine 2.18, ONNX Runtime
+2.27, so LibRaw alone set the floor for the whole release. The workflow
+builds it in an `ubuntu:22.04` container, which yields **GLIBC_2.33** and
+`libjpeg.so.8` (the SONAME Ubuntu ships — Debian's `libjpeg.so.62` would
+not load there). Run it, download the artifact, drop it in here.
 
 Requires `autoconf automake libtool libjpeg-dev zlib1g-dev liblcms2-dev`
 (`g++`, not `clang++` — clang needs a separate `libomp-dev` for `omp.h`
@@ -19,6 +21,13 @@ that gcc bundles on its own). Dynamically links against
 libjpeg/zlib/lcms2/libgomp/libstdc++ — assumed already present on the
 system rather than bundled; revisit if a truly self-contained portable
 build is needed later.
+
+**Verifying a swap:** decode a real RAW before and after and compare, but
+set `OMP_NUM_THREADS=1` first. LibRaw demosaics with OpenMP and the
+reduction order across threads varies, so the decode is not
+bit-reproducible — the same file through the same `.so` checksummed
+differently three times before this was noticed. Single-threaded, the
+2.33 rebuild is bit-identical to the 2.43 one it replaces.
 
 `libonnxruntime.so` / `libonnxruntime_providers_shared.so` — the official
 prebuilt release, no build step:

@@ -65,9 +65,18 @@ void main(List<String> args) {
           '${decoded.width}x${decoded.height}',
         );
       }
+      // A checksum, not just a size: swapping the native library — a
+      // rebuild against a different glibc, a version bump — must not
+      // change the pixels it decodes, and identical dimensions would not
+      // prove that on their own.
+      var hash = 0x811c9dc5;
+      for (final b in decoded.rgbBytes) {
+        hash = ((hash ^ b) * 0x01000193) & 0xFFFFFFFF;
+      }
       stdout.writeln(
         '          ${decoded.width}x${decoded.height}, '
-        '${decoded.rgbBytes.length} bytes',
+        '${decoded.rgbBytes.length} bytes, '
+        'fnv1a=0x${hash.toRadixString(16).padLeft(8, '0')}',
       );
     });
   } else {
