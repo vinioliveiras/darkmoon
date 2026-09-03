@@ -15,7 +15,7 @@
 # onnx_dml_c_api.h), same trick libraw_c_api.h uses for LibRaw's C++-mixed
 # header.
 name: OnnxruntimeBindings
-description: Minimal FFI bindings for ONNX Runtime inference (DirectML EP).
+description: Minimal FFI bindings for ONNX Runtime inference (DirectML + plugin EPs).
 output: 'lib/native/onnxruntime_bindings.dart'
 headers:
   entry-points:
@@ -50,6 +50,10 @@ structs:
     - 'OrtTypeInfo'
     - 'OrtTensorTypeAndShapeInfo'
     - 'OrtRunOptions'
+    # Plugin execution providers (ORT 1.23+) — how the WebGPU EP is
+    # attached on Linux, where DirectML has no equivalent. See
+    # onnx_runtime.dart's _appendPluginExecutionProvider.
+    - 'OrtEpDevice'
   dependency-only: opaque
 enums:
   include:
@@ -60,6 +64,7 @@ enums:
     - 'OrtAllocatorType'
     - 'GraphOptimizationLevel'
     - 'ExecutionMode'
+    - 'OrtExecutionProviderDevicePolicy'
 # Windows/MSVC (what onnxruntime.dll is built with) always sizes plain
 # enums as `int` (4 bytes), matching ffigen's Windows default — safe to
 # silence, same reasoning as ffigen.yaml's LibRaw config.
