@@ -245,6 +245,19 @@ const _thumbnailsBeforePreload = 24;
 /// How long to wait after the last slider change before actually
 /// re-rendering, restarted on every change — matches the Python app's
 /// DEBOUNCE_MS. Keeps a fast slider drag from queuing a render per frame.
+/// How many photos on each side of the selected one keep their decoded
+/// edit source and rendered previews in memory (see [_trimPhotoCaches]).
+///
+/// These caches used to be cleared only on a folder change or a file
+/// removal, so browsing a folder accumulated every photo ever selected:
+/// a decoded EditSourcePair is several megabytes and a full-quality
+/// ui.Image is tens, which is how a long session drifted into gigabytes.
+///
+/// 2 keeps arrow-key stepping through the filmstrip instant in both
+/// directions without re-decoding, which is the only reason to hold a
+/// photo other than the selected one at all.
+const _photoCacheNeighborWindow = 2;
+
 const _renderDebounce = Duration(milliseconds: 25);
 
 /// How long to wait after the last slider change before writing the
@@ -900,6 +913,56 @@ class _EditorScreenState extends State<EditorScreen>
     } else {
       map[path] = image;
     }
+  }
+
+  /// Evicts every photo outside [_photoCacheNeighborWindow] of the
+  /// selected one from the memory caches that hold real pixel data.
+  ///
+  /// Bounds what browsing a folder can accumulate: without this, every
+  /// photo the user ever selected kept its decoded edit source and its
+  /// rendered previews for as long as the folder stayed open.
+  ///
+  /// [_thumbnails] and [_metadata] are deliberately left alone — a ~200px
+  /// JPEG and a handful of numbers per photo, and the filmstrip needs all
+  /// of them on screen at once anyway. [_fullQualityPreviews] and
+  /// [_neutralPreviews] are narrowed harder than the rest, to the selected
+  /// photo alone: they are the largest entries (a full-quality frame is
+  /// tens of megabytes) and neither is ever shown for a photo that is not
+  /// the current one.
+  void _trimPhotoCaches() {
+    final selectedIndex = _selectedIndex;
+    if (selectedIndex == null || selectedIndex >= _files.length) {
+      return;
+    }
+    final selectedPath = _files[selectedIndex].path;
+    final window = <String>{};
+    for (
+      var i = selectedIndex - _photoCacheNeighborWindow;
+      i <= selectedIndex + _photoCacheNeighborWindow;
+      i++
+    ) {
+      if (i >= 0 && i < _files.length) {
+        window.add(_files[i].path);
+      }
+    }
+
+    _editSources.removeWhere((path, _) => !window.contains(path));
+    _histograms.removeWhere((path, _) => !window.contains(path));
+    _evictImages(_renderedPreviews, window);
+    _evictImages(_fullQualityPreviews, {selectedPath});
+    _evictImages(_neutralPreviews, {selectedPath});
+  }
+
+  /// [_trimPhotoCaches]'s helper for the `ui.Image` caches — same eviction,
+  /// but each dropped entry has to be disposed (see [_setPreviewImage]).
+  void _evictImages(Map<String, ui.Image> map, Set<String> keep) {
+    map.removeWhere((path, image) {
+      if (keep.contains(path)) {
+        return false;
+      }
+      image.dispose();
+      return true;
+    });
   }
 
   /// Drops (and disposes) every cached render of [path] — used when the
@@ -3146,6 +3209,9 @@ class _EditorScreenState extends State<EditorScreen>
       _appliedPresetId = _photoPresets[path];
     });
     _resetHistory();
+    // Before kicking off this photo's own decode/render, drop whatever the
+    // ones we've navigated away from were still holding.
+    _trimPhotoCaches();
     unawaited(_saveLastActiveFile(path));
     unawaited(_loadEditSourceAndRender(path, _folderGeneration));
     if (_beforeAfterMode && !_neutralPreviews.containsKey(path)) {
