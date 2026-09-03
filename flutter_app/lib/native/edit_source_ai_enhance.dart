@@ -7,6 +7,7 @@ import 'package:image/image.dart' as img;
 import '../catalog/ai_enhance_cache.dart';
 import '../raw_files.dart' show isRawFile;
 import '../render/ai_enhance.dart';
+import '../render/colorize.dart';
 import '../render/ai_enhance_job.dart'
     show
         AiEnhanceCancellationToken,
@@ -101,9 +102,11 @@ EditSourcePair? decodeCachedAiEnhanceSources(DecodeCachedAiEnhanceArgs args) {
 ///
 /// [enableDenoise]/[enableUpscale] pick which of the two passes actually
 /// run (see `ai_enhance.dart`'s `enhanceImage`) — at least one must be
-/// true; callers that want neither should skip this function entirely and
-/// decode normally instead (`_revertToNormalEditSource` in
-/// `editor_screen.dart` does exactly that). [denoiseStrengthPercent] (0-100,
+/// true unless [enableColorize] is, since colorize is itself a pass this
+/// pipeline can run; callers that want none of them should skip this
+/// function entirely and decode normally instead
+/// (`_revertToNormalEditSource` in `editor_screen.dart` does exactly
+/// that). [denoiseStrengthPercent] (0-100,
 /// meaningful only when [enableDenoise] is true) is a whole-percent blend
 /// ratio rather than a raw 0.0-1.0 double specifically so the cache key
 /// (see `ai_enhance_cache.dart`) doesn't fragment into a near-infinite
@@ -121,6 +124,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
   int upscaleSharpnessAmount,
   bool enableDetailRestore,
   int detailRestoreAmount,
+  bool enableColorize,
+  int colorizeIntensityPercent,
   void Function(Object stage) onStage,
 ) async {
   int width;
@@ -138,6 +143,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
     upscaleSharpnessAmount: upscaleSharpnessAmount,
     detailRestore: enableDetailRestore,
     detailRestoreAmount: detailRestoreAmount,
+    colorize: enableColorize,
+    colorizeIntensityPercent: colorizeIntensityPercent,
   );
   final cachedImage = cachedPng == null ? null : img.decodePng(cachedPng);
 
@@ -219,6 +226,18 @@ Future<EditSourcePair?> _decodeAndEnhance(
         ),
       );
     }
+    final colorizeModel = enableColorize
+        ? OnnxModel.forSpec(ddcolorModelSpec)
+        : null;
+    if (colorizeModel != null) {
+      onStage(
+        AiEnhanceModelInfo(
+          ddcolorModelSpec.fileName,
+          colorizeModel.usingGpu,
+          colorizeModel.directMlError,
+        ),
+      );
+    }
     final upscaleModel = enableUpscale
         ? OnnxModel.forSpec(upscaleModelSpec)
         : null;
@@ -267,35 +286,132 @@ Future<EditSourcePair?> _decodeAndEnhance(
         ),
       );
     }
-    final enhanced = enhanceImage(
-      decoded.rgbBytes,
-      decoded.width,
-      decoded.height,
-      // enhanceImage never actually calls these when the matching
-      // enable* flag is false, so the null-asserts below are safe —
-      // there's simply no model loaded to call them on in that case.
-      denoise: (tile) => denoiseModel!.runTile(tile),
-      upscale: (tile) => upscaleModel!.runTile(tile),
-      upscaleSpec: upscaleModelSpec,
-      enableDenoise: effectiveEnableDenoise,
-      enableUpscale: enableUpscale,
-      denoiseStrength: denoiseStrengthPercent / 100.0,
-      detailRestore: enableDetailRestore
-          ? (tile) => detailRestoreModel!.runTile(tile)
-          : null,
-      detailSharpen: enableDetailRestore
-          ? (tile) => detailSharpenModel!.runTile(tile)
-          : null,
-      detailSpec: enableDetailRestore ? gaterV3RestoreModelSpec : null,
-      detailAmount: detailRestoreAmount / 100.0,
-      sharpenUpscale: wantSharpen
-          ? (tile) => sharpenModel!.runTile(tile)
-          : null,
-      sharpenUpscaleSpec: wantSharpen ? realEsrganUpscaleModelSpec : null,
-      sharpnessAmount: upscaleSharpnessAmount / 100.0,
-      onProgress: (stage, i, total) =>
-          onStage(AiEnhanceProgress(stage, i, total)),
-    );
+    // Colorize slots *between* denoise and upscale rather than before or
+    // after the whole chain, which is why this splits enhanceImage into
+    // two calls when it's active:
+    //
+    // - after denoise, because DDColor predicts chroma from luminance
+    //   structure, so noise in its input comes out as blotchy colour that
+    //   denoising afterwards can only smear, not correct. Old B&W photos —
+    //   the actual reason to want both at once — are usually grainy.
+    // - before upscale, so DDColor tiles over the original pixel count
+    //   instead of 4x it, and Real-ESRGAN gets to synthesise detail in a
+    //   picture that already has its final colour.
+    //
+    // Detail restore stays with the denoise half (see enhanceImage's own
+    // doc: it chains onto denoise's output, before the upscale pass).
+    //
+    // When colorize is off this stays a single call, byte-identical to
+    // what it was before — splitting unconditionally would add an 8-bit
+    // round trip between the two halves and change existing output (and
+    // orphan every cached result along with it).
+    final AiEnhanceResult enhanced;
+    if (enableColorize) {
+      var workingRgb = decoded.rgbBytes;
+      var workingWidth = decoded.width;
+      var workingHeight = decoded.height;
+
+      if (effectiveEnableDenoise || enableDetailRestore) {
+        final denoisePass = enhanceImage(
+          workingRgb,
+          workingWidth,
+          workingHeight,
+          denoise: (tile) => denoiseModel!.runTile(tile),
+          upscale: (tile) => upscaleModel!.runTile(tile),
+          upscaleSpec: upscaleModelSpec,
+          enableDenoise: effectiveEnableDenoise,
+          enableUpscale: false,
+          denoiseStrength: denoiseStrengthPercent / 100.0,
+          detailRestore: enableDetailRestore
+              ? (tile) => detailRestoreModel!.runTile(tile)
+              : null,
+          detailSharpen: enableDetailRestore
+              ? (tile) => detailSharpenModel!.runTile(tile)
+              : null,
+          detailSpec: enableDetailRestore ? gaterV3RestoreModelSpec : null,
+          detailAmount: detailRestoreAmount / 100.0,
+          onProgress: (stage, i, total) =>
+              onStage(AiEnhanceProgress(stage, i, total)),
+        );
+        workingRgb = denoisePass.rgbBytes;
+        workingWidth = denoisePass.width;
+        workingHeight = denoisePass.height;
+      }
+
+      // DDColor is a single fixed-resolution run rather than a tiled
+      // pass, so it has no progress of its own — but without these two
+      // markers the overlay would sit on whatever the previous stage last
+      // reported (and the stage-label switch would fall through to
+      // "Denoising") for the whole time it runs.
+      onStage(const AiEnhanceProgress('colorize', 0, 1));
+      workingRgb = colorizeImage(
+        workingRgb,
+        workingWidth,
+        workingHeight,
+        runModel: (tile) => colorizeModel!.runToChannels(tile, 2),
+        modelInputSize: ddcolorModelSpec.inputTileSize,
+        intensity: colorizeIntensityPercent / 100.0,
+      );
+      onStage(const AiEnhanceProgress('colorize', 1, 1));
+
+      if (enableUpscale) {
+        final upscalePass = enhanceImage(
+          workingRgb,
+          workingWidth,
+          workingHeight,
+          denoise: (tile) => denoiseModel!.runTile(tile),
+          upscale: (tile) => upscaleModel!.runTile(tile),
+          upscaleSpec: upscaleModelSpec,
+          enableDenoise: false,
+          enableUpscale: true,
+          sharpenUpscale: wantSharpen
+              ? (tile) => sharpenModel!.runTile(tile)
+              : null,
+          sharpenUpscaleSpec: wantSharpen ? realEsrganUpscaleModelSpec : null,
+          sharpnessAmount: upscaleSharpnessAmount / 100.0,
+          onProgress: (stage, i, total) =>
+              onStage(AiEnhanceProgress(stage, i, total)),
+        );
+        workingRgb = upscalePass.rgbBytes;
+        workingWidth = upscalePass.width;
+        workingHeight = upscalePass.height;
+      }
+      enhanced = AiEnhanceResult(
+        rgbBytes: workingRgb,
+        width: workingWidth,
+        height: workingHeight,
+      );
+    } else {
+      enhanced = enhanceImage(
+        decoded.rgbBytes,
+        decoded.width,
+        decoded.height,
+        // enhanceImage never actually calls these when the matching
+        // enable* flag is false, so the null-asserts below are safe —
+        // there's simply no model loaded to call them on in that case.
+        denoise: (tile) => denoiseModel!.runTile(tile),
+        upscale: (tile) => upscaleModel!.runTile(tile),
+        upscaleSpec: upscaleModelSpec,
+        enableDenoise: effectiveEnableDenoise,
+        enableUpscale: enableUpscale,
+        denoiseStrength: denoiseStrengthPercent / 100.0,
+        detailRestore: enableDetailRestore
+            ? (tile) => detailRestoreModel!.runTile(tile)
+            : null,
+        detailSharpen: enableDetailRestore
+            ? (tile) => detailSharpenModel!.runTile(tile)
+            : null,
+        detailSpec: enableDetailRestore ? gaterV3RestoreModelSpec : null,
+        detailAmount: detailRestoreAmount / 100.0,
+        sharpenUpscale: wantSharpen
+            ? (tile) => sharpenModel!.runTile(tile)
+            : null,
+        sharpenUpscaleSpec: wantSharpen ? realEsrganUpscaleModelSpec : null,
+        sharpnessAmount: upscaleSharpnessAmount / 100.0,
+        onProgress: (stage, i, total) =>
+            onStage(AiEnhanceProgress(stage, i, total)),
+      );
+    }
     width = enhanced.width;
     height = enhanced.height;
     enhancedRgb = enhanced.rgbBytes;
@@ -319,6 +435,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
       upscaleSharpnessAmount: upscaleSharpnessAmount,
       detailRestore: enableDetailRestore,
       detailRestoreAmount: detailRestoreAmount,
+      colorize: enableColorize,
+      colorizeIntensityPercent: colorizeIntensityPercent,
     );
   }
 
@@ -358,6 +476,8 @@ class _AiEnhanceDecodeIsolateArgs {
     this.upscaleSharpnessAmount,
     this.enableDetailRestore,
     this.detailRestoreAmount,
+    this.enableColorize,
+    this.colorizeIntensityPercent,
     this.sendPort,
   );
 
@@ -372,6 +492,8 @@ class _AiEnhanceDecodeIsolateArgs {
   final int upscaleSharpnessAmount;
   final bool enableDetailRestore;
   final int detailRestoreAmount;
+  final bool enableColorize;
+  final int colorizeIntensityPercent;
   final SendPort sendPort;
 }
 
@@ -390,6 +512,8 @@ void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
       args.upscaleSharpnessAmount,
       args.enableDetailRestore,
       args.detailRestoreAmount,
+      args.enableColorize,
+      args.colorizeIntensityPercent,
       (stage) => args.sendPort.send(stage),
     );
   } finally {
@@ -436,6 +560,12 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
   // behind a nonzero amount wouldn't save anything worth the complexity.
   bool enableDetailRestore = false,
   int detailRestoreAmount = 50,
+  // Colorize (DDColor) runs *inside* this pipeline, between the denoise
+  // and upscale passes — see _decodeAndEnhance for why that spot. Only
+  // used for the combination: colorize on its own still goes through
+  // `edit_source_colorize.dart`, keeping its own dedicated disk cache.
+  bool enableColorize = false,
+  int colorizeIntensityPercent = 0,
 }) async {
   final receivePort = ReceivePort();
   final isolate = await Isolate.spawn(
@@ -452,6 +582,8 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
       upscaleSharpnessAmount,
       enableDetailRestore,
       detailRestoreAmount,
+      enableColorize,
+      colorizeIntensityPercent,
       receivePort.sendPort,
     ),
   );

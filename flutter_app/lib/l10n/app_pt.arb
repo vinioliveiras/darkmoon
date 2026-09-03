@@ -130,6 +130,7 @@
   "aiDenoiseEnhanceStageDetailRestore": "Restaurando detalhe",
   "aiDenoiseEnhanceStageDetailSharpen": "Aplicando nitidez ao detalhe",
   "aiDenoiseEnhanceStageSharpen": "Aplicando nitidez",
+  "aiDenoiseEnhanceStageColorize": "Colorindo",
   "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
   "@aiDenoiseEnhanceTileProgress": {
     "placeholders": {

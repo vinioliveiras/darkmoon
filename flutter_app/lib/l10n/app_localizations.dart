@@ -880,6 +880,12 @@ abstract class AppLocalizations {
   /// **'Sharpening'**
   String get aiDenoiseEnhanceStageSharpen;
 
+  /// No description provided for @aiDenoiseEnhanceStageColorize.
+  ///
+  /// In en, this message translates to:
+  /// **'Colorizing'**
+  String get aiDenoiseEnhanceStageColorize;
+
   /// No description provided for @aiDenoiseEnhanceTileProgress.
   ///
   /// In en, this message translates to:

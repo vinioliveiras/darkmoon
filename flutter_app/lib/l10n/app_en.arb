@@ -203,6 +203,7 @@
   "aiDenoiseEnhanceStageDetailRestore": "Restoring detail",
   "aiDenoiseEnhanceStageDetailSharpen": "Sharpening detail",
   "aiDenoiseEnhanceStageSharpen": "Sharpening",
+  "aiDenoiseEnhanceStageColorize": "Colorizing",
   "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
   "@aiDenoiseEnhanceTileProgress": {
     "placeholders": {

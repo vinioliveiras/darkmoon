@@ -33,12 +33,18 @@ class ColorizeChoice {
 }
 
 /// Colorize (item 37, DDColor) confirm dialog — deliberately not folded
-/// into `AiDenoiseDialog` as a 4th tab: colorize replaces the photo's base
-/// image the same way Enhance does, but it's a conceptually different
-/// operation (recoloring, not noise/detail restoration) and the user
-/// asked for it as its own dedicated toolbar button (2026-09-01). Much
-/// simpler than `AiDenoiseDialog` since there's only one real choice
-/// (how much color, not which of several independent passes to combine).
+/// into `AiDenoiseDialog` as a 4th tab: it's a conceptually different
+/// operation (recoloring, not noise/detail restoration) and the user asked
+/// for it as its own dedicated toolbar button (2026-09-01). Much simpler
+/// than `AiDenoiseDialog` since there's only one real choice (how much
+/// color, not which of several independent passes to combine).
+///
+/// Applying this no longer turns Enhance off (2026-09-03). Colorize runs
+/// as a pass inside the Enhance pipeline when both are on — see
+/// `_openColorizeDialog` for the routing and
+/// `edit_source_ai_enhance.dart`'s `_decodeAndEnhance` for why it sits
+/// between the denoise and upscale passes. Cloud AI is still exclusive
+/// with both.
 class ColorizeDialog extends StatefulWidget {
   const ColorizeDialog({
     super.key,

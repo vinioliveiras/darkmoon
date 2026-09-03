@@ -3264,6 +3264,15 @@ class _EditorScreenState extends State<EditorScreen>
               .round();
       final wantAnyEnhance =
           wantDenoise || wantUpscale || wantRawDenoise || wantRestoreDetail;
+      // Colorize is a pass *inside* the Enhance pipeline when both are on,
+      // so the combination lives under the Enhance cache with colorize
+      // folded into its key — not under the colorize cache. Read here
+      // (ahead of its own block below) so this lookup can key on it.
+      final wantColorizeWithEnhance =
+          wantAnyEnhance && (_paramValues[_colorizeKey] ?? 0.0) > 0;
+      final wantComboColorizeIntensity =
+          (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
+              .round();
       if (wantAnyEnhance) {
         final cacheDir = await resolveAiEnhanceCacheDir();
         if (mounted) {
@@ -3278,6 +3287,8 @@ class _EditorScreenState extends State<EditorScreen>
             upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
             detailRestore: wantRestoreDetail,
             detailRestoreAmount: wantRestoreDetailAmount,
+            colorize: wantColorizeWithEnhance,
+            colorizeIntensityPercent: wantComboColorizeIntensity,
           );
           if (cachedPng != null) {
             sources = await compute(
@@ -3325,10 +3336,10 @@ class _EditorScreenState extends State<EditorScreen>
       // most one of these three cache lookups ever actually finds
       // something.
       final wantColorize = (_paramValues[_colorizeKey] ?? 0.0) > 0;
-      final wantColorizeIntensity =
-          (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
-              .round();
-      if (wantColorize) {
+      final wantColorizeIntensity = wantComboColorizeIntensity;
+      // Colorize *alone* keeps its own dedicated cache; combined with
+      // Enhance it was already resolved from the Enhance cache above.
+      if (wantColorize && !wantAnyEnhance) {
         final cacheDir = await resolveColorizeCacheDir();
         if (mounted) {
           final cachedPng = await lookupColorizeCache(
@@ -3952,6 +3963,8 @@ class _EditorScreenState extends State<EditorScreen>
     int upscaleSharpnessAmount = 0,
     bool restoreDetail = false,
     int restoreDetailAmount = defaultRestoreDetailAmount,
+    bool colorize = false,
+    int colorizeIntensity = defaultColorizeIntensity,
   }) async {
     final cacheDir = await resolveAiEnhanceCacheDir();
     if (!mounted) return null;
@@ -3966,6 +3979,8 @@ class _EditorScreenState extends State<EditorScreen>
       upscaleSharpnessAmount: upscaleSharpnessAmount,
       detailRestore: restoreDetail,
       detailRestoreAmount: restoreDetailAmount,
+      colorize: colorize,
+      colorizeIntensityPercent: colorizeIntensity,
     );
     if (cachedPng == null) {
       final ok = await _runNeuralEnhance(
@@ -3977,6 +3992,8 @@ class _EditorScreenState extends State<EditorScreen>
         upscaleSharpnessAmount: upscaleSharpnessAmount,
         restoreDetail: restoreDetail,
         restoreDetailAmount: restoreDetailAmount,
+        colorize: colorize,
+        colorizeIntensity: colorizeIntensity,
       );
       if (!mounted || !ok) {
         return null;
@@ -3992,6 +4009,8 @@ class _EditorScreenState extends State<EditorScreen>
         upscaleSharpnessAmount: upscaleSharpnessAmount,
         detailRestore: restoreDetail,
         detailRestoreAmount: restoreDetailAmount,
+        colorize: colorize,
+        colorizeIntensityPercent: colorizeIntensity,
       );
     }
     if (cachedPng == null || !mounted) {
@@ -4101,6 +4120,10 @@ class _EditorScreenState extends State<EditorScreen>
           (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
               .round();
       if (wantDenoise || wantUpscale || wantRawDenoise || wantRestoreDetail) {
+        // Colorize rides along inside the Enhance pipeline when both are
+        // on (it is a pass between denoise and upscale, not a separate
+        // base) — the `else if (wantColorize)` branch below is only for
+        // colorize on its own.
         native = await _loadEnhancedNativeSource(
           path,
           denoise: wantDenoise,
@@ -4110,6 +4133,8 @@ class _EditorScreenState extends State<EditorScreen>
           upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
           restoreDetail: wantRestoreDetail,
           restoreDetailAmount: wantRestoreDetailAmount,
+          colorize: wantColorize,
+          colorizeIntensity: wantColorizeIntensity,
         );
       } else if (wantCloudProvider != null) {
         native = await _loadCloudDenoisedNativeSource(path, wantCloudProvider);
@@ -4427,10 +4452,15 @@ class _EditorScreenState extends State<EditorScreen>
             _restoreDetailKey: wantRestoreDetail ? 1.0 : 0.0,
             _restoreDetailAmountKey: wantRestoreDetailAmount.toDouble(),
             _cloudDenoiseProviderKey: 0.0,
-            _colorizeKey: 0.0,
+            // _colorizeKey deliberately left alone: Colorize now runs as a
+            // pass inside this same pipeline (between denoise and upscale),
+            // so applying Enhance no longer has to throw it away. Cloud AI
+            // is still exclusive with both — it hands the photo to a remote
+            // provider, so there is no local buffer to chain onto.
             'AiDenoiseLevel': 0.0,
           };
         });
+        final keepColorize = (_paramValues[_colorizeKey] ?? 0.0) > 0;
         final ok = await _runNeuralEnhance(
           selected.path,
           denoise: wantDenoise,
@@ -4440,6 +4470,10 @@ class _EditorScreenState extends State<EditorScreen>
           upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
           restoreDetail: wantRestoreDetail,
           restoreDetailAmount: wantRestoreDetailAmount,
+          colorize: keepColorize,
+          colorizeIntensity:
+              (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
+                  .round(),
         );
         if (!mounted || !ok) {
           return;
@@ -4456,7 +4490,20 @@ class _EditorScreenState extends State<EditorScreen>
             _restoreDetailKey: 0.0,
           };
         });
-        await _revertToNormalEditSource(selected.path);
+        // Colorize may still be on. Reverting to the plain decode would
+        // silently drop it while _paramValues still claims it is applied,
+        // so re-run it on its own instead.
+        if ((_paramValues[_colorizeKey] ?? 0.0) > 0) {
+          await _runColorize(
+            selected.path,
+            intensityPercent:
+                (_paramValues[_colorizeIntensityKey] ??
+                        defaultColorizeIntensity)
+                    .round(),
+          );
+        } else {
+          await _revertToNormalEditSource(selected.path);
+        }
         if (!mounted) return;
         await _applyAiDenoiseChoiceAndRender(selected.path, disabling: true);
       case CloudDenoiseChoice(
@@ -4547,28 +4594,62 @@ class _EditorScreenState extends State<EditorScreen>
     if (choice == null || !mounted) {
       return;
     }
-    // Colorize replaces `_editSources[path]` the same way AI Enhance/Cloud
-    // AI do — mutually exclusive with both for the same reason those two
-    // already are with each other (only one buffer can be "the base"
-    // at a time).
+    // Colorize and AI Enhance can be applied together (2026-09-03):
+    // colorize is a pass *inside* the Enhance pipeline, between denoise
+    // and upscale — see `edit_source_ai_enhance.dart`'s `_decodeAndEnhance`
+    // for why that spot. Which pipeline actually runs depends on whether
+    // any neural toggle is also on:
+    //
+    //   colorize alone  -> _runColorize, its own dedicated disk cache
+    //   colorize + AI   -> _runNeuralEnhance with colorize: true, one
+    //                      combined result under the Enhance cache
+    //
+    // Cloud AI stays exclusive with both: it hands the photo to a remote
+    // provider, so there is no local buffer for another pass to chain onto.
+    final neuralDenoiseOn = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
+    final neuralUpscaleOn = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
+    final neuralRawDenoiseOn = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
+    final neuralRestoreOn = (_paramValues[_restoreDetailKey] ?? 0.0) > 0;
+    final anyNeuralOn =
+        neuralDenoiseOn ||
+        neuralUpscaleOn ||
+        neuralRawDenoiseOn ||
+        neuralRestoreOn;
+
     if (choice.active) {
       setState(() {
         _paramValues = {
           ..._paramValues,
           _colorizeKey: 1.0,
           _colorizeIntensityKey: choice.intensityPercent.toDouble(),
-          _neuralDenoiseKey: 0.0,
-          _neuralUpscaleKey: 0.0,
-          _neuralRawDenoiseKey: 0.0,
-          _restoreDetailKey: 0.0,
           _cloudDenoiseProviderKey: 0.0,
           'AiDenoiseLevel': 0.0,
         };
       });
-      final ok = await _runColorize(
-        selected.path,
-        intensityPercent: choice.intensityPercent,
-      );
+      final ok = anyNeuralOn
+          ? await _runNeuralEnhance(
+              selected.path,
+              denoise: neuralDenoiseOn,
+              upscale: neuralUpscaleOn,
+              denoiseAmount:
+                  (_paramValues[_neuralDenoiseAmountKey] ??
+                          defaultNeuralDenoiseAmount)
+                      .round(),
+              rawDenoise: neuralRawDenoiseOn,
+              upscaleSharpnessAmount:
+                  (_paramValues[_upscaleSharpnessAmountKey] ?? 0.0).round(),
+              restoreDetail: neuralRestoreOn,
+              restoreDetailAmount:
+                  (_paramValues[_restoreDetailAmountKey] ??
+                          defaultRestoreDetailAmount)
+                      .round(),
+              colorize: true,
+              colorizeIntensity: choice.intensityPercent,
+            )
+          : await _runColorize(
+              selected.path,
+              intensityPercent: choice.intensityPercent,
+            );
       if (!mounted || !ok) {
         return;
       }
@@ -4577,7 +4658,30 @@ class _EditorScreenState extends State<EditorScreen>
       setState(() {
         _paramValues = {..._paramValues, _colorizeKey: 0.0};
       });
-      await _revertToNormalEditSource(selected.path);
+      // Enhance may still be on. Reverting to the plain decode would
+      // silently drop it while _paramValues still claims it is applied, so
+      // re-run it without the colorize pass instead.
+      if (anyNeuralOn) {
+        await _runNeuralEnhance(
+          selected.path,
+          denoise: neuralDenoiseOn,
+          upscale: neuralUpscaleOn,
+          denoiseAmount:
+              (_paramValues[_neuralDenoiseAmountKey] ??
+                      defaultNeuralDenoiseAmount)
+                  .round(),
+          rawDenoise: neuralRawDenoiseOn,
+          upscaleSharpnessAmount:
+              (_paramValues[_upscaleSharpnessAmountKey] ?? 0.0).round(),
+          restoreDetail: neuralRestoreOn,
+          restoreDetailAmount:
+              (_paramValues[_restoreDetailAmountKey] ??
+                      defaultRestoreDetailAmount)
+                  .round(),
+        );
+      } else {
+        await _revertToNormalEditSource(selected.path);
+      }
       if (!mounted) return;
       await _applyColorizeChoiceAndRender(selected.path, disabling: true);
     }
@@ -4701,6 +4805,12 @@ class _EditorScreenState extends State<EditorScreen>
     int upscaleSharpnessAmount = 0,
     bool restoreDetail = false,
     int restoreDetailAmount = defaultRestoreDetailAmount,
+    // Colorize runs inside this pipeline (between denoise and upscale)
+    // rather than as its own pass, so the two can be applied together —
+    // see `edit_source_ai_enhance.dart`'s `_decodeAndEnhance`. Colorize on
+    // its own still goes through [_runColorize] and its own disk cache.
+    bool colorize = false,
+    int colorizeIntensity = defaultColorizeIntensity,
   }) async {
     setState(() {
       _isRunningNeuralEnhance = true;
@@ -4766,6 +4876,8 @@ class _EditorScreenState extends State<EditorScreen>
       upscaleSharpnessAmount: upscaleSharpnessAmount,
       enableDetailRestore: restoreDetail,
       detailRestoreAmount: restoreDetailAmount,
+      enableColorize: colorize,
+      colorizeIntensityPercent: colorizeIntensity,
     );
     _aiEnhanceCancellation = null;
     if (!mounted) {
@@ -4780,6 +4892,10 @@ class _EditorScreenState extends State<EditorScreen>
           _neuralUpscaleKey: 0.0,
           _neuralRawDenoiseKey: 0.0,
           _restoreDetailKey: 0.0,
+          // This run owned the colorize pass too when it was asked for, so
+          // a failure has to clear that marker as well — leaving it set
+          // would claim a colorized base that was never produced.
+          if (colorize) _colorizeKey: 0.0,
         };
         _isRunningNeuralEnhance = false;
         _aiEnhanceProgress = null;
@@ -6035,6 +6151,10 @@ class _EditorScreenState extends State<EditorScreen>
     final srcSw = Stopwatch()..start();
     try {
       if (wantDenoise || wantUpscale || wantRawDenoise || wantRestoreDetail) {
+        // Colorize rides along inside the Enhance pipeline when both are
+        // on (it is a pass between denoise and upscale, not a separate
+        // base) — the `else if (wantColorize)` branch below is only for
+        // colorize on its own.
         nativeForExport = await _loadEnhancedNativeSource(
           selected.path,
           denoise: wantDenoise,
@@ -6044,6 +6164,8 @@ class _EditorScreenState extends State<EditorScreen>
           upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
           restoreDetail: wantRestoreDetail,
           restoreDetailAmount: wantRestoreDetailAmount,
+          colorize: wantColorize,
+          colorizeIntensity: wantColorizeIntensity,
         );
       } else if (wantCloudProvider != null) {
         nativeForExport = await _loadCloudDenoisedNativeSource(
@@ -6198,6 +6320,7 @@ class _EditorScreenState extends State<EditorScreen>
         'detail-restore' => l10n.aiDenoiseEnhanceStageDetailRestore,
         'detail-sharpen' => l10n.aiDenoiseEnhanceStageDetailSharpen,
         'sharpen' => l10n.aiDenoiseEnhanceStageSharpen,
+        'colorize' => l10n.aiDenoiseEnhanceStageColorize,
         _ => l10n.aiDenoiseEnhanceStageDenoise,
       };
       // A raw tile count (hundreds, for a full-res photo tiled into small

@@ -31,22 +31,30 @@ const int aiEnhanceCacheVersion = 10;
 /// only meaningful when [upscale] is true, but always folded in regardless
 /// so dragging the slider back and forth on the same photo never collides
 /// with a different amount's own entry.
+/// [colorize]/[colorizeIntensityPercent] append to the tag only when
+/// colorize actually ran. Deliberate: appending them unconditionally would
+/// change every existing key and orphan every cached result on disk — and
+/// those cost minutes of inference each to rebuild. A colorize-free run
+/// still hashes to exactly what it did before this option existed.
 String _modeTag(
   bool denoise,
   bool upscale,
   bool rawDenoise,
   int denoiseStrengthPercent,
   String? denoiseModelPath,
-  int upscaleSharpnessAmount,
   bool detailRestore,
   int detailRestoreAmount,
+  int upscaleSharpnessAmount,
+  bool colorize,
+  int colorizeIntensityPercent,
 ) =>
     'd${denoise ? 1 : 0}s$denoiseStrengthPercent'
     'u${upscale ? 1 : 0}'
     'q$upscaleSharpnessAmount'
     'r${rawDenoise ? 1 : 0}'
     'g${detailRestore ? 1 : 0}a$detailRestoreAmount'
-    'm${denoiseModelPath ?? "default"}';
+    'm${denoiseModelPath ?? "default"}'
+    '${colorize ? "c1i$colorizeIntensityPercent" : ""}';
 
 /// `path_provider`-free by design (see `ai_enhance_cache_dir.dart`'s doc
 /// comment) — safe to call from a background isolate, unlike resolving
@@ -63,12 +71,48 @@ String _entryKey(
   int upscaleSharpnessAmount,
   bool detailRestore,
   int detailRestoreAmount,
+  bool colorize,
+  int colorizeIntensityPercent,
 ) {
   final raw =
       '$path|${modified.microsecondsSinceEpoch}|$size|'
-      '${_modeTag(denoise, upscale, rawDenoise, denoiseStrengthPercent, denoiseModelPath, upscaleSharpnessAmount, detailRestore, detailRestoreAmount)}|v$aiEnhanceCacheVersion';
+      '${_modeTag(denoise, upscale, rawDenoise, denoiseStrengthPercent, denoiseModelPath, detailRestore, detailRestoreAmount, upscaleSharpnessAmount, colorize, colorizeIntensityPercent)}|v$aiEnhanceCacheVersion';
   return sha1.convert(utf8.encode(raw)).toString();
 }
+
+/// The cache key for one photo + pipeline configuration, exposed so tests
+/// can assert the two properties that matter: a colorize-free run keys
+/// exactly as it did before colorize existed, and any change to the
+/// colorize inputs is a distinct entry rather than a stale hit.
+String aiEnhanceCacheKeyForTest(
+  String path,
+  DateTime modified,
+  int size, {
+  required bool denoise,
+  required bool upscale,
+  bool rawDenoise = false,
+  int denoiseStrengthPercent = 100,
+  String? denoiseModelPath,
+  int upscaleSharpnessAmount = 0,
+  bool detailRestore = false,
+  int detailRestoreAmount = 50,
+  bool colorize = false,
+  int colorizeIntensityPercent = 0,
+}) => _entryKey(
+  path,
+  modified,
+  size,
+  denoise,
+  upscale,
+  rawDenoise,
+  denoiseStrengthPercent,
+  denoiseModelPath,
+  upscaleSharpnessAmount,
+  detailRestore,
+  detailRestoreAmount,
+  colorize,
+  colorizeIntensityPercent,
+);
 
 // `.aicache` (not `.png`) purely for naming consistency with every other
 // on-disk cache in this app (thumbnail_cache.dart's month files,
@@ -103,6 +147,8 @@ Future<Uint8List?> lookupAiEnhanceCache(
   int upscaleSharpnessAmount = 0,
   bool detailRestore = false,
   int detailRestoreAmount = 50,
+  bool colorize = false,
+  int colorizeIntensityPercent = 0,
 }) async {
   try {
     final stat = await File(path).stat();
@@ -121,6 +167,8 @@ Future<Uint8List?> lookupAiEnhanceCache(
           upscaleSharpnessAmount,
           detailRestore,
           detailRestoreAmount,
+          colorize,
+          colorizeIntensityPercent,
         ),
       ),
     );
@@ -151,6 +199,8 @@ Future<void> storeAiEnhanceCache(
   int upscaleSharpnessAmount = 0,
   bool detailRestore = false,
   int detailRestoreAmount = 50,
+  bool colorize = false,
+  int colorizeIntensityPercent = 0,
 }) async {
   try {
     final stat = await File(path).stat();
@@ -166,6 +216,8 @@ Future<void> storeAiEnhanceCache(
       upscaleSharpnessAmount,
       detailRestore,
       detailRestoreAmount,
+      colorize,
+      colorizeIntensityPercent,
     );
     final dest = File(_entryFile(cacheDir, key));
     final tmp = File('${dest.path}.tmp');

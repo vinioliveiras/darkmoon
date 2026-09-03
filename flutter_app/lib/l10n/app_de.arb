@@ -130,6 +130,7 @@
   "aiDenoiseEnhanceStageDetailRestore": "Details werden wiederhergestellt",
   "aiDenoiseEnhanceStageDetailSharpen": "Details werden geschärft",
   "aiDenoiseEnhanceStageSharpen": "Schärfung",
+  "aiDenoiseEnhanceStageColorize": "Kolorierung",
   "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
   "exportPanelButton": "Exportieren",
   "exportingButton": "Wird exportiert...",

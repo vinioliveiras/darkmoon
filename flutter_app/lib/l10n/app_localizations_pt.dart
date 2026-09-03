@@ -440,6 +440,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get aiDenoiseEnhanceStageSharpen => 'Aplicando nitidez';
 
   @override
+  String get aiDenoiseEnhanceStageColorize => 'Colorindo';
+
+  @override
   String aiDenoiseEnhanceTileProgress(String stage, int percent) {
     return '$stage — $percent%';
   }
