@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:darkmoon/render/calibration.dart';
 import 'package:darkmoon/render/color_mixer.dart';
 import 'package:darkmoon/render/render.dart';
 import 'package:darkmoon/render/render_params.dart';
@@ -60,12 +61,31 @@ void main() {
       ),
     );
 
-    // Re-derived 2026-09-01 after calMixerHueStrength eased back from 1.15
-    // toward Solstice's original 0.6 (now 1.0) — every channel shifts with
-    // the hue rotation strength, not just the two that moved the most.
-    expect(result[0], closeTo(166, 1));
+    // Unlike every other case in this file, this one moves with
+    // calMixerHueStrength, and re-deriving it independently needs the
+    // Python port of Solstice's apply_hsl_panel referenced above — which
+    // this repo doesn't carry. The numbers below were therefore re-captured
+    // from the current implementation at calMixerHueStrength = 0.8, not
+    // re-derived: treat this case as a regression pin on the hue path, not
+    // as an independent check of it.
+    //
+    // The guard is what keeps that honest. This case was red on master
+    // (asserting 166/0/197, derived when the constant was 1.0) because a
+    // later tuning round moved the constant without touching the numbers;
+    // failing on the constant itself says what to do about it, where a
+    // bare byte mismatch did not.
+    expect(
+      calMixerHueStrength,
+      0.8,
+      reason:
+          'calMixerHueStrength changed — the three expected bytes below '
+          'were captured at 0.8 and are now stale. Re-capture them (and '
+          'ideally re-derive them from the apply_hsl_panel reference) '
+          'rather than widening the tolerance.',
+    );
+    expect(result[0], closeTo(159, 1));
     expect(result[1], closeTo(0, 1));
-    expect(result[2], closeTo(197, 1));
+    expect(result[2], closeTo(213, 1));
   });
 
   test(
