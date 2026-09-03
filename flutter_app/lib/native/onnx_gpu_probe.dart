@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart' show compute;
 
+import '../diagnostics/dev_log.dart';
 import 'onnx_runtime.dart';
 
 /// Cached for the app's lifetime once probed — DirectML support can't
@@ -46,13 +47,14 @@ Future<bool> probeAiEnhanceGpuSupport() async {
     final result = await compute(_probeInIsolate, null);
     _cachedGpuSupport = result;
     return result;
-  } catch (_) {
+  } catch (e, st) {
     // Model/DLL genuinely missing, or some other setup problem deeper
     // than a DirectML-vs-CPU question — not cached (worth trying again
-    // later, e.g. after Settings > Developer Mode surfaces the real
-    // reason), and treated as "no GPU" so the dialog's warning still
-    // errs toward telling the user to expect a slow run rather than
-    // silently saying nothing.
+    // later), and treated as "no GPU" so the dialog's warning still errs
+    // toward telling the user to expect a slow run rather than silently
+    // saying nothing. This is the "real reason" the comment used to
+    // promise Developer Mode would surface, and now does.
+    DevLog.logError('AI Enhance GPU probe failed, assuming CPU', e, st);
     return false;
   }
 }
@@ -91,7 +93,8 @@ Future<bool> probeColorizeGpuSupport() async {
     final result = await compute(_probeColorizeInIsolate, null);
     _cachedColorizeGpuSupport = result;
     return result;
-  } catch (_) {
+  } catch (e, st) {
+    DevLog.logError('Colorize GPU probe failed, assuming CPU', e, st);
     return false;
   }
 }

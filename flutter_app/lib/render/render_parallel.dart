@@ -141,20 +141,30 @@ Future<Uint8List> renderAdjustmentsParallel(
 
   // Dehaze: whole-image is a no-op when it's off; band it (its sigma-40
   // blur needs a halo) when it's on.
+  //
+  // Its band count is picked from its *own* halo, not the local-steps one
+  // above. Dehaze's halo is 180px against the local steps' 40-200 — reusing
+  // their count could hand Dehaze bands whose content is shorter than its
+  // own overlap, so each isolate would spend more time on padding it
+  // throws away than on the rows it is responsible for. _bandPass slices
+  // and stitches by whatever count it is given, so they need not match.
   final dehazeHalo = dehazeHaloPx(params);
-  if (dehazeHalo == 0 || bandCount <= 1) {
+  final dehazeBandCount = dehazeHalo == 0
+      ? 1
+      : _pickBandCount(height, dehazeHalo, Platform.numberOfProcessors);
+  if (dehazeHalo == 0 || dehazeBandCount <= 1) {
     applyDehazeStage(buffer, width, height, params);
   } else {
     await _bandPass(
       width,
       height,
       buffer,
-      bandCount,
+      dehazeBandCount,
       dehazeHalo,
       (slice, w, h, top) => applyDehazeStage(slice, w, h, params),
     );
   }
-  mark('dehaze');
+  mark('dehaze ($dehazeBandCount bands)');
 
   // The point-op half — the pow()-heavy majority of a full-res render — in
   // bands, converting each band straight to bytes so there's no separate

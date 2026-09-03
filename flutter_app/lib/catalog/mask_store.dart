@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../diagnostics/dev_log.dart';
 import '../render/mask.dart';
 import '../render/tone_curve.dart';
 import 'legacy_filename_migration.dart';
@@ -213,7 +214,8 @@ Future<Map<String, List<MaskLayer>>> loadPhotoMasks() async {
             _decodeMask(mask as Map<String, dynamic>),
         ],
     };
-  } catch (_) {
+  } catch (e, st) {
+    DevLog.logError('loadMasks failed, treating masks as empty', e, st);
     return {};
   }
 }

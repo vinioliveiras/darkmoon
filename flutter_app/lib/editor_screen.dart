@@ -3828,11 +3828,15 @@ class _EditorScreenState extends State<EditorScreen>
     // slower than it needed to be.
     final profile = job.params.colorProfile;
     final gpuMissingToneCurve = profile != null && !profile.toneIsIdentity;
-    if (allowGpu &&
-        !gpuMissingToneCurve &&
-        _settings.useGpuRender &&
-        await isGpuRenderAvailable()) {
-      return renderJobToJpegGpu(job);
+    if (allowGpu && !gpuMissingToneCurve && _settings.useGpuRender) {
+      // Probed once at launch (see initState), so this is settled by the
+      // time any render runs — read synchronously to avoid awaiting a
+      // known answer, which would push the render into the next microtask
+      // for nothing.
+      final probed = gpuRenderAvailableIfProbed ?? await isGpuRenderAvailable();
+      if (probed) {
+        return renderJobToJpegGpu(job);
+      }
     }
     return compute(renderJobToJpeg, job);
   }
@@ -6182,8 +6186,17 @@ class _EditorScreenState extends State<EditorScreen>
         selected.path,
         lowPriority: false,
       );
-    } catch (_) {
-      nativeForExport = null; // fall back to decoding in the export isolate
+    } catch (e, st) {
+      // Falls back to decoding inside the export isolate — correct, just
+      // slower, and for an AI pipeline source it means re-running the
+      // whole thing. Worth knowing why when an export takes minutes
+      // longer than the same photo did last time.
+      DevLog.logError(
+        'export source preload failed, decoding in the export isolate',
+        e,
+        st,
+      );
+      nativeForExport = null;
     }
     final srcMs = srcSw.elapsedMilliseconds;
     final srcTiming = nativeForExport == null

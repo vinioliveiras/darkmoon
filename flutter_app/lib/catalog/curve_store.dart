@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../diagnostics/dev_log.dart';
 import '../render/tone_curve.dart';
 import 'legacy_filename_migration.dart';
 
@@ -63,7 +64,8 @@ Future<Map<String, PhotoCurves>> loadPhotoCurves() async {
           blue: _decodePoints((entry.value as Map<String, dynamic>)['blue']),
         ),
     };
-  } catch (_) {
+  } catch (e, st) {
+    DevLog.logError('loadCurves failed, treating curves as empty', e, st);
     return {};
   }
 }

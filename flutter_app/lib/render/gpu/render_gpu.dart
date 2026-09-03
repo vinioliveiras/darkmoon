@@ -206,34 +206,14 @@ Future<ui.Image> renderImageGpu(
   return result;
 }
 
-ui.FragmentProgram? _preDenoiseProgram;
-ui.FragmentProgram? _postDenoiseProgram;
-ui.FragmentProgram? _postDehazeProgram;
-
-Future<ui.FragmentProgram> _loadProgram(
-  String assetPath,
-  ui.FragmentProgram? Function() getCached,
-  void Function(ui.FragmentProgram) setCached,
-) async {
-  final cached = getCached();
-  if (cached != null) {
-    return cached;
-  }
-  final program = await ui.FragmentProgram.fromAsset(assetPath);
-  setCached(program);
-  return program;
-}
-
 Future<ui.Image> _runPreDenoise(
   ui.Image source,
   int width,
   int height,
   RenderParams params,
 ) async {
-  final program = await _loadProgram(
+  final program = await GpuPass.loadProgram(
     'shaders/point_ops_pre_denoise.frag',
-    () => _preDenoiseProgram,
-    (p) => _preDenoiseProgram = p,
   );
   final shader = program.fragmentShader();
 
@@ -274,10 +254,8 @@ Future<ui.Image> _runPostDenoise(
   int height,
   RenderParams params,
 ) async {
-  final program = await _loadProgram(
+  final program = await GpuPass.loadProgram(
     'shaders/point_ops_post_denoise.frag',
-    () => _postDenoiseProgram,
-    (p) => _postDenoiseProgram = p,
   );
   final shader = program.fragmentShader();
 
@@ -389,11 +367,7 @@ Future<ui.Image> _runPostDehaze(
   int height,
   RenderParams params,
 ) async {
-  final program = await _loadProgram(
-    'shaders/post_dehaze.frag',
-    () => _postDehazeProgram,
-    (p) => _postDehazeProgram = p,
-  );
+  final program = await GpuPass.loadProgram('shaders/post_dehaze.frag');
   final shader = program.fragmentShader();
 
   final vignette = params.vignette;

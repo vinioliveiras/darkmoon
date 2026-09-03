@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../diagnostics/dev_log.dart';
 import 'legacy_filename_migration.dart';
 
 /// Per-photo slider values, keyed by absolute RAW file path — persisted so
@@ -25,7 +26,11 @@ Future<Directory> _catalogDir() async {
 
 Future<File> _catalogFile() async {
   final dir = await _catalogDir();
-  await migrateLegacyFilename(dir, 'flutter_catalog.json', 'darkmoon_catalog.json');
+  await migrateLegacyFilename(
+    dir,
+    'flutter_catalog.json',
+    'darkmoon_catalog.json',
+  );
   return File(p.join(dir.path, 'darkmoon_catalog.json'));
 }
 
@@ -46,7 +51,11 @@ Future<Map<String, Map<String, double>>> loadCatalog() async {
             param.key: (param.value as num).toDouble(),
         },
     };
-  } catch (_) {
+  } catch (e, st) {
+    // Every edit for every photo in the catalog silently becomes "no
+    // edits" from here — worth a line, since the user sees their work
+    // gone with no other explanation available.
+    DevLog.logError('loadCatalog failed, treating catalog as empty', e, st);
     return {};
   }
 }

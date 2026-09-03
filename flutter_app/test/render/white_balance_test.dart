@@ -104,30 +104,6 @@ void main() {
       }
     });
 
-    test('preserveTintBrightness is a harmless no-op now (model already '
-        'luminance-normalised)', () {
-      final src = flatGray(4, 4, 150);
-      final off = renderRgb(
-        4,
-        4,
-        src,
-        const RenderParams(baseContrast: 0, tint: 40),
-      );
-      final on = renderRgb(
-        4,
-        4,
-        src,
-        const RenderParams(
-          baseContrast: 0,
-          tint: 40,
-          preserveTintBrightness: true,
-        ),
-      );
-      for (var i = 0; i < off.length; i++) {
-        expect(on[i], off[i]);
-      }
-    });
-
     test('per-photo as-shot reference: sliders parked at the camera value '
         'are an identity, and 5500/0 now shifts', () {
       final src = flatGray(4, 4, 150);

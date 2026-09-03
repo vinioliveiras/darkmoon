@@ -5,6 +5,7 @@ import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../diagnostics/dev_log.dart';
 import 'preset.dart';
 import 'preset_xmp.dart';
 
@@ -52,11 +53,7 @@ Preset? _parsePresetFile(String path, String contents) {
   if (preset == null) {
     return null;
   }
-  return preset.copyWith(
-    id: path,
-    name: _nameFromFile(path),
-    sourcePath: path,
-  );
+  return preset.copyWith(id: path, name: _nameFromFile(path), sourcePath: path);
 }
 
 /// Loads every `.xmp` in the presets folder, sorted by name (case-
@@ -77,15 +74,20 @@ Future<List<Preset>> loadPresets() async {
         if (preset != null) {
           presets.add(preset);
         }
-      } catch (_) {
-        // Skip a single bad file rather than failing the whole library.
+      } catch (e, st) {
+        // Skip a single bad file rather than failing the whole library —
+        // but name it, or a preset that silently stops appearing in the
+        // list is indistinguishable from one the user deleted.
+        DevLog.logError('skipping unreadable preset ${entity.path}', e, st);
       }
     }
     presets.sort(
       (a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()),
     );
     return presets;
-  } catch (_) {
+  } catch (e, st) {
+    // The whole preset library reads as empty from here.
+    DevLog.logError('loadPresets failed, library reads as empty', e, st);
     return [];
   }
 }

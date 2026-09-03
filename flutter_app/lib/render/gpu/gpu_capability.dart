@@ -2,6 +2,8 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import '../../diagnostics/dev_log.dart';
+
 /// Whether GPU rendering ([renderRgbGpu]) is safe to offer in the UI at
 /// all on this machine — see `project_gpu_render_plan.md`'s Phase 6
 /// "capability probe" exit criterion. Compiles the same tiny passthrough
@@ -22,6 +24,16 @@ import 'dart:ui' as ui;
 Future<bool> isGpuRenderAvailable() async {
   return _cached ??= await _probe();
 }
+
+/// [isGpuRenderAvailable]'s answer if it has already been probed, else
+/// null — a synchronous peek, so the render dispatch doesn't have to
+/// `await` (and so bounce through a microtask, delaying the render by a
+/// frame) just to read a bool that was settled at startup.
+///
+/// `editor_screen.dart` kicks the probe off on launch, so this is
+/// non-null for every render in practice; the async form stays as the
+/// fallback for the first call.
+bool? get gpuRenderAvailableIfProbed => _cached;
 
 bool? _cached;
 
@@ -77,7 +89,12 @@ Future<bool> _probe() async {
       if (d > maxDiff) maxDiff = d;
     }
     return maxDiff <= 1;
-  } catch (_) {
+  } catch (e, st) {
+    // Failing here turns the whole GPU render path off for the session
+    // (editor_screen falls back to CPU silently), so the reason is the
+    // only thing that explains "why did rendering get slow on this
+    // machine" in a bug report.
+    DevLog.logError('GPU capability probe failed, falling back to CPU', e, st);
     return false;
   }
 }

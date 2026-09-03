@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../catalog/legacy_filename_migration.dart';
+import '../diagnostics/dev_log.dart';
 import '../native/edit_source.dart' show defaultPreviewMaxDimension;
 
 /// Leave at least two cores for the UI isolate and the preview-cache
@@ -353,7 +354,11 @@ Future<AppSettings> loadSettings() async {
       animationsEnabled:
           raw['animationsEnabled'] as bool? ?? defaults.animationsEnabled,
     );
-  } catch (_) {
+  } catch (e, st) {
+    // Every setting the user has ever changed silently reverts to its
+    // default here, which reads as "the app forgot my settings" with
+    // nothing to go on.
+    DevLog.logError('loadSettings failed, falling back to defaults', e, st);
     return AppSettings(thumbnailConcurrency: defaultConcurrency);
   }
 }

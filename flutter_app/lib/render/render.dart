@@ -225,7 +225,6 @@ void applyExposureAndWhiteBalance(Float32List buffer, RenderParams params) {
     params.tint,
     params.asShotKelvin,
     params.asShotTint,
-    params.preserveTintBrightness,
   );
 }
 
@@ -502,16 +501,19 @@ Uint8List _toUint8(Float32List buffer) {
 /// tint == asShotTint` it's a no-op — the LibRaw decode already applied
 /// the camera's white balance.
 ///
-/// [preserveTintBrightness] is retained for the (unchanged) call
-/// signature and the settings toggle, but the model is luminance-
-/// normalised by construction now, so it no longer changes anything.
+/// Had a `preserveTintBrightness` flag until 2026-09-03, kept "for the
+/// call signature and the settings toggle" — but the model became
+/// luminance-normalised by construction, so the flag stopped changing
+/// anything, and there was no settings toggle: nothing anywhere set the
+/// `WhiteBalancePreserveTintBrightness` key it was read from. Removed
+/// rather than left as a parameter that documents a behaviour the code no
+/// longer has.
 void _applyWhiteBalance(
   Float32List img,
   double temperatureKelvin,
   double tint,
   double asShotKelvin,
   double asShotTint,
-  bool preserveTintBrightness,
 ) {
   if (temperatureKelvin == asShotKelvin && tint == asShotTint) {
     return;
