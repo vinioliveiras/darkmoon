@@ -114,11 +114,22 @@ jobs:
           echo "DMG=$DMG" >> "$GITHUB_ENV"
           ls -lh "$DMG"
 
+      # Tolerates a tag with no release behind it, which is what makes a
+      # dry run possible: point this at any existing tag to prove the
+      # whole pipeline builds a signed, complete .dmg without having to
+      # publish anything first. The artifact below is kept either way.
       - name: Attach it to the release
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
-        run: gh release upload "$TAG" "$DMG" --clobber
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$DMG" --clobber
+            echo "Attached to release $TAG."
+          else
+            echo "::notice::No release exists for tag $TAG — nothing to attach to."
+            echo "The .dmg is still available as the workflow artifact below."
+          fi
 
       # A copy that outlives nothing, but makes a failed upload recoverable
       # without a 40-minute rebuild.
