@@ -2,6 +2,9 @@ build/
 dist/
 *.zip
 *.tar.gz
+*.deb
+*.dmg
+darkmoon-v*-setup.exe
 .claude/*
 .vscode/settings.json
 flutter_app/wb_dump_out.txt
