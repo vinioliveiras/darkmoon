@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Existing release tag to build and attach the .dmg to (e.g. v1.9.2)"
+        description: "Git ref to build from, and the release tag to attach to (e.g. v1.9.2). Any branch works for a dry run."
         required: true
 
 # To upload the .dmg onto the release.
@@ -36,7 +36,9 @@ jobs:
     steps:
       # The tag, not the branch: the .dmg must be built from exactly the
       # source the release claims to be, not from whatever master has
-      # drifted to since.
+      # drifted to since. A branch name is accepted too, which is how this
+      # gets exercised before a tag exists — note that the ref must be new
+      # enough to contain tool/fetch_models.sh.
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.tag }}
@@ -97,7 +99,13 @@ jobs:
         run: |
           APP=build/macos/Build/Products/Release/darkmoon.app
           STAGE="$RUNNER_TEMP/dmg"
-          DMG="$RUNNER_TEMP/darkmoon-$TAG-macos-arm64.dmg"
+          # From pubspec, not from the input: the asset name then always
+          # states the version that is actually inside the disk image, and
+          # matches the naming the other platforms' artifacts use, whatever
+          # ref this was pointed at.
+          VER="$(sed -n 's/^version: \([0-9.]*\)+.*//p' pubspec.yaml)"
+          [ -n "$VER" ] || { echo "::error::could not read version from pubspec.yaml"; exit 1; }
+          DMG="$RUNNER_TEMP/darkmoon-v$VER-macos-arm64.dmg"
 
           rm -rf "$STAGE" "$DMG"
           mkdir -p "$STAGE"

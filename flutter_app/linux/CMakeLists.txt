@@ -142,6 +142,16 @@ install(FILES
 # set_default_window_icon(). Goes in data/ rather than lib/ because it is
 # payload, not a shared library, and next to the executable's own folder so
 # the portable tarball needs no installation step to have an icon.
+# The optional menu-entry installer, at the bundle root where someone who
+# just extracted the tarball will actually see it. Executable bits matter
+# here: a tar.gz preserves them, and a user should not have to work out
+# that they need to chmod before running the thing called install.sh.
+install(PROGRAMS
+  "${CMAKE_CURRENT_SOURCE_DIR}/packaging/install.sh"
+  "${CMAKE_CURRENT_SOURCE_DIR}/packaging/uninstall.sh"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)
+
 install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../docs/favicon.png"
   DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   RENAME "icon.png"
