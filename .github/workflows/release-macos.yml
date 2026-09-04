@@ -103,7 +103,7 @@ jobs:
           # states the version that is actually inside the disk image, and
           # matches the naming the other platforms' artifacts use, whatever
           # ref this was pointed at.
-          VER="$(sed -n 's/^version: \([0-9.]*\)+.*//p' pubspec.yaml)"
+          VER="$(sed -n 's/^version: \([0-9.]*\)+.*/\1/p' pubspec.yaml)"
           [ -n "$VER" ] || { echo "::error::could not read version from pubspec.yaml"; exit 1; }
           DMG="$RUNNER_TEMP/darkmoon-v$VER-macos-arm64.dmg"
 
