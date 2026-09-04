@@ -5,7 +5,45 @@
 #include <gdk/gdkx.h>
 #endif
 
+#include <limits.h>
+#include <unistd.h>
+
 #include "flutter/generated_plugin_registrant.h"
+
+// Sets the window icon shown in the taskbar, alt-tab and dock.
+//
+// Windows gets this from a resource compiled into the executable and macOS
+// from its asset catalog; GTK has no equivalent, and Flutter's Linux
+// template sets no icon at all, so the app showed the generic fallback.
+//
+// Loaded from a file next to the executable rather than by icon name,
+// because gtk_window_set_default_icon_name() resolves through the system
+// icon theme — which works for something installed into
+// /usr/share/icons, and not at all for the portable tarball this project
+// actually ships. data/icon.png is installed by linux/CMakeLists.txt.
+static void set_default_window_icon() {
+  char exe_path[PATH_MAX];
+  ssize_t len = readlink("/proc/self/exe", exe_path, sizeof(exe_path) - 1);
+  if (len <= 0) {
+    return;
+  }
+  exe_path[len] = '\0';
+
+  g_autofree gchar* exe_dir = g_path_get_dirname(exe_path);
+  g_autofree gchar* icon_path =
+      g_build_filename(exe_dir, "data", "icon.png", nullptr);
+
+  g_autoptr(GError) error = nullptr;
+  g_autoptr(GdkPixbuf) icon = gdk_pixbuf_new_from_file(icon_path, &error);
+  if (icon == nullptr) {
+    // Not fatal: a missing icon is a cosmetic problem, and refusing to
+    // start over one would be worse than the generic fallback.
+    g_warning("darkmoon: could not load window icon from %s: %s", icon_path,
+              error != nullptr ? error->message : "unknown error");
+    return;
+  }
+  gtk_window_set_default_icon(icon);
+}
 
 struct _MyApplication {
   GtkApplication parent_instance;
@@ -23,6 +61,8 @@ static void first_frame_cb(MyApplication* self, FlView *view)
 // Implements GApplication::activate.
 static void my_application_activate(GApplication* application) {
   MyApplication* self = MY_APPLICATION(application);
+  // Before the window exists, so it picks the icon up on creation.
+  set_default_window_icon();
   GtkWindow* window =
       GTK_WINDOW(gtk_application_window_new(GTK_APPLICATION(application)));
 

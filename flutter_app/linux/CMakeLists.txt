@@ -138,6 +138,15 @@ install(FILES
 # CMakeLists for why models get their own subfolder but the .so files
 # above don't: those are resolved via OS shared-library search rules
 # (rpath), models via an explicit Dart-computed path).
+# The window icon, loaded at runtime by my_application.cc's
+# set_default_window_icon(). Goes in data/ rather than lib/ because it is
+# payload, not a shared library, and next to the executable's own folder so
+# the portable tarball needs no installation step to have an icon.
+install(FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../docs/favicon.png"
+  DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
+  RENAME "icon.png"
+  COMPONENT Runtime)
+
 file(GLOB DARKMOON_ONNX_MODELS "${CMAKE_CURRENT_SOURCE_DIR}/../native_models/*.onnx")
 # Guarded: the .onnx weights are gitignored (hundreds of MB, over GitHub's
 # per-file limit — see .gitignore), so a fresh clone and every CI build has
