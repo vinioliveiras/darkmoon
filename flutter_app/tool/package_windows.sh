@@ -60,12 +60,16 @@ done
 }
 
 # Inno resolves relative paths against the .iss file, so everything it is
-# handed has to be absolute.
-ABS_BUNDLE="$(cd "$BUNDLE" && pwd -W 2>/dev/null || cd "$BUNDLE" && pwd)"
-ABS_OUT="$(cd "$OUT" && pwd -W 2>/dev/null || cd "$OUT" && pwd)"
-ABS_ICON="$(cd windows/runner/resources && pwd -W 2>/dev/null || cd windows/runner/resources && pwd)/app_icon.ico"
+# handed has to be absolute — and a Windows path, not a POSIX one. cygpath
+# rather than `pwd -W`: the earlier attempt wrote
+#   pwd -W 2>/dev/null || cd "$X" && pwd
+# which groups as ((A && B) || C) && D, so the POSIX fallback ran every
+# time and ISCC was handed /d/Documentos/... regardless.
+ABS_BUNDLE="$(cygpath -w "$(cd "$BUNDLE" && pwd)")"
+ABS_OUT="$(cygpath -w "$OUT")"
+ABS_ICON="$(cygpath -w "$(cd windows/runner/resources && pwd)/app_icon.ico")"
 
-"$ISCC" \
+MSYS_NO_PATHCONV=1 "$ISCC" \
   "/DAppVersion=$VER" \
   "/DSourceDir=$ABS_BUNDLE" \
   "/DOutputDir=$ABS_OUT" \
@@ -75,5 +79,13 @@ ABS_ICON="$(cd windows/runner/resources && pwd -W 2>/dev/null || cd windows/runn
 
 SETUP="$OUT/darkmoon-v${VER}-windows-x64-setup.exe"
 echo
+# Checked explicitly: ISCC exits 0 on at least one usage error, so a
+# missing installer is otherwise indistinguishable from a successful
+# run and this script would report success having built nothing.
+[ -f "$SETUP" ] || {
+  echo "error: ISCC reported no failure but $SETUP does not exist." >&2
+  exit 1
+}
+
 echo "==> Done"
 ls -la "$ZIP" "$SETUP" | sed 's/^/    /'
