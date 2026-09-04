@@ -122,6 +122,17 @@ jobs:
           echo "DMG=$DMG" >> "$GITHUB_ENV"
           ls -lh "$DMG"
 
+          # The portable half of the pair, for people who would rather keep
+          # the .app wherever they like than install it. ditto -c -k is
+          # Apple's own archiver: plain `zip` drops the extended attributes
+          # that carry the code signature, and an unsigned-looking app does
+          # not launch on Apple Silicon at all.
+          ZIP="$RUNNER_TEMP/darkmoon-v$VER-macos-arm64.zip"
+          rm -f "$ZIP"
+          ditto -c -k --sequesterRsrc --keepParent "$STAGE/darkmoon.app" "$ZIP"
+          echo "ZIP=$ZIP" >> "$GITHUB_ENV"
+          ls -lh "$ZIP"
+
       # Tolerates a tag with no release behind it, which is what makes a
       # dry run possible: point this at any existing tag to prove the
       # whole pipeline builds a signed, complete .dmg without having to
@@ -132,11 +143,11 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" "$DMG" --clobber
+            gh release upload "$TAG" "$DMG" "$ZIP" --clobber
             echo "Attached to release $TAG."
           else
             echo "::notice::No release exists for tag $TAG — nothing to attach to."
-            echo "The .dmg is still available as the workflow artifact below."
+            echo "Both files are still available as the workflow artifact below."
           fi
 
       # A copy that outlives nothing, but makes a failed upload recoverable
@@ -144,7 +155,9 @@ jobs:
       - name: Upload as a workflow artifact too
         uses: actions/upload-artifact@v4
         with:
-          name: darkmoon-macos-dmg
-          path: ${{ env.DMG }}
+          name: darkmoon-macos
+          path: |
+            ${{ env.DMG }}
+            ${{ env.ZIP }}
           retention-days: 7
           if-no-files-found: error
