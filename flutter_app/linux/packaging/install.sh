@@ -40,7 +40,7 @@ Comment=Develop and edit RAW photographs
 Exec="$BIN"
 Icon=darkmoon
 Terminal=false
-Categories=Graphics;Photography;RasterGraphics;
+Categories=Graphics;2DGraphics;RasterGraphics;Photography;
 Keywords=photo;raw;editor;develop;
 StartupWMClass=darkmoon
 DESKTOP
