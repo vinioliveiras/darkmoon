@@ -1,0 +1,131 @@
+# Builds a distributable macOS .dmg and attaches it to an existing release.
+#
+# Separate from ci.yml on purpose. CI answers "does it still compile
+# everywhere" on every push and must stay fast, so it builds a .app with no
+# model weights. This one is the slow, deliberate path: it pulls the 1.2GB
+# of weights, puts them in the bundle, signs and packages the result. It
+# only ever runs when asked.
+#
+# It exists because this project has no Mac. The Apple runners are the only
+# Mac it has, so this workflow is not a convenience — it is the sole way a
+# macOS build gets produced at all.
+name: Release macOS
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing release tag to build and attach the .dmg to (e.g. v1.9.2)"
+        required: true
+
+# To upload the .dmg onto the release.
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: 3.35.5
+
+defaults:
+  run:
+    working-directory: flutter_app
+
+jobs:
+  dmg:
+    name: Build and attach .dmg
+    runs-on: macos-latest
+    steps:
+      # The tag, not the branch: the .dmg must be built from exactly the
+      # source the release claims to be, not from whatever master has
+      # drifted to since.
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      # Same cache key as ci.yml, so a run here usually reuses the
+      # libraries CI already built rather than rebuilding LibRaw.
+      - name: Cache macOS native libraries
+        id: macos-natives
+        uses: actions/cache@v4
+        with:
+          path: flutter_app/macos/native/*.dylib
+          key: macos-natives-${{ hashFiles('flutter_app/tool/fetch_macos_natives.sh') }}
+
+      - name: Fetch macOS native libraries
+        if: steps.macos-natives.outputs.cache-hit != 'true'
+        run: tool/fetch_macos_natives.sh
+
+      # The whole reason this workflow can exist. See tool/fetch_models.sh.
+      - name: Fetch model weights
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tool/fetch_models.sh
+
+      - run: flutter config --enable-macos-desktop
+      - run: flutter pub get
+      - run: flutter build macos --release
+
+      # Copies the dylibs and the models into the bundle, then ad-hoc signs
+      # it. Order matters: signing has to come after the last thing is put
+      # inside, or the seal covers a bundle that no longer exists.
+      - name: Bundle natives and models into the .app
+        run: tool/bundle_macos_natives.sh build/macos/Build/Products/Release/darkmoon.app
+
+      # Without this a mistake upstream — a rename, a failed copy — would
+      # ship a .dmg that installs cleanly and then reports a missing model
+      # for every AI feature. Cheap check, expensive failure.
+      - name: Verify the bundle is actually complete
+        run: |
+          APP=build/macos/Build/Products/Release/darkmoon.app
+          expected=$(grep -c . tool/models.sha256)
+          actual=$(ls "$APP/Contents/Resources/models"/*.onnx 2>/dev/null | wc -l | tr -d ' ')
+          echo "models in bundle: $actual (expected $expected)"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::bundle has $actual models, expected $expected"
+            exit 1
+          fi
+          codesign --verify --strict --verbose=2 "$APP"
+
+      - name: Build the .dmg
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          APP=build/macos/Build/Products/Release/darkmoon.app
+          STAGE="$RUNNER_TEMP/dmg"
+          DMG="$RUNNER_TEMP/darkmoon-$TAG-macos-arm64.dmg"
+
+          rm -rf "$STAGE" "$DMG"
+          mkdir -p "$STAGE"
+          # ditto, not cp: it preserves the extended attributes and the code
+          # signature. A plain cp -R can invalidate the seal, and on Apple
+          # Silicon an app with a broken signature does not launch at all.
+          ditto "$APP" "$STAGE/darkmoon.app"
+          # The drag-to-install target every Mac user expects.
+          ln -s /Applications "$STAGE/Applications"
+
+          codesign --verify --strict "$STAGE/darkmoon.app"
+          hdiutil create -volname darkmoon -srcfolder "$STAGE" \
+            -ov -format UDZO -imagekey zlib-level=6 "$DMG"
+          echo "DMG=$DMG" >> "$GITHUB_ENV"
+          ls -lh "$DMG"
+
+      - name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" "$DMG" --clobber
+
+      # A copy that outlives nothing, but makes a failed upload recoverable
+      # without a 40-minute rebuild.
+      - name: Upload as a workflow artifact too
+        uses: actions/upload-artifact@v4
+        with:
+          name: darkmoon-macos-dmg
+          path: ${{ env.DMG }}
+          retention-days: 7
+          if-no-files-found: error
