@@ -45,7 +45,12 @@ const _maxPoints = 12;
 /// [_handlePaintRadius] (the biggest thing drawn at a point) plus a
 /// couple of px of breathing room is enough for the whole handle to
 /// always render fully on-screen, at every point position.
-const _plotInset = 8.0;
+const kToneCurvePlotInset = 8.0;
+
+/// Local alias, so the rest of this file reads as it did before the inset
+/// had to become public for [ParametricSplitBar] to line its handles up
+/// with this graph's x axis.
+const _plotInset = kToneCurvePlotInset;
 
 class _ToneCurveEditorState extends State<ToneCurveEditor> {
   int? _activeIndex;

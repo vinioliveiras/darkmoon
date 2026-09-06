@@ -82,6 +82,7 @@ import 'widgets/gradient_mask_overlay.dart';
 import 'widgets/histogram_view.dart';
 import 'widgets/lens_correction_panel.dart';
 import 'widgets/mask_selector.dart';
+import 'widgets/parametric_split_bar.dart';
 import 'widgets/photo_metadata_view.dart';
 import 'widgets/preset_panel.dart';
 import 'widgets/settings_dialog.dart';
@@ -9578,6 +9579,22 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   points: curves.tone,
                                   onChanged: onToneCurveChanged,
                                   onChangeEnd: onToneCurveChangeEnd,
+                                ),
+                              ),
+                              // Directly under the graph, sharing its x
+                              // axis, so each handle sits at the input
+                              // luminance it splits.
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: ParametricSplitBar(
+                                  shadowSplit:
+                                      values['ParamCurveShadowSplit'] ?? 25,
+                                  midtoneSplit:
+                                      values['ParamCurveMidtoneSplit'] ?? 50,
+                                  highlightSplit:
+                                      values['ParamCurveHighlightSplit'] ?? 75,
+                                  onChanged: onChanged,
+                                  onChangeEnd: onChangeEnd,
                                 ),
                               ),
                               Padding(
