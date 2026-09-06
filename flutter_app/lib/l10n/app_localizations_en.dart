@@ -960,6 +960,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get colorProfileModeFlat => 'Vivid';
 
   @override
+  String get colorProfileModeMissing => 'Custom profile (not installed)';
+
+  @override
+  String get colorProfileMissingWarning =>
+      'This photo uses a custom colour profile that is not installed. Rendering with Default until it is imported — the photo still remembers which profile it wants.';
+
+  @override
   String get sliderTexture => 'Texture';
 
   @override

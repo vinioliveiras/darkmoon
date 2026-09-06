@@ -41,6 +41,7 @@ import 'native/thumbnail_loader.dart';
 import 'presets/preset.dart';
 import 'presets/preset_store.dart';
 import 'presets/preset_xmp.dart';
+import 'profiles/color_profile_store.dart';
 import 'presets/preset_zip.dart';
 import 'raw_files.dart';
 import 'render/ai_denoise.dart';
@@ -415,7 +416,7 @@ PhotoCurves _withCurveCategoriesApplied(
 
 /// A selectable "color profile" for the COLOR PROFILE section — a
 /// per-photo/per-preset pick (like [WbMode]), stored under
-/// [_colorProfileModeKey]. Deliberately a data-bearing (enhanced) enum
+/// [colorProfileModeKey]. Deliberately a data-bearing (enhanced) enum
 /// rather than a hardcoded if/else per mode: every field below is what
 /// actually *defines* a profile, so a new profile is just a new enum
 /// value with its own field values, never a new branch scattered through
@@ -439,7 +440,7 @@ PhotoCurves _withCurveCategoriesApplied(
 /// 2026-09-01) and their siblings "Golden Hour"/"Teal & Orange" (removed
 /// 2026-09-02) have all now been removed (2026-09-02, explicit user
 /// request) — [darkmoonDefault]/[vivid] are the only two modes left. See
-/// [_colorProfileModeOf] for the index-migration this and the earlier
+/// [colorProfileModeOf] for the index-migration this and the earlier
 /// removal left behind; `tool/author_color_profiles.dart` still has the
 /// generation methodology if a new hand-authored profile is ever wanted.
 ///
@@ -465,6 +466,18 @@ enum ColorProfileMode {
     dampened: false,
     usesHueProfile: true,
     profileAsset: 'darkmoon_vivid.json',
+  ),
+
+  /// A profile the user authored, resolved by [customProfileIdKey] rather
+  /// than by this entry — one enum member stands for all of them.
+  ///
+  /// Undamped like [vivid]: the user tuned the numbers themselves, so
+  /// Strength at 100% should hand back exactly what they built.
+  custom(
+    contrastBaseline: calBaseContrast,
+    dampened: false,
+    usesHueProfile: true,
+    profileAsset: null,
   );
 
   const ColorProfileMode({
@@ -494,15 +507,42 @@ enum ColorProfileMode {
 }
 
 /// Storage key for [ColorProfileMode] — see its own doc.
-const _colorProfileModeKey = 'ColorProfileMode';
+const colorProfileModeKey = 'ColorProfileMode';
 
 /// [ColorProfileMode] currently selected for [values] (a flat
 /// `{paramName: value}` map — the global layer's `_paramValues`, since
 /// masks don't get their own profile) — the shared lookup every render-
 /// and UI-facing spot that needs the mode reads through, so there's one
 /// place that knows how the stored double maps back to the enum.
-ColorProfileMode _colorProfileModeOf(Map<String, double> values) {
-  final stored = (values[_colorProfileModeKey] ?? 0.0).toInt();
+/// Storage key for the id of the user profile [ColorProfileMode.custom]
+/// refers to — see [ColorProfile.id] for why it is a 32-bit number living
+/// in a map of doubles.
+const customProfileIdKey = 'ColorProfileCustomId';
+
+/// What [ColorProfileMode.custom] is written as, instead of its enum
+/// index.
+///
+/// Its index is 2, and 2 is exactly the number old saved photos carry for
+/// modes that were removed in 2026-09-02's enum trimming — `pastel` after
+/// round one, `goldenHour` before it. Storing the index would make every
+/// one of those files claim to be a custom profile, referring to an id
+/// that never existed. 100 is outside every index any version of this enum
+/// has ever had.
+const int customProfileStoredValue = 100;
+
+int customProfileIdOf(Map<String, double> values) =>
+    (values[customProfileIdKey] ?? 0.0).toInt();
+
+double storedValueForColorProfileMode(ColorProfileMode mode) =>
+    mode == ColorProfileMode.custom
+    ? customProfileStoredValue.toDouble()
+    : mode.index.toDouble();
+
+ColorProfileMode colorProfileModeOf(Map<String, double> values) {
+  final stored = (values[colorProfileModeKey] ?? 0.0).toInt();
+  if (stored == customProfileStoredValue) {
+    return ColorProfileMode.custom;
+  }
   // Index migration: two rounds of enum trimming (2026-09-02) left old
   // saved photos/presets carrying stale indices. Original 6-entry enum
   // was [default, vivid, goldenHour, tealOrange, pastel, noir]; round 1
@@ -581,7 +621,7 @@ const defaultFlowAmount = 10.0;
 /// override or not.
 Map<String, double> _withGlobalEditAmountApplied(Map<String, double> values) {
   final amount = values[_globalEditAmountKey] ?? 100.0;
-  final dampened = _colorProfileModeOf(values).dampened;
+  final dampened = colorProfileModeOf(values).dampened;
   final defaults = _defaultParamValues();
   final scaleKeys = defaults.keys.toSet()
     ..remove('Temperature')
@@ -1093,8 +1133,33 @@ class _EditorScreenState extends State<EditorScreen>
     if ((_paramValues[_categoryEnabledKey('COLOR PROFILE')] ?? 1.0) == 0) {
       return null;
     }
-    final mode = _colorProfileModeOf(_paramValues);
+    final mode = colorProfileModeOf(_paramValues);
+    if (mode == ColorProfileMode.custom) {
+      return _userColorProfiles[customProfileIdOf(_paramValues)];
+    }
     return mode.usesHueProfile ? _colorProfiles[mode] : null;
+  }
+
+  /// Every user-authored profile currently on disk, keyed by
+  /// [ColorProfile.id]. Loaded once at startup and refreshed whenever one
+  /// is saved, imported or deleted.
+  Map<int, ColorProfile> _userColorProfiles = const {};
+
+  /// The user profile this photo asks for but which is not installed, if
+  /// any — drives the warning under the dropdown.
+  ///
+  /// The photo keeps pointing at the missing id: [_effectiveColorProfile]
+  /// simply resolves to null, so the render falls back to Default, but
+  /// nothing rewrites `_paramValues`. Overwriting the reference here would
+  /// be easy and quietly destructive — the photo would forget which
+  /// profile it was built with, and importing that profile later would no
+  /// longer bring its look back. Default is what gets *rendered*, never
+  /// what gets *stored*.
+  bool get _customProfileMissing {
+    if (colorProfileModeOf(_paramValues) != ColorProfileMode.custom) {
+      return false;
+    }
+    return !_userColorProfiles.containsKey(customProfileIdOf(_paramValues));
   }
 
   /// The base contrast to actually render with: the profile's fitted tone
@@ -1601,6 +1666,7 @@ class _EditorScreenState extends State<EditorScreen>
     unawaited(cleanupStalePreviewCacheVersions());
     if (_colorProfileEnabled) {
       unawaited(_loadColorProfile());
+      unawaited(_loadUserColorProfiles());
     }
     _lifecycleListener = AppLifecycleListener(
       onExitRequested: _handleExitRequested,
@@ -1678,6 +1744,24 @@ class _EditorScreenState extends State<EditorScreen>
   /// existed; it doesn't block the others from loading. Not awaited from
   /// initState; a re-render is kicked once it lands so the open photo
   /// picks up whichever mode it's currently on.
+  /// Reads the user's own profiles off disk into [_userColorProfiles].
+  ///
+  /// Called at startup and again after any save, import or delete, so the
+  /// dropdown and the missing-profile warning both follow the folder
+  /// rather than an in-memory copy that can drift from it.
+  Future<void> _loadUserColorProfiles() async {
+    final loaded = await loadUserColorProfiles();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _userColorProfiles = loaded);
+    // A photo already open may have been waiting on one of these: it would
+    // have rendered with the Default fallback until now.
+    if (_selectedIndex != null && _customProfileMissing == false) {
+      _scheduleRender(live: false);
+    }
+  }
+
   Future<void> _loadColorProfile() async {
     final loaded = <ColorProfileMode, ColorProfile>{};
     for (final mode in ColorProfileMode.values) {
@@ -1829,7 +1913,7 @@ class _EditorScreenState extends State<EditorScreen>
     }
     newValues['ColorProfileAmount'] =
         preset.values['ColorProfileAmount'] ??
-        _colorProfileModeOf(_paramValues).contrastBaseline;
+        colorProfileModeOf(_paramValues).contrastBaseline;
     for (final entry in preset.values.entries) {
       if (!sliderKeys.contains(entry.key) &&
           entry.key != 'Temperature' &&
@@ -5217,16 +5301,46 @@ class _EditorScreenState extends State<EditorScreen>
     _scheduleCatalogSave();
   }
 
+  /// What the COLOR PROFILE dropdown should currently show — a
+  /// [ColorProfileMode] index for a built-in, a [ColorProfile.id] for one
+  /// of the user's. See [reservedColorProfileIds].
+  int get _colorProfileChoice {
+    final mode = colorProfileModeOf(_paramValues);
+    return mode == ColorProfileMode.custom
+        ? customProfileIdOf(_paramValues)
+        : mode.index;
+  }
+
+  /// The dropdown's single entry point, mapping that int back to either a
+  /// built-in mode or a user profile.
+  void _applyColorProfileChoice(int choice) {
+    if (choice >= reservedColorProfileIds) {
+      _applyColorProfileMode(ColorProfileMode.custom, customId: choice);
+      return;
+    }
+    _applyColorProfileMode(
+      ColorProfileMode.values[choice.clamp(
+        0,
+        ColorProfileMode.values.length - 1,
+      )],
+    );
+  }
+
   /// COLOR PROFILE section's mode dropdown — see [ColorProfileMode]'s doc.
   /// Resets Strength (Amount) to 100% and Contrast to that mode's default
   /// (mirrors [_applyWbMode]'s "picking a mode resets its own fields"
   /// convention), rather than leaving whatever values were dialed in
   /// under the previous mode — 2026-09-01, explicit user request.
-  void _applyColorProfileMode(ColorProfileMode mode) {
+  ///
+  /// [customId] is the user profile to point at, and is only meaningful
+  /// for [ColorProfileMode.custom]; every other mode clears it back to 0
+  /// so a stale reference cannot outlive the switch away from it.
+  void _applyColorProfileMode(ColorProfileMode mode, {int customId = 0}) {
     setState(() {
       _paramValues = {
         ..._paramValues,
-        _colorProfileModeKey: mode.index.toDouble(),
+        colorProfileModeKey: storedValueForColorProfileMode(mode),
+        customProfileIdKey: customId.toDouble(),
         _globalEditAmountKey: 100.0,
         'ColorProfileAmount': mode.contrastBaseline,
       };
@@ -5276,7 +5390,7 @@ class _EditorScreenState extends State<EditorScreen>
       _paramValues,
     );
     final amount = _paramValues[_globalEditAmountKey] ?? 100.0;
-    final compression = _colorProfileModeOf(_paramValues).dampened
+    final compression = colorProfileModeOf(_paramValues).dampened
         ? calGlobalAmountCompression
         : 1.0;
     final fraction = amount / 100.0 * compression;
@@ -6684,8 +6798,12 @@ class _EditorScreenState extends State<EditorScreen>
                             onPresetAmountChanged: _onGlobalEditAmountChanged,
                             onPresetAmountChangeEnd:
                                 _onGlobalEditAmountChangeEnd,
-                            colorProfileMode: _colorProfileModeOf(_paramValues),
-                            onColorProfileModeChanged: _applyColorProfileMode,
+                            colorProfileMode: colorProfileModeOf(_paramValues),
+                            colorProfileChoice: _colorProfileChoice,
+                            userColorProfiles: _userColorProfiles,
+                            customProfileMissing: _customProfileMissing,
+                            onColorProfileChoiceChanged:
+                                _applyColorProfileChoice,
                             onWhiteBalanceMode: _applyWbMode,
                             wbEyedropperActive: _wbEyedropperActive,
                             onToggleWbEyedropper: () => setState(
@@ -8739,7 +8857,10 @@ class _ControlsPanel extends StatefulWidget {
     required this.onPresetAmountChanged,
     required this.onPresetAmountChangeEnd,
     required this.colorProfileMode,
-    required this.onColorProfileModeChanged,
+    required this.colorProfileChoice,
+    required this.userColorProfiles,
+    required this.customProfileMissing,
+    required this.onColorProfileChoiceChanged,
     required this.onExport,
     required this.exporting,
     required this.enabled,
@@ -8820,7 +8941,16 @@ class _ControlsPanel extends StatefulWidget {
 
   /// COLOR PROFILE section's mode dropdown — see [ColorProfileMode]'s doc.
   final ColorProfileMode colorProfileMode;
-  final ValueChanged<ColorProfileMode> onColorProfileModeChanged;
+
+  /// What the COLOR PROFILE dropdown is showing: a `ColorProfileMode`
+  /// index for a built-in, or a `ColorProfile.id` for one of the user's.
+  final int colorProfileChoice;
+  final Map<int, ColorProfile> userColorProfiles;
+
+  /// True when this photo refers to a user profile that is not installed —
+  /// drives both the dropdown's placeholder entry and the warning below it.
+  final bool customProfileMissing;
+  final ValueChanged<int> onColorProfileChoiceChanged;
 
   final VoidCallback? onExport;
   final bool exporting;
@@ -9015,6 +9145,9 @@ class _ControlsPanelState extends State<_ControlsPanel> {
       switch (mode) {
         ColorProfileMode.darkmoonDefault => l10n.colorProfileModeDefault,
         ColorProfileMode.vivid => l10n.colorProfileModeFlat,
+        // Only reached when the profile this photo points at is gone; a
+        // resolvable one is listed under its own name instead.
+        ColorProfileMode.custom => l10n.colorProfileModeMissing,
       };
 
   Widget _buildWhiteBalanceModeRow(
@@ -9452,21 +9585,77 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                   top: 6,
                                   bottom: 14,
                                 ),
-                                child: StyledDropdown<ColorProfileMode>(
-                                  value: widget.colorProfileMode,
+                                // One int identifies every entry: a
+                                // ColorProfileMode index for the built-ins,
+                                // a ColorProfile.id for the user's own.
+                                // reservedColorProfileIds keeps those two
+                                // number spaces from ever overlapping.
+                                child: StyledDropdown<int>(
+                                  value: widget.colorProfileChoice,
                                   items: [
-                                    for (final mode in ColorProfileMode.values)
+                                    for (final mode in [
+                                      ColorProfileMode.darkmoonDefault,
+                                      ColorProfileMode.vivid,
+                                    ])
                                       StyledDropdownItem(
-                                        value: mode,
+                                        value: mode.index,
                                         label: _colorProfileModeLabel(
                                           l10n,
                                           mode,
                                         ),
                                       ),
+                                    for (final profile
+                                        in widget.userColorProfiles.values)
+                                      StyledDropdownItem(
+                                        value: profile.id,
+                                        label: profile.name,
+                                      ),
+                                    // The dangling reference gets its own
+                                    // entry rather than snapping the
+                                    // dropdown back to Default: the photo
+                                    // still points at that profile, and the
+                                    // control should say so.
+                                    if (widget.customProfileMissing)
+                                      StyledDropdownItem(
+                                        value: widget.colorProfileChoice,
+                                        label: l10n.colorProfileModeMissing,
+                                      ),
                                   ],
-                                  onChanged: widget.onColorProfileModeChanged,
+                                  onChanged: widget.onColorProfileChoiceChanged,
                                 ),
                               ),
+                              if (widget.customProfileMissing)
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 12),
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      const Padding(
+                                        padding: EdgeInsets.only(
+                                          top: 1,
+                                          right: 6,
+                                        ),
+                                        child: Icon(
+                                          Icons.error_outline,
+                                          size: 14,
+                                          color: DarkmoonColors.textMuted,
+                                        ),
+                                      ),
+                                      Expanded(
+                                        child: Text(
+                                          l10n.colorProfileMissingWarning,
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelSmall
+                                              ?.copyWith(
+                                                color: DarkmoonColors.textMuted,
+                                              ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               Padding(
                                 padding: const EdgeInsets.only(bottom: 12),
                                 // Faded + non-interactive under Default

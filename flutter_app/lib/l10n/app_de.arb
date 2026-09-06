@@ -299,6 +299,8 @@
   "sliderColorProfileAmount": "Farbprofil-Kontrast",
   "colorProfileModeDefault": "Standard",
   "colorProfileModeFlat": "Lebendig",
+  "colorProfileModeMissing": "Eigenes Profil (nicht installiert)",
+  "colorProfileMissingWarning": "Dieses Foto verwendet ein eigenes Farbprofil, das nicht installiert ist. Es wird mit Standard gerendert, bis das Profil importiert wird — das Foto merkt sich weiterhin, welches Profil es moechte.",
   "sliderTexture": "Textur",
   "sliderClarity": "Klarheit",
   "sliderDehaze": "Dunst entfernen",

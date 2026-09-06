@@ -31,6 +31,7 @@ class ColorProfile {
     required this.satMul,
     required this.lumMul,
     this.name = '',
+    this.id = 0,
   });
 
   /// Perceptual-luma -> perceptual-luma curve, [colorProfileTonePoints]
@@ -49,6 +50,18 @@ class ColorProfile {
   final List<double> lumMul;
 
   final String name;
+
+  /// Stable identifier for a user-authored profile; 0 for the built-in
+  /// ones, which are addressed by [ColorProfileMode] instead.
+  ///
+  /// 32 bits, and deliberately not 64: a photo's reference to its profile
+  /// is stored in the per-photo `Map<String, double>` that
+  /// `catalog_store.dart` writes out as JSON, so the value makes a round
+  /// trip through a `double`. Integers stay exact there only up to 2^53,
+  /// and a 64-bit id would lose its low bits in silence — two different
+  /// profiles could then collide on the same number, which is close to
+  /// the worst kind of bug to be handed after the fact.
+  final int id;
 
   bool get toneIsIdentity {
     for (var i = 0; i < tone.length; i++) {
@@ -86,11 +99,31 @@ class ColorProfile {
       satMul: arr('satMul', colorProfileBins, (_) => 1),
       lumMul: arr('lumMul', colorProfileBins, (_) => 1),
       name: json['name'] as String? ?? '',
+      id: (json['id'] as num?)?.toInt() ?? 0,
     );
   }
 
+  ColorProfile withName(String value) => ColorProfile(
+    tone: tone,
+    hueShift: hueShift,
+    satMul: satMul,
+    lumMul: lumMul,
+    name: value,
+    id: id,
+  );
+
+  ColorProfile withId(int value) => ColorProfile(
+    tone: tone,
+    hueShift: hueShift,
+    satMul: satMul,
+    lumMul: lumMul,
+    name: name,
+    id: value,
+  );
+
   Map<String, dynamic> toJson() => {
     'name': name,
+    'id': id,
     'bins': colorProfileBins,
     'tone': tone,
     'hueShift': hueShift,

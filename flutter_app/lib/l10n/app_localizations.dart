@@ -1852,6 +1852,18 @@ abstract class AppLocalizations {
   /// **'Vivid'**
   String get colorProfileModeFlat;
 
+  /// No description provided for @colorProfileModeMissing.
+  ///
+  /// In en, this message translates to:
+  /// **'Custom profile (not installed)'**
+  String get colorProfileModeMissing;
+
+  /// No description provided for @colorProfileMissingWarning.
+  ///
+  /// In en, this message translates to:
+  /// **'This photo uses a custom colour profile that is not installed. Rendering with Default until it is imported — the photo still remembers which profile it wants.'**
+  String get colorProfileMissingWarning;
+
   /// No description provided for @sliderTexture.
   ///
   /// In en, this message translates to:

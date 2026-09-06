@@ -437,6 +437,8 @@
   "sliderColorProfileAmount": "Color Profile Contrast",
   "colorProfileModeDefault": "Default",
   "colorProfileModeFlat": "Vivid",
+  "colorProfileModeMissing": "Custom profile (not installed)",
+  "colorProfileMissingWarning": "This photo uses a custom colour profile that is not installed. Rendering with Default until it is imported — the photo still remembers which profile it wants.",
   "sliderTexture": "Texture",
   "sliderClarity": "Clarity",
   "sliderDehaze": "Dehaze",

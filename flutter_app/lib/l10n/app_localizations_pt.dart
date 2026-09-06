@@ -968,6 +968,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get colorProfileModeFlat => 'Vívido';
 
   @override
+  String get colorProfileModeMissing => 'Perfil personalizado (nao instalado)';
+
+  @override
+  String get colorProfileMissingWarning =>
+      'Esta foto usa um perfil de cor personalizado que nao esta instalado. Renderizando com o Padrao ate que ele seja importado — a foto continua lembrando de qual perfil ela quer.';
+
+  @override
   String get sliderTexture => 'Textura';
 
   @override

@@ -978,6 +978,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get colorProfileModeFlat => 'Lebendig';
 
   @override
+  String get colorProfileModeMissing => 'Eigenes Profil (nicht installiert)';
+
+  @override
+  String get colorProfileMissingWarning =>
+      'Dieses Foto verwendet ein eigenes Farbprofil, das nicht installiert ist. Es wird mit Standard gerendert, bis das Profil importiert wird — das Foto merkt sich weiterhin, welches Profil es moechte.';
+
+  @override
   String get sliderTexture => 'Textur';
 
   @override
