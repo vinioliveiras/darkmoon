@@ -283,6 +283,63 @@ void main() {
       );
     });
 
+    // The tone-curve half of the profile, which until 2026-09-04 existed
+    // only on the CPU — `_runRenderJob` forced the whole render off the
+    // GPU whenever a profile carried a non-identity curve, so no test in
+    // this file ever exercised the two paths against each other. It is
+    // now color_profile.frag's uToneLut, and this is what holds it to the
+    // CPU's `_lerpList` over the same 33 points.
+    //
+    // The curve below is a deliberate S: it lifts the shadows and pulls
+    // the highlights down, so it moves every pixel of the synthetic photo
+    // rather than only the extremes, and its steepest region sits in the
+    // midtones where quantisation would show first.
+    testWidgets('color profile tone curve alone', (tester) async {
+      await expectMatchesCpu(
+        RenderParams(
+          colorProfile: ColorProfile(
+            tone: [
+              for (var i = 0; i < colorProfileTonePoints; i++)
+                () {
+                  final x = i / (colorProfileTonePoints - 1);
+                  return (x + 0.18 * math.sin(math.pi * x)).clamp(0.0, 1.0);
+                }(),
+            ],
+            hueShift: identityColorProfile.hueShift,
+            satMul: identityColorProfile.satMul,
+            lumMul: identityColorProfile.lumMul,
+          ),
+          colorProfileStrength: 1.0,
+        ),
+        'color profile tone curve',
+      );
+    });
+
+    // Strength scales the tone curve's effect toward identity on both
+    // paths (`pIn + (curve(pIn) - pIn) * s`). A partial blend is where an
+    // implementation that applied the curve first and blended afterwards
+    // would diverge, and it looks correct at 0 and 1.
+    testWidgets('color profile tone curve at partial strength', (tester) async {
+      await expectMatchesCpu(
+        RenderParams(
+          colorProfile: ColorProfile(
+            tone: [
+              for (var i = 0; i < colorProfileTonePoints; i++)
+                () {
+                  final x = i / (colorProfileTonePoints - 1);
+                  return (x + 0.18 * math.sin(math.pi * x)).clamp(0.0, 1.0);
+                }(),
+            ],
+            hueShift: identityColorProfile.hueShift,
+            satMul: identityColorProfile.satMul,
+            lumMul: identityColorProfile.lumMul,
+          ),
+          colorProfileStrength: 0.45,
+        ),
+        'color profile tone curve at 45%',
+      );
+    });
+
     testWidgets('color profile combined with tone edits and dehaze', (
       tester,
     ) async {

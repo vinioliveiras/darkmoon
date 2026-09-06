@@ -3843,18 +3843,14 @@ class _EditorScreenState extends State<EditorScreen>
     if (onStage != null) {
       return renderJobToJpegWithProgress(job, onStage);
     }
-    // The GPU shader has a per-hue "darkmoon Color" pass now
-    // (color_profile_gpu.dart) — but not the tone-curve half, so a profile
-    // with a real (non-identity) tone curve still has to fall back to CPU
-    // or it would render as if no profile were applied at all. Every
-    // profile shipped so far forces tone to identity by design (see
-    // project_darkmoon_color_profile.md), so in practice this no longer
-    // forces CPU for any of them — 2026-09-02, this used to check the
-    // profile's full `isIdentity` (tone AND per-hue), forcing CPU for
-    // every active profile and silently making every settled render much
-    // slower than it needed to be.
-    final profile = job.params.colorProfile;
-    final gpuMissingToneCurve = profile != null && !profile.toneIsIdentity;
+    // The "darkmoon Color" profile is fully on the GPU as of 2026-09-04 —
+    // both the per-hue correction and the tone curve (color_profile_gpu.dart,
+    // color_profile.frag's uToneLut). There used to be a
+    // `gpuMissingToneCurve` check here forcing CPU for any profile whose
+    // tone curve was not the identity ramp, which was harmless only
+    // because every profile shipped so far sets tone to identity by
+    // design. User-authored profiles will not, so the check had to go
+    // rather than quietly make every custom profile render on the CPU.
     // Radii scale with the frame now (RenderParams.renderScale), and the
     // GPU's box-blur shaders have a fixed maximum radius they would
     // silently truncate past — so a large enough full-quality render has
@@ -3866,10 +3862,7 @@ class _EditorScreenState extends State<EditorScreen>
           .withRenderScaleFor(job.source.width, job.source.height)
           .renderScale,
     );
-    if (allowGpu &&
-        !gpuMissingToneCurve &&
-        gpuScaleOk &&
-        _settings.useGpuRender) {
+    if (allowGpu && gpuScaleOk && _settings.useGpuRender) {
       // Probed once at launch (see initState), so this is settled by the
       // time any render runs — read synchronously to avoid awaiting a
       // known answer, which would push the render into the next microtask

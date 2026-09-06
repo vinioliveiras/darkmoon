@@ -1,12 +1,16 @@
 #version 460 core
 #include <flutter/runtime_effect.glsl>
 
-// GPU port of color_profile.dart's applyColorProfile — the per-hue half
-// only (hueShift/satMul/lumMul). The tone-curve half stays CPU-only: every
-// profile shipped so far forces it to identity by design (see
-// project_darkmoon_color_profile.md), so this pass covers everything a
-// real profile actually does today. editor_screen.dart's `_runRenderJob`
-// still forces CPU whenever a profile's tone curve is non-identity.
+// GPU port of color_profile.dart's applyColorProfile, in full: the tone
+// curve (uToneLut) and then the per-hue correction
+// (hueShift/satMul/lumMul), in that order.
+//
+// The tone half landed 2026-09-04. Before that it was CPU-only and
+// editor_screen.dart's `_runRenderJob` forced the entire render onto the
+// CPU for any profile carrying a non-identity curve. That was tolerable
+// only because every built-in profile sets tone to identity by design;
+// user-authored profiles will not, so leaving it would have meant every
+// custom profile silently rendering on the slow path.
 //
 // Runs where render.dart's applyColorProfileStage runs it: after Clarity,
 // before Dehaze (see render_gpu.dart's renderImageGpu call site).
@@ -39,7 +43,33 @@ uniform float uHueShift[24];
 uniform float uSatMul[24];
 uniform float uLumMul[24];
 
+// 1 when the profile carries a real tone curve, 0 when it is the identity
+// ramp. Lets one shader serve both instead of branching on a texture whose
+// contents it cannot cheaply inspect.
+uniform float uToneActive;
+
 uniform sampler2D uTexture;
+
+// The profile's tone curve, as a 33x1 RGBA texture — one texel per
+// ColorProfile.tone point, the value carried at 16 bits across r (high
+// byte) and g (low byte).
+//
+// A texture rather than a `uniform float[33]` because the lookup index is
+// computed from the pixel's own luminance. The per-hue arrays above can be
+// indexed by compile-time constants (see the doc at the top of this file
+// for the SkSL/Impeller reason); a tone curve cannot, and a fully unrolled
+// 33-way select would be far worse than one sample.
+//
+// 16-bit, unlike point_ops_post_denoise.frag's own 8-bit uLut. Honest
+// note on that choice: it was measured, and 8 bits turned out to be
+// indistinguishable on the parity test (mean 0.985 vs 0.963 of 255). The
+// 16-bit split is kept because it is free — the RGBA texel carries four
+// bytes either way, so it costs one multiply-add in the decode and no
+// memory — and because the one path the synthetic test photo does not
+// exercise is real: this curve yields a *multiplier*
+// (perceptualDecode(pOut) / linLuma), so error is amplified as linLuma
+// approaches zero. Free insurance on a path the numbers cannot see.
+uniform sampler2D uToneLut;
 
 out vec4 fragColor;
 
@@ -114,6 +144,34 @@ float contrastCurve(float t, float gamma) {
   return 1.0 - 0.5 * pow(2.0 * (1.0 - x), gamma);
 }
 
+// color_space.dart's perceptualEncode/perceptualDecode: pow(x, 1/2.2) and
+// pow(x, 2.2), both clamping their input to [0, 1]. The CPU evaluates them
+// through an interpolated lookup table rather than pow() directly, so the
+// two differ by a hair — the same way this file's srgbToLinear already
+// does, and within what the parity test allows.
+float perceptualEncode(float x) { return pow(clamp(x, 0.0, 1.0), 1.0 / 2.2); }
+float perceptualDecode(float x) { return pow(clamp(x, 0.0, 1.0), 2.2); }
+
+// One texel of uToneLut, decoded from its 16-bit r/g split.
+float toneTexel(float index) {
+  // Sampled at the texel's exact centre, so the result is that texel's
+  // value whether the sampler filters linearly or not.
+  vec2 rg = texture(uToneLut, vec2((index + 0.5) / 33.0, 0.5)).rg;
+  return (rg.r * 255.0 * 256.0 + rg.g * 255.0) / 65535.0;
+}
+
+// color_profile.dart's _lerpList over the 33 tone points, reproduced
+// exactly: clamp, scale to 0..32, linearly interpolate the two
+// neighbouring points.
+float toneAt(float x) {
+  float f = clamp(x, 0.0, 1.0) * 32.0;
+  float i0 = floor(f);
+  float i1 = min(i0 + 1.0, 32.0);
+  float v0 = toneTexel(i0);
+  float v1 = toneTexel(i1);
+  return v0 + (v1 - v0) * (f - i0);
+}
+
 void main() {
   vec2 uv = FlutterFragCoord().xy / uSize;
   vec3 c = texture(uTexture, uv).rgb;
@@ -126,6 +184,18 @@ void main() {
   c.b = linearToSrgb(pow(contrastCurve(pow(srgbToLinear(c.b), 1.0 / 2.2), uBaseContrastGamma), 2.2));
 
   vec3 lin = vec3(srgbToLinear(c.r), srgbToLinear(c.g), srgbToLinear(c.b));
+
+  // Tone curve — a chroma-preserving luminance remap in perceptual space,
+  // before the per-hue correction, exactly where applyColorProfile runs
+  // it. Until 2026-09-04 this half lived only on the CPU and any profile
+  // carrying a real curve forced the whole render off the GPU.
+  if (uToneActive > 0.5) {
+    float linLuma = max(dot(lin, vec3(0.2126, 0.7152, 0.0722)), 1e-6);
+    float pIn = perceptualEncode(linLuma);
+    float pOut = pIn + (toneAt(pIn) - pIn) * uStrength;
+    lin *= perceptualDecode(pOut) / linLuma;
+  }
+
   if (abs(lin.r - lin.g) >= 0.001 || abs(lin.g - lin.b) >= 0.001) {
     vec3 hsv = rgbToHsv(lin);
     float hue = hsv.x;
