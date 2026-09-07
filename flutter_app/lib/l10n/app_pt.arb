@@ -368,5 +368,16 @@
   "hueRangeAqua": "Ciano",
   "hueRangeBlue": "Azul",
   "hueRangePurple": "Roxo",
-  "hueRangeMagenta": "Magenta"
+  "hueRangeMagenta": "Magenta",
+  "colorProfileRenameTitle": "Renomear perfil de cor",
+  "colorProfileExportDialogTitle": "Exportar perfil de cor",
+  "colorProfileImportDialogTitle": "Importar perfil de cor",
+  "colorProfileImportFailed": "Nao foi possivel ler esse arquivo como perfil de cor.",
+  "colorProfileDeleteTitle": "Excluir perfil de cor",
+  "colorProfileDeleteMessage": "Excluir \"{name}\"? As fotos que ja o usam voltam para o Padrao e avisam disso, e voltam a usa-lo se voce importa-lo de novo.",
+  "colorProfileMenuTooltip": "Acoes do perfil de cor",
+  "colorProfileEditLabel": "Editar",
+  "colorProfileDuplicateLabel": "Duplicar",
+  "colorProfileImportLabel": "Importar...",
+  "colorProfileEyedropper": "Escolher uma cor da foto"
 }

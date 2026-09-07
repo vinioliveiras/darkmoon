@@ -1144,4 +1144,40 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get hueRangeMagenta => 'Magenta';
+
+  @override
+  String get colorProfileRenameTitle => 'Rename colour profile';
+
+  @override
+  String get colorProfileExportDialogTitle => 'Export colour profile';
+
+  @override
+  String get colorProfileImportDialogTitle => 'Import colour profile';
+
+  @override
+  String get colorProfileImportFailed =>
+      'That file could not be read as a colour profile.';
+
+  @override
+  String get colorProfileDeleteTitle => 'Delete colour profile';
+
+  @override
+  String colorProfileDeleteMessage(String name) {
+    return 'Delete \"$name\"? Photos already using it will fall back to Default and say so, and will use it again if you import it back.';
+  }
+
+  @override
+  String get colorProfileMenuTooltip => 'Colour profile actions';
+
+  @override
+  String get colorProfileEditLabel => 'Edit';
+
+  @override
+  String get colorProfileDuplicateLabel => 'Duplicate';
+
+  @override
+  String get colorProfileImportLabel => 'Import...';
+
+  @override
+  String get colorProfileEyedropper => 'Pick a colour from the photo';
 }

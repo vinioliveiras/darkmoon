@@ -54,6 +54,7 @@ import 'render/ai_enhance_job.dart'
         CustomDenoiseModelFallback;
 import 'render/color_profile.dart';
 import 'render/histogram.dart';
+import 'render/hsl.dart';
 import 'render/lens_correction.dart';
 import 'render/luminance.dart' show luminanceRgb;
 import 'render/mask.dart';
@@ -1481,6 +1482,13 @@ class _EditorScreenState extends State<EditorScreen>
   /// True while the White Balance eyedropper is armed — the next click on
   /// the preview samples a neutral and sets Temperature/Tint. Session-only.
   bool _wbEyedropperActive = false;
+
+  /// Armed while the colour-profile editor is waiting for a colour to be
+  /// picked off the photo. The editor dialog is closed during this — see
+  /// [ColorProfileEditorResult] — and [_pendingProfileDraft] holds its
+  /// work until it reopens.
+  bool _profileHueEyedropperActive = false;
+  ColorProfile? _pendingProfileDraft;
 
   /// True while the Straighten slider is actively being dragged (item 28)
   /// — lets [CropOverlay] show a denser guide grid only during that
@@ -5319,25 +5327,199 @@ class _EditorScreenState extends State<EditorScreen>
   /// user saves.
   ColorProfile? _draftColorProfile;
 
+  /// The user profile currently selected, if the selection is one at all.
+  ColorProfile? get _selectedUserColorProfile =>
+      colorProfileModeOf(_paramValues) == ColorProfileMode.custom
+      ? _userColorProfiles[customProfileIdOf(_paramValues)]
+      : null;
+
+  /// Re-opens the selected profile for editing. Keeps its id, so every
+  /// photo already using it follows the edit rather than being orphaned.
+  Future<void> _editSelectedColorProfile() async {
+    final profile = _selectedUserColorProfile;
+    if (profile != null) {
+      await _openColorProfileEditor(initial: profile);
+    }
+  }
+
+  /// Copies the selected profile under a new id, so editing the copy
+  /// cannot disturb photos using the original.
+  Future<void> _duplicateSelectedColorProfile() async {
+    final profile = _selectedUserColorProfile;
+    if (profile == null) {
+      return;
+    }
+    final copy = await saveUserColorProfile(
+      profile.withId(newColorProfileId()).withName('${profile.name} (2)'),
+    );
+    await _loadUserColorProfiles();
+    if (mounted) {
+      _applyColorProfileChoice(copy.id);
+    }
+  }
+
+  Future<void> _renameSelectedColorProfile() async {
+    final profile = _selectedUserColorProfile;
+    if (profile == null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final name = await showTextPromptDialog(
+      context,
+      title: l10n.colorProfileRenameTitle,
+      initialValue: profile.name,
+    );
+    if (name == null || name.trim().isEmpty || !mounted) {
+      return;
+    }
+    // The id is untouched: renaming must not detach the photos using it.
+    await saveUserColorProfile(profile.withName(name.trim()));
+    await _loadUserColorProfiles();
+  }
+
+  Future<void> _exportSelectedColorProfile() async {
+    final profile = _selectedUserColorProfile;
+    if (profile == null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final destPath = await FilePicker.saveFile(
+      dialogTitle: l10n.colorProfileExportDialogTitle,
+      fileName: '${profile.name}.json',
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    if (destPath == null) {
+      return;
+    }
+    await exportColorProfile(profile, destPath);
+  }
+
+  Future<void> _deleteSelectedColorProfile() async {
+    final profile = _selectedUserColorProfile;
+    if (profile == null) {
+      return;
+    }
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showAnimatedDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: DarkmoonColors.dialogBackground,
+        shape: dialogShape,
+        title: Text(l10n.colorProfileDeleteTitle),
+        content: Text(l10n.colorProfileDeleteMessage(profile.name)),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.cancelButton),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.presetDeleteLabel),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) {
+      return;
+    }
+    await deleteUserColorProfile(profile.id);
+    await _loadUserColorProfiles();
+    if (!mounted) {
+      return;
+    }
+    // Back to Default for *this* photo, since its profile genuinely no
+    // longer exists. Other photos still referencing it keep the dangling
+    // reference and show the missing-profile warning instead — deleting a
+    // profile must not silently rewrite every photo that used it.
+    _applyColorProfileMode(ColorProfileMode.darkmoonDefault);
+  }
+
+  Future<void> _importColorProfile() async {
+    final l10n = AppLocalizations.of(context)!;
+    final result = await FilePicker.pickFiles(
+      dialogTitle: l10n.colorProfileImportDialogTitle,
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    final path = result?.files.single.path;
+    if (path == null) {
+      return;
+    }
+    try {
+      final imported = await importColorProfile(path);
+      await _loadUserColorProfiles();
+      if (mounted) {
+        _applyColorProfileChoice(imported.id);
+      }
+    } catch (_) {
+      if (mounted) {
+        _showTransientStatus(l10n.colorProfileImportFailed);
+      }
+    }
+  }
+
+  /// The canvas has one eyedropper overlay; this routes its sample to
+  /// whichever tool armed it.
+  void _onEyedropperSample(double nx, double ny) {
+    if (_profileHueEyedropperActive) {
+      unawaited(_sampleProfileHue(nx, ny));
+      return;
+    }
+    _onSampleWhiteBalance(nx, ny);
+  }
+
+  /// Reads the hue under the pointer and reopens the profile editor on the
+  /// range that owns it.
+  Future<void> _sampleProfileHue(double nx, double ny) async {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    final draft = _pendingProfileDraft;
+    if (selected == null || draft == null) {
+      return;
+    }
+    final pixel = await _samplePreviewPixel(selected.path, nx, ny);
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _profileHueEyedropperActive = false;
+      _pendingProfileDraft = null;
+    });
+    if (pixel == null) {
+      // Nothing readable under the pointer — reopen where we left off
+      // rather than discarding the profile the user was building.
+      await _openColorProfileEditor(initial: draft);
+      return;
+    }
+    final (hue, _, _) = rgbToHsv(pixel.r, pixel.g, pixel.b);
+    await _openColorProfileEditor(initial: draft, highlightHue: hue);
+  }
+
   /// Opens the colour profile editor, previewing on the current photo.
-  Future<void> _openColorProfileEditor() async {
+  Future<void> _openColorProfileEditor({
+    ColorProfile? initial,
+    double? highlightHue,
+  }) async {
     final existingNames = _userColorProfiles.values
         .map((profile) => profile.name)
         .toSet();
-    final saved = await showDialog<ColorProfile>(
+    final result = await showDialog<ColorProfileEditorResult>(
       context: context,
-      // Not the usual dimming barrier: the photo behind this dialog is the
+      // Not the usual dimming barrier: the photo around this dialog is the
       // preview, and dimming it would misrepresent the colours being
       // judged.
       barrierColor: Colors.transparent,
       builder: (context) => ColorProfileEditorDialog(
-        initial: ColorProfile(
-          tone: identityColorProfile.tone,
-          hueShift: List<double>.of(identityColorProfile.hueShift),
-          satMul: List<double>.of(identityColorProfile.satMul),
-          lumMul: List<double>.of(identityColorProfile.lumMul),
-          id: newColorProfileId(),
-        ),
+        initial:
+            initial ??
+            ColorProfile(
+              tone: identityColorProfile.tone,
+              hueShift: List<double>.of(identityColorProfile.hueShift),
+              satMul: List<double>.of(identityColorProfile.satMul),
+              lumMul: List<double>.of(identityColorProfile.lumMul),
+              id: newColorProfileId(),
+            ),
+        highlightHue: highlightHue,
         existingNames: existingNames,
         onDraftChanged: (draft) {
           setState(() => _draftColorProfile = draft);
@@ -5354,13 +5536,25 @@ class _EditorScreenState extends State<EditorScreen>
       return;
     }
     setState(() => _draftColorProfile = null);
-    if (saved == null) {
+    if (result == null) {
       // Cancelled — put the photo back the way it was.
       _scheduleRender(live: false);
       return;
     }
 
-    final stored = await saveUserColorProfile(saved);
+    if (result.pickHue) {
+      // Arm the canvas and wait. The draft is held rather than saved: the
+      // user has not agreed to create anything yet, they asked a question
+      // about a colour.
+      setState(() {
+        _profileHueEyedropperActive = true;
+        _pendingProfileDraft = result.profile;
+      });
+      _scheduleRender(live: false);
+      return;
+    }
+
+    final stored = await saveUserColorProfile(result.profile);
     await _loadUserColorProfiles();
     if (!mounted) {
       return;
@@ -6785,8 +6979,10 @@ class _EditorScreenState extends State<EditorScreen>
                                   onSampleColor: _onSampleMaskColor,
                                   onSampleLuminance: _onSampleMaskLuminance,
                                   wbEyedropperActive:
-                                      _wbEyedropperActive && !_beforeAfterMode,
-                                  onSampleWhiteBalance: _onSampleWhiteBalance,
+                                      (_wbEyedropperActive ||
+                                          _profileHueEyedropperActive) &&
+                                      !_beforeAfterMode,
+                                  onSampleWhiteBalance: _onEyedropperSample,
                                   maskOverlayVisible:
                                       _maskOverlayVisible &&
                                       !_isAdjustingMaskValue,
@@ -6874,6 +7070,15 @@ class _EditorScreenState extends State<EditorScreen>
                             onColorProfileChoiceChanged:
                                 _applyColorProfileChoice,
                             onCreateColorProfile: _openColorProfileEditor,
+                            onImportColorProfile: _importColorProfile,
+                            onEditColorProfile: _editSelectedColorProfile,
+                            onDuplicateColorProfile:
+                                _duplicateSelectedColorProfile,
+                            onRenameColorProfile: _renameSelectedColorProfile,
+                            onExportColorProfile: _exportSelectedColorProfile,
+                            onDeleteColorProfile: _deleteSelectedColorProfile,
+                            selectedProfileIsUsers:
+                                _selectedUserColorProfile != null,
                             onWhiteBalanceMode: _applyWbMode,
                             wbEyedropperActive: _wbEyedropperActive,
                             onToggleWbEyedropper: () => setState(
@@ -8932,6 +9137,13 @@ class _ControlsPanel extends StatefulWidget {
     required this.customProfileMissing,
     required this.onColorProfileChoiceChanged,
     required this.onCreateColorProfile,
+    required this.onImportColorProfile,
+    required this.onEditColorProfile,
+    required this.onDuplicateColorProfile,
+    required this.onRenameColorProfile,
+    required this.onExportColorProfile,
+    required this.onDeleteColorProfile,
+    required this.selectedProfileIsUsers,
     required this.onExport,
     required this.exporting,
     required this.enabled,
@@ -9026,6 +9238,17 @@ class _ControlsPanel extends StatefulWidget {
   /// Opens the profile editor. Not a per-photo edit, which is why it
   /// is a separate callback rather than another dropdown value.
   final VoidCallback onCreateColorProfile;
+  final VoidCallback onImportColorProfile;
+  final VoidCallback onEditColorProfile;
+  final VoidCallback onDuplicateColorProfile;
+  final VoidCallback onRenameColorProfile;
+  final VoidCallback onExportColorProfile;
+  final VoidCallback onDeleteColorProfile;
+
+  /// Whether the selected profile is one the user owns. The built-ins are
+  /// not editable, renameable or deletable, so their menu offers only
+  /// import.
+  final bool selectedProfileIsUsers;
 
   final VoidCallback? onExport;
   final bool exporting;
@@ -9725,6 +9948,77 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                           icon: const Icon(Icons.add),
                                           onPressed:
                                               widget.onCreateColorProfile,
+                                        ),
+                                      ),
+                                    ),
+                                    // Bare icon, not an IconButton: the
+                                    // app's IconButtonTheme draws a filled
+                                    // rounded-square meant for standalone
+                                    // toolbar buttons, which reads as a box
+                                    // around a quiet menu trigger. Same
+                                    // reasoning as preset_panel.dart's row
+                                    // menu.
+                                    Tooltip(
+                                      message: l10n.colorProfileMenuTooltip,
+                                      child: PopupMenuButton<VoidCallback>(
+                                        padding: EdgeInsets.zero,
+                                        onSelected: (action) => action(),
+                                        itemBuilder: (context) => [
+                                          // Import is always here; the rest
+                                          // only mean something once a user
+                                          // profile is the one selected.
+                                          PopupMenuItem(
+                                            value: widget.onImportColorProfile,
+                                            child: Text(
+                                              l10n.colorProfileImportLabel,
+                                            ),
+                                          ),
+                                          if (widget
+                                              .selectedProfileIsUsers) ...[
+                                            const PopupMenuDivider(),
+                                            PopupMenuItem(
+                                              value: widget.onEditColorProfile,
+                                              child: Text(
+                                                l10n.colorProfileEditLabel,
+                                              ),
+                                            ),
+                                            PopupMenuItem(
+                                              value: widget
+                                                  .onDuplicateColorProfile,
+                                              child: Text(
+                                                l10n.colorProfileDuplicateLabel,
+                                              ),
+                                            ),
+                                            PopupMenuItem(
+                                              value:
+                                                  widget.onRenameColorProfile,
+                                              child: Text(
+                                                l10n.presetRenameLabel,
+                                              ),
+                                            ),
+                                            PopupMenuItem(
+                                              value:
+                                                  widget.onExportColorProfile,
+                                              child: Text(
+                                                l10n.presetExportLabel,
+                                              ),
+                                            ),
+                                            PopupMenuItem(
+                                              value:
+                                                  widget.onDeleteColorProfile,
+                                              child: Text(
+                                                l10n.presetDeleteLabel,
+                                              ),
+                                            ),
+                                          ],
+                                        ],
+                                        child: const Padding(
+                                          padding: EdgeInsets.all(6),
+                                          child: Icon(
+                                            CupertinoIcons.ellipsis,
+                                            size: 14,
+                                            color: DarkmoonColors.textMuted,
+                                          ),
                                         ),
                                       ),
                                     ),

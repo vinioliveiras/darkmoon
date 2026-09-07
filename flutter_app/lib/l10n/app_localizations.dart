@@ -2211,6 +2211,72 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Magenta'**
   String get hueRangeMagenta;
+
+  /// No description provided for @colorProfileRenameTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Rename colour profile'**
+  String get colorProfileRenameTitle;
+
+  /// No description provided for @colorProfileExportDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Export colour profile'**
+  String get colorProfileExportDialogTitle;
+
+  /// No description provided for @colorProfileImportDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import colour profile'**
+  String get colorProfileImportDialogTitle;
+
+  /// No description provided for @colorProfileImportFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'That file could not be read as a colour profile.'**
+  String get colorProfileImportFailed;
+
+  /// No description provided for @colorProfileDeleteTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete colour profile'**
+  String get colorProfileDeleteTitle;
+
+  /// No description provided for @colorProfileDeleteMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete \"{name}\"? Photos already using it will fall back to Default and say so, and will use it again if you import it back.'**
+  String colorProfileDeleteMessage(String name);
+
+  /// No description provided for @colorProfileMenuTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour profile actions'**
+  String get colorProfileMenuTooltip;
+
+  /// No description provided for @colorProfileEditLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get colorProfileEditLabel;
+
+  /// No description provided for @colorProfileDuplicateLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Duplicate'**
+  String get colorProfileDuplicateLabel;
+
+  /// No description provided for @colorProfileImportLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Import...'**
+  String get colorProfileImportLabel;
+
+  /// No description provided for @colorProfileEyedropper.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a colour from the photo'**
+  String get colorProfileEyedropper;
 }
 
 class _AppLocalizationsDelegate

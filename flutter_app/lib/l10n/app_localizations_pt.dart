@@ -1152,4 +1152,40 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get hueRangeMagenta => 'Magenta';
+
+  @override
+  String get colorProfileRenameTitle => 'Renomear perfil de cor';
+
+  @override
+  String get colorProfileExportDialogTitle => 'Exportar perfil de cor';
+
+  @override
+  String get colorProfileImportDialogTitle => 'Importar perfil de cor';
+
+  @override
+  String get colorProfileImportFailed =>
+      'Nao foi possivel ler esse arquivo como perfil de cor.';
+
+  @override
+  String get colorProfileDeleteTitle => 'Excluir perfil de cor';
+
+  @override
+  String colorProfileDeleteMessage(String name) {
+    return 'Excluir \"$name\"? As fotos que ja o usam voltam para o Padrao e avisam disso, e voltam a usa-lo se voce importa-lo de novo.';
+  }
+
+  @override
+  String get colorProfileMenuTooltip => 'Acoes do perfil de cor';
+
+  @override
+  String get colorProfileEditLabel => 'Editar';
+
+  @override
+  String get colorProfileDuplicateLabel => 'Duplicar';
+
+  @override
+  String get colorProfileImportLabel => 'Importar...';
+
+  @override
+  String get colorProfileEyedropper => 'Escolher uma cor da foto';
 }

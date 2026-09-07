@@ -358,5 +358,16 @@
   "hueRangeAqua": "Türkis",
   "hueRangeBlue": "Blau",
   "hueRangePurple": "Violett",
-  "hueRangeMagenta": "Magenta"
+  "hueRangeMagenta": "Magenta",
+  "colorProfileRenameTitle": "Farbprofil umbenennen",
+  "colorProfileExportDialogTitle": "Farbprofil exportieren",
+  "colorProfileImportDialogTitle": "Farbprofil importieren",
+  "colorProfileImportFailed": "Diese Datei konnte nicht als Farbprofil gelesen werden.",
+  "colorProfileDeleteTitle": "Farbprofil loeschen",
+  "colorProfileDeleteMessage": "\"{name}\" loeschen? Fotos, die es bereits verwenden, fallen auf Standard zurueck und weisen darauf hin; sie verwenden es wieder, wenn Sie es erneut importieren.",
+  "colorProfileMenuTooltip": "Farbprofil-Aktionen",
+  "colorProfileEditLabel": "Bearbeiten",
+  "colorProfileDuplicateLabel": "Duplizieren",
+  "colorProfileImportLabel": "Importieren...",
+  "colorProfileEyedropper": "Eine Farbe aus dem Foto waehlen"
 }

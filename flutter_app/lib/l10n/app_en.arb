@@ -496,5 +496,17 @@
   "hueRangeAqua": "Aqua",
   "hueRangeBlue": "Blue",
   "hueRangePurple": "Purple",
-  "hueRangeMagenta": "Magenta"
+  "hueRangeMagenta": "Magenta",
+  "colorProfileRenameTitle": "Rename colour profile",
+  "colorProfileExportDialogTitle": "Export colour profile",
+  "colorProfileImportDialogTitle": "Import colour profile",
+  "colorProfileImportFailed": "That file could not be read as a colour profile.",
+  "colorProfileDeleteTitle": "Delete colour profile",
+  "colorProfileDeleteMessage": "Delete \"{name}\"? Photos already using it will fall back to Default and say so, and will use it again if you import it back.",
+  "@colorProfileDeleteMessage": {"placeholders": {"name": {"type": "String"}}},
+  "colorProfileMenuTooltip": "Colour profile actions",
+  "colorProfileEditLabel": "Edit",
+  "colorProfileDuplicateLabel": "Duplicate",
+  "colorProfileImportLabel": "Import...",
+  "colorProfileEyedropper": "Pick a colour from the photo"
 }

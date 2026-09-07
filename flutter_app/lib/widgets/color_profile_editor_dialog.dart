@@ -10,17 +10,41 @@ import 'tone_curve_editor.dart';
 
 /// Creates or edits a user-authored "darkmoon Color" profile.
 ///
-/// Deliberately aligned to the right edge over the controls panel rather
-/// than centred: the whole point is watching the photo change while you
-/// work, and a centred modal would cover it. There is no preview widget
-/// inside the dialog at all — [onDraftChanged] pushes the work-in-progress
-/// profile into the editor, which renders it through the same GPU pipeline
-/// everything else uses. What you see while editing is the real thing, not
-/// an approximation of it.
+/// There is no preview widget inside this dialog. [onDraftChanged] pushes
+/// the work-in-progress profile into the editor, which renders it through
+/// the same GPU pipeline everything else uses, so what you see while
+/// editing is the real thing rather than an approximation that could
+/// disagree with the saved result.
+///
+/// Centred, like every other dialog in the app — user's call, 2026-09-07,
+/// after seeing it right-aligned. Right alignment kept the whole canvas
+/// visible while editing; centring trades some of that for consistency.
+/// The barrier stays transparent so what remains visible around the
+/// dialog still updates live, and dimming the photo would misrepresent
+/// the colours being judged.
 ///
 /// [onDraftChanged] fires continuously (live, low-res preview) and
 /// [onDraftSettled] once a gesture ends (full-quality), matching the
 /// convention every slider in this app already follows.
+/// Why the editor closed.
+///
+/// Picking a colour needs the photo, and the photo is behind a modal
+/// barrier that swallows clicks — so arming the eyedropper closes the
+/// dialog carrying its work, and the editor reopens it once a pixel has
+/// been sampled. The alternative, letting clicks fall through a dialog
+/// that is still on screen, does not exist while the barrier is there.
+class ColorProfileEditorResult {
+  const ColorProfileEditorResult.saved(this.profile) : pickHue = false;
+  const ColorProfileEditorResult.pickHue(this.profile) : pickHue = true;
+
+  /// The profile as it stood when the dialog closed — the thing to save,
+  /// or the thing to hand back when reopening after a pick.
+  final ColorProfile profile;
+
+  /// True when the user asked to sample a colour rather than to save.
+  final bool pickHue;
+}
+
 class ColorProfileEditorDialog extends StatefulWidget {
   const ColorProfileEditorDialog({
     super.key,
@@ -28,7 +52,14 @@ class ColorProfileEditorDialog extends StatefulWidget {
     required this.existingNames,
     required this.onDraftChanged,
     required this.onDraftSettled,
+    this.highlightHue,
   });
+
+  /// A hue in degrees just sampled from the photo. The dialog opens on the
+  /// Colour tab with the range (or bin) that owns it marked, which is the
+  /// whole point of the eyedropper: naming which of the eight ranges a
+  /// given patch of sky or skin actually falls in.
+  final double? highlightHue;
 
   /// The profile to open with — a fresh identity one when creating, an
   /// installed one when editing.
@@ -71,6 +102,9 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
   late final TabController _tabController = TabController(
     length: 3,
     vsync: this,
+    // Straight to Colour when reopened after a sample: the user asked a
+    // question about a colour and this is the answer.
+    initialIndex: widget.highlightHue == null ? 0 : 1,
   );
   late final TextEditingController _nameController = TextEditingController(
     text: widget.initial.name,
@@ -87,6 +121,12 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
   late List<double> _lumMul = List<double>.of(widget.initial.lumMul);
 
   bool _advanced = false;
+
+  /// Which range or bin the last sampled colour landed in, or null.
+  late final int? _highlightBin = widget.highlightHue == null
+      ? null
+      : (widget.highlightHue! / (360 / colorProfileBins)).floor() %
+            colorProfileBins;
 
   /// Recovers editable control points from a stored 33-point curve.
   ///
@@ -216,6 +256,20 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
               ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
             ),
           ),
+          Tooltip(
+            message: l10n.colorProfileEyedropper,
+            child: IconButton(
+              iconSize: 16,
+              splashRadius: 16,
+              color: DarkmoonColors.textSecondary,
+              icon: const Icon(Icons.colorize),
+              // Closes the dialog carrying the work — see
+              // ColorProfileEditorResult for why it cannot stay open.
+              onPressed: () => Navigator.of(
+                context,
+              ).pop(ColorProfileEditorResult.pickHue(_draft)),
+            ),
+          ),
           TextButton(
             onPressed: () => setState(() => _advanced = !_advanced),
             child: Text(
@@ -235,6 +289,20 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
     ],
   );
 
+  /// True when the last sampled colour falls inside this range.
+  bool _rangeHolds(int firstBin) {
+    final bin = _highlightBin;
+    if (bin == null) {
+      return false;
+    }
+    for (var i = 0; i < _binsPerRange; i++) {
+      if ((firstBin + i) % colorProfileBins == bin) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   List<Widget> _basicRange(
     AppLocalizations l10n,
     ({String key, int firstBin}) range,
@@ -243,9 +311,12 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
       padding: const EdgeInsets.only(top: 6, bottom: 2),
       child: Text(
         _hueRangeLabel(l10n, range.key),
-        style: Theme.of(
-          context,
-        ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textSecondary),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: _rangeHolds(range.firstBin)
+              ? DarkmoonColors.accent
+              : DarkmoonColors.textSecondary,
+          fontWeight: _rangeHolds(range.firstBin) ? FontWeight.w700 : null,
+        ),
       ),
     ),
     _slider(
@@ -281,9 +352,12 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
         // The bin's own hue, in degrees — the only label that means
         // anything at this granularity.
         '${bin * (360 ~/ colorProfileBins)}°',
-        style: Theme.of(
-          context,
-        ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textSecondary),
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+          color: bin == _highlightBin
+              ? DarkmoonColors.accent
+              : DarkmoonColors.textSecondary,
+          fontWeight: bin == _highlightBin ? FontWeight.w700 : null,
+        ),
       ),
     ),
     _slider(l10n.colorProfileEditorHue, _hueShift[bin], -30, 30, 0, (v) {
@@ -415,10 +489,6 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
     return AlertDialog(
       backgroundColor: DarkmoonColors.dialogBackground,
       shape: dialogShape,
-      // Right-aligned so the canvas stays visible behind it — see the class
-      // doc. The preview *is* the photo.
-      alignment: Alignment.centerRight,
-      insetPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
       title: DialogTitleRow(
         title: widget.initial.name.isEmpty
             ? l10n.colorProfileEditorTitleNew
@@ -474,7 +544,9 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
           // impossible to tell apart from the next one.
           onPressed: name.isEmpty
               ? null
-              : () => Navigator.of(context).pop(_draft),
+              : () => Navigator.of(
+                  context,
+                ).pop(ColorProfileEditorResult.saved(_draft)),
           child: Text(l10n.presetSaveLabel),
         ),
       ],

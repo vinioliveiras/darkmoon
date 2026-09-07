@@ -23,6 +23,7 @@ void main() {
     WidgetTester tester, {
     ColorProfile? initial,
     Set<String> existingNames = const {},
+    double? highlightHue,
   }) async {
     final drafts = <ColorProfile>[];
     await tester.pumpWidget(
@@ -32,6 +33,7 @@ void main() {
         home: ColorProfileEditorDialog(
           initial: initial ?? identity(),
           existingNames: existingNames,
+          highlightHue: highlightHue,
           onDraftChanged: drafts.add,
           onDraftSettled: drafts.add,
         ),
@@ -193,6 +195,89 @@ void main() {
           'sampling an untouched curve must not introduce a tone curve, '
           'which would change every pixel of the photo',
     );
+  });
+
+  group('eyedropper round trip', () {
+    /// The dialog has to close for a colour to be picked — a modal barrier
+    /// sits over the photo — so the work in progress leaves with it. If it
+    /// did not, arming the eyedropper would silently discard everything
+    /// the user had built.
+    testWidgets('arming carries the work out with it', (tester) async {
+      ColorProfileEditorResult? popped;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Builder(
+            builder: (context) => TextButton(
+              onPressed: () async {
+                popped = await showDialog<ColorProfileEditorResult>(
+                  context: context,
+                  builder: (_) => ColorProfileEditorDialog(
+                    initial: identity(),
+                    existingNames: const {},
+                    onDraftChanged: (_) {},
+                    onDraftSettled: (_) {},
+                  ),
+                );
+              },
+              child: const Text('open'),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+      await tester.tap(find.text(l10n.colorProfileEditorTabColor));
+      await tester.pumpAndSettle();
+
+      // Build something first, so "carries the work" means anything.
+      final hueSliders = find.byWidgetPredicate(
+        (w) => w is SliderRow && w.name == l10n.colorProfileEditorHue,
+      );
+      tester.widget<SliderRow>(hueSliders.first).onChanged(20);
+      await tester.pump();
+
+      await tester.tap(find.byIcon(Icons.colorize));
+      await tester.pumpAndSettle();
+
+      expect(popped, isNotNull);
+      expect(popped!.pickHue, isTrue);
+      expect(
+        popped!.profile.hueShift[0],
+        20,
+        reason: 'the edit made before arming must survive the round trip',
+      );
+    });
+
+    testWidgets('a sampled hue opens on Colour and marks its range', (
+      tester,
+    ) async {
+      // 50 degrees sits just past the Red/Orange boundary: 50 / 15 = bin
+      // 3, and Orange owns bins 3-5 while Red owns 0-2. A boundary value
+      // is the one worth asserting — the arithmetic is off by one range if
+      // the floor or the modulo is wrong. Both labels are near the top of
+      // the list, so both are actually built; a range further down would
+      // not be, and the finder would fail for a reason unrelated to the
+      // mapping.
+      await pumpDialog(tester, highlightHue: 50);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+      final red = tester.widget<Text>(find.text(l10n.hueRangeRed));
+      final orange = tester.widget<Text>(find.text(l10n.hueRangeOrange));
+      expect(
+        orange.style?.fontWeight,
+        FontWeight.w700,
+        reason: 'hue 50 falls in bin 3, which Orange owns',
+      );
+      expect(
+        red.style?.fontWeight,
+        isNot(FontWeight.w700),
+        reason: 'the neighbouring range must not also claim it',
+      );
+    });
   });
 
   testWidgets('an existing profile opens with its own values', (tester) async {
