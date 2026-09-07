@@ -7916,6 +7916,14 @@ class _ImageArea extends StatelessWidget {
             );
             return Stack(
               fit: StackFit.expand,
+              // Stack clips to its own bounds by default, and the crop
+              // handles are drawn centred on the crop rect's corners — so
+              // at a full-frame crop, where those corners sit exactly on
+              // the edge, the outer half of every dot was being cut away.
+              // That clip is what the handles were nudged inward to avoid;
+              // letting them paint past it is the fix that keeps them
+              // where the corners actually are.
+              clipBehavior: Clip.none,
               children: [
                 _fadingImage(frame),
                 CropOverlay(
