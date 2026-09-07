@@ -37,11 +37,18 @@ class ColorMixerValues {
   /// "Hue/Saturation/Luminance" (e.g. `'MixerRedHue'`), same convention as
   /// every other slider.
   factory ColorMixerValues.fromValues(Map<String, double> values) {
-    ChannelAdjust channel(String name) => ChannelAdjust(
-      hue: values['Mixer${name}Hue'] ?? 0,
-      saturation: values['Mixer${name}Saturation'] ?? 0,
-      luminance: values['Mixer${name}Luminance'] ?? 0,
-    );
+    ChannelAdjust channel(String name) {
+      // Scaled here, where the sliders become mixer values, because this
+      // is the one place both render paths read: the GPU uploads these
+      // very numbers as uMixer[24]. A per-band strength applied any later
+      // would have to be applied twice, and the two copies would drift.
+      final band = calMixerBandStrength[name] ?? 1.0;
+      return ChannelAdjust(
+        hue: (values['Mixer${name}Hue'] ?? 0) * band,
+        saturation: (values['Mixer${name}Saturation'] ?? 0) * band,
+        luminance: (values['Mixer${name}Luminance'] ?? 0) * band,
+      );
+    }
     return ColorMixerValues(
       red: channel('Red'),
       orange: channel('Orange'),

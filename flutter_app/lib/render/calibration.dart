@@ -78,17 +78,22 @@ const double calGlobalAmountCompression = 1.0;
 /// reads through it for every key.
 const Map<String, double> calGlobalAmountCompressionOverrides = {
   'ColorProfileAmount': 1.0,
-  'Exposure': 5.0,
+  'Exposure': 3.0,
   'Contrast': 0.8,
   'Shadow': 0.5,
-  'Texture': 0.5,
+  'Texture': 0.3,
   'Sharpen': 0.5,
   'Blacks': 0.5,
-  'Vibrance': 0.5,
+  'Vibrance': 0.8,
   'Saturation': 0.5,
-  'Dehaze': 0.5,
-  'MixerHue': 0.5,
+  'Dehaze': 0.2,
+  'Clarity': 0.5,
+  'Mixer': 0.5,
+  'MixerHue': 0.2,
+  'MixerHueStrength': 0.2,
   'MixerSaturation': 0.6,
+  'MixerHueSaturation': 0.5,
+  'MixerHueLuminance': 0.5,
   'MixerLuminance': 0.3,
   // Real bug found 2026-09-02: dragging the "Color Profile Contrast"
   // slider (ColorProfileAmount) barely changed the render even across
@@ -450,6 +455,39 @@ const double calSaturationStrength = 0.10;
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  COLOR — Color Mixer / HSL (8 bands)                                      ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
+
+/// **Mixer → per band** — scales one band's Hue/Saturation/Luminance
+/// sliders, on top of the three global strengths below.
+///
+/// This is the knob for "one colour is too sensitive". The global
+/// strengths move all eight bands together; this moves one. 1.0 leaves a
+/// band exactly as it was, 0.5 makes its sliders half as strong, 0 makes
+/// them inert.
+///
+/// Applied where the slider values become mixer values, which is one
+/// place, ahead of both the CPU and the GPU — so there is no shader
+/// counterpart to keep in step and no way for the two to disagree.
+///
+/// Note this changes what an existing preset does to that band, the same
+/// way the global strengths do.
+///
+/// If a band feels sensitive because it reaches colours you did not mean
+/// it to — Orange spanning 45° from a centre of 25° covers a lot of skin
+/// — that is its *width*, not its strength, and the widths still live as
+/// literals in `color_mixer.dart` and `point_ops_post_denoise.frag`.
+///   ↑ higher = that band's sliders bite harder
+///   ↓ lower  = gentler, finer control over that colour
+/// default: 1.0 for all eight
+const Map<String, double> calMixerBandStrength = {
+  'Red': 1.0,
+  'Orange': 1.0,
+  'Yellow': 1.0,
+  'Green': 1.0,
+  'Aqua': 1.0,
+  'Blue': 1.0,
+  'Purple': 1.0,
+  'Magenta': 1.0,
+};
 
 /// **Mixer → Hue** — how many degrees of hue rotation each slider unit
 /// produces (before per-band normalization and the saturation mask). The
