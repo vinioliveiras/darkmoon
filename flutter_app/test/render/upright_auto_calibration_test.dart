@@ -216,10 +216,14 @@ void main() {
     );
     expect(
       after!.abs(),
-      lessThan(before.abs() * 0.25),
+      lessThan(before.abs() * 0.12),
       reason:
-          'Auto must remove most of the convergence it measured; leaving '
-          'more than a quarter means the gain is wrong, not the fit',
+          'Auto must remove nearly all of the convergence it measured. '
+          'This was a quarter while the detector returned the same edge '
+          'two or three times and a single constant gain had to cover a '
+          'response that is not linear; across seven perspective '
+          'strengths it now leaves 0-8%, so a regression past 12% means '
+          'something has gone backwards',
     );
   });
 

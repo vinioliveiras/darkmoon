@@ -602,6 +602,16 @@ const double calUprightMaxTiltDeg = 35.0;
 /// default: 2
 const double calUprightMinAgreement = 2.0;
 
+/// **Upright** — how far off the robust trend a line may sit and still
+/// join the least-squares refit, as a multiple of the typical miss.
+///
+/// The robust fit decides which lines belong; this says how generously,
+/// and the refit then uses all of them properly.
+///   ↑ higher = lets a stray line back into the final slope
+///   ↓ lower  = discards real family members and wastes their evidence
+/// default: 2.5
+const double calUprightRefitCutoff = 2.5;
+
 /// **Upright** — how many edges of a family are needed before its slope
 /// is trusted.
 ///   ↑ higher = only corrects photos with plenty of structure
@@ -647,21 +657,30 @@ const double calUprightMaxLines = 40;
 /// default: 0.2
 const double calUprightLineFloor = 0.2;
 
-/// **Upright** — slider units per unit of measured vertical fan-out.
+/// **Upright** — slider units per unit of measured vertical fan-out, at
+/// the gentle end.
 ///
 /// Set by measurement, not taste: `upright_auto_calibration_test.dart`
 /// drives synthetic perspectives through the real geometry pass and
 /// bisects for the slider value that leaves no convergence behind.
-/// Across a five-fold range of perspective strength that value came back
-/// at 133-161 units of slider per unit of fan-out; this is the middle of
-/// it. The spread is real — the geometry pass anchors the bottom edge, so
-/// its response is not quite linear — and it costs about a tenth of the
-/// correction at the extremes, which is well inside what the eye reads as
-/// upright.
+///
+/// It takes two numbers because one does not fit. The geometry pass
+/// anchors the bottom edge, so its response is not linear, and the
+/// measured ratio climbs steadily from about 112 units per unit of
+/// fan-out on a gentle perspective to about 143 on a steep one. A single
+/// constant splits that difference and is then wrong at both ends —
+/// worst exactly where the error shows most, on the strong perspectives.
 ///   ↑ higher = over-corrects, tipping verticals the other way
 ///   ↓ lower  = leaves some convergence in
-/// default: 140 (measured)
-const double calUprightVerticalGain = 140.0;
+/// default: 107 (measured)
+const double calUprightVerticalGain = 107.0;
+
+/// **Upright** — how much [calUprightVerticalGain] grows per unit of
+/// fan-out, which is what makes the mapping fit both ends.
+///   ↑ higher = corrects steep perspectives harder
+///   ↓ lower  = flatter response, back toward a single constant
+/// default: 58 (measured)
+const double calUprightVerticalGainSlope = 58.0;
 
 /// **Upright** — the same, for horizontal fan-out.
 ///

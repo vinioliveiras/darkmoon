@@ -94,6 +94,7 @@ ConvergenceFit? fitConvergence(
 }) {
   final positions = <double>[];
   final values = <double>[];
+  final weights = <double>[];
   for (final line in lines) {
     final tilt = verticals
         ? _tiltFromVertical(line.angleDeg)
@@ -109,6 +110,7 @@ ConvergenceFit? fitConvergence(
     }
     positions.add(position);
     values.add(math.tan(tilt * math.pi / 180.0));
+    weights.add(line.strength);
   }
   if (positions.length < 3) {
     return null;
@@ -156,13 +158,55 @@ ConvergenceFit? fitConvergence(
     for (var i = 0; i < positions.length; i++)
       values[i] - slope * positions[i],
   ]);
-  final scatter = median([
+  final residuals = [
     for (var i = 0; i < positions.length; i++)
       (values[i] - (intercept + slope * positions[i])).abs(),
-  ]);
+  ];
+  final scatter = median(residuals);
+
+  // Robust first, efficient second. A median of pairwise slopes cannot be
+  // dragged by a rival population, which is the whole reason it is here,
+  // but with five or six lines it is also throwing away most of what they
+  // say — a median steps between discrete pair slopes instead of using
+  // all of them. So the robust fit is used for what it is good at, naming
+  // which lines belong, and a least-squares fit over just those lines
+  // gives the slope. Measured on synthetic perspectives, this halved the
+  // scatter in the slider gain it implies.
+  final keptPositions = <double>[];
+  final keptValues = <double>[];
+  final keptWeights = <double>[];
+  final cutoff = math.max(scatter * calUprightRefitCutoff, 1e-6);
+  for (var i = 0; i < positions.length; i++) {
+    if (residuals[i] <= cutoff) {
+      keptPositions.add(positions[i]);
+      keptValues.add(values[i]);
+      keptWeights.add(weights[i]);
+    }
+  }
+
+  var refined = slope;
+  if (keptPositions.length >= 4) {
+    var sw = 0.0;
+    var sx = 0.0;
+    var sy = 0.0;
+    var sxx = 0.0;
+    var sxy = 0.0;
+    for (var i = 0; i < keptPositions.length; i++) {
+      final w = keptWeights[i];
+      sw += w;
+      sx += w * keptPositions[i];
+      sy += w * keptValues[i];
+      sxx += w * keptPositions[i] * keptPositions[i];
+      sxy += w * keptPositions[i] * keptValues[i];
+    }
+    final denominator = sxx - sx * sx / sw;
+    if (sw > 0 && denominator.abs() > 1e-9) {
+      refined = (sxy - sx * sy / sw) / denominator;
+    }
+  }
 
   return ConvergenceFit(
-    slope: slope,
+    slope: refined,
     spread: spread,
     count: positions.length,
     scatter: scatter,
@@ -193,7 +237,12 @@ class UprightCorrection {
 
 /// Turns a fitted convergence into a Transform slider value, or 0 when
 /// the fit does not earn one.
-double _correctionFrom(ConvergenceFit? fit, double extent, double gain) {
+double _correctionFrom(
+  ConvergenceFit? fit,
+  double extent,
+  double gain, {
+  double gainSlope = 0,
+}) {
   if (fit == null || fit.spread < extent * calUprightMinSpread) {
     return 0;
   }
@@ -214,7 +263,10 @@ double _correctionFrom(ConvergenceFit? fit, double extent, double gain) {
   if (fanOut.abs() < fit.scatter * calUprightMinAgreement) {
     return 0;
   }
-  final correction = fanOut * gain;
+  // The gain is not constant: the geometry pass anchors the bottom edge,
+  // so a steep perspective needs proportionally more slider than a gentle
+  // one. See calUprightVerticalGainSlope.
+  final correction = fanOut * (gain + gainSlope * fanOut.abs());
   if (correction.abs() < calUprightDeadZone) {
     return 0;
   }
@@ -248,6 +300,7 @@ UprightCorrection? uprightMeasureFor(Uint8List luma, int width, int height) {
     fitConvergence(lines, verticals: true),
     width.toDouble(),
     calUprightVerticalGain,
+    gainSlope: calUprightVerticalGainSlope,
   );
   final horizontal = _correctionFrom(
     fitConvergence(lines, verticals: false),
