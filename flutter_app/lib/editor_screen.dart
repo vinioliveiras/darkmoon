@@ -66,6 +66,7 @@ import 'render/render_job.dart';
 import 'render/crop_transform.dart';
 import 'render/render_params.dart';
 import 'render/tone_curve.dart';
+import 'render/upright.dart';
 import 'render/white_balance.dart';
 import 'settings/app_settings.dart';
 import 'theme.dart';
@@ -1488,6 +1489,11 @@ class _EditorScreenState extends State<EditorScreen>
   /// [ColorProfileEditorResult] — and [_pendingProfileDraft] holds its
   /// work until it reopens.
   bool _profileHueEyedropperActive = false;
+
+  /// True while Level is measuring. The measurement is a per-pixel pass on
+  /// another isolate and takes a moment on a large preview, so the button
+  /// has to say it is working rather than look like it ignored the click.
+  bool _levelBusy = false;
   ColorProfile? _pendingProfileDraft;
 
   /// True while the Straighten slider is actively being dragged (item 28)
@@ -5566,6 +5572,108 @@ class _EditorScreenState extends State<EditorScreen>
     return (rgb: rgb, width: w, height: h);
   }
 
+  /// Measures how far the open photo is off level and straightens it.
+  ///
+  /// The Level mode of the Upright set (PENDING item 27). It reads the
+  /// *neutral* preview, which renders with no geometry at all, so what
+  /// comes back is the absolute angle to set rather than a correction to
+  /// add to whatever Straighten already holds.
+  ///
+  /// Runs the per-pixel pass on another isolate: it is the same class of
+  /// work as a render, and the button is disabled meanwhile so a second
+  /// press cannot queue a second one.
+  Future<void> _levelPhoto() async {
+    if (_levelBusy) {
+      return;
+    }
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null) {
+      return;
+    }
+    setState(() => _levelBusy = true);
+    try {
+      final source = await _levelSource(selected.path);
+      if (source == null || !mounted) {
+        return;
+      }
+      final rotation = await compute(levelRotationForRequest, source);
+      if (!mounted) {
+        return;
+      }
+      if (rotation == null) {
+        // Not a failure to report as an error: plenty of photographs have
+        // nothing straight in them, and guessing would be worse than
+        // saying so.
+        _showTransientStatus(
+          AppLocalizations.of(context)!.transformLevelNothingFound,
+        );
+        return;
+      }
+      _onCropTransformChangeEnd(
+        _cropTransform.copyWith(straightenAngle: rotation),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _levelBusy = false);
+      }
+    }
+  }
+
+  /// The neutral preview as luma, for [_levelPhoto].
+  ///
+  /// Box-averaged down rather than point-sampled. Nearest-neighbour would
+  /// alias every edge into a staircase, and a staircased edge is exactly
+  /// the case the estimator measures worst — averaging softens the edge,
+  /// which is what carries the angle.
+  Future<LevelRequest?> _levelSource(String path) async {
+    if (!_neutralPreviews.containsKey(path)) {
+      await _loadNeutralPreview(path);
+    }
+    final neutral = _neutralPreviews[path];
+    if (neutral == null || !mounted) {
+      return null;
+    }
+    final image = neutral.clone();
+    final ByteData? bytes;
+    try {
+      bytes = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    } finally {
+      image.dispose();
+    }
+    if (bytes == null) {
+      return null;
+    }
+
+    const target = 800;
+    final step = neutral.width <= target ? 1 : (neutral.width / target).ceil();
+    final w = neutral.width ~/ step;
+    final h = neutral.height ~/ step;
+    if (w < 8 || h < 8) {
+      return null;
+    }
+    final rgba = bytes.buffer.asUint8List();
+    final luma = Uint8List(w * h);
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        var sum = 0.0;
+        var count = 0;
+        for (var sy = 0; sy < step; sy++) {
+          for (var sx = 0; sx < step; sx++) {
+            final i = ((y * step + sy) * neutral.width + x * step + sx) * 4;
+            if (i + 2 >= rgba.length) {
+              continue;
+            }
+            sum +=
+                0.2126 * rgba[i] + 0.7152 * rgba[i + 1] + 0.0722 * rgba[i + 2];
+            count++;
+          }
+        }
+        luma[y * w + x] = count == 0 ? 0 : (sum / count).round().clamp(0, 255);
+      }
+    }
+    return LevelRequest(luma, w, h);
+  }
+
   /// Opens the colour profile editor, previewing on the current photo.
   Future<void> _openColorProfileEditor({
     ColorProfile? initial,
@@ -7145,6 +7253,8 @@ class _EditorScreenState extends State<EditorScreen>
                             onColorProfileChoiceChanged:
                                 _applyColorProfileChoice,
                             onCreateColorProfile: _openColorProfileEditor,
+                            onLevel: _levelPhoto,
+                            levelBusy: _levelBusy,
                             tabbedLayout: _settings.tabbedControlsPanel,
                             onImportColorProfile: _importColorProfile,
                             onEditColorProfile: _editSelectedColorProfile,
@@ -8735,7 +8845,17 @@ class _CropTransformPanel extends StatelessWidget {
     required this.onStraighteningChanged,
     required this.guidedModeActive,
     required this.onToggleGuidedMode,
+    required this.onLevel,
+    required this.levelBusy,
   });
+
+  /// Measures the photo and straightens it — the Level mode of PENDING
+  /// item 27's Upright set.
+  final VoidCallback onLevel;
+
+  /// True while that measurement is running, so the button can say so
+  /// instead of looking like it did nothing.
+  final bool levelBusy;
 
   final CropTransformParams params;
   final ValueChanged<CropTransformParams> onChanged;
@@ -8829,6 +8949,22 @@ class _CropTransformPanel extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 10),
+          // Above the Straighten slider it drives, so the relationship
+          // between the two is visible rather than something to discover.
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton.icon(
+              onPressed: levelBusy ? null : onLevel,
+              icon: levelBusy
+                  ? const SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: CircularProgressIndicator(strokeWidth: 1.6),
+                    )
+                  : const Icon(CupertinoIcons.wand_stars, size: 15),
+              label: Text(l10n.transformLevelButton),
+            ),
+          ),
           SliderRow(
             name: l10n.transformStraightenLabel,
             min: -45,
@@ -9212,6 +9348,8 @@ class _ControlsPanel extends StatefulWidget {
     required this.customProfileMissing,
     required this.onColorProfileChoiceChanged,
     required this.onCreateColorProfile,
+    required this.onLevel,
+    required this.levelBusy,
     required this.tabbedLayout,
     required this.onImportColorProfile,
     required this.onEditColorProfile,
@@ -9317,6 +9455,11 @@ class _ControlsPanel extends StatefulWidget {
   /// Group the sections into tabs, or list them all in one scroll — see
   /// `AppSettings.tabbedControlsPanel`.
   final bool tabbedLayout;
+
+  /// Measures the open photo and straightens it — Crop & Transform's Level
+  /// button, and [levelBusy] while that runs.
+  final VoidCallback onLevel;
+  final bool levelBusy;
   final VoidCallback onImportColorProfile;
   final VoidCallback onEditColorProfile;
   final VoidCallback onDuplicateColorProfile;
@@ -9841,6 +9984,8 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                 widget.onStraighteningChanged,
                             guidedModeActive: widget.guidedModeActive,
                             onToggleGuidedMode: widget.onToggleGuidedMode,
+                            onLevel: widget.onLevel,
+                            levelBusy: widget.levelBusy,
                           ),
                           const SizedBox(height: 12),
                         ],

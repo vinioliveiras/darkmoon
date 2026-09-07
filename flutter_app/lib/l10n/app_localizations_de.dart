@@ -1221,4 +1221,11 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get controlsTabDetails => 'Details';
+
+  @override
+  String get transformLevelButton => 'Ausrichten';
+
+  @override
+  String get transformLevelNothingFound =>
+      'Nichts Gerades zum Ausrichten gefunden. Bitte manuell drehen.';
 }

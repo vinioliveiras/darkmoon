@@ -1210,4 +1210,11 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get controlsTabDetails => 'Detalhes';
+
+  @override
+  String get transformLevelButton => 'Nivelar';
+
+  @override
+  String get transformLevelNothingFound =>
+      'Nada reto o bastante para nivelar. Endireite manualmente.';
 }

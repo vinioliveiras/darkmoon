@@ -2319,6 +2319,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Details'**
   String get controlsTabDetails;
+
+  /// No description provided for @transformLevelButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Level'**
+  String get transformLevelButton;
+
+  /// No description provided for @transformLevelNothingFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing straight enough to level by. Straighten by hand.'**
+  String get transformLevelNothingFound;
 }
 
 class _AppLocalizationsDelegate

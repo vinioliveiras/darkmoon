@@ -370,5 +370,7 @@
   "settingsPanelLayoutTabbed": "Registerkarten",
   "settingsPanelLayoutFlat": "Eine lange Liste",
   "settingsPanelLayoutHint": "Registerkarten gruppieren die Abschnitte in Anpassen, Farbe und Effekte. Masken bleiben in beiden Faellen oben angeheftet.",
-  "controlsTabDetails": "Details"
+  "controlsTabDetails": "Details",
+  "transformLevelButton": "Ausrichten",
+  "transformLevelNothingFound": "Nichts Gerades zum Ausrichten gefunden. Bitte manuell drehen."
 }

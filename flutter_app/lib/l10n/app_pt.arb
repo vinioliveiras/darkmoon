@@ -371,5 +371,7 @@
   "settingsPanelLayoutTabbed": "Abas",
   "settingsPanelLayoutFlat": "Lista unica",
   "settingsPanelLayoutHint": "As abas agrupam as secoes em Ajustes, Cor e Efeitos. As mascaras ficam fixas acima nos dois modos.",
-  "controlsTabDetails": "Detalhes"
+  "controlsTabDetails": "Detalhes",
+  "transformLevelButton": "Nivelar",
+  "transformLevelNothingFound": "Nada reto o bastante para nivelar. Endireite manualmente."
 }

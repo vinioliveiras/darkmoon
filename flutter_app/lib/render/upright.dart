@@ -153,3 +153,19 @@ double? levelRotationFor(
   }
   return -deviation;
 }
+
+/// One levelling job, packaged so it can be handed to `compute`.
+///
+/// The measurement is per-pixel over the whole frame, which is exactly the
+/// kind of work the house rules say to keep off the main isolate.
+class LevelRequest {
+  const LevelRequest(this.luma, this.width, this.height);
+
+  final Uint8List luma;
+  final int width;
+  final int height;
+}
+
+/// [levelRotationFor], reachable through `compute`.
+double? levelRotationForRequest(LevelRequest request) =>
+    levelRotationFor(request.luma, request.width, request.height);

@@ -1202,4 +1202,11 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get controlsTabDetails => 'Details';
+
+  @override
+  String get transformLevelButton => 'Level';
+
+  @override
+  String get transformLevelNothingFound =>
+      'Nothing straight enough to level by. Straighten by hand.';
 }
