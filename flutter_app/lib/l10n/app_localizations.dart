@@ -2319,6 +2319,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Tabs group the sections into Adjust, Colour and Effects. Masks stay pinned above them either way.'**
   String get settingsPanelLayoutHint;
+
+  /// No description provided for @controlsTabDetails.
+  ///
+  /// In en, this message translates to:
+  /// **'Details'**
+  String get controlsTabDetails;
 }
 
 class _AppLocalizationsDelegate

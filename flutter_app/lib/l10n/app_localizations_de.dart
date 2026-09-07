@@ -1221,4 +1221,7 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get settingsPanelLayoutHint =>
       'Registerkarten gruppieren die Abschnitte in Anpassen, Farbe und Effekte. Masken bleiben in beiden Faellen oben angeheftet.';
+
+  @override
+  String get controlsTabDetails => 'Details';
 }

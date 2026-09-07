@@ -1202,4 +1202,7 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsPanelLayoutHint =>
       'Tabs group the sections into Adjust, Colour and Effects. Masks stay pinned above them either way.';
+
+  @override
+  String get controlsTabDetails => 'Details';
 }

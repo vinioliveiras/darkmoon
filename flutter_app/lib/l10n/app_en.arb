@@ -389,5 +389,6 @@
   "settingsPanelLayoutLabel": "Editing panel",
   "settingsPanelLayoutTabbed": "Tabs",
   "settingsPanelLayoutFlat": "One long list",
-  "settingsPanelLayoutHint": "Tabs group the sections into Adjust, Colour and Effects. Masks stay pinned above them either way."
+  "settingsPanelLayoutHint": "Tabs group the sections into Adjust, Colour and Effects. Masks stay pinned above them either way.",
+  "controlsTabDetails": "Details"
 }

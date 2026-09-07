@@ -9417,7 +9417,7 @@ class _ControlsPanel extends StatefulWidget {
 /// Which tab a section lives under. Three for now; the panel used to be
 /// one long scroll of all eleven, which meant Lens Correction was a dozen
 /// section-heights below the Tone sliders people actually reach for.
-enum _ControlsTab { adjust, colour, effects }
+enum _ControlsTab { adjust, colour, details, effects }
 
 /// Which tab each entry of [_sections] belongs to.
 ///
@@ -9435,7 +9435,10 @@ const _sectionTabs = <String, _ControlsTab>{
   'WHITE BALANCE': _ControlsTab.adjust,
   'TONE': _ControlsTab.adjust,
   'PRESENCE': _ControlsTab.adjust,
-  'DETAIL': _ControlsTab.adjust,
+  // Sharpening and noise reduction get their own tab (2026-09-07) rather
+  // than sitting at the bottom of Adjust: they are judged at 100% zoom on
+  // a detail, not while setting overall exposure.
+  'DETAIL': _ControlsTab.details,
   // The profile is chosen once per photo and then left alone, so it can
   // live a tab away.
   'COLOR PROFILE': _ControlsTab.colour,
@@ -9474,12 +9477,14 @@ class _ControlsPanelState extends State<_ControlsPanel>
   String _tabLabel(AppLocalizations l10n, _ControlsTab tab) => switch (tab) {
     _ControlsTab.adjust => l10n.controlsTabAdjust,
     _ControlsTab.colour => l10n.controlsTabColour,
+    _ControlsTab.details => l10n.controlsTabDetails,
     _ControlsTab.effects => l10n.controlsTabEffects,
   };
 
   IconData _tabIcon(_ControlsTab tab) => switch (tab) {
     _ControlsTab.adjust => CupertinoIcons.slider_horizontal_3,
     _ControlsTab.colour => CupertinoIcons.color_filter,
+    _ControlsTab.details => CupertinoIcons.zoom_in,
     _ControlsTab.effects => CupertinoIcons.wand_stars,
   };
 
@@ -9786,8 +9791,19 @@ class _ControlsPanelState extends State<_ControlsPanel>
               // the block expands with the brush and colour-range
               // controls, and without a ceiling a handful of masks would
               // push the tabs off the bottom of the panel entirely.
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 320),
+              // Flexible, not a fixed cap. A constant ceiling overflowed
+              // this column by 60px on a real window: the histogram plus
+              // the block plus the tab bar exceeded the panel, the Expanded
+              // below was left with nothing, and the difference spilled.
+              // Whatever the constant, some window is short enough to break
+              // it. Flexible makes the block yield instead — natural height
+              // when there is room, shrinking and scrolling inside when
+              // there is not — so the overflow is not expressible.
+              //
+              // flex 1 against the sections' 2 leaves it at most a third of
+              // the free space, which is the ceiling the constant was
+              // trying to express.
+              Flexible(
                 child: SingleChildScrollView(
                   padding: const EdgeInsets.fromLTRB(
                     _controlsPanelInset,
@@ -10032,6 +10048,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
               ),
               if (widget.tabbedLayout) _buildControlsTabBar(l10n),
               Expanded(
+                flex: 2,
                 child: SingleChildScrollView(
                   controller: _scrollController,
                   padding: const EdgeInsets.fromLTRB(
@@ -10338,458 +10355,441 @@ class _ControlsPanelState extends State<_ControlsPanel>
                         // Detail rather than interleaved with the _sections
                         // loop, so Presence/Detail stay right after Tone, ahead
                         // of the advanced color tools.
-                        if (entry.key == 'DETAIL') ...[
-                          if (_inTab(_ControlsTab.adjust))
-                            ..._section(
-                              'TONE CURVE',
-                              label: l10n.sectionToneCurve,
-                              enabled:
-                                  (values[_categoryEnabledKey('TONE CURVE')] ??
-                                      1) !=
-                                  0,
-                              onEnabledChanged: (v) => _toggleCategoryEnabled(
-                                _categoryEnabledKey('TONE CURVE'),
-                                v,
+                      ],
+                      // Tone Curve, Color Curve, Color Mixer, Color
+                      // Grading, Effects and Lens Correction are their own
+                      // sections rather than entries of _sections, because
+                      // they are not plain slider lists.
+                      //
+                      // They used to be emitted from inside the loop above,
+                      // on its DETAIL iteration. That worked while the loop
+                      // always ran every entry; once the tabs filtered it,
+                      // DETAIL only came up under Adjust and these five
+                      // vanished from the other tabs entirely — Effects had
+                      // nothing in it at all. They are siblings of the loop
+                      // now, so what the loop yields cannot decide whether
+                      // they exist.
+                      if (_inTab(_ControlsTab.adjust))
+                        ..._section(
+                          'TONE CURVE',
+                          label: l10n.sectionToneCurve,
+                          enabled:
+                              (values[_categoryEnabledKey('TONE CURVE')] ??
+                                  1) !=
+                              0,
+                          onEnabledChanged: (v) => _toggleCategoryEnabled(
+                            _categoryEnabledKey('TONE CURVE'),
+                            v,
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: ToneCurveEditor(
+                                points: curves.tone,
+                                onChanged: onToneCurveChanged,
+                                onChangeEnd: onToneCurveChangeEnd,
                               ),
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: ToneCurveEditor(
-                                    points: curves.tone,
-                                    onChanged: onToneCurveChanged,
-                                    onChangeEnd: onToneCurveChangeEnd,
-                                  ),
-                                ),
-                                // Directly under the graph, sharing its x
-                                // axis, so each handle sits at the input
-                                // luminance it splits.
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 10),
-                                  child: ParametricSplitBar(
-                                    shadowSplit:
-                                        values['ParamCurveShadowSplit'] ?? 25,
-                                    midtoneSplit:
-                                        values['ParamCurveMidtoneSplit'] ?? 50,
-                                    highlightSplit:
-                                        values['ParamCurveHighlightSplit'] ??
-                                        75,
-                                    onChanged: onChanged,
-                                    onChangeEnd: onChangeEnd,
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 6),
-                                  child: Text(
-                                    l10n.toneCurveParametricLabel,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelSmall
-                                        ?.copyWith(
-                                          color: DarkmoonColors.textMuted,
-                                        ),
-                                  ),
-                                ),
-                                for (final spec in _parametricCurveSliders)
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: SliderRow(
-                                      name: _sliderLabel(l10n, spec.name),
-                                      min: spec.min,
-                                      max: spec.max,
-                                      value:
-                                          values[spec.name] ??
-                                          spec.defaultValue,
-                                      decimals: spec.decimals,
-                                      defaultValue: spec.defaultValue,
-                                      onChanged: (v) => onChanged(spec.name, v),
-                                      onChangeEnd: (v) =>
-                                          onChangeEnd(spec.name, v),
-                                    ),
-                                  ),
-                              ],
                             ),
-                          if (_inTab(_ControlsTab.colour))
-                            ..._section(
-                              'COLOR CURVE',
-                              label: l10n.sectionColorCurve,
-                              enabled:
-                                  (values[_categoryEnabledKey('COLOR CURVE')] ??
-                                      1) !=
-                                  0,
-                              onEnabledChanged: (v) => _toggleCategoryEnabled(
-                                _categoryEnabledKey('COLOR CURVE'),
-                                v,
+                            // Directly under the graph, sharing its x
+                            // axis, so each handle sits at the input
+                            // luminance it splits.
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10),
+                              child: ParametricSplitBar(
+                                shadowSplit:
+                                    values['ParamCurveShadowSplit'] ?? 25,
+                                midtoneSplit:
+                                    values['ParamCurveMidtoneSplit'] ?? 50,
+                                highlightSplit:
+                                    values['ParamCurveHighlightSplit'] ?? 75,
+                                onChanged: onChanged,
+                                onChangeEnd: onChangeEnd,
                               ),
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: 4,
-                                    bottom: 8,
-                                  ),
-                                  child: _ColorChannelTabs(
-                                    active: _activeColorChannel,
-                                    onSelect: (channel) => setState(
-                                      () => _activeColorChannel = channel,
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: ToneCurveEditor(
-                                    key: ValueKey(_activeColorChannel),
-                                    points: _channelPoints(
-                                      curves,
-                                      _activeColorChannel,
-                                    ),
-                                    lineColor: _channelColor(
-                                      _activeColorChannel,
-                                    ),
-                                    onChanged: (points) => onColorCurveChanged(
-                                      _activeColorChannel,
-                                      points,
-                                    ),
-                                    onChangeEnd: (points) =>
-                                        onColorCurveChangeEnd(
-                                          _activeColorChannel,
-                                          points,
-                                        ),
-                                  ),
-                                ),
-                              ],
                             ),
-                          if (_inTab(_ControlsTab.colour))
-                            ..._section(
-                              'COLOR MIXER',
-                              label: l10n.sectionColorMixer,
-                              enabled:
-                                  (values[_categoryEnabledKey('COLOR MIXER')] ??
-                                      1) !=
-                                  0,
-                              onEnabledChanged: (v) => _toggleCategoryEnabled(
-                                _categoryEnabledKey('COLOR MIXER'),
-                                v,
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 6),
+                              child: Text(
+                                l10n.toneCurveParametricLabel,
+                                style: Theme.of(context).textTheme.labelSmall
+                                    ?.copyWith(color: DarkmoonColors.textMuted),
                               ),
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: 6,
-                                    bottom: 10,
-                                  ),
-                                  child: _MixerModeTabs(
-                                    active: _mixerViewMode,
-                                    onSelect: (mode) =>
-                                        setState(() => _mixerViewMode = mode),
-                                  ),
-                                ),
-                                if (_mixerViewMode == 'Mixer') ...[
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 10),
-                                    child: _MixerChannelDots(
-                                      active: _activeMixerChannel,
-                                      onSelect: (channel) => setState(
-                                        () => _activeMixerChannel = channel,
-                                      ),
-                                    ),
-                                  ),
-                                  // Luminance re-enabled: color_mixer.dart now
-                                  // ports Solstice's apply_hsl_panel in full
-                                  // (scene-linear HSV, per-band Gaussian
-                                  // influence, saturation-gated), including its
-                                  // luma-preserving-then-adjusting Luminance
-                                  // term — a different code path from the one
-                                  // previously disabled after reports of it
-                                  // blowing out/pixelating pixels (that one
-                                  // relied on HSL lightness directly, not luma
-                                  // explicitly restored after the shift).
-                                  for (final suffix in const [
-                                    'Hue',
-                                    'Saturation',
-                                    'Luminance',
-                                  ])
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 12,
-                                      ),
-                                      child: SliderRow(
-                                        name: _mixerSliderLabel(l10n, suffix),
-                                        min: -100,
-                                        max: 100,
-                                        value:
-                                            values['Mixer$_activeMixerChannel$suffix'] ??
-                                            0,
-                                        decimals: 0,
-                                        defaultValue: 0,
-                                        trackColors: _mixerTrackColors(
-                                          _activeMixerChannel,
-                                          suffix,
-                                        ),
-                                        onChanged: (v) => onChanged(
-                                          'Mixer$_activeMixerChannel$suffix',
-                                          v,
-                                        ),
-                                        onChangeEnd: (v) => onChangeEnd(
-                                          'Mixer$_activeMixerChannel$suffix',
-                                          v,
-                                        ),
-                                      ),
-                                    ),
-                                ] else
-                                  for (final suffix in const [
-                                    'Hue',
-                                    'Saturation',
-                                    'Luminance',
-                                  ])
-                                    Padding(
-                                      padding: const EdgeInsets.only(
-                                        bottom: 14,
-                                      ),
-                                      child: Column(
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Padding(
-                                            padding: const EdgeInsets.only(
-                                              bottom: 4,
-                                            ),
-                                            child: Text(
-                                              _mixerSliderLabel(l10n, suffix),
-                                              style: TextStyle(
-                                                color: DarkmoonColors.textMuted,
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w600,
-                                                letterSpacing: 0.4,
-                                              ),
-                                            ),
-                                          ),
-                                          for (final channel in _mixerChannels)
-                                            Padding(
-                                              padding: const EdgeInsets.only(
-                                                bottom: 8,
-                                              ),
-                                              child: SliderRow(
-                                                name: _mixerChannelLabel(
-                                                  l10n,
-                                                  channel,
-                                                ),
-                                                min: -100,
-                                                max: 100,
-                                                value:
-                                                    values['Mixer$channel$suffix'] ??
-                                                    0,
-                                                decimals: 0,
-                                                defaultValue: 0,
-                                                trackColors: _mixerTrackColors(
-                                                  channel,
-                                                  suffix,
-                                                ),
-                                                onChanged: (v) => onChanged(
-                                                  'Mixer$channel$suffix',
-                                                  v,
-                                                ),
-                                                onChangeEnd: (v) => onChangeEnd(
-                                                  'Mixer$channel$suffix',
-                                                  v,
-                                                ),
-                                              ),
-                                            ),
-                                        ],
-                                      ),
-                                    ),
-                              ],
                             ),
-                          if (_inTab(_ControlsTab.colour))
-                            ..._section(
-                              'COLOR GRADING',
-                              label: l10n.sectionColorGrading,
-                              enabled:
-                                  (values[_categoryEnabledKey(
-                                        'COLOR GRADING',
-                                      )] ??
-                                      1) !=
-                                  0,
-                              onEnabledChanged: (v) => _toggleCategoryEnabled(
-                                _categoryEnabledKey('COLOR GRADING'),
-                                v,
+                            for (final spec in _parametricCurveSliders)
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: SliderRow(
+                                  name: _sliderLabel(l10n, spec.name),
+                                  min: spec.min,
+                                  max: spec.max,
+                                  value: values[spec.name] ?? spec.defaultValue,
+                                  decimals: spec.decimals,
+                                  defaultValue: spec.defaultValue,
+                                  onChanged: (v) => onChanged(spec.name, v),
+                                  onChangeEnd: (v) => onChangeEnd(spec.name, v),
+                                ),
                               ),
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.only(
-                                    top: 6,
-                                    bottom: 10,
-                                  ),
-                                  child: _GradeRangeTabs(
-                                    active: _activeGradeRange,
-                                    onSelect: (range) => setState(
-                                      () => _activeGradeRange = range,
-                                    ),
+                          ],
+                        ),
+                      if (_inTab(_ControlsTab.colour))
+                        ..._section(
+                          'COLOR CURVE',
+                          label: l10n.sectionColorCurve,
+                          enabled:
+                              (values[_categoryEnabledKey('COLOR CURVE')] ??
+                                  1) !=
+                              0,
+                          onEnabledChanged: (v) => _toggleCategoryEnabled(
+                            _categoryEnabledKey('COLOR CURVE'),
+                            v,
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 4, bottom: 8),
+                              child: _ColorChannelTabs(
+                                active: _activeColorChannel,
+                                onSelect: (channel) => setState(
+                                  () => _activeColorChannel = channel,
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: ToneCurveEditor(
+                                key: ValueKey(_activeColorChannel),
+                                points: _channelPoints(
+                                  curves,
+                                  _activeColorChannel,
+                                ),
+                                lineColor: _channelColor(_activeColorChannel),
+                                onChanged: (points) => onColorCurveChanged(
+                                  _activeColorChannel,
+                                  points,
+                                ),
+                                onChangeEnd: (points) => onColorCurveChangeEnd(
+                                  _activeColorChannel,
+                                  points,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      if (_inTab(_ControlsTab.colour))
+                        ..._section(
+                          'COLOR MIXER',
+                          label: l10n.sectionColorMixer,
+                          enabled:
+                              (values[_categoryEnabledKey('COLOR MIXER')] ??
+                                  1) !=
+                              0,
+                          onEnabledChanged: (v) => _toggleCategoryEnabled(
+                            _categoryEnabledKey('COLOR MIXER'),
+                            v,
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                top: 6,
+                                bottom: 10,
+                              ),
+                              child: _MixerModeTabs(
+                                active: _mixerViewMode,
+                                onSelect: (mode) =>
+                                    setState(() => _mixerViewMode = mode),
+                              ),
+                            ),
+                            if (_mixerViewMode == 'Mixer') ...[
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 10),
+                                child: _MixerChannelDots(
+                                  active: _activeMixerChannel,
+                                  onSelect: (channel) => setState(
+                                    () => _activeMixerChannel = channel,
                                   ),
                                 ),
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 12),
-                                  child: Center(
-                                    child: SizedBox(
-                                      width: 160,
-                                      child: ColorWheel(
-                                        key: ValueKey(_activeGradeRange),
-                                        hue:
-                                            values['Grade${_activeGradeRange}Hue'] ??
-                                            0,
-                                        saturation:
-                                            values['Grade${_activeGradeRange}Saturation'] ??
-                                            0,
-                                        onChanged: (hue, sat) {
-                                          onChanged(
-                                            'Grade${_activeGradeRange}Hue',
-                                            hue,
-                                          );
-                                          onChanged(
-                                            'Grade${_activeGradeRange}Saturation',
-                                            sat,
-                                          );
-                                        },
-                                        onChangeEnd: (hue, sat) {
-                                          onChangeEnd(
-                                            'Grade${_activeGradeRange}Hue',
-                                            hue,
-                                          );
-                                          onChangeEnd(
-                                            'Grade${_activeGradeRange}Saturation',
-                                            sat,
-                                          );
-                                        },
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: SliderRow(
-                                    name: l10n.mixerHueLabel,
-                                    min: 0,
-                                    max: 360,
-                                    value:
-                                        values['Grade${_activeGradeRange}Hue'] ??
-                                        0,
-                                    decimals: 0,
-                                    defaultValue: 0,
-                                    onChanged: (v) => onChanged(
-                                      'Grade${_activeGradeRange}Hue',
-                                      v,
-                                    ),
-                                    onChangeEnd: (v) => onChangeEnd(
-                                      'Grade${_activeGradeRange}Hue',
-                                      v,
-                                    ),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.only(bottom: 8),
-                                  child: SliderRow(
-                                    name: l10n.mixerSaturationLabel,
-                                    min: 0,
-                                    max: 100,
-                                    value:
-                                        values['Grade${_activeGradeRange}Saturation'] ??
-                                        0,
-                                    decimals: 0,
-                                    defaultValue: 0,
-                                    onChanged: (v) => onChanged(
-                                      'Grade${_activeGradeRange}Saturation',
-                                      v,
-                                    ),
-                                    onChangeEnd: (v) => onChangeEnd(
-                                      'Grade${_activeGradeRange}Saturation',
-                                      v,
-                                    ),
-                                  ),
-                                ),
+                              ),
+                              // Luminance re-enabled: color_mixer.dart now
+                              // ports Solstice's apply_hsl_panel in full
+                              // (scene-linear HSV, per-band Gaussian
+                              // influence, saturation-gated), including its
+                              // luma-preserving-then-adjusting Luminance
+                              // term — a different code path from the one
+                              // previously disabled after reports of it
+                              // blowing out/pixelating pixels (that one
+                              // relied on HSL lightness directly, not luma
+                              // explicitly restored after the shift).
+                              for (final suffix in const [
+                                'Hue',
+                                'Saturation',
+                                'Luminance',
+                              ])
                                 Padding(
                                   padding: const EdgeInsets.only(bottom: 12),
                                   child: SliderRow(
-                                    name: l10n.mixerLuminanceLabel,
+                                    name: _mixerSliderLabel(l10n, suffix),
                                     min: -100,
                                     max: 100,
                                     value:
-                                        values['Grade${_activeGradeRange}Luminance'] ??
+                                        values['Mixer$_activeMixerChannel$suffix'] ??
                                         0,
                                     decimals: 0,
                                     defaultValue: 0,
+                                    trackColors: _mixerTrackColors(
+                                      _activeMixerChannel,
+                                      suffix,
+                                    ),
                                     onChanged: (v) => onChanged(
-                                      'Grade${_activeGradeRange}Luminance',
+                                      'Mixer$_activeMixerChannel$suffix',
                                       v,
                                     ),
                                     onChangeEnd: (v) => onChangeEnd(
-                                      'Grade${_activeGradeRange}Luminance',
+                                      'Mixer$_activeMixerChannel$suffix',
                                       v,
                                     ),
                                   ),
                                 ),
-                              ],
-                            ),
-                          if (_inTab(_ControlsTab.effects))
-                            ..._section(
-                              'EFFECTS',
-                              label: l10n.sectionEffects,
-                              // On by default, like every other section —
-                              // see _withCategoriesApplied's disabled() doc.
-                              enabled:
-                                  (values[_categoryEnabledKey('EFFECTS')] ??
-                                      1) !=
-                                  0,
-                              onEnabledChanged: (v) => _toggleCategoryEnabled(
-                                _categoryEnabledKey('EFFECTS'),
-                                v,
-                              ),
-                              children: [
-                                for (final spec in [
-                                  ..._vignetteSliders,
-                                  ..._grainSliders,
-                                ])
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: SliderRow(
-                                      name: _sliderLabel(l10n, spec.name),
-                                      min: spec.min,
-                                      max: spec.max,
-                                      value:
-                                          values[spec.name] ??
-                                          spec.defaultValue,
-                                      decimals: spec.decimals,
-                                      defaultValue: spec.defaultValue,
-                                      onChanged: (v) => onChanged(spec.name, v),
-                                      onChangeEnd: (v) =>
-                                          onChangeEnd(spec.name, v),
-                                    ),
-                                  ),
-                              ],
-                            ),
-                          if (_inTab(_ControlsTab.effects))
-                            ..._section(
-                              'LENS CORRECTION',
-                              label: l10n.sectionLensCorrection,
-                              enabled: widget.lensCorrection.enabled,
-                              onEnabledChanged: (v) =>
-                                  widget.onLensCorrectionChangeEnd(
-                                    widget.lensCorrection.copyWith(enabled: v),
-                                  ),
-                              children: [
+                            ] else
+                              for (final suffix in const [
+                                'Hue',
+                                'Saturation',
+                                'Luminance',
+                              ])
                                 Padding(
-                                  padding: const EdgeInsets.only(top: 10),
-                                  child: LensCorrectionPanel(
-                                    params: widget.lensCorrection,
-                                    resolvedProfile: widget.resolvedLensProfile,
-                                    allProfiles: widget.lensProfiles,
-                                    cameraMake:
-                                        widget.metadata?.cameraMake ?? '',
-                                    onChanged: widget.onLensCorrectionChanged,
-                                    onChangeEnd:
-                                        widget.onLensCorrectionChangeEnd,
+                                  padding: const EdgeInsets.only(bottom: 14),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: 4,
+                                        ),
+                                        child: Text(
+                                          _mixerSliderLabel(l10n, suffix),
+                                          style: TextStyle(
+                                            color: DarkmoonColors.textMuted,
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            letterSpacing: 0.4,
+                                          ),
+                                        ),
+                                      ),
+                                      for (final channel in _mixerChannels)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            bottom: 8,
+                                          ),
+                                          child: SliderRow(
+                                            name: _mixerChannelLabel(
+                                              l10n,
+                                              channel,
+                                            ),
+                                            min: -100,
+                                            max: 100,
+                                            value:
+                                                values['Mixer$channel$suffix'] ??
+                                                0,
+                                            decimals: 0,
+                                            defaultValue: 0,
+                                            trackColors: _mixerTrackColors(
+                                              channel,
+                                              suffix,
+                                            ),
+                                            onChanged: (v) => onChanged(
+                                              'Mixer$channel$suffix',
+                                              v,
+                                            ),
+                                            onChangeEnd: (v) => onChangeEnd(
+                                              'Mixer$channel$suffix',
+                                              v,
+                                            ),
+                                          ),
+                                        ),
+                                    ],
                                   ),
                                 ),
-                              ],
+                          ],
+                        ),
+                      if (_inTab(_ControlsTab.colour))
+                        ..._section(
+                          'COLOR GRADING',
+                          label: l10n.sectionColorGrading,
+                          enabled:
+                              (values[_categoryEnabledKey('COLOR GRADING')] ??
+                                  1) !=
+                              0,
+                          onEnabledChanged: (v) => _toggleCategoryEnabled(
+                            _categoryEnabledKey('COLOR GRADING'),
+                            v,
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(
+                                top: 6,
+                                bottom: 10,
+                              ),
+                              child: _GradeRangeTabs(
+                                active: _activeGradeRange,
+                                onSelect: (range) =>
+                                    setState(() => _activeGradeRange = range),
+                              ),
                             ),
-                        ],
-                      ],
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 160,
+                                  child: ColorWheel(
+                                    key: ValueKey(_activeGradeRange),
+                                    hue:
+                                        values['Grade${_activeGradeRange}Hue'] ??
+                                        0,
+                                    saturation:
+                                        values['Grade${_activeGradeRange}Saturation'] ??
+                                        0,
+                                    onChanged: (hue, sat) {
+                                      onChanged(
+                                        'Grade${_activeGradeRange}Hue',
+                                        hue,
+                                      );
+                                      onChanged(
+                                        'Grade${_activeGradeRange}Saturation',
+                                        sat,
+                                      );
+                                    },
+                                    onChangeEnd: (hue, sat) {
+                                      onChangeEnd(
+                                        'Grade${_activeGradeRange}Hue',
+                                        hue,
+                                      );
+                                      onChangeEnd(
+                                        'Grade${_activeGradeRange}Saturation',
+                                        sat,
+                                      );
+                                    },
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: SliderRow(
+                                name: l10n.mixerHueLabel,
+                                min: 0,
+                                max: 360,
+                                value:
+                                    values['Grade${_activeGradeRange}Hue'] ?? 0,
+                                decimals: 0,
+                                defaultValue: 0,
+                                onChanged: (v) => onChanged(
+                                  'Grade${_activeGradeRange}Hue',
+                                  v,
+                                ),
+                                onChangeEnd: (v) => onChangeEnd(
+                                  'Grade${_activeGradeRange}Hue',
+                                  v,
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: SliderRow(
+                                name: l10n.mixerSaturationLabel,
+                                min: 0,
+                                max: 100,
+                                value:
+                                    values['Grade${_activeGradeRange}Saturation'] ??
+                                    0,
+                                decimals: 0,
+                                defaultValue: 0,
+                                onChanged: (v) => onChanged(
+                                  'Grade${_activeGradeRange}Saturation',
+                                  v,
+                                ),
+                                onChangeEnd: (v) => onChangeEnd(
+                                  'Grade${_activeGradeRange}Saturation',
+                                  v,
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: SliderRow(
+                                name: l10n.mixerLuminanceLabel,
+                                min: -100,
+                                max: 100,
+                                value:
+                                    values['Grade${_activeGradeRange}Luminance'] ??
+                                    0,
+                                decimals: 0,
+                                defaultValue: 0,
+                                onChanged: (v) => onChanged(
+                                  'Grade${_activeGradeRange}Luminance',
+                                  v,
+                                ),
+                                onChangeEnd: (v) => onChangeEnd(
+                                  'Grade${_activeGradeRange}Luminance',
+                                  v,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      if (_inTab(_ControlsTab.effects))
+                        ..._section(
+                          'EFFECTS',
+                          label: l10n.sectionEffects,
+                          // On by default, like every other section —
+                          // see _withCategoriesApplied's disabled() doc.
+                          enabled:
+                              (values[_categoryEnabledKey('EFFECTS')] ?? 1) !=
+                              0,
+                          onEnabledChanged: (v) => _toggleCategoryEnabled(
+                            _categoryEnabledKey('EFFECTS'),
+                            v,
+                          ),
+                          children: [
+                            for (final spec in [
+                              ..._vignetteSliders,
+                              ..._grainSliders,
+                            ])
+                              Padding(
+                                padding: const EdgeInsets.only(bottom: 12),
+                                child: SliderRow(
+                                  name: _sliderLabel(l10n, spec.name),
+                                  min: spec.min,
+                                  max: spec.max,
+                                  value: values[spec.name] ?? spec.defaultValue,
+                                  decimals: spec.decimals,
+                                  defaultValue: spec.defaultValue,
+                                  onChanged: (v) => onChanged(spec.name, v),
+                                  onChangeEnd: (v) => onChangeEnd(spec.name, v),
+                                ),
+                              ),
+                          ],
+                        ),
+                      if (_inTab(_ControlsTab.effects))
+                        ..._section(
+                          'LENS CORRECTION',
+                          label: l10n.sectionLensCorrection,
+                          enabled: widget.lensCorrection.enabled,
+                          onEnabledChanged: (v) =>
+                              widget.onLensCorrectionChangeEnd(
+                                widget.lensCorrection.copyWith(enabled: v),
+                              ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(top: 10),
+                              child: LensCorrectionPanel(
+                                params: widget.lensCorrection,
+                                resolvedProfile: widget.resolvedLensProfile,
+                                allProfiles: widget.lensProfiles,
+                                cameraMake: widget.metadata?.cameraMake ?? '',
+                                onChanged: widget.onLensCorrectionChanged,
+                                onChangeEnd: widget.onLensCorrectionChangeEnd,
+                              ),
+                            ),
+                          ],
+                        ),
                     ],
                   ),
                 ),

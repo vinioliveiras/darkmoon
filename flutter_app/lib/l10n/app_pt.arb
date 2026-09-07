@@ -371,5 +371,6 @@
   "settingsPanelLayoutLabel": "Painel de edicao",
   "settingsPanelLayoutTabbed": "Abas",
   "settingsPanelLayoutFlat": "Lista unica",
-  "settingsPanelLayoutHint": "As abas agrupam as secoes em Ajustes, Cor e Efeitos. As mascaras ficam fixas acima nos dois modos."
+  "settingsPanelLayoutHint": "As abas agrupam as secoes em Ajustes, Cor e Efeitos. As mascaras ficam fixas acima nos dois modos.",
+  "controlsTabDetails": "Detalhes"
 }

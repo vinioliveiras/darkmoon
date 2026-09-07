@@ -1210,4 +1210,7 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get settingsPanelLayoutHint =>
       'As abas agrupam as secoes em Ajustes, Cor e Efeitos. As mascaras ficam fixas acima nos dois modos.';
+
+  @override
+  String get controlsTabDetails => 'Detalhes';
 }
