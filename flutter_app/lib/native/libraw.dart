@@ -6,6 +6,7 @@ import 'package:ffi/ffi.dart';
 
 import '../render/pmrid_denoise.dart' show denoisePmridRggb;
 import '../render/white_balance.dart' show wbMultipliersToKelvinTint;
+import 'camera_match.dart';
 import 'libraw_bindings.dart';
 import 'pmrid_raw.dart';
 
@@ -69,11 +70,26 @@ import 'pmrid_raw.dart';
 /// padding — 3 bytes per pixel, matching libraw_dcraw_make_mem_image's
 /// default (non-TIFF) output.
 class RawImage {
-  RawImage({required this.width, required this.height, required this.rgbBytes});
+  RawImage({
+    required this.width,
+    required this.height,
+    required this.rgbBytes,
+    this.baseExposureStops,
+  });
 
   final int width;
   final int height;
   final Uint8List rgbBytes;
+
+  /// How many stops this decode sits away from the brightness of the
+  /// camera's own embedded preview of the same shot, or null when there
+  /// was nothing trustworthy to compare against.
+  ///
+  /// The editor applies it ahead of the Exposure slider, so a photo opens
+  /// at the brightness the camera decided on and the slider stays a
+  /// relative adjustment — the same shape as As Shot white balance. See
+  /// [cameraExposureOffsetStops].
+  final double? baseExposureStops;
 }
 
 class _Lib {
@@ -578,7 +594,20 @@ RawImage? decodeRawImage(
         // own use_camera_wb + use_camera_matrix calibration (set when
         // opening the file, above) is the actual camera-profile-based
         // color science and needs no such nudge.
-        return RawImage(width: width, height: height, rgbBytes: rgbBytes);
+        // Measured from the same open handle rather than a second pass
+        // over the file: the preview is right there, and re-opening a RAW
+        // to read it would cost more than the comparison does.
+        return RawImage(
+          width: width,
+          height: height,
+          rgbBytes: rgbBytes,
+          baseExposureStops: cameraExposureOffsetStops(
+            rgbBytes,
+            width,
+            height,
+            _extractThumbJpeg(lib, lr),
+          ),
+        );
       } finally {
         lib.libraw_dcraw_clear_mem(image);
       }
@@ -754,7 +783,20 @@ RawImage? decodeRawImageWithPmridDenoise(
         final width = image.ref.width;
         final height = image.ref.height;
         final rgbBytes = _copyProcessedImageData(image);
-        return RawImage(width: width, height: height, rgbBytes: rgbBytes);
+        // Measured from the same open handle rather than a second pass
+        // over the file: the preview is right there, and re-opening a RAW
+        // to read it would cost more than the comparison does.
+        return RawImage(
+          width: width,
+          height: height,
+          rgbBytes: rgbBytes,
+          baseExposureStops: cameraExposureOffsetStops(
+            rgbBytes,
+            width,
+            height,
+            _extractThumbJpeg(lib, lr),
+          ),
+        );
       } finally {
         lib.libraw_dcraw_clear_mem(image);
       }

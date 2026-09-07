@@ -3865,6 +3865,7 @@ class _EditorScreenState extends State<EditorScreen>
         curves: _effectiveCurves,
         asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
         asShotTint: metadata?.asShotTint ?? wbDefaultTint,
+        baseExposure: _baseExposureFor(path),
         baseContrast: _effectiveBaseContrast,
         colorProfile: _effectiveColorProfile,
         colorProfileStrength: _effectiveColorProfileStrength,
@@ -4343,9 +4344,13 @@ class _EditorScreenState extends State<EditorScreen>
       RenderJob(
         source: sources.preview,
         // "Before" still gets the base profile (contrast curve + colour
-        // correction) — it's part of the baseline rendering, like Meridian
-        // keeping the camera profile, not a develop edit.
+        // correction) and the camera's own base exposure — all of it is
+        // part of the baseline rendering, like Meridian keeping the camera
+        // profile, not a develop edit. Leaving the exposure out here would
+        // make Before and After differ by a stop before a single slider
+        // moved.
         params: RenderParams(
+          exposure: _baseExposureFor(path),
           baseContrast: _effectiveBaseContrast,
           colorProfile: _effectiveColorProfile,
         ),
@@ -5690,6 +5695,18 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Where the Exposure slider's zero sits for [path]: how many stops the
+  /// decode is from the brightness of the camera's own preview of the same
+  /// shot.
+  ///
+  /// The exact shape of As Shot white balance, and for the same reason —
+  /// the camera made a judgement about this photo and it is a better
+  /// starting point than a fixed constant. Zero when the file carries no
+  /// preview to compare against, which is every non-RAW source, so those
+  /// keep opening exactly as they did.
+  double _baseExposureFor(String? path) =>
+      path == null ? 0 : (_editSources[path]?.baseExposureStops ?? 0);
+
   /// Points the preset thumbnails at whatever is selected now.
   ///
   /// Called from build, which is the one place that reliably runs after
@@ -5719,6 +5736,9 @@ class _EditorScreenState extends State<EditorScreen>
         curves: preset.curves,
         asShotKelvin: path == null ? wbDefaultKelvin : _asShotFor(path).kelvin,
         asShotTint: path == null ? wbDefaultTint : _asShotFor(path).tint,
+        // Or every thumbnail would be a stop away from the render it is
+        // supposed to be previewing.
+        baseExposure: _baseExposureFor(path),
         baseContrast: _effectiveBaseContrast,
         colorProfile: profile,
       ),
@@ -6921,6 +6941,7 @@ class _EditorScreenState extends State<EditorScreen>
           curves: _effectiveCurves,
           asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
           asShotTint: metadata?.asShotTint ?? wbDefaultTint,
+          baseExposure: _baseExposureFor(selected.path),
           baseContrast: _effectiveBaseContrast,
           colorProfile: _effectiveColorProfile,
           colorProfileStrength: _effectiveColorProfileStrength,

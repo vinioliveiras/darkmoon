@@ -61,7 +61,7 @@ library;
 ///     values
 ///   ↓ lower  = default Amount (100%) renders gentler
 /// default: 0.3   (original/unset: 1.0 — Amount was a 1:1 pass-through)
-const double calGlobalAmountCompression = 0.30;
+const double calGlobalAmountCompression = 1.0;
 
 /// Per-slider override of [calGlobalAmountCompression] — a slider key
 /// present here (matching its `_SliderSpec` name in `editor_screen.dart`,
@@ -77,8 +77,19 @@ const double calGlobalAmountCompression = 0.30;
 /// change needed beyond this map, [_withGlobalEditAmountApplied] already
 /// reads through it for every key.
 const Map<String, double> calGlobalAmountCompressionOverrides = {
-  'Exposure': 2.0,
-  'Contrast': 1.0,
+  'ColorProfileAmount': 1.0,
+  'Exposure': 5.0,
+  'Contrast': 0.8,
+  'Shadow': 0.5,
+  'Texture': 0.5,
+  'Sharpen': 0.5,
+  'Blacks': 0.5,
+  'Vibrance': 0.5,
+  'Saturation': 0.5,
+  'Dehaze': 0.5,
+  'MixerHue': 0.5,
+  'MixerSaturation': 0.6,
+  'MixerLuminance': 0.3,
   // Real bug found 2026-09-02: dragging the "Color Profile Contrast"
   // slider (ColorProfileAmount) barely changed the render even across
   // its full range, because it fell back to the global 0.3 fraction like
@@ -88,7 +99,9 @@ const Map<String, double> calGlobalAmountCompressionOverrides = {
   // whole 30% rule was never meant to touch that quietly, since it's
   // itself a stand-in for a fixed baked-in curve, not a "how much of a
   // preset's edit" knob.
-  'ColorProfileAmount': 1.0,
+
+
+
 };
 
 // Temperature/Tint deliberately have NO entry here, not even 1.0: they
@@ -692,3 +705,36 @@ const double calUprightVerticalGainSlope = 58.0;
 /// tighter than the vertical axis manages.
 /// default: -101 (measured)
 const double calUprightHorizontalGain = -101.0;
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  BASE EXPOSURE (match the camera's own rendering)                        ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+//
+// This tunes a MEASUREMENT that becomes a photo's starting exposure, not
+// a render stage: the offset is folded into RenderParams.exposure before
+// any rendering happens, so it needs no GPU counterpart — both paths get
+// it through the exposure they already apply.
+
+/// **Base exposure** — how far, in stops, the decode may be pushed to
+/// reach the brightness of the camera's own embedded preview.
+///
+/// A cap, not a target. The measurement is a ratio of two mean
+/// luminances, and the two images are not guaranteed to be the same crop
+/// or even the same scene rendering — a film simulation can be a long way
+/// from a neutral decode. Beyond this the comparison is more likely to be
+/// wrong than the decode is.
+///   ↑ higher = matches the camera more closely, trusts the preview more
+///   ↓ lower  = safer against an odd preview, leaves more to correct
+/// default: 1.5
+const double calCameraExposureLimitStops = 1.5;
+
+/// **Base exposure** — mean linear luminance below which the comparison
+/// is refused.
+///
+/// The offset is a ratio, and a ratio of two nearly-black frames is noise
+/// amplified without limit. A genuinely dark photo is exactly where a
+/// wrong answer would be most visible.
+///   ↑ higher = refuses more photos, leaving them as decoded
+///   ↓ lower  = answers for darker frames, less reliably
+/// default: 0.002
+const double calCameraExposureLumaFloor = 0.002;

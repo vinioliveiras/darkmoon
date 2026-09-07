@@ -63,10 +63,19 @@ class EditSource {
 
 /// The two resolutions [decodeEditSources] produces for one photo.
 class EditSourcePair {
-  const EditSourcePair({required this.preview, required this.live});
+  const EditSourcePair({
+    required this.preview,
+    required this.live,
+    this.baseExposureStops,
+  });
 
   final EditSource preview;
   final EditSource live;
+
+  /// [RawImage.baseExposureStops] for the file these came from — null for
+  /// anything that carries no camera preview to compare against, which is
+  /// every non-RAW source.
+  final double? baseExposureStops;
 }
 
 Uint8List _rgbBytes(img.Image image) =>
@@ -108,6 +117,7 @@ EditSourcePair? decodeEditSources(
   final previewImage = fitToMaxDimension(full, previewMaxDimension);
   final liveImage = fitToMaxDimension(previewImage, livePreviewMaxDimension);
   return EditSourcePair(
+    baseExposureStops: decoded.baseExposureStops,
     preview: EditSource(
       width: previewImage.width,
       height: previewImage.height,

@@ -1,4 +1,7 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
+
+import '../render/calibration.dart';
 
 import 'package:image/image.dart' as img;
 
@@ -93,4 +96,84 @@ Uint8List applyCameraMatch(
     sumB += rgbBytes[i + 2];
   }
   return (sumR / pixelCount, sumG / pixelCount, sumB / pixelCount);
+}
+
+/// One 8-bit sRGB value, linearised. Built once: the offset below averages
+/// millions of pixels and the transfer function is not cheap.
+final Float64List _srgbToLinear = Float64List.fromList([
+  for (var i = 0; i < 256; i++)
+    if (i / 255.0 <= 0.04045)
+      (i / 255.0) / 12.92
+    else
+      math.pow((i / 255.0 + 0.055) / 1.055, 2.4).toDouble(),
+]);
+
+double _meanLinearLuma(Uint8List rgb) {
+  if (rgb.length < 3) {
+    return 0;
+  }
+  var sum = 0.0;
+  for (var i = 0; i + 2 < rgb.length; i += 3) {
+    sum +=
+        0.2126 * _srgbToLinear[rgb[i]] +
+        0.7152 * _srgbToLinear[rgb[i + 1]] +
+        0.0722 * _srgbToLinear[rgb[i + 2]];
+  }
+  return sum / (rgb.length / 3);
+}
+
+/// How many stops [rgbBytes] sits away from the brightness of
+/// [embeddedJpegBytes], the camera's own preview of the same shot.
+///
+/// Positive means the decode is darker than the camera's rendering and
+/// wants opening up. Null when there is nothing trustworthy to compare —
+/// no preview, a preview of a different shape, or a frame too dark for a
+/// ratio to mean anything.
+///
+/// **Luminance only, and deliberately.** [applyCameraMatch] above does the
+/// same comparison per channel and is not used, because against a
+/// camera's film-simulation JPEG the per-channel gains introduced a
+/// yellow/green cast — it was matching a colour rendering, not correcting
+/// one. Brightness carries none of that: how bright the camera decided the
+/// scene should be is a judgement worth inheriting, and it says nothing
+/// about hue.
+///
+/// The means are taken in **linear** light. Exposure is a multiplication
+/// there, and averaging gamma-encoded values would weight the shadows far
+/// too heavily for a ratio that is about to become a power of two.
+double? cameraExposureOffsetStops(
+  Uint8List rgbBytes,
+  int width,
+  int height,
+  Uint8List? embeddedJpegBytes, {
+  double limitStops = calCameraExposureLimitStops,
+  double lumaFloor = calCameraExposureLumaFloor,
+}) {
+  if (embeddedJpegBytes == null || width <= 0 || height <= 0) {
+    return null;
+  }
+  img.Image? jpeg;
+  try {
+    jpeg = img.decodeJpg(embeddedJpegBytes);
+  } on Exception {
+    jpeg = null;
+  }
+  if (jpeg == null || jpeg.width == 0 || jpeg.height == 0) {
+    return null;
+  }
+
+  // Same guard as applyCameraMatch, for the same reason: the means of two
+  // differently-oriented crops of a scene are not comparable.
+  final aspect = (width / height) / (jpeg.width / jpeg.height);
+  if (aspect < 0.8 || aspect > 1.25) {
+    return null;
+  }
+
+  final decoded = _meanLinearLuma(rgbBytes);
+  final preview = _meanLinearLuma(jpeg.getBytes(order: img.ChannelOrder.rgb));
+  if (decoded < lumaFloor || preview < lumaFloor) {
+    return null;
+  }
+  final stops = math.log(preview / decoded) / math.ln2;
+  return stops.clamp(-limitStops, limitStops);
 }

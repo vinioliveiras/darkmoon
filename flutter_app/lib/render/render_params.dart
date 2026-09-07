@@ -54,6 +54,7 @@ class RenderParams {
     PhotoCurves? curves,
     double asShotKelvin = 5500,
     double asShotTint = 0,
+    double baseExposure = 0,
     double baseContrast = calBaseContrast,
     ColorProfile? colorProfile,
     double colorProfileStrength = 1.0,
@@ -69,7 +70,13 @@ class RenderParams {
       colorProfile: colorProfile,
       colorProfileStrength: colorProfileStrength,
       renderScale: renderScale,
-      exposure: values['Exposure'] ?? defaults.exposure,
+      // The camera's own rendering of this shot sets where the Exposure
+      // slider's zero sits, the same way as-shot white balance sets where
+      // Temperature's does. Added here rather than written into the values
+      // map so the global Amount slider cannot scale it: it is a baseline,
+      // not an edit, and damping it would make a photo's starting
+      // brightness depend on how strongly its edit is being applied.
+      exposure: (values['Exposure'] ?? defaults.exposure) + baseExposure,
       brightness: values['Brightness'] ?? defaults.brightness,
       contrast: values['Contrast'] ?? defaults.contrast,
       highlights: values['Highlights'] ?? defaults.highlights,
