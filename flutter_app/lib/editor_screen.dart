@@ -9488,10 +9488,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
     _ControlsTab.adjust => CupertinoIcons.slider_horizontal_3,
     _ControlsTab.details => CupertinoIcons.dial,
     _ControlsTab.colour => CupertinoIcons.circle_grid_hex_fill,
-    // Also the toolbar's AI Denoise button. Chosen by name, so the
-    // duplication is deliberate rather than an oversight — worth knowing
-    // if one of the two ever needs to be told apart from the other.
-    _ControlsTab.effects => CupertinoIcons.sparkles,
+    _ControlsTab.effects => CupertinoIcons.fx,
   };
 
   /// Icons only, by request. The name still reaches a tooltip and the

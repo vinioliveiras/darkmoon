@@ -85,14 +85,14 @@ void main() {
 
     // Declared in tab order: Adjust, Details, Colour, Effects.
     //
-    // Scoped to the TabBar rather than searched app-wide: sparkles is also
-    // the toolbar's AI Denoise button, so a bare byIcon would find two and
-    // the assertion would be about the wrong thing.
+    // Scoped to the TabBar rather than searched app-wide, so a glyph the
+    // toolbar happens to share cannot make this assert about the wrong
+    // widget.
     for (final icon in [
       CupertinoIcons.slider_horizontal_3,
       CupertinoIcons.dial,
       CupertinoIcons.circle_grid_hex_fill,
-      CupertinoIcons.sparkles,
+      CupertinoIcons.fx,
     ]) {
       expect(
         find.descendant(of: find.byType(TabBar), matching: find.byIcon(icon)),

@@ -294,9 +294,9 @@ class _PresetRow extends StatelessWidget {
                 )
               else
                 Icon(
-                  applied
-                      ? CupertinoIcons.checkmark_alt
-                      : CupertinoIcons.wand_stars,
+                  // The checkmark is state, not identity: it replaces the
+                  // preset's own icon only while that preset is applied.
+                  applied ? CupertinoIcons.checkmark_alt : CupertinoIcons.film,
                   size: 14,
                   color: applied
                       ? DarkmoonColors.accent
