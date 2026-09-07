@@ -70,6 +70,7 @@ import 'settings/app_settings.dart';
 import 'theme.dart';
 import 'widgets/about_dialog.dart';
 import 'widgets/ai_denoise_dialog.dart';
+import 'widgets/color_profile_editor_dialog.dart';
 import 'widgets/colorize_dialog.dart';
 import 'widgets/animated_dialog.dart';
 import 'widgets/brush_mask_overlay.dart';
@@ -1132,6 +1133,13 @@ class _EditorScreenState extends State<EditorScreen>
     // raw" the way every other section's toggle does.
     if ((_paramValues[_categoryEnabledKey('COLOR PROFILE')] ?? 1.0) == 0) {
       return null;
+    }
+    // The draft outranks whatever this photo selected: that is what makes
+    // the editor dialog's preview the real render rather than a separate
+    // approximation of one.
+    final draft = _draftColorProfile;
+    if (draft != null) {
+      return draft;
     }
     final mode = colorProfileModeOf(_paramValues);
     if (mode == ColorProfileMode.custom) {
@@ -5301,6 +5309,67 @@ class _EditorScreenState extends State<EditorScreen>
     _scheduleCatalogSave();
   }
 
+  /// The profile being authored right now, if the editor dialog is open.
+  ///
+  /// [_effectiveColorProfile] returns this ahead of anything the photo
+  /// actually selected, which is what makes the dialog's live preview the
+  /// real render rather than a separate approximation of one — the whole
+  /// GPU pipeline runs on the draft exactly as it will once saved. Cleared
+  /// on both save and cancel; nothing about the photo is written until the
+  /// user saves.
+  ColorProfile? _draftColorProfile;
+
+  /// Opens the colour profile editor, previewing on the current photo.
+  Future<void> _openColorProfileEditor() async {
+    final existingNames = _userColorProfiles.values
+        .map((profile) => profile.name)
+        .toSet();
+    final saved = await showDialog<ColorProfile>(
+      context: context,
+      // Not the usual dimming barrier: the photo behind this dialog is the
+      // preview, and dimming it would misrepresent the colours being
+      // judged.
+      barrierColor: Colors.transparent,
+      builder: (context) => ColorProfileEditorDialog(
+        initial: ColorProfile(
+          tone: identityColorProfile.tone,
+          hueShift: List<double>.of(identityColorProfile.hueShift),
+          satMul: List<double>.of(identityColorProfile.satMul),
+          lumMul: List<double>.of(identityColorProfile.lumMul),
+          id: newColorProfileId(),
+        ),
+        existingNames: existingNames,
+        onDraftChanged: (draft) {
+          setState(() => _draftColorProfile = draft);
+          _scheduleRender(live: true);
+        },
+        onDraftSettled: (draft) {
+          setState(() => _draftColorProfile = draft);
+          _scheduleRender(live: false);
+        },
+      ),
+    );
+
+    if (!mounted) {
+      return;
+    }
+    setState(() => _draftColorProfile = null);
+    if (saved == null) {
+      // Cancelled — put the photo back the way it was.
+      _scheduleRender(live: false);
+      return;
+    }
+
+    final stored = await saveUserColorProfile(saved);
+    await _loadUserColorProfiles();
+    if (!mounted) {
+      return;
+    }
+    // Select what was just built. Doing this only after the save means a
+    // failed write leaves the photo pointing at something that exists.
+    _applyColorProfileChoice(stored.id);
+  }
+
   /// What the COLOR PROFILE dropdown should currently show — a
   /// [ColorProfileMode] index for a built-in, a [ColorProfile.id] for one
   /// of the user's. See [reservedColorProfileIds].
@@ -6804,6 +6873,7 @@ class _EditorScreenState extends State<EditorScreen>
                             customProfileMissing: _customProfileMissing,
                             onColorProfileChoiceChanged:
                                 _applyColorProfileChoice,
+                            onCreateColorProfile: _openColorProfileEditor,
                             onWhiteBalanceMode: _applyWbMode,
                             wbEyedropperActive: _wbEyedropperActive,
                             onToggleWbEyedropper: () => setState(
@@ -8861,6 +8931,7 @@ class _ControlsPanel extends StatefulWidget {
     required this.userColorProfiles,
     required this.customProfileMissing,
     required this.onColorProfileChoiceChanged,
+    required this.onCreateColorProfile,
     required this.onExport,
     required this.exporting,
     required this.enabled,
@@ -8951,6 +9022,10 @@ class _ControlsPanel extends StatefulWidget {
   /// drives both the dropdown's placeholder entry and the warning below it.
   final bool customProfileMissing;
   final ValueChanged<int> onColorProfileChoiceChanged;
+
+  /// Opens the profile editor. Not a per-photo edit, which is why it
+  /// is a separate callback rather than another dropdown value.
+  final VoidCallback onCreateColorProfile;
 
   final VoidCallback? onExport;
   final bool exporting;
@@ -9590,38 +9665,70 @@ class _ControlsPanelState extends State<_ControlsPanel> {
                                 // a ColorProfile.id for the user's own.
                                 // reservedColorProfileIds keeps those two
                                 // number spaces from ever overlapping.
-                                child: StyledDropdown<int>(
-                                  value: widget.colorProfileChoice,
-                                  items: [
-                                    for (final mode in [
-                                      ColorProfileMode.darkmoonDefault,
-                                      ColorProfileMode.vivid,
-                                    ])
-                                      StyledDropdownItem(
-                                        value: mode.index,
-                                        label: _colorProfileModeLabel(
-                                          l10n,
-                                          mode,
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: StyledDropdown<int>(
+                                        value: widget.colorProfileChoice,
+                                        items: [
+                                          for (final mode in [
+                                            ColorProfileMode.darkmoonDefault,
+                                            ColorProfileMode.vivid,
+                                          ])
+                                            StyledDropdownItem(
+                                              value: mode.index,
+                                              label: _colorProfileModeLabel(
+                                                l10n,
+                                                mode,
+                                              ),
+                                            ),
+                                          for (final profile
+                                              in widget
+                                                  .userColorProfiles
+                                                  .values)
+                                            StyledDropdownItem(
+                                              value: profile.id,
+                                              label: profile.name,
+                                            ),
+                                          // The dangling reference gets its own
+                                          // entry rather than snapping the
+                                          // dropdown back to Default: the photo
+                                          // still points at that profile, and the
+                                          // control should say so.
+                                          if (widget.customProfileMissing)
+                                            StyledDropdownItem(
+                                              value: widget.colorProfileChoice,
+                                              label:
+                                                  l10n.colorProfileModeMissing,
+                                            ),
+                                        ],
+                                        onChanged:
+                                            widget.onColorProfileChoiceChanged,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 6),
+                                    // Creating a profile is not an edit to
+                                    // this photo, so it sits beside the
+                                    // dropdown rather than inside it — a
+                                    // "+" entry in the list would look like
+                                    // one more profile to pick.
+                                    Tooltip(
+                                      message: l10n.colorProfileNewTooltip,
+                                      child: SizedBox(
+                                        width: 30,
+                                        height: 30,
+                                        child: IconButton(
+                                          padding: EdgeInsets.zero,
+                                          iconSize: 17,
+                                          splashRadius: 16,
+                                          color: DarkmoonColors.textSecondary,
+                                          icon: const Icon(Icons.add),
+                                          onPressed:
+                                              widget.onCreateColorProfile,
                                         ),
                                       ),
-                                    for (final profile
-                                        in widget.userColorProfiles.values)
-                                      StyledDropdownItem(
-                                        value: profile.id,
-                                        label: profile.name,
-                                      ),
-                                    // The dangling reference gets its own
-                                    // entry rather than snapping the
-                                    // dropdown back to Default: the photo
-                                    // still points at that profile, and the
-                                    // control should say so.
-                                    if (widget.customProfileMissing)
-                                      StyledDropdownItem(
-                                        value: widget.colorProfileChoice,
-                                        label: l10n.colorProfileModeMissing,
-                                      ),
+                                    ),
                                   ],
-                                  onChanged: widget.onColorProfileChoiceChanged,
                                 ),
                               ),
                               if (widget.customProfileMissing)

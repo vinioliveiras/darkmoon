@@ -1,0 +1,224 @@
+import 'package:darkmoon/l10n/app_localizations.dart';
+import 'package:darkmoon/render/color_profile.dart';
+import 'package:darkmoon/widgets/color_profile_editor_dialog.dart';
+import 'package:darkmoon/widgets/slider_row.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+/// The dialog's real job is translating what the user touches into a
+/// 33-point tone curve and a 24-bin hue table. Those two shapes are what
+/// the renderer consumes, so a mistake here is invisible in the interface
+/// and wrong in the picture.
+void main() {
+  ColorProfile identity({String name = '', int id = 1000}) => ColorProfile(
+    tone: List<double>.of(identityColorProfile.tone),
+    hueShift: List<double>.of(identityColorProfile.hueShift),
+    satMul: List<double>.of(identityColorProfile.satMul),
+    lumMul: List<double>.of(identityColorProfile.lumMul),
+    name: name,
+    id: id,
+  );
+
+  Future<List<ColorProfile>> pumpDialog(
+    WidgetTester tester, {
+    ColorProfile? initial,
+    Set<String> existingNames = const {},
+  }) async {
+    final drafts = <ColorProfile>[];
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        home: ColorProfileEditorDialog(
+          initial: initial ?? identity(),
+          existingNames: existingNames,
+          onDraftChanged: drafts.add,
+          onDraftSettled: drafts.add,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    return drafts;
+  }
+
+  testWidgets('opens on the tone tab with an untouched profile', (
+    tester,
+  ) async {
+    final drafts = await pumpDialog(tester);
+    expect(
+      drafts,
+      isEmpty,
+      reason: 'merely opening the dialog must not change the photo',
+    );
+  });
+
+  testWidgets('saving is refused until the profile has a name', (tester) async {
+    await pumpDialog(tester);
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+    final save = tester.widget<TextButton>(
+      find.widgetWithText(TextButton, l10n.presetSaveLabel),
+    );
+    expect(
+      save.onPressed,
+      isNull,
+      reason: 'an unnamed profile would be saved as profile.json',
+    );
+  });
+
+  testWidgets('a Basic range writes its three bins and nothing else', (
+    tester,
+  ) async {
+    final drafts = await pumpDialog(tester);
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+    // Colour tab, then the first range (Red, bins 0-2) saturation slider.
+    await tester.tap(find.text(l10n.colorProfileEditorTabColor));
+    await tester.pumpAndSettle();
+
+    final saturationSliders = find.byWidgetPredicate(
+      (w) => w is SliderRow && w.name == l10n.colorProfileEditorSaturation,
+    );
+    expect(saturationSliders, findsWidgets);
+    tester.widget<SliderRow>(saturationSliders.first).onChanged(50);
+    await tester.pump();
+
+    expect(drafts, isNotEmpty);
+    final table = drafts.last.satMul;
+
+    for (final bin in [0, 1, 2]) {
+      expect(
+        table[bin],
+        closeTo(1.5, 1e-9),
+        reason: 'bin $bin is inside the Red range',
+      );
+    }
+    // The neighbouring bins belong to Magenta and Orange. Red's slider
+    // must not touch them: there are no spare bins between ranges, so any
+    // feathering here would silently edit a range the user did not open.
+    // The renderer interpolates between bin centres anyway, so the
+    // transition is already a 15-degree ramp in the picture.
+    for (final bin in [23, 3]) {
+      expect(
+        table[bin],
+        1.0,
+        reason: 'bin $bin belongs to a neighbouring range',
+      );
+    }
+    for (final bin in [5, 12, 20]) {
+      expect(table[bin], 1.0, reason: 'bin $bin is nowhere near Red');
+    }
+  });
+
+  testWidgets('dragging a range slider does not drift on repeat events', (
+    tester,
+  ) async {
+    // onChanged fires continuously through a drag. Any write that reads the
+    // current value back would accumulate across those events, so the same
+    // gesture would land somewhere different depending on how many frames
+    // it happened to produce.
+    final drafts = await pumpDialog(tester);
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+    await tester.tap(find.text(l10n.colorProfileEditorTabColor));
+    await tester.pumpAndSettle();
+    final saturationSliders = find.byWidgetPredicate(
+      (w) => w is SliderRow && w.name == l10n.colorProfileEditorSaturation,
+    );
+
+    for (var i = 0; i < 5; i++) {
+      tester.widget<SliderRow>(saturationSliders.first).onChanged(50);
+      await tester.pump();
+    }
+
+    for (final bin in [0, 1, 2]) {
+      expect(drafts.last.satMul[bin], closeTo(1.5, 1e-9));
+    }
+    for (final bin in [23, 3]) {
+      expect(
+        drafts.last.satMul[bin],
+        1.0,
+        reason: 'five identical events must land exactly where one does',
+      );
+    }
+  });
+
+  testWidgets('Advanced writes a single bin and leaves its neighbours', (
+    tester,
+  ) async {
+    final drafts = await pumpDialog(tester);
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+    await tester.tap(find.text(l10n.colorProfileEditorTabColor));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(l10n.colorProfileEditorModeAdvanced));
+    await tester.pumpAndSettle();
+
+    final hueSliders = find.byWidgetPredicate(
+      (w) => w is SliderRow && w.name == l10n.colorProfileEditorHue,
+    );
+    tester.widget<SliderRow>(hueSliders.first).onChanged(12);
+    await tester.pump();
+
+    final table = drafts.last.hueShift;
+    expect(table[0], 12);
+    expect(
+      table[1],
+      0,
+      reason: 'Advanced is per-bin — no easing into the neighbours',
+    );
+    expect(table[23], 0);
+  });
+
+  testWidgets('an untouched tone curve stays exactly the identity ramp', (
+    tester,
+  ) async {
+    final drafts = await pumpDialog(tester);
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+    // Any edit at all, so a draft is emitted without touching tone.
+    await tester.tap(find.text(l10n.colorProfileEditorTabColor));
+    await tester.pumpAndSettle();
+    final hueSliders = find.byWidgetPredicate(
+      (w) => w is SliderRow && w.name == l10n.colorProfileEditorHue,
+    );
+    tester.widget<SliderRow>(hueSliders.first).onChanged(5);
+    await tester.pump();
+
+    expect(drafts.last.tone.length, colorProfileTonePoints);
+    expect(
+      drafts.last.toneIsIdentity,
+      isTrue,
+      reason:
+          'sampling an untouched curve must not introduce a tone curve, '
+          'which would change every pixel of the photo',
+    );
+  });
+
+  testWidgets('an existing profile opens with its own values', (tester) async {
+    final existing = identity(name: 'Warm', id: 2000);
+    existing.satMul[6] = 1.4;
+
+    final drafts = await pumpDialog(tester, initial: existing);
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+    await tester.tap(find.text(l10n.colorProfileEditorTabColor));
+    await tester.pumpAndSettle();
+    final hueSliders = find.byWidgetPredicate(
+      (w) => w is SliderRow && w.name == l10n.colorProfileEditorHue,
+    );
+    tester.widget<SliderRow>(hueSliders.first).onChanged(1);
+    await tester.pump();
+
+    expect(
+      drafts.last.satMul[6],
+      closeTo(1.4, 1e-9),
+      reason: 'editing one range must not reset the rest of the profile',
+    );
+    expect(
+      drafts.last.id,
+      2000,
+      reason: 'editing keeps the id, or every photo using it would be orphaned',
+    );
+  });
+}

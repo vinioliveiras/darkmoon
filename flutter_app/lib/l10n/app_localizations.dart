@@ -2055,6 +2055,162 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'No matches'**
   String get lensCorrectionSearchNoMatches;
+
+  /// No description provided for @colorProfileEditorTitleNew.
+  ///
+  /// In en, this message translates to:
+  /// **'New colour profile'**
+  String get colorProfileEditorTitleNew;
+
+  /// No description provided for @colorProfileEditorTitleEdit.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit colour profile'**
+  String get colorProfileEditorTitleEdit;
+
+  /// No description provided for @colorProfileEditorTabTone.
+  ///
+  /// In en, this message translates to:
+  /// **'Tone'**
+  String get colorProfileEditorTabTone;
+
+  /// No description provided for @colorProfileEditorTabColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour'**
+  String get colorProfileEditorTabColor;
+
+  /// No description provided for @colorProfileEditorTabBase.
+  ///
+  /// In en, this message translates to:
+  /// **'Base'**
+  String get colorProfileEditorTabBase;
+
+  /// No description provided for @colorProfileEditorToneHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Remaps brightness while keeping colour. Drag a point to reshape, click empty space to add one, right-click to remove.'**
+  String get colorProfileEditorToneHint;
+
+  /// No description provided for @colorProfileEditorBasicHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Eight hue ranges. Each covers three of the profile\'s 24 bins.'**
+  String get colorProfileEditorBasicHint;
+
+  /// No description provided for @colorProfileEditorAdvancedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'All 24 hue bins, one every 15 degrees.'**
+  String get colorProfileEditorAdvancedHint;
+
+  /// No description provided for @colorProfileEditorModeBasic.
+  ///
+  /// In en, this message translates to:
+  /// **'Basic'**
+  String get colorProfileEditorModeBasic;
+
+  /// No description provided for @colorProfileEditorModeAdvanced.
+  ///
+  /// In en, this message translates to:
+  /// **'Advanced'**
+  String get colorProfileEditorModeAdvanced;
+
+  /// No description provided for @colorProfileEditorHue.
+  ///
+  /// In en, this message translates to:
+  /// **'Hue'**
+  String get colorProfileEditorHue;
+
+  /// No description provided for @colorProfileEditorSaturation.
+  ///
+  /// In en, this message translates to:
+  /// **'Saturation'**
+  String get colorProfileEditorSaturation;
+
+  /// No description provided for @colorProfileEditorLuminance.
+  ///
+  /// In en, this message translates to:
+  /// **'Luminance'**
+  String get colorProfileEditorLuminance;
+
+  /// No description provided for @colorProfileEditorNameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Profile name'**
+  String get colorProfileEditorNameLabel;
+
+  /// No description provided for @colorProfileEditorNameTaken.
+  ///
+  /// In en, this message translates to:
+  /// **'A profile with this name already exists. Saving will add a number to keep them apart.'**
+  String get colorProfileEditorNameTaken;
+
+  /// No description provided for @colorProfileEditorResetHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Clears the tone curve and every hue adjustment. The name is kept.'**
+  String get colorProfileEditorResetHint;
+
+  /// No description provided for @colorProfileEditorReset.
+  ///
+  /// In en, this message translates to:
+  /// **'Reset everything'**
+  String get colorProfileEditorReset;
+
+  /// No description provided for @colorProfileNewTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Create a colour profile'**
+  String get colorProfileNewTooltip;
+
+  /// No description provided for @hueRangeRed.
+  ///
+  /// In en, this message translates to:
+  /// **'Red'**
+  String get hueRangeRed;
+
+  /// No description provided for @hueRangeOrange.
+  ///
+  /// In en, this message translates to:
+  /// **'Orange'**
+  String get hueRangeOrange;
+
+  /// No description provided for @hueRangeYellow.
+  ///
+  /// In en, this message translates to:
+  /// **'Yellow'**
+  String get hueRangeYellow;
+
+  /// No description provided for @hueRangeGreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Green'**
+  String get hueRangeGreen;
+
+  /// No description provided for @hueRangeAqua.
+  ///
+  /// In en, this message translates to:
+  /// **'Aqua'**
+  String get hueRangeAqua;
+
+  /// No description provided for @hueRangeBlue.
+  ///
+  /// In en, this message translates to:
+  /// **'Blue'**
+  String get hueRangeBlue;
+
+  /// No description provided for @hueRangePurple.
+  ///
+  /// In en, this message translates to:
+  /// **'Purple'**
+  String get hueRangePurple;
+
+  /// No description provided for @hueRangeMagenta.
+  ///
+  /// In en, this message translates to:
+  /// **'Magenta'**
+  String get hueRangeMagenta;
 }
 
 class _AppLocalizationsDelegate

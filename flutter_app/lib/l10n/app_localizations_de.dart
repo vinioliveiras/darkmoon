@@ -1080,4 +1080,87 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get lensCorrectionSearchNoMatches => 'Keine Treffer';
+
+  @override
+  String get colorProfileEditorTitleNew => 'Neues Farbprofil';
+
+  @override
+  String get colorProfileEditorTitleEdit => 'Farbprofil bearbeiten';
+
+  @override
+  String get colorProfileEditorTabTone => 'Tonwert';
+
+  @override
+  String get colorProfileEditorTabColor => 'Farbe';
+
+  @override
+  String get colorProfileEditorTabBase => 'Basis';
+
+  @override
+  String get colorProfileEditorToneHint =>
+      'Bildet die Helligkeit neu ab und behält die Farbe. Punkt ziehen zum Formen, in den freien Bereich klicken zum Hinzufügen, Rechtsklick zum Entfernen.';
+
+  @override
+  String get colorProfileEditorBasicHint =>
+      'Acht Farbtonbereiche. Jeder deckt drei der 24 Bins des Profils ab.';
+
+  @override
+  String get colorProfileEditorAdvancedHint =>
+      'Alle 24 Farbton-Bins, einer alle 15 Grad.';
+
+  @override
+  String get colorProfileEditorModeBasic => 'Einfach';
+
+  @override
+  String get colorProfileEditorModeAdvanced => 'Erweitert';
+
+  @override
+  String get colorProfileEditorHue => 'Farbton';
+
+  @override
+  String get colorProfileEditorSaturation => 'Sättigung';
+
+  @override
+  String get colorProfileEditorLuminance => 'Luminanz';
+
+  @override
+  String get colorProfileEditorNameLabel => 'Profilname';
+
+  @override
+  String get colorProfileEditorNameTaken =>
+      'Ein Profil mit diesem Namen existiert bereits. Beim Speichern wird eine Nummer angehängt.';
+
+  @override
+  String get colorProfileEditorResetHint =>
+      'Setzt die Tonwertkurve und alle Farbtonanpassungen zurück. Der Name bleibt erhalten.';
+
+  @override
+  String get colorProfileEditorReset => 'Alles zurücksetzen';
+
+  @override
+  String get colorProfileNewTooltip => 'Farbprofil erstellen';
+
+  @override
+  String get hueRangeRed => 'Rot';
+
+  @override
+  String get hueRangeOrange => 'Orange';
+
+  @override
+  String get hueRangeYellow => 'Gelb';
+
+  @override
+  String get hueRangeGreen => 'Grün';
+
+  @override
+  String get hueRangeAqua => 'Türkis';
+
+  @override
+  String get hueRangeBlue => 'Blau';
+
+  @override
+  String get hueRangePurple => 'Violett';
+
+  @override
+  String get hueRangeMagenta => 'Magenta';
 }

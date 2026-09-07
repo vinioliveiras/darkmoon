@@ -1069,4 +1069,87 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get lensCorrectionSearchNoMatches => 'Nenhum resultado';
+
+  @override
+  String get colorProfileEditorTitleNew => 'Novo perfil de cor';
+
+  @override
+  String get colorProfileEditorTitleEdit => 'Editar perfil de cor';
+
+  @override
+  String get colorProfileEditorTabTone => 'Tom';
+
+  @override
+  String get colorProfileEditorTabColor => 'Cor';
+
+  @override
+  String get colorProfileEditorTabBase => 'Base';
+
+  @override
+  String get colorProfileEditorToneHint =>
+      'Remapeia o brilho preservando a cor. Arraste um ponto para moldar, clique no vazio para adicionar, botão direito para remover.';
+
+  @override
+  String get colorProfileEditorBasicHint =>
+      'Oito faixas de matiz. Cada uma cobre três dos 24 bins do perfil.';
+
+  @override
+  String get colorProfileEditorAdvancedHint =>
+      'Os 24 bins de matiz, um a cada 15 graus.';
+
+  @override
+  String get colorProfileEditorModeBasic => 'Básico';
+
+  @override
+  String get colorProfileEditorModeAdvanced => 'Avançado';
+
+  @override
+  String get colorProfileEditorHue => 'Matiz';
+
+  @override
+  String get colorProfileEditorSaturation => 'Saturação';
+
+  @override
+  String get colorProfileEditorLuminance => 'Luminância';
+
+  @override
+  String get colorProfileEditorNameLabel => 'Nome do perfil';
+
+  @override
+  String get colorProfileEditorNameTaken =>
+      'Já existe um perfil com este nome. Ao salvar, um número será adicionado para distinguir os dois.';
+
+  @override
+  String get colorProfileEditorResetHint =>
+      'Limpa a curva de tom e todos os ajustes de matiz. O nome é mantido.';
+
+  @override
+  String get colorProfileEditorReset => 'Zerar tudo';
+
+  @override
+  String get colorProfileNewTooltip => 'Criar um perfil de cor';
+
+  @override
+  String get hueRangeRed => 'Vermelho';
+
+  @override
+  String get hueRangeOrange => 'Laranja';
+
+  @override
+  String get hueRangeYellow => 'Amarelo';
+
+  @override
+  String get hueRangeGreen => 'Verde';
+
+  @override
+  String get hueRangeAqua => 'Ciano';
+
+  @override
+  String get hueRangeBlue => 'Azul';
+
+  @override
+  String get hueRangePurple => 'Roxo';
+
+  @override
+  String get hueRangeMagenta => 'Magenta';
 }

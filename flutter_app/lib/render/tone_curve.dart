@@ -57,13 +57,18 @@ Uint8List buildToneCurveLut(List<CurvePoint> points) {
     return lut;
   }
   for (var i = 0; i < 256; i++) {
-    final y = _evaluateCurve(points, i / 255.0);
+    final y = evaluateToneCurveAt(points, i / 255.0);
     lut[i] = (y * 255.0).clamp(0.0, 255.0).round();
   }
   return lut;
 }
 
-double _evaluateCurve(List<CurvePoint> points, double x) {
+/// The curve's value at [x], both in 0..1 — the spline itself, not a
+/// quantised sample of it. `buildToneCurveLut` is this evaluated at 256
+/// points and rounded to bytes; callers that need the real value (the
+/// colour-profile editor sampling a curve into a ColorProfile.tone) want
+/// this instead, so authoring precision is not capped at 8 bits.
+double evaluateToneCurveAt(List<CurvePoint> points, double x) {
   if (x <= points.first.x) {
     return points.first.y;
   }
