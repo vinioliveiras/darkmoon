@@ -1528,6 +1528,11 @@ class _EditorScreenState extends State<EditorScreen>
   /// reads well for its shape: Brush's dabs already show the paint quite
   /// clearly even at 1%, while the gradient/color-range shading needs more
   /// to be visible at all.
+  /// Overlay strength per mask type, fixed since 2026-09-07 — the slider
+  /// that exposed it was removed at the user's request. The overlay still
+  /// renders with these; they are just no longer adjustable, and are tuned
+  /// per type because a brush stroke needs almost none while a colour
+  /// range needs enough to see what it caught.
   final Map<MaskType, double> _maskOverlayOpacity = {
     MaskType.linearGradient: 0.15,
     MaskType.radialGradient: 0.00,
@@ -6014,10 +6019,6 @@ class _EditorScreenState extends State<EditorScreen>
     setState(() => _maskOverlayVisible = !_maskOverlayVisible);
   }
 
-  void _setMaskOverlayOpacity(MaskType type, double value) {
-    setState(() => _maskOverlayOpacity[type] = value);
-  }
-
   void _addMask(MaskType type) {
     final l10n = AppLocalizations.of(context)!;
     final countOfType = _currentMasks.where((m) => m.type == type).length + 1;
@@ -7182,7 +7183,6 @@ class _EditorScreenState extends State<EditorScreen>
                             onToggleMaskOverlayVisible:
                                 _toggleMaskOverlayVisible,
                             maskOverlayOpacity: _maskOverlayOpacity,
-                            onMaskOverlayOpacityChanged: _setMaskOverlayOpacity,
                             brushRadius: _brushRadius,
                             brushHardness: _brushHardness,
                             brushErase: _brushErase,
@@ -9241,7 +9241,6 @@ class _ControlsPanel extends StatefulWidget {
     required this.maskOverlayVisible,
     required this.onToggleMaskOverlayVisible,
     required this.maskOverlayOpacity,
-    required this.onMaskOverlayOpacityChanged,
     required this.brushRadius,
     required this.brushHardness,
     required this.brushErase,
@@ -9358,7 +9357,6 @@ class _ControlsPanel extends StatefulWidget {
   final bool maskOverlayVisible;
   final VoidCallback onToggleMaskOverlayVisible;
   final Map<MaskType, double> maskOverlayOpacity;
-  final void Function(MaskType type, double value) onMaskOverlayOpacityChanged;
 
   final double brushRadius;
   final double brushHardness;
@@ -9861,8 +9859,6 @@ class _ControlsPanelState extends State<_ControlsPanel>
                           onToggleOverlayVisible:
                               widget.onToggleMaskOverlayVisible,
                           overlayOpacity: widget.maskOverlayOpacity,
-                          onOverlayOpacityChanged:
-                              widget.onMaskOverlayOpacityChanged,
                         ),
                         if (isBrushActive) ...[
                           const SizedBox(height: 8),
@@ -9898,9 +9894,24 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                   style: Theme.of(context).textTheme.bodyMedium,
                                 ),
                               ),
-                              Switch(
-                                value: widget.brushErase,
-                                onChanged: (_) => widget.onToggleBrushErase(),
+                              // Same 34x21 SizedBox+FittedBox a section
+                              // header's switch uses, so the two read as
+                              // the same control. FittedBox rather than
+                              // Transform.scale for the reason documented
+                              // there: scale shrinks only the painting and
+                              // leaves a full-size box reserving space.
+                              SizedBox(
+                                width: 34,
+                                height: 21,
+                                child: FittedBox(
+                                  child: Switch(
+                                    value: widget.brushErase,
+                                    onChanged: (_) =>
+                                        widget.onToggleBrushErase(),
+                                    materialTapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
                               ),
                               const SizedBox(width: 6),
                               SizedBox(

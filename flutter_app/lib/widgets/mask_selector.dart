@@ -31,7 +31,6 @@ class MaskSelector extends StatelessWidget {
     required this.overlayVisible,
     required this.onToggleOverlayVisible,
     required this.overlayOpacity,
-    required this.onOverlayOpacityChanged,
   });
 
   final List<MaskLayer> masks;
@@ -61,7 +60,6 @@ class MaskSelector extends StatelessWidget {
   /// [onOpacityChanged]'s real mask-effect strength. The active mask's own
   /// type picks which entry is shown/edited.
   final Map<MaskType, double> overlayOpacity;
-  final void Function(MaskType type, double value) onOverlayOpacityChanged;
 
   MaskLayer? get _active => activeId == imageMaskId
       ? null
@@ -246,17 +244,6 @@ class MaskSelector extends StatelessWidget {
             onChanged: onOpacityChanged,
             onChangeEnd: onOpacityChangeEnd,
           ),
-          if (overlayVisible) ...[
-            const SizedBox(height: 8),
-            SliderRow(
-              name: l10n.maskOverlayOpacityLabel,
-              min: 0,
-              max: 100,
-              value: (overlayOpacity[active.type] ?? 0) * 100,
-              decimals: 0,
-              onChanged: (v) => onOverlayOpacityChanged(active.type, v / 100),
-            ),
-          ],
         ],
       ],
     );

@@ -790,9 +790,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get maskOpacityLabel => 'Deckkraft';
 
   @override
-  String get maskOverlayOpacityLabel => 'Overlay-Deckkraft';
-
-  @override
   String get maskCloneTooltip => 'Maske duplizieren';
 
   @override

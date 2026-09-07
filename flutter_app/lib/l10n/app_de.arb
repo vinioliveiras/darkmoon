@@ -231,7 +231,6 @@
   "maskEnabledLabel": "Aktiviert",
   "maskInvertLabel": "Invertieren",
   "maskOpacityLabel": "Deckkraft",
-  "maskOverlayOpacityLabel": "Overlay-Deckkraft",
   "maskCloneTooltip": "Maske duplizieren",
   "maskCloneSuffix": "Kopie",
   "maskDeleteTooltip": "Maske löschen",

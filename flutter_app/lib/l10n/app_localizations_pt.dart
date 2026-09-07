@@ -781,9 +781,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get maskOpacityLabel => 'Opacidade';
 
   @override
-  String get maskOverlayOpacityLabel => 'Opacidade da Marcação';
-
-  @override
   String get maskCloneTooltip => 'Duplicar máscara';
 
   @override

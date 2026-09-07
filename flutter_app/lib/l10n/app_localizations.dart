@@ -1480,12 +1480,6 @@ abstract class AppLocalizations {
   /// **'Opacity'**
   String get maskOpacityLabel;
 
-  /// No description provided for @maskOverlayOpacityLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Overlay Opacity'**
-  String get maskOverlayOpacityLabel;
-
   /// No description provided for @maskCloneTooltip.
   ///
   /// In en, this message translates to:

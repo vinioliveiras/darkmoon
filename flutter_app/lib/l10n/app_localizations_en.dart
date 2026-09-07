@@ -774,9 +774,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get maskOpacityLabel => 'Opacity';
 
   @override
-  String get maskOverlayOpacityLabel => 'Overlay Opacity';
-
-  @override
   String get maskCloneTooltip => 'Duplicate mask';
 
   @override
