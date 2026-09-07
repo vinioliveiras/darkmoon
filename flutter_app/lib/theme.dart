@@ -64,6 +64,16 @@ class DarkmoonColors {
   static const sliderInactiveTrack = Color(0xFF3C3E43);
 }
 
+/// Trailing space a vertical scroll view must leave for the scrollbar.
+///
+/// Flutter's desktop `Scrollbar` overlays the content it scrolls rather
+/// than displacing it, so without this a slider's right end, a value
+/// readout or a row's trailing icon sits underneath the thumb. There is no
+/// theme setting that reserves the space — the scroll view has to.
+///
+/// Width of the thumb plus its cross-axis margin, plus a little air.
+const double kScrollbarGutter = 14.0;
+
 ThemeData buildDarkmoonTheme() {
   const scheme = ColorScheme.dark(
     surface: DarkmoonColors.background,
@@ -98,6 +108,25 @@ ThemeData buildDarkmoonTheme() {
       color: DarkmoonColors.divider,
       thickness: 1,
       space: 1,
+    ),
+    // Flutter's desktop scroll behaviour wraps every scrollable in a
+    // Scrollbar that draws *over* the content, so a slider's right end or
+    // a list row's trailing icon ends up underneath the thumb. There is no
+    // theme flag for "reserve space"; the fix is [kScrollbarGutter] as
+    // trailing padding on the scroll view. This part makes the thumb quiet
+    // and consistent — thin, inset, and only solid while it is being used.
+    scrollbarTheme: ScrollbarThemeData(
+      thickness: const WidgetStatePropertyAll(6),
+      radius: const Radius.circular(3),
+      crossAxisMargin: 2,
+      mainAxisMargin: 2,
+      thumbColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.dragged) ||
+            states.contains(WidgetState.hovered)) {
+          return DarkmoonColors.textMuted;
+        }
+        return DarkmoonColors.divider;
+      }),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style:

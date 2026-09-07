@@ -5509,8 +5509,20 @@ class _EditorScreenState extends State<EditorScreen>
   Future<({Float32List rgb, int width, int height})?>
   _profilePreviewSource() async {
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
-    final neutral = selected == null ? null : _neutralPreviews[selected.path];
-    if (neutral == null) {
+    if (selected == null) {
+      return null;
+    }
+    // Render it if it is not there. Until 2026-09-07 this read the cache
+    // and gave up: the neutral preview is only produced when Before/After
+    // is switched on, so for anyone who had never used that mode the
+    // profile editor simply showed no photo at all. The cache is keyed by
+    // path and shared with Before/After, so this is not extra work — it is
+    // the same render, just requested earlier.
+    if (!_neutralPreviews.containsKey(selected.path)) {
+      await _loadNeutralPreview(selected.path);
+    }
+    final neutral = _neutralPreviews[selected.path];
+    if (neutral == null || !mounted) {
       return null;
     }
     // Own a handle across the readback — a render landing mid-await would

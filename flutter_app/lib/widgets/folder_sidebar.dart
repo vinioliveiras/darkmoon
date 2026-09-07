@@ -100,6 +100,7 @@ class FolderSidebar extends StatelessWidget {
         children: [
           Expanded(
             child: SingleChildScrollView(
+              padding: const EdgeInsets.only(right: kScrollbarGutter),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [

@@ -234,7 +234,7 @@ class _HeaderIconButton extends StatelessWidget {
       width: 24,
       child: IconButton(
         tooltip: tooltip,
-        padding: EdgeInsets.zero,
+        padding: const EdgeInsets.only(right: kScrollbarGutter),
         onPressed: onPressed,
         icon: Icon(icon, size: 14),
       ),
@@ -335,7 +335,7 @@ class _PresetRow extends StatelessWidget {
                         // trigger that's supposed to sit quietly at the end
                         // of a list row, so this stays a bare icon with no
                         // persistent background.
-                        padding: EdgeInsets.zero,
+                        padding: const EdgeInsets.only(right: kScrollbarGutter),
                         onSelected: (action) => action(),
                         itemBuilder: (context) => [
                           PopupMenuItem(

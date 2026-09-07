@@ -59,6 +59,7 @@ class _DarkmoonAboutDialogState extends State<DarkmoonAboutDialog> {
       content: SizedBox(
         width: 340,
         child: SingleChildScrollView(
+          padding: const EdgeInsets.only(right: kScrollbarGutter),
           child: SettingsGroup(
             children: [
               Row(

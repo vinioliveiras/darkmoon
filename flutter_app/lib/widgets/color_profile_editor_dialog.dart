@@ -214,7 +214,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
   // ------------------------------------------------------------ tone tab
 
   Widget _buildToneTab(AppLocalizations l10n) => ListView(
-    padding: EdgeInsets.zero,
+    padding: const EdgeInsets.only(right: kScrollbarGutter),
     children: [
       Padding(
         padding: const EdgeInsets.only(bottom: 10),
@@ -306,7 +306,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
       table[(firstBin + _binsPerRange ~/ 2) % colorProfileBins];
 
   Widget _buildColorTab(AppLocalizations l10n) => ListView(
-    padding: EdgeInsets.zero,
+    padding: const EdgeInsets.only(right: kScrollbarGutter),
     children: [
       Row(
         children: [
@@ -504,7 +504,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
         name != widget.initial.name &&
         widget.existingNames.contains(name);
     return ListView(
-      padding: EdgeInsets.zero,
+      padding: const EdgeInsets.only(right: kScrollbarGutter),
       children: [
         Text(
           l10n.colorProfileEditorNameLabel,

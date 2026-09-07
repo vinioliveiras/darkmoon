@@ -470,6 +470,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
             const SizedBox(height: 14),
             Flexible(
               child: SingleChildScrollView(
+                padding: const EdgeInsets.only(right: kScrollbarGutter),
                 child: IndexedStack(
                   index: _tabController.index,
                   alignment: Alignment.topLeft,

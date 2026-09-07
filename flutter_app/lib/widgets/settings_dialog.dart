@@ -182,6 +182,7 @@ class _SettingsDialogState extends State<SettingsDialog>
 
   Widget _buildGeneralTab(AppLocalizations l10n) {
     return SingleChildScrollView(
+      padding: const EdgeInsets.only(right: kScrollbarGutter),
       child: SettingsGroup(
         children: [
           Row(
@@ -248,6 +249,7 @@ class _SettingsDialogState extends State<SettingsDialog>
 
   Widget _buildPerformanceTab(AppLocalizations l10n) {
     return SingleChildScrollView(
+      padding: const EdgeInsets.only(right: kScrollbarGutter),
       child: SettingsGroup(
         children: [
           SwitchListTile(
@@ -479,6 +481,7 @@ class _SettingsDialogState extends State<SettingsDialog>
 
   Widget _buildDataTab(AppLocalizations l10n) {
     return SingleChildScrollView(
+      padding: const EdgeInsets.only(right: kScrollbarGutter),
       child: SettingsGroup(
         children: [
           _ClearDataRow(
