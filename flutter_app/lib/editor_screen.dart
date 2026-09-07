@@ -3871,8 +3871,18 @@ class _EditorScreenState extends State<EditorScreen>
 
     // Phase 1 — the quick render: the tiny `live` buffer while dragging,
     // the preview buffer for a settled edit. Always cheap, always shown.
+    //
+    // Cropping uses the `live` buffer for both. Every drag of a corner or
+    // the rotate anchor re-runs the whole pipeline — geometry resample
+    // included — and at preview resolution that is enough work to be felt
+    // (2026-09-07, user's report). Nothing being judged while cropping
+    // needs the detail: framing and horizon are decided from shape, and
+    // the full-resolution render arrives the moment the overlay closes.
+    final quickSource = (live || _cropOverlayActive)
+        ? sources.live
+        : sources.preview;
     final firstResult = await _runRenderJob(
-      buildJob(live ? sources.live : sources.preview),
+      buildJob(quickSource),
       onStage: onStage,
       allowGpu: !live,
     );
@@ -9906,36 +9916,40 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 // column so they stay put as the first item even while a
                 // mask is being created/edited below — the mask UI and every
                 // adjustment section scroll independently beneath them.
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(
-                    _controlsPanelInset,
-                    14,
-                    _controlsPanelInset,
-                    8,
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 6),
-                        child: Text(
-                          l10n.histogramTitle,
-                          style: Theme.of(context).textTheme.labelSmall,
+                // Hidden while cropping, like everything else in the
+                // panel: the histogram describes colour, and cropping is
+                // the one operation that changes none of it.
+                if (!widget.cropOverlayActive)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      _controlsPanelInset,
+                      14,
+                      _controlsPanelInset,
+                      8,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 6),
+                          child: Text(
+                            l10n.histogramTitle,
+                            style: Theme.of(context).textTheme.labelSmall,
+                          ),
                         ),
-                      ),
-                      HistogramView(histogram: histogram),
-                      PhotoMetadataView(metadata: widget.metadata),
-                      const Padding(
-                        padding: EdgeInsets.only(top: 12),
-                        child: Divider(
-                          color: DarkmoonColors.divider,
-                          height: 1,
-                          thickness: 1,
+                        HistogramView(histogram: histogram),
+                        PhotoMetadataView(metadata: widget.metadata),
+                        const Padding(
+                          padding: EdgeInsets.only(top: 12),
+                          child: Divider(
+                            color: DarkmoonColors.divider,
+                            height: 1,
+                            thickness: 1,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
                 // Crop takes the whole panel, in both layouts. It is a
                 // mode rather than another section — nothing else in here
                 // acts on a photo while it is open, and leaving the masks

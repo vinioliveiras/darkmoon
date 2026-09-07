@@ -1,5 +1,6 @@
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../render/crop_transform.dart';
@@ -27,25 +28,20 @@ enum _CropHandle { topLeft, topRight, bottomLeft, bottomRight, move, rotate }
 
 const _handleHitRadius = 20.0;
 
-/// How far outside the crop rect's top-right corner the rotate anchor sits
-/// — along the same diagonal the corner itself sits on relative to the
-/// crop's centre, so it reads as "an extension of that corner" rather
-/// than a floating, disconnected dot.
+/// How far outside the crop rect's right edge the rotate anchor sits.
 const _rotateHandleOffset = 26.0;
 
 /// Where the rotate anchor sits for a given [cropRect] — shared between
 /// hit-testing ([_CropOverlayState._handlePanStart]) and painting
 /// ([_CropPainter]) so the two can never drift apart.
-Offset _rotateHandlePosition(Rect cropRect) {
-  final center = cropRect.center;
-  final corner = cropRect.topRight;
-  final dir = (corner - center);
-  final len = dir.distance;
-  if (len < 1e-6) {
-    return corner;
-  }
-  return corner + dir / len * _rotateHandleOffset;
-}
+///
+/// Centred on the right edge (2026-09-07, user's call). It used to sit
+/// diagonally beyond the top-right corner, which put it close enough to
+/// that corner's resize handle that the two competed for the same drag —
+/// hit-testing had to check the anchor first to stop the corner winning.
+/// On the edge midpoint there is nothing near it.
+Offset _rotateHandlePosition(Rect cropRect) =>
+    Offset(cropRect.right + _rotateHandleOffset, cropRect.center.dy);
 
 /// Draggable crop rectangle, shown over the (already straightened/
 /// keystoned) preview image while the Crop tool is active — same
@@ -495,28 +491,25 @@ class _CropPainter extends CustomPainter {
         ..strokeWidth = 1.5,
     );
 
-    // Handle drawn slightly inset from the true corner when that corner
-    // sits at (or very near) the canvas's own edge — real bug fixed
-    // 2026-09-01: an uncropped/full-frame crop rect puts corners exactly
-    // on the canvas boundary, so the handle circle's outer edge got cut
-    // off by whatever clips this canvas (the viewer panel's own bounds).
-    // Only the *drawn* position moves; hit-testing below still uses the
-    // real corner (cropRect.topLeft etc.) via [_handleHitRadius]'s
-    // generous 20px radius, so dragging still feels anchored to the
-    // actual corner, not the nudged dot.
+    // Drawn at the true corner, always — no nudging inward when the crop
+    // reaches the edge of the canvas.
+    //
+    // It used to be clamped, added 2026-09-01 because a full-frame crop
+    // puts the corners exactly on the canvas boundary and the outer half
+    // of each circle was being cut off. The cure was worse than the
+    // complaint: the handle drifted away from the corner it represents
+    // exactly when the crop was at its largest, so the dots looked loose.
+    // Fixed position, drawn over the margin, is what was asked for
+    // (2026-09-07) and is the honest depiction — a handle that is not at
+    // the corner is lying about where the corner is.
     const handleRadius = 6.0;
-    const edgePadding = handleRadius + 2;
-    Offset inset(Offset corner) => Offset(
-      corner.dx.clamp(edgePadding, size.width - edgePadding),
-      corner.dy.clamp(edgePadding, size.height - edgePadding),
-    );
     for (final corner in [
       cropRect.topLeft,
       cropRect.topRight,
       cropRect.bottomLeft,
       cropRect.bottomRight,
     ]) {
-      final drawAt = inset(corner);
+      final drawAt = corner;
       canvas.drawCircle(
         drawAt,
         handleRadius,
@@ -532,13 +525,12 @@ class _CropPainter extends CustomPainter {
       );
     }
 
-    // Rotate anchor — a hollow ring (vs. the corners' filled dots) just
-    // outside the top-right corner, connected to it by a short line so it
-    // reads as "an extension of that corner" rather than a stray dot. See
-    // _rotateHandlePosition's doc for the exact placement.
-    final rotateAt = inset(_rotateHandlePosition(cropRect));
+    // Rotate anchor — a ring carrying a curved arrow, off the middle of
+    // the right edge, joined to it by a short line so it reads as part of
+    // the crop rather than a stray dot.
+    final rotateAt = _rotateHandlePosition(cropRect);
     canvas.drawLine(
-      inset(cropRect.topRight),
+      Offset(cropRect.right, cropRect.center.dy),
       rotateAt,
       Paint()
         ..color = Colors.white.withValues(alpha: 0.7)
@@ -547,12 +539,30 @@ class _CropPainter extends CustomPainter {
     canvas.drawCircle(rotateAt, handleRadius, Paint()..color = Colors.black54);
     canvas.drawCircle(
       rotateAt,
-      handleRadius,
+      handleRadius + 3,
       Paint()
         ..color = DarkmoonColors.accent
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5,
     );
+    // The glyph is drawn through a TextPainter rather than as a
+    // hand-rolled arc and arrowhead: it is the same icon the rest of the
+    // app would use for "rotate", so it cannot drift from the app's own
+    // look the way a bespoke drawing would.
+    const rotateIcon = CupertinoIcons.arrow_2_circlepath;
+    final glyph = TextPainter(
+      textDirection: TextDirection.ltr,
+      text: TextSpan(
+        text: String.fromCharCode(rotateIcon.codePoint),
+        style: TextStyle(
+          fontSize: 11,
+          fontFamily: rotateIcon.fontFamily,
+          package: rotateIcon.fontPackage,
+          color: DarkmoonColors.accent,
+        ),
+      ),
+    )..layout();
+    glyph.paint(canvas, rotateAt - Offset(glyph.width / 2, glyph.height / 2));
 
     // "Guided" reference line — a bright yellow so it reads clearly against
     // both the image and the white crop/grid lines above, with a small
