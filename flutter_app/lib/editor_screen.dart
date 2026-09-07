@@ -9527,13 +9527,6 @@ class _ControlsPanelState extends State<_ControlsPanel>
   /// starts expanded, matching the panel's previous (always-open) layout.
   final Set<String> _collapsed = {};
 
-  /// Drives the panel's own scroll position — used only to auto-scroll
-  /// back to the top when the Crop & Transform panel opens (it's inserted
-  /// at the very top of this list), since it would otherwise render
-  /// off-screen above whatever section the user had scrolled down to
-  /// (e.g. Effects), reading as "nothing happened" when Crop was tapped.
-  final _scrollController = ScrollController();
-
   /// A category switch flips (and its own slide animation starts) the
   /// instant it's tapped — [onChanged] fires synchronously, same as any
   /// slider drag. What's deferred is [onChangeEnd]: the expensive settled
@@ -9569,7 +9562,6 @@ class _ControlsPanelState extends State<_ControlsPanel>
 
   @override
   void dispose() {
-    _scrollController.dispose();
     _tabController.dispose();
     super.dispose();
   }
@@ -10079,7 +10071,16 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 if (widget.tabbedLayout) _buildControlsTabBar(l10n),
                 Expanded(
                   child: SingleChildScrollView(
-                    controller: _scrollController,
+                    // Keyed by tab so each keeps its own scroll position. A
+                    // single controller shared by all four meant reading
+                    // far down Colour and switching to Effects landed you
+                    // at that same offset in a shorter list, which is not
+                    // where anyone left off.
+                    //
+                    // PageStorage does the remembering; no controller is
+                    // needed here now that opening Crop no longer scrolls
+                    // this list, Crop being pinned above the tabs.
+                    key: PageStorageKey<_ControlsTab>(_tab),
                     padding: const EdgeInsets.fromLTRB(
                       _controlsPanelInset,
                       10,
