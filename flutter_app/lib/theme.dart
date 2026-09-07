@@ -128,6 +128,30 @@ ThemeData buildDarkmoonTheme() {
         return DarkmoonColors.divider;
       }),
     ),
+    // Photoshop-style tabs, set once here so every TabBar in the app
+    // agrees: the selected tab is a filled panel rather than a label with
+    // a bar under it, and the unselected ones sit flat on the background.
+    //
+    // The fill is [DarkmoonColors.surfaceRaised], the same token every
+    // other raised control uses, so this reads as one more surface rather
+    // than a new colour. The radius is deliberately small — Photoshop's
+    // are square, and going fully square looked wrong beside the app's
+    // own rounded buttons and cards.
+    tabBarTheme: TabBarThemeData(
+      indicator: BoxDecoration(
+        color: DarkmoonColors.surfaceRaised,
+        borderRadius: BorderRadius.circular(4),
+      ),
+      // The fill has to cover the whole tab, not just the label, or it
+      // reads as a highlighted word instead of a tab.
+      indicatorSize: TabBarIndicatorSize.tab,
+      labelColor: DarkmoonColors.textPrimary,
+      unselectedLabelColor: DarkmoonColors.textMuted,
+      dividerColor: DarkmoonColors.divider,
+      overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+      labelStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: const TextStyle(fontSize: 12.5),
+    ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style:
           ElevatedButton.styleFrom(

@@ -7907,39 +7907,51 @@ class _ImageArea extends StatelessWidget {
       final rotated = cropTransform.rotateQuarterTurns.isOdd;
       final frameWidth = rotated ? source.height : source.width;
       final frameHeight = rotated ? source.width : source.height;
-      return SizedBox.expand(
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            final containerSize = Size(
-              constraints.maxWidth,
-              constraints.maxHeight,
-            );
-            return Stack(
-              fit: StackFit.expand,
-              // Stack clips to its own bounds by default, and the crop
-              // handles are drawn centred on the crop rect's corners — so
-              // at a full-frame crop, where those corners sit exactly on
-              // the edge, the outer half of every dot was being cut away.
-              // That clip is what the handles were nudged inward to avoid;
-              // letting them paint past it is the fix that keeps them
-              // where the corners actually are.
-              clipBehavior: Clip.none,
-              children: [
-                _fadingImage(frame),
-                CropOverlay(
-                  containerSize: containerSize,
-                  imageWidth: frameWidth,
-                  imageHeight: frameHeight,
-                  params: cropTransform,
-                  lockedAspectRatio: cropAspectRatio,
-                  onChanged: onCropTransformChanged,
-                  onChangeEnd: onCropTransformChangeEnd,
-                  straighteningActive: straighteningActive,
-                  guidedModeActive: guidedModeActive,
-                ),
-              ],
-            );
-          },
+      // A margin around the whole thing while cropping, photo and overlay
+      // together, so a full-frame crop's corners never sit on a clip
+      // boundary in the first place.
+      //
+      // Clip.none on the Stack below was not enough on its own: something
+      // further up still clipped, and chasing it would have meant relaxing
+      // a clip that exists for another reason. Insetting the pair costs a
+      // few pixels of preview size only while the crop tool is open, and
+      // nothing can cut a handle that is not near an edge. It is also what
+      // other editors do — the photo steps back when you start cropping.
+      return Padding(
+        padding: const EdgeInsets.all(_cropHandleMargin),
+        child: SizedBox.expand(
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              final containerSize = Size(
+                constraints.maxWidth,
+                constraints.maxHeight,
+              );
+              return Stack(
+                fit: StackFit.expand,
+                // Belt and braces with the margin above: the handles are
+                // drawn centred on the crop corners, so anything that clips
+                // to the overlay's own bounds takes half of each dot.
+                // That clip is what the handles were nudged inward to avoid;
+                // letting them paint past it is the fix that keeps them
+                // where the corners actually are.
+                clipBehavior: Clip.none,
+                children: [
+                  _fadingImage(frame),
+                  CropOverlay(
+                    containerSize: containerSize,
+                    imageWidth: frameWidth,
+                    imageHeight: frameHeight,
+                    params: cropTransform,
+                    lockedAspectRatio: cropAspectRatio,
+                    onChanged: onCropTransformChanged,
+                    onChangeEnd: onCropTransformChangeEnd,
+                    straighteningActive: straighteningActive,
+                    guidedModeActive: guidedModeActive,
+                  ),
+                ],
+              );
+            },
+          ),
         ),
       );
     }
@@ -8682,7 +8694,11 @@ class _ViewerToolbar extends StatelessWidget {
                                 ),
                               )
                             : const Icon(
-                                CupertinoIcons.square_arrow_down,
+                                // Arrow leaving the box. square_arrow_down
+                                // is the same glyph pointing in, which
+                                // reads as importing — the opposite of what
+                                // this button does.
+                                CupertinoIcons.square_arrow_up,
                                 size: 16,
                               ),
                         label: Text(
@@ -9117,6 +9133,15 @@ class _AspectChip extends StatelessWidget {
 /// its scrolling content sits at. [_SectionHeader] needs both so it can
 /// break back out of that inset and paint its bar edge-to-edge.
 const _controlsPanelWidth = 300.0;
+
+/// Space kept clear around the photo while the crop tool is open, so the
+/// corner handles — drawn centred on the crop rect's corners — always have
+/// room to draw in full.
+///
+/// Slightly wider than the handle's own radius, so the dot clears the edge
+/// rather than merely touching it.
+const _cropHandleMargin = 10.0;
+
 const _controlsPanelInset = 16.0;
 
 class _SectionHeader extends StatelessWidget {
@@ -9664,17 +9689,9 @@ class _ControlsPanelState extends State<_ControlsPanel>
 
   Widget _buildControlsTabBar(AppLocalizations l10n) => TabBar(
     controller: _tabController,
-    labelColor: DarkmoonColors.textPrimary,
-    unselectedLabelColor: DarkmoonColors.textMuted,
-    indicatorColor: DarkmoonColors.accent,
-    // Sized to the label, like SettingsDialog's — with icon-only tabs
-    // that means a short rounded bar under the icon rather than one
-    // spanning the whole tab, which is the shape the rest of the app
-    // uses. The divider is the theme's too, instead of a hand-rolled
-    // bottom border doing the same job differently.
-    indicatorSize: TabBarIndicatorSize.label,
-    dividerColor: DarkmoonColors.divider,
-    overlayColor: const WidgetStatePropertyAll(Colors.transparent),
+    // Every appearance choice lives in the app theme's tabBarTheme, so
+    // this bar and the dialogs' all look alike without any of them saying
+    // so individually.
     tabs: [
       for (final tab in _ControlsTab.values)
         Tab(

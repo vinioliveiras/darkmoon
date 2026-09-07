@@ -333,7 +333,7 @@ const double calTextureSigma = 3.5;
 ///   ↑ higher = stronger Texture     ↓ lower = weaker
 /// default: 3.0   (user raised to 2.0, then 2.3, then 2.7, then asked
 /// for more — 2026-09-02)
-const double calTextureStrength = 5.0;
+const double calTextureStrength = 4.0;
 
 /// **Clarity** — radius (in pixels) of the local contrast. Deliberately
 /// large (mid-range contrast, more like "definition").

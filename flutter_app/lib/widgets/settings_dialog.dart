@@ -146,17 +146,6 @@ class _SettingsDialogState extends State<SettingsDialog>
           children: [
             TabBar(
               controller: _tabController,
-              labelColor: DarkmoonColors.textPrimary,
-              unselectedLabelColor: DarkmoonColors.textMuted,
-              indicatorColor: DarkmoonColors.accent,
-              indicatorSize: TabBarIndicatorSize.label,
-              dividerColor: DarkmoonColors.divider,
-              overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-              labelStyle: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelStyle: const TextStyle(fontSize: 12.5),
               tabs: [
                 Tab(text: l10n.settingsTabGeneral),
                 Tab(text: l10n.settingsTabPerformance),
