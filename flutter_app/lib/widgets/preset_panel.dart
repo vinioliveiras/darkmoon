@@ -316,83 +316,104 @@ class _PresetRowState extends State<_PresetRow> {
     final onExport = widget.onExport;
     final onDelete = widget.onDelete;
     final l10n = AppLocalizations.of(context)!;
-    return Material(
-      color: selected
-          ? DarkmoonColors.panel
-          : (applied
-                ? DarkmoonColors.accent.withValues(alpha: 0.12)
-                : Colors.transparent),
-      child: InkWell(
-        onTap: selectionMode ? onToggleSelected : (enabled ? onApply : null),
-        child: Padding(
-          padding: const EdgeInsets.only(left: 12, right: 4, top: 5, bottom: 5),
-          child: Row(
-            children: [
-              // Fixed-width centred slot, the same idea as the trailing one
-              // below. An Icon sizes its box but not the glyph inside it,
-              // and these three glyphs do not share optical metrics — film
-              // is wider than checkmark_alt — so drawn straight into the
-              // row they sat at visibly different offsets and the column
-              // of icons read as ragged.
-              SizedBox(
-                width: 16,
-                child: Center(
-                  child: selectionMode
-                      ? Icon(
-                          selected
-                              ? CupertinoIcons.checkmark_circle_fill
-                              : CupertinoIcons.circle,
-                          size: 14,
-                          color: selected
-                              ? DarkmoonColors.accent
-                              : DarkmoonColors.textMuted,
-                        )
-                      : Icon(
-                          // Always film outside selection mode, never
-                          // swapped for a checkmark while applied.
-                          //
-                          // Two glyphs sharing one column cannot be made
-                          // to line up: an Icon sizes its box, not the ink
-                          // inside it, and checkmark_alt and film do not
-                          // occupy their 14px the same way. Centring the
-                          // box — which this already does — gets the boxes
-                          // aligned and leaves the drawings visibly
-                          // offset from each other.
-                          //
-                          // "Applied" is still said three ways without it:
-                          // the icon turns accent, the label goes bold and
-                          // primary, and the row takes a tinted
-                          // background.
-                          CupertinoIcons.film,
-                          size: 14,
+    final showThumbnail = widget.thumbnails != null;
+    // A card per row rather than a flush list line: the thumbnail is the
+    // point of this list now, and a picture needs an edge of its own to
+    // read as a picture rather than as part of the row above it.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
+      child: Material(
+        color: selected
+            ? DarkmoonColors.panel
+            : (applied
+                  ? DarkmoonColors.accent.withValues(alpha: 0.12)
+                  : DarkmoonColors.sectionCardBackground),
+        borderRadius: BorderRadius.circular(10),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: selectionMode ? onToggleSelected : (enabled ? onApply : null),
+          child: Padding(
+            padding: EdgeInsets.fromLTRB(
+              showThumbnail ? 8 : 12,
+              showThumbnail ? 8 : 6,
+              4,
+              showThumbnail ? 8 : 6,
+            ),
+            child: Row(
+              children: [
+                if (selectionMode)
+                  // Only in selection mode now. Outside it the thumbnail
+                  // is what identifies the row, so a leading glyph beside
+                  // a picture of the preset is just clutter.
+                  Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: Icon(
+                      selected
+                          ? CupertinoIcons.checkmark_circle_fill
+                          : CupertinoIcons.circle,
+                      size: 14,
+                      color: selected
+                          ? DarkmoonColors.accent
+                          : DarkmoonColors.textMuted,
+                    ),
+                  ),
+                if (showThumbnail)
+                  _PresetThumbnail(
+                    store: widget.thumbnails!,
+                    presetId: preset.id,
+                  )
+                else if (!selectionMode)
+                  // With previews off the row still needs something to
+                  // anchor its left edge.
+                  Icon(
+                    CupertinoIcons.film,
+                    size: 14,
+                    color: applied
+                        ? DarkmoonColors.accent
+                        : DarkmoonColors.textMuted,
+                  ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        preset.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
                           color: applied
                               ? DarkmoonColors.accent
-                              : DarkmoonColors.textMuted,
+                              : DarkmoonColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13,
                         ),
-                ),
-              ),
-              if (widget.thumbnails != null) ...[
-                const SizedBox(width: 8),
-                _PresetThumbnail(
-                  store: widget.thumbnails!,
-                  presetId: preset.id,
-                ),
-              ],
-              const SizedBox(width: 6),
-              Expanded(
-                child: Text(
-                  preset.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: applied
-                        ? DarkmoonColors.textPrimary
-                        : DarkmoonColors.textSecondary,
-                    fontWeight: applied ? FontWeight.w600 : FontWeight.normal,
-                    fontSize: 12,
+                      ),
+                      const SizedBox(height: 3),
+                      Row(
+                        children: [
+                          Icon(
+                            CupertinoIcons.film,
+                            size: 10,
+                            color: DarkmoonColors.textMuted,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            l10n.presetTypeBadge,
+                            style: const TextStyle(
+                              color: DarkmoonColors.textMuted,
+                              fontSize: 9,
+                              fontWeight: FontWeight.w600,
+                              letterSpacing: 1.1,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
                 ),
-              ),
               // Fixed-width trailing slot in *both* modes — an empty box
               // in selection mode instead of just dropping the menu
               // button, so switching modes doesn't reflow the name column
@@ -437,7 +458,8 @@ class _PresetRowState extends State<_PresetRow> {
                         ),
                       ),
               ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -457,7 +479,11 @@ class _PresetThumbnail extends StatelessWidget {
   final PresetThumbnailStore store;
   final String presetId;
 
-  static const double _size = 64;
+  /// Wide rather than square, and sized to show the frame rather than a
+  /// crop of it: a preset changes colour and tone across a whole picture,
+  /// and a square cut out of the middle throws away most of the evidence.
+  static const double _width = 86;
+  static const double _height = 56;
 
   @override
   Widget build(BuildContext context) {
@@ -466,12 +492,11 @@ class _PresetThumbnail extends StatelessWidget {
       builder: (context, _) {
         final image = store.thumbnailFor(presetId);
         return Container(
-          width: _size,
-          height: _size,
+          width: _width,
+          height: _height,
           decoration: BoxDecoration(
             color: DarkmoonColors.canvas,
-            borderRadius: BorderRadius.circular(4),
-            border: Border.all(color: DarkmoonColors.border),
+            borderRadius: BorderRadius.circular(6),
           ),
           clipBehavior: Clip.antiAlias,
           child: image == null

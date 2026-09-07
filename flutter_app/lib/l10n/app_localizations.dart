@@ -268,6 +268,12 @@ abstract class AppLocalizations {
   /// **'Save current edits as a preset'**
   String get presetSaveNewTooltip;
 
+  /// No description provided for @presetTypeBadge.
+  ///
+  /// In en, this message translates to:
+  /// **'PRESET'**
+  String get presetTypeBadge;
+
   /// No description provided for @presetEmptyHint.
   ///
   /// In en, this message translates to:

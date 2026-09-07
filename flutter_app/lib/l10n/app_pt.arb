@@ -28,6 +28,7 @@
   "sidebarPresetsSection": "PRESETS",
   "presetImportTooltip": "Importar presets (.xmp ou .zip)",
   "presetSaveNewTooltip": "Salvar edições atuais como preset",
+  "presetTypeBadge": "PRESET",
   "presetEmptyHint": "Nenhum preset ainda",
   "presetAmountDialogTitle": "Aplicar \"{name}\"",
   "presetAmountLabel": "Força do Perfil de Cor",

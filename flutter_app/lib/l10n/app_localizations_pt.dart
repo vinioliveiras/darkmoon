@@ -103,6 +103,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get presetSaveNewTooltip => 'Salvar edições atuais como preset';
 
   @override
+  String get presetTypeBadge => 'PRESET';
+
+  @override
   String get presetEmptyHint => 'Nenhum preset ainda';
 
   @override

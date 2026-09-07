@@ -28,6 +28,7 @@
   "sidebarPresetsSection": "VORGABEN",
   "presetImportTooltip": "Vorgaben importieren (.xmp oder .zip)",
   "presetSaveNewTooltip": "Aktuelle Bearbeitung als Vorgabe speichern",
+  "presetTypeBadge": "VORGABE",
   "presetEmptyHint": "Noch keine Vorgaben",
   "presetAmountDialogTitle": "\"{name}\" anwenden",
   "presetAmountLabel": "Farbprofil-Stärke",

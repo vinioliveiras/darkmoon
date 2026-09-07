@@ -105,6 +105,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Aktuelle Bearbeitung als Vorgabe speichern';
 
   @override
+  String get presetTypeBadge => 'VORGABE';
+
+  @override
   String get presetEmptyHint => 'Noch keine Vorgaben';
 
   @override

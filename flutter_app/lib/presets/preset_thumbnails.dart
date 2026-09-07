@@ -10,9 +10,11 @@ import 'preset.dart';
 
 /// Long edge of a preset thumbnail, in pixels.
 ///
-/// Small enough that one render costs about five milliseconds, which is
-/// what makes rendering dozens of them practical at all.
-const int kPresetThumbnailEdge = 64;
+/// Above the 86px the list draws it at, so it is never upscaled, and with
+/// enough over for a display running at 150%. Measured render cost at
+/// this size is about 14ms, against 5ms at 64 — which would be cheaper
+/// and visibly soft, and softness defeats the point of a preview.
+const int kPresetThumbnailEdge = 128;
 
 /// One tiny render, shaped for `compute()`.
 class PresetThumbnailJob {
@@ -42,10 +44,10 @@ typedef PresetThumbnailParams = RenderParams Function(Preset preset);
 ///
 /// Three things make this affordable with a library of eighty presets.
 ///
-/// It renders tiny: a 64px frame costs about five milliseconds, against
+/// It renders tiny: a 128px frame costs about 14 milliseconds, against
 /// seconds for a real preview. It renders one at a time, on another
-/// isolate, so a long queue never becomes a stutter — five milliseconds
-/// is a third of a frame, which is too much to spend on the UI thread
+/// isolate, so a long queue never becomes a stutter — 14 milliseconds is
+/// most of a frame, which is far too much to spend on the UI thread
 /// eighty times over. And it renders only what is asked for, which the
 /// panel ties to what is on screen.
 ///

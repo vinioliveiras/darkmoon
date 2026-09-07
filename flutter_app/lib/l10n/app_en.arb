@@ -32,6 +32,7 @@
   "sidebarPresetsSection": "PRESETS",
   "presetImportTooltip": "Import presets (.xmp or .zip)",
   "presetSaveNewTooltip": "Save current edits as a preset",
+  "presetTypeBadge": "PRESET",
   "presetEmptyHint": "No presets yet",
   "presetAmountDialogTitle": "Apply \"{name}\"",
   "@presetAmountDialogTitle": {"placeholders": {"name": {"type": "String"}}},
