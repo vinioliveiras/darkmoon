@@ -138,25 +138,32 @@ class _SettingsDialogState extends State<SettingsDialog>
         title: l10n.settingsDialogTitle,
         closeTooltip: l10n.closeButton,
       ),
+      contentPadding: dialogScrollContentPadding,
       content: SizedBox(
         width: 420,
         height: 460,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TabBar(
-              // The theme's indicator erases the bar's rule with the
-              // controls panel's background; on a dialog that is the
-              // wrong near-black and shows as a seam.
-              indicator: const BrowserTabIndicator(
-                background: DarkmoonColors.dialogBackground,
+            Padding(
+              // The content below keeps kScrollbarGutter clear on the
+              // right for the scrollbar; the bar and its rule take the
+              // same inset so the two line up.
+              padding: const EdgeInsets.only(right: kScrollbarGutter),
+              child: TabBar(
+                // The theme's indicator erases the bar's rule with the
+                // controls panel's background; on a dialog that is the
+                // wrong near-black and shows as a seam.
+                indicator: const BrowserTabIndicator(
+                  background: DarkmoonColors.dialogBackground,
+                ),
+                controller: _tabController,
+                tabs: [
+                  Tab(height: kTabHeight, text: l10n.settingsTabGeneral),
+                  Tab(height: kTabHeight, text: l10n.settingsTabPerformance),
+                  Tab(height: kTabHeight, text: l10n.settingsTabData),
+                ],
               ),
-              controller: _tabController,
-              tabs: [
-                Tab(height: kTabHeight, text: l10n.settingsTabGeneral),
-                Tab(height: kTabHeight, text: l10n.settingsTabPerformance),
-                Tab(height: kTabHeight, text: l10n.settingsTabData),
-              ],
             ),
             const SizedBox(height: 14),
             Expanded(

@@ -17,8 +17,9 @@ void main() {
 
   /// The rendered tab bar, plus where it sits inside the captured image.
   Future<({ByteData pixels, int width, Rect bar})> renderTabBar(
-    WidgetTester tester,
-  ) async {
+    WidgetTester tester, {
+    double shift = 0.0,
+  }) async {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetDevicePixelRatio);
 
@@ -33,7 +34,11 @@ void main() {
               alignment: Alignment.topLeft,
               child: RepaintBoundary(
                 key: boundaryKey,
-                child: Container(
+                child: Padding(
+                  // [shift] puts the bar on a half-pixel boundary, which
+                  // is where the rule stopped being covered cleanly.
+                  padding: EdgeInsets.only(top: shift),
+                  child: Container(
                   width: barWidth,
                   color: DarkmoonColors.panel,
                   child: const TabBar(
@@ -43,6 +48,7 @@ void main() {
                       Tab(height: kTabHeight, text: 'Three'),
                     ],
                   ),
+                ),
                 ),
               ),
             ),
@@ -143,6 +149,38 @@ void main() {
       pixelAt(pixels, width, edgeX, bar.top.round()),
       DarkmoonColors.panel,
       reason: 'the top corners are still rounded',
+    );
+  });
+
+  testWidgets('the rule stays covered when the bar lands on a half pixel', (
+    tester,
+  ) async {
+    // A dialog whose content changes height lands here half the time, and
+    // it is where a cover exactly the width of the rule stops working:
+    // both get antialiased across the same two rows and 50% over 50%
+    // leaves a quarter of the rule showing. Reported as a line under the
+    // tabs appearing out of nowhere partway through using a dialog.
+    final (:pixels, :width, :bar) = await renderTabBar(tester, shift: 0.5);
+
+    final tabWidth = bar.width / 3;
+    final selectedX = (bar.left + tabWidth * 0.5).round();
+    final unselectedX = (bar.left + tabWidth * 2.5).round();
+
+    // Either row can hold the rule once it is off the grid, so check both.
+    for (final y in [bar.bottom.floor() - 1, bar.bottom.floor()]) {
+      expect(
+        pixelAt(pixels, width, selectedX, y),
+        DarkmoonColors.panel,
+        reason: 'row $y under the selected tab still shows part of the rule',
+      );
+    }
+    expect(
+      [
+        pixelAt(pixels, width, unselectedX, bar.bottom.floor() - 1),
+        pixelAt(pixels, width, unselectedX, bar.bottom.floor()),
+      ],
+      isNot(everyElement(DarkmoonColors.panel)),
+      reason: 'the rule must still be there under the other tabs',
     );
   });
 }

@@ -7,6 +7,7 @@ import 'package:url_launcher_platform_interface/url_launcher_platform_interface.
 import 'package:darkmoon/l10n/app_localizations.dart';
 import 'package:darkmoon/settings/app_settings.dart';
 import 'package:darkmoon/widgets/about_dialog.dart';
+import 'package:darkmoon/widgets/dialog_chrome.dart';
 import 'package:darkmoon/widgets/settings_dialog.dart';
 
 /// Records `launchUrl` calls instead of actually opening a browser — the
@@ -214,5 +215,59 @@ void main() {
         );
       },
     );
+  });
+
+  /// A scroll view has to hold [kScrollbarGutter] clear on its right so
+  /// the desktop scrollbar does not overlay what it scrolls. Charged to
+  /// the content, that inset reads as a margin — the card stops short of
+  /// the title above it and the dialog looks off-centre, which is how it
+  /// was reported. The dialog pays for it out of its own right margin
+  /// instead, so these edges have to come back level.
+  group('dialog content lines up with its title', () {
+    testWidgets('Settings: title, tab bar and cards share both edges', (
+      tester,
+    ) async {
+      tester.view.physicalSize = const Size(800, 900);
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.resetPhysicalSize);
+      addTearDown(tester.view.resetDevicePixelRatio);
+
+      await tester.pumpWidget(
+        _wrap(
+          SettingsDialog(
+            settings: const AppSettings(),
+            onChanged: (_) {},
+            onClearThumbnails: () {},
+            onClearCatalog: () {},
+            onPruneMissing: () {},
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      final title = tester.getRect(find.byType(DialogTitleRow));
+      final tabs = tester.getRect(find.byType(TabBar));
+      final card = tester.getRect(find.byType(SettingsGroup).first);
+
+      expect(tabs.right, closeTo(title.right, 0.01));
+      expect(card.right, closeTo(title.right, 0.01));
+      expect(tabs.left, closeTo(title.left, 0.01));
+      expect(card.left, closeTo(title.left, 0.01));
+    });
+
+    testWidgets('About: the card shares both edges with the title', (
+      tester,
+    ) async {
+      await tester.pumpWidget(_wrap(const DarkmoonAboutDialog()));
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      final title = tester.getRect(find.byType(DialogTitleRow));
+      final card = tester.getRect(find.byType(SettingsGroup));
+
+      expect(card.right, closeTo(title.right, 0.01));
+      expect(card.left, closeTo(title.left, 0.01));
+    });
   });
 }

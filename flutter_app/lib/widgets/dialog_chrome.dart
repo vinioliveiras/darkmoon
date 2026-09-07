@@ -14,6 +14,29 @@ const dialogShape = RoundedRectangleBorder(
   side: BorderSide(color: DarkmoonColors.border),
 );
 
+/// [AlertDialog.contentPadding] for a dialog whose content scrolls.
+///
+/// Flutter's desktop scrollbar overlays what it scrolls, so a scroll view
+/// has to keep [kScrollbarGutter] clear on its right for it. Done naively
+/// that inset shows up as a margin: the content ends short of the title
+/// above it and of the dialog's other edges, which reads as the whole
+/// dialog being off-centre.
+///
+/// So the dialog hands the scroll view that much of its own right margin.
+/// The view reaches into the margin and parks the scrollbar there, and
+/// the content inside it — which pads itself back by the same amount —
+/// lands exactly where unscrolled content would. Anything that is *not*
+/// inside the scroll view (a tab bar above it, say) has to take the same
+/// padding itself to stay in line.
+///
+/// Material's own default otherwise.
+const dialogScrollContentPadding = EdgeInsets.fromLTRB(
+  24,
+  16,
+  24 - kScrollbarGutter,
+  24,
+);
+
 /// A small circular "×" — the system-panel convention for dismissing a
 /// preferences/info panel (macOS System Settings, iOS Settings) — used
 /// instead of a bottom "Close" text button so these dialogs read less like

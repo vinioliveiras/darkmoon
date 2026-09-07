@@ -429,6 +429,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         l10n.aiDenoiseDialogTitle,
         style: const TextStyle(color: DarkmoonColors.textPrimary, fontSize: 16),
       ),
+      contentPadding: dialogScrollContentPadding,
       content: SizedBox(
         width: 360,
         // No fixed height: Classic's/Enhance's/Cloud AI's content are very
@@ -448,19 +449,25 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            TabBar(
-              // The theme's indicator erases the bar's rule with the
-              // controls panel's background; on a dialog that is the
-              // wrong near-black and shows as a seam.
-              indicator: const BrowserTabIndicator(
-                background: DarkmoonColors.dialogBackground,
+            Padding(
+              // The content below keeps kScrollbarGutter clear on the
+              // right for the scrollbar; the bar and its rule take the
+              // same inset so the two line up.
+              padding: const EdgeInsets.only(right: kScrollbarGutter),
+              child: TabBar(
+                // The theme's indicator erases the bar's rule with the
+                // controls panel's background; on a dialog that is the
+                // wrong near-black and shows as a seam.
+                indicator: const BrowserTabIndicator(
+                  background: DarkmoonColors.dialogBackground,
+                ),
+                controller: _tabController,
+                tabs: [
+                  Tab(height: kTabHeight, text: l10n.aiDenoiseTabClassic),
+                  Tab(height: kTabHeight, text: l10n.aiDenoiseTabEnhance),
+                  Tab(height: kTabHeight, text: l10n.aiDenoiseTabCloud),
+                ],
               ),
-              controller: _tabController,
-              tabs: [
-                Tab(height: kTabHeight, text: l10n.aiDenoiseTabClassic),
-                Tab(height: kTabHeight, text: l10n.aiDenoiseTabEnhance),
-                Tab(height: kTabHeight, text: l10n.aiDenoiseTabCloud),
-              ],
             ),
             const SizedBox(height: 14),
             Flexible(

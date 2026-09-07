@@ -56,6 +56,7 @@ class _DarkmoonAboutDialogState extends State<DarkmoonAboutDialog> {
         title: l10n.aboutDialogTitle,
         closeTooltip: l10n.closeButton,
       ),
+      contentPadding: dialogScrollContentPadding,
       content: SizedBox(
         width: 340,
         child: SingleChildScrollView(

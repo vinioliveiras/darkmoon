@@ -610,6 +610,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
             : l10n.colorProfileEditorTitleEdit,
         closeTooltip: l10n.closeButton,
       ),
+      contentPadding: dialogScrollContentPadding,
       content: SizedBox(
         // Two columns: the before/after pair on the left, the controls on
         // the right. Wider than the app's other dialogs by necessity — the
@@ -635,31 +636,37 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  TabBar(
-                    // The theme's indicator erases the bar's rule with the
-                    // controls panel's background; on a dialog that is the
-                    // wrong near-black and shows as a seam.
-                    indicator: const BrowserTabIndicator(
-                      background: DarkmoonColors.dialogBackground,
+                  Padding(
+                    // The content below keeps kScrollbarGutter clear on the
+                    // right for the scrollbar; the bar and its rule take the
+                    // same inset so the two line up.
+                    padding: const EdgeInsets.only(right: kScrollbarGutter),
+                    child: TabBar(
+                      // The theme's indicator erases the bar's rule with the
+                      // controls panel's background; on a dialog that is the
+                      // wrong near-black and shows as a seam.
+                      indicator: const BrowserTabIndicator(
+                        background: DarkmoonColors.dialogBackground,
+                      ),
+                      controller: _tabController,
+                      overlayColor: const WidgetStatePropertyAll(
+                        Colors.transparent,
+                      ),
+                      tabs: [
+                        Tab(
+                          height: kTabHeight,
+                          text: l10n.colorProfileEditorTabTone,
+                        ),
+                        Tab(
+                          height: kTabHeight,
+                          text: l10n.colorProfileEditorTabColor,
+                        ),
+                        Tab(
+                          height: kTabHeight,
+                          text: l10n.colorProfileEditorTabBase,
+                        ),
+                      ],
                     ),
-                    controller: _tabController,
-                    overlayColor: const WidgetStatePropertyAll(
-                      Colors.transparent,
-                    ),
-                    tabs: [
-                      Tab(
-                        height: kTabHeight,
-                        text: l10n.colorProfileEditorTabTone,
-                      ),
-                      Tab(
-                        height: kTabHeight,
-                        text: l10n.colorProfileEditorTabColor,
-                      ),
-                      Tab(
-                        height: kTabHeight,
-                        text: l10n.colorProfileEditorTabBase,
-                      ),
-                    ],
                   ),
                   const SizedBox(height: 14),
                   Expanded(

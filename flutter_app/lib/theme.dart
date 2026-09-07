@@ -130,8 +130,22 @@ class _BrowserTabPainter extends BoxPainter {
     final r = decoration.radius;
 
     // Erase the bar's rule where this tab sits.
+    //
+    // The band is deliberately wider than the one-pixel rule it covers,
+    // and that is not slack — it is the fix for a bug. A dialog whose
+    // content changes height lands on a half-pixel offset half the time,
+    // and there both the rule and an exactly-matching cover get
+    // antialiased across the same two device rows at 50% each. Painting
+    // 50% of the background over 50% of the rule leaves a quarter of it
+    // showing: a faint line that appears out of nowhere the moment the
+    // layout shifts, which is exactly how it was reported. Straddling the
+    // rule instead covers both rows whole, at any offset.
+    //
+    // It costs a row above (inside the tab, already this colour) and a
+    // row below the bar, where every use of this theme has either a gap
+    // or a scroll view's own padding.
     canvas.drawRect(
-      Rect.fromLTRB(rect.left, rect.bottom - 1, rect.right, rect.bottom),
+      Rect.fromLTRB(rect.left, rect.bottom - 2, rect.right, rect.bottom + 1),
       Paint()..color = decoration.background,
     );
 
