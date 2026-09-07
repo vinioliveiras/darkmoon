@@ -1208,6 +1208,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsPanelLayoutFlat => 'Lista unica';
 
   @override
+  String get settingsTabStyleLabel => 'Rotulos das abas';
+
+  @override
+  String get settingsTabStyleText => 'Texto';
+
+  @override
+  String get settingsTabStyleIcons => 'Icones';
+
+  @override
   String get settingsPanelLayoutHint =>
       'As abas agrupam as secoes em Ajustes, Cor e Efeitos. As mascaras ficam fixas acima nos dois modos.';
 

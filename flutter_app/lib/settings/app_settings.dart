@@ -66,6 +66,7 @@ class AppSettings {
     this.previewResolution = defaultPreviewMaxDimension,
     this.useGpuRender = true,
     this.tabbedControlsPanel = true,
+    this.tabbedControlsPanelIcons = false,
     this.dynamicFullPreview = true,
     this.fullQualityPercent = 40,
     this.thumbnailConcurrency = 4,
@@ -116,6 +117,15 @@ class AppSettings {
   /// Tone sliders. Off restores the flat list for anyone who would rather
   /// scroll than switch.
   final bool tabbedControlsPanel;
+
+  /// Whether those tabs are marked with a glyph instead of a word.
+  ///
+  /// Defaults off: a word says which section it opens outright, where a
+  /// glyph has to be learned first. Kept as a choice because the icons
+  /// are the more compact of the two and some people prefer them once
+  /// they know them. Means nothing while [tabbedControlsPanel] is off,
+  /// and the Settings dialog hides it there.
+  final bool tabbedControlsPanelIcons;
 
   /// When true, a beat after an edit settles the editor decodes the
   /// photo's *native*-resolution source once and, from then on, runs
@@ -209,6 +219,7 @@ class AppSettings {
     int? previewResolution,
     bool? useGpuRender,
     bool? tabbedControlsPanel,
+    bool? tabbedControlsPanelIcons,
     bool? dynamicFullPreview,
     int? fullQualityPercent,
     int? thumbnailConcurrency,
@@ -227,6 +238,8 @@ class AppSettings {
     previewResolution: previewResolution ?? this.previewResolution,
     useGpuRender: useGpuRender ?? this.useGpuRender,
     tabbedControlsPanel: tabbedControlsPanel ?? this.tabbedControlsPanel,
+    tabbedControlsPanelIcons:
+        tabbedControlsPanelIcons ?? this.tabbedControlsPanelIcons,
     dynamicFullPreview: dynamicFullPreview ?? this.dynamicFullPreview,
     fullQualityPercent: (fullQualityPercent ?? this.fullQualityPercent).clamp(
       25,
@@ -267,6 +280,7 @@ class AppSettings {
     previewResolution: previewResolution,
     useGpuRender: useGpuRender,
     tabbedControlsPanel: tabbedControlsPanel,
+    tabbedControlsPanelIcons: tabbedControlsPanelIcons,
     dynamicFullPreview: dynamicFullPreview,
     fullQualityPercent: fullQualityPercent,
     thumbnailConcurrency: thumbnailConcurrency,
@@ -297,6 +311,7 @@ class AppSettings {
     previewResolution: previewResolution,
     useGpuRender: useGpuRender,
     tabbedControlsPanel: tabbedControlsPanel,
+    tabbedControlsPanelIcons: tabbedControlsPanelIcons,
     dynamicFullPreview: dynamicFullPreview,
     fullQualityPercent: fullQualityPercent,
     thumbnailConcurrency: thumbnailConcurrency,
@@ -344,6 +359,9 @@ Future<AppSettings> loadSettings() async {
       useGpuRender: raw['useGpuRender'] as bool? ?? defaults.useGpuRender,
       tabbedControlsPanel:
           raw['tabbedControlsPanel'] as bool? ?? defaults.tabbedControlsPanel,
+      tabbedControlsPanelIcons:
+          raw['tabbedControlsPanelIcons'] as bool? ??
+          defaults.tabbedControlsPanelIcons,
       dynamicFullPreview:
           raw['dynamicFullPreview'] as bool? ?? defaults.dynamicFullPreview,
       fullQualityPercent:
@@ -390,6 +408,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'previewResolution': settings.previewResolution,
       'useGpuRender': settings.useGpuRender,
       'tabbedControlsPanel': settings.tabbedControlsPanel,
+      'tabbedControlsPanelIcons': settings.tabbedControlsPanelIcons,
       'dynamicFullPreview': settings.dynamicFullPreview,
       'fullQualityPercent': settings.fullQualityPercent,
       'thumbnailConcurrency': settings.thumbnailConcurrency,

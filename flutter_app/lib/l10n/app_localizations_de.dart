@@ -1219,6 +1219,15 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsPanelLayoutFlat => 'Eine lange Liste';
 
   @override
+  String get settingsTabStyleLabel => 'Tab-Beschriftung';
+
+  @override
+  String get settingsTabStyleText => 'Text';
+
+  @override
+  String get settingsTabStyleIcons => 'Symbole';
+
+  @override
   String get settingsPanelLayoutHint =>
       'Registerkarten gruppieren die Abschnitte in Anpassen, Farbe und Effekte. Masken bleiben in beiden Faellen oben angeheftet.';
 

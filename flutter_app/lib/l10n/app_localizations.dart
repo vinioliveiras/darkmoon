@@ -2314,6 +2314,24 @@ abstract class AppLocalizations {
   /// **'One long list'**
   String get settingsPanelLayoutFlat;
 
+  /// No description provided for @settingsTabStyleLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Tab labels'**
+  String get settingsTabStyleLabel;
+
+  /// No description provided for @settingsTabStyleText.
+  ///
+  /// In en, this message translates to:
+  /// **'Text'**
+  String get settingsTabStyleText;
+
+  /// No description provided for @settingsTabStyleIcons.
+  ///
+  /// In en, this message translates to:
+  /// **'Icons'**
+  String get settingsTabStyleIcons;
+
   /// No description provided for @settingsPanelLayoutHint.
   ///
   /// In en, this message translates to:

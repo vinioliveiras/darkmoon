@@ -1200,6 +1200,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get settingsPanelLayoutFlat => 'One long list';
 
   @override
+  String get settingsTabStyleLabel => 'Tab labels';
+
+  @override
+  String get settingsTabStyleText => 'Text';
+
+  @override
+  String get settingsTabStyleIcons => 'Icons';
+
+  @override
   String get settingsPanelLayoutHint =>
       'Tabs group the sections into Adjust, Colour and Effects. Masks stay pinned above them either way.';
 

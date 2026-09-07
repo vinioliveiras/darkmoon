@@ -7320,6 +7320,7 @@ class _EditorScreenState extends State<EditorScreen>
                             onUpright: _uprightAuto,
                             uprightBusy: _uprightBusy,
                             tabbedLayout: _settings.tabbedControlsPanel,
+                            tabIcons: _settings.tabbedControlsPanelIcons,
                             onImportColorProfile: _importColorProfile,
                             onEditColorProfile: _editSelectedColorProfile,
                             onDuplicateColorProfile:
@@ -9465,6 +9466,7 @@ class _ControlsPanel extends StatefulWidget {
     required this.onUpright,
     required this.uprightBusy,
     required this.tabbedLayout,
+    required this.tabIcons,
     required this.onImportColorProfile,
     required this.onEditColorProfile,
     required this.onDuplicateColorProfile,
@@ -9569,6 +9571,9 @@ class _ControlsPanel extends StatefulWidget {
   /// Group the sections into tabs, or list them all in one scroll — see
   /// `AppSettings.tabbedControlsPanel`.
   final bool tabbedLayout;
+
+  /// Whether [tabbedLayout]'s tabs carry a glyph instead of a word.
+  final bool tabIcons;
 
   /// Measures the open photo and straightens it — Crop & Transform's Level
   /// button, and [levelBusy] while that runs.
@@ -9744,6 +9749,13 @@ class _ControlsPanelState extends State<_ControlsPanel>
     _ControlsTab.effects => l10n.controlsTabEffects,
   };
 
+  IconData _tabIcon(_ControlsTab tab) => switch (tab) {
+    _ControlsTab.adjust => CupertinoIcons.slider_horizontal_3,
+    _ControlsTab.details => CupertinoIcons.circle_righthalf_fill,
+    _ControlsTab.colour => CupertinoIcons.circle_grid_hex,
+    _ControlsTab.effects => CupertinoIcons.fx,
+  };
+
   Widget _buildCropPanel() => _CropTransformPanel(
     params: widget.cropTransform,
     onChanged: widget.onCropTransformChanged,
@@ -9766,13 +9778,26 @@ class _ControlsPanelState extends State<_ControlsPanel>
     // Every appearance choice lives in the app theme's tabBarTheme, so
     // this bar and the dialogs' all look alike without any of them saying
     // so individually.
-    // Text rather than icons, being tried out (2026-09-07). Four words
-    // fit the panel's width, and a word says which section it opens
-    // outright instead of asking to be learned. _tabIcon is kept for the
-    // moment in case this comes back.
+    // Words by default, glyphs on request (Settings > Tab labels). A
+    // word says which section it opens outright; a glyph is more compact
+    // but has to be learned. Either way the name reaches the semantics
+    // tree — an icon with no accessible name is unreadable to a screen
+    // reader, and it costs nothing to give it one.
     tabs: [
       for (final tab in _ControlsTab.values)
-        Tab(height: kTabHeight, text: _tabLabel(l10n, tab)),
+        if (widget.tabIcons)
+          Tab(
+            height: kTabHeight,
+            icon: Tooltip(
+              message: _tabLabel(l10n, tab),
+              child: Semantics(
+                label: _tabLabel(l10n, tab),
+                child: Icon(_tabIcon(tab), size: 17),
+              ),
+            ),
+          )
+        else
+          Tab(height: kTabHeight, text: _tabLabel(l10n, tab)),
     ],
   );
 

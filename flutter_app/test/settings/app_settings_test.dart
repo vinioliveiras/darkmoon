@@ -3,6 +3,34 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:darkmoon/settings/app_settings.dart';
 
 void main() {
+  group('AppSettings.tabbedControlsPanelIcons', () {
+    test('defaults to words', () {
+      expect(const AppSettings().tabbedControlsPanelIcons, isFalse);
+    });
+
+    // AppSettings has two hand-written copy constructors that list every
+    // field. A new field forgotten in one of them does not fail to
+    // compile — it silently snaps back to its default the next time that
+    // constructor runs, which for asSingleFileSession is every time a
+    // single photo is opened. Persistence itself reads a file and needs
+    // path_provider, so it cannot be reached from here; these two can.
+    test('survives withDefaultDenoiseModel', () {
+      const settings = AppSettings(tabbedControlsPanelIcons: true);
+      expect(
+        settings.withDefaultDenoiseModel().tabbedControlsPanelIcons,
+        isTrue,
+      );
+    });
+
+    test('survives asSingleFileSession', () {
+      const settings = AppSettings(tabbedControlsPanelIcons: true);
+      expect(
+        settings.asSingleFileSession(r'D:\photo.cr2').tabbedControlsPanelIcons,
+        isTrue,
+      );
+    });
+  });
+
   group('AppSettings.customDenoiseModelPath', () {
     test('defaults to null (use the bundled model)', () {
       const settings = AppSettings();

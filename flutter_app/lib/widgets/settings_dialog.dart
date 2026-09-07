@@ -241,6 +241,33 @@ class _SettingsDialogState extends State<SettingsDialog>
               ),
             ],
           ),
+          // Only while there are tabs to label. Shown when there are not,
+          // it is a control with nothing to act on.
+          if (_settings.tabbedControlsPanel)
+            Row(
+              children: [
+                Expanded(
+                  child: Text(l10n.settingsTabStyleLabel, style: _labelStyle),
+                ),
+                StyledDropdown<bool>(
+                  value: _settings.tabbedControlsPanelIcons,
+                  width: 170,
+                  items: [
+                    StyledDropdownItem(
+                      value: false,
+                      label: l10n.settingsTabStyleText,
+                    ),
+                    StyledDropdownItem(
+                      value: true,
+                      label: l10n.settingsTabStyleIcons,
+                    ),
+                  ],
+                  onChanged: (value) => _update(
+                    _settings.copyWith(tabbedControlsPanelIcons: value),
+                  ),
+                ),
+              ],
+            ),
           Padding(
             padding: const EdgeInsets.only(bottom: 4),
             child: Text(l10n.settingsPanelLayoutHint, style: _hintStyle),

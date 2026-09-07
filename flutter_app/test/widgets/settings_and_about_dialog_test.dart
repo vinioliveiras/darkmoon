@@ -151,6 +151,66 @@ void main() {
       );
     });
 
+    testWidgets('the tab-label dropdown reports the chosen value', (
+      tester,
+    ) async {
+      AppSettings? saved;
+      await tester.pumpWidget(
+        _wrap(
+          SettingsDialog(
+            settings: const AppSettings(),
+            onChanged: (value) => saved = value,
+            onClearThumbnails: () {},
+            onClearCatalog: () {},
+            onPruneMissing: () {},
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+      // Words are the default, so that is what it must be showing.
+      expect(find.text(l10n.settingsTabStyleText), findsOneWidget);
+
+      await tester.tap(find.text(l10n.settingsTabStyleText));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.settingsTabStyleIcons).last);
+      await tester.pumpAndSettle();
+
+      expect(saved, isNotNull);
+      expect(
+        saved!.tabbedControlsPanelIcons,
+        isTrue,
+        reason: 'choosing glyphs has to reach the saved settings',
+      );
+    });
+
+    testWidgets('the tab-label dropdown is hidden when there are no tabs', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        _wrap(
+          SettingsDialog(
+            settings: const AppSettings(tabbedControlsPanel: false),
+            onChanged: (_) {},
+            onClearThumbnails: () {},
+            onClearCatalog: () {},
+            onPruneMissing: () {},
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+      expect(
+        find.text(l10n.settingsTabStyleLabel),
+        findsNothing,
+        reason: 'a control with nothing to act on should not be offered',
+      );
+    });
+
     testWidgets('the full-preview scale row shows up once that switch is on', (
       tester,
     ) async {
