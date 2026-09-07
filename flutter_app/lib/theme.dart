@@ -174,10 +174,12 @@ class _BrowserTabPainter extends BoxPainter {
 
 /// Height of a tab across the app.
 ///
-/// Shorter than Material's own 46: these sit above dense control panels
-/// and dialogs where vertical space is the scarce thing, and a tab marked
-/// by an outline does not need the height a filled one does to read.
-const double kTabHeight = 34.0;
+/// Well under Material's own 46: these sit above dense control panels and
+/// dialogs where vertical space is the scarce thing, and a tab marked by
+/// an outline does not need the height a filled one does to read. 34 was
+/// still reading as tall (2026-09-07); this leaves a 12.5px label about
+/// 7px of air either side, and the icon variant's 17px glyph about 5.
+const double kTabHeight = 27.0;
 
 /// Trailing space a vertical scroll view must leave for the scrollbar.
 ///
