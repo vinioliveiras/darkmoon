@@ -255,6 +255,13 @@ ThemeData buildDarkmoonTheme() {
       // The indicator has to cover the whole tab, not just the label, or
       // it reads as a boxed word instead of a tab.
       indicatorSize: TabBarIndicatorSize.tab,
+      // Material reserves 16 either side of a label. The editor's panel
+      // is 300 wide and splits it four ways, which left each word 43px to
+      // sit in and quietly faded the end off every one of them — in
+      // English, and worse in German. The tabs stay equal-width and the
+      // indicator still spans them whole; this only stops the padding
+      // capping the word.
+      labelPadding: EdgeInsets.symmetric(horizontal: 4),
       labelColor: DarkmoonColors.textPrimary,
       unselectedLabelColor: DarkmoonColors.textMuted,
       dividerColor: DarkmoonColors.divider,

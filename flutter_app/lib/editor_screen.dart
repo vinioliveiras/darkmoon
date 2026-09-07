@@ -9744,17 +9744,6 @@ class _ControlsPanelState extends State<_ControlsPanel>
     _ControlsTab.effects => l10n.controlsTabEffects,
   };
 
-  IconData _tabIcon(_ControlsTab tab) => switch (tab) {
-    _ControlsTab.adjust => CupertinoIcons.slider_horizontal_3,
-    _ControlsTab.details => CupertinoIcons.circle_righthalf_fill,
-    _ControlsTab.colour => CupertinoIcons.circle_grid_hex,
-    _ControlsTab.effects => CupertinoIcons.fx,
-  };
-
-  /// Icons only, by request. The name still reaches a tooltip and the
-  /// semantics tree — an icon with no accessible name at all is unreadable
-  /// to a screen reader and unguessable on first use, and neither costs
-  /// anything visually.
   Widget _buildCropPanel() => _CropTransformPanel(
     params: widget.cropTransform,
     onChanged: widget.onCropTransformChanged,
@@ -9777,18 +9766,13 @@ class _ControlsPanelState extends State<_ControlsPanel>
     // Every appearance choice lives in the app theme's tabBarTheme, so
     // this bar and the dialogs' all look alike without any of them saying
     // so individually.
+    // Text rather than icons, being tried out (2026-09-07). Four words
+    // fit the panel's width, and a word says which section it opens
+    // outright instead of asking to be learned. _tabIcon is kept for the
+    // moment in case this comes back.
     tabs: [
       for (final tab in _ControlsTab.values)
-        Tab(
-          height: kTabHeight,
-          icon: Tooltip(
-            message: _tabLabel(l10n, tab),
-            child: Semantics(
-              label: _tabLabel(l10n, tab),
-              child: Icon(_tabIcon(tab), size: 17),
-            ),
-          ),
-        ),
+        Tab(height: kTabHeight, text: _tabLabel(l10n, tab)),
     ],
   );
 

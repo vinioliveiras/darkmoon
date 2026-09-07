@@ -83,21 +83,26 @@ void main() {
   testWidgets('all four tabs are present', (tester) async {
     await pumpEditor(tester);
 
-    // Declared in tab order: Adjust, Details, Colour, Effects.
+    // Declared in tab order: Adjust, Details, Colour, Effects. The bar
+    // carries these as words now rather than glyphs (2026-09-07).
     //
-    // Scoped to the TabBar rather than searched app-wide, so a glyph the
-    // toolbar happens to share cannot make this assert about the wrong
-    // widget.
-    for (final icon in [
-      CupertinoIcons.slider_horizontal_3,
-      CupertinoIcons.circle_righthalf_fill,
-      CupertinoIcons.circle_grid_hex,
-      CupertinoIcons.fx,
-    ]) {
-      expect(
-        find.descendant(of: find.byType(TabBar), matching: find.byIcon(icon)),
-        findsOneWidget,
+    // Scoped to the TabBar rather than searched app-wide, so a section
+    // header sharing one of these words cannot make this assert about the
+    // wrong widget.
+    const labels = ['Adjust', 'Details', 'Colour', 'Effects'];
+    final lefts = <double>[];
+    for (final label in labels) {
+      final tab = find.descendant(
+        of: find.byType(TabBar),
+        matching: find.text(label),
       );
+      expect(tab, findsOneWidget, reason: '$label is missing from the bar');
+      lefts.add(tester.getRect(tab).left);
     }
+    expect(
+      lefts,
+      orderedEquals(([...lefts]..sort())),
+      reason: 'the tabs must read left to right in their declared order',
+    );
   });
 }
