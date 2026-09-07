@@ -8487,6 +8487,14 @@ class _ViewerToolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    // Crop takes over the whole editor — the panel to the right shows
+    // nothing but its own controls — so the toolbar goes with it: while
+    // the overlay is open every button here is inert except Crop itself,
+    // which is how you get out. Note this only removes the *tap*: AI
+    // Denoise and Colorize stay filled if they are applied to the photo,
+    // because that fill says what the photo has on it, not what you can
+    // press.
+    final locked = cropOverlayActive;
     return Container(
       height: 64,
       color: DarkmoonColors.panel,
@@ -8517,7 +8525,7 @@ class _ViewerToolbar extends StatelessWidget {
                         icon: CupertinoIcons.minus,
                         iconSize: _squareButtonIconSize,
                         width: _squareButtonSize,
-                        onTap: onZoomOut,
+                        onTap: locked ? null : onZoomOut,
                       ),
                       _ToolbarSegment(
                         label: zoomLabel,
@@ -8528,7 +8536,7 @@ class _ViewerToolbar extends StatelessWidget {
                         icon: CupertinoIcons.add,
                         iconSize: _squareButtonIconSize,
                         width: _squareButtonSize,
-                        onTap: onZoomIn,
+                        onTap: locked ? null : onZoomIn,
                       ),
                     ],
                   ),
@@ -8541,7 +8549,7 @@ class _ViewerToolbar extends StatelessWidget {
                         icon: CupertinoIcons.arrow_up_left_arrow_down_right,
                         iconSize: _squareButtonIconSize,
                         width: _squareButtonSize,
-                        onTap: onZoomFit,
+                        onTap: locked ? null : onZoomFit,
                         tooltip: l10n.fitToWindow,
                       ),
                     ],
@@ -8567,21 +8575,21 @@ class _ViewerToolbar extends StatelessWidget {
                         icon: CupertinoIcons.arrow_uturn_left,
                         iconSize: _squareButtonIconSize,
                         width: _squareButtonSize,
-                        onTap: canUndo ? onUndo : null,
+                        onTap: (canUndo && !locked) ? onUndo : null,
                         tooltip: l10n.undoButton,
                       ),
                       _ToolbarSegment(
                         icon: CupertinoIcons.arrow_2_circlepath,
                         iconSize: _squareButtonIconSize,
                         width: _squareButtonSize,
-                        onTap: onReset,
+                        onTap: locked ? null : onReset,
                         tooltip: l10n.resetTooltip,
                       ),
                       _ToolbarSegment(
                         icon: CupertinoIcons.arrow_uturn_right,
                         iconSize: _squareButtonIconSize,
                         width: _squareButtonSize,
-                        onTap: canRedo ? onRedo : null,
+                        onTap: (canRedo && !locked) ? onRedo : null,
                         tooltip: l10n.redoButton,
                       ),
                     ],
@@ -8611,7 +8619,7 @@ class _ViewerToolbar extends StatelessWidget {
                         iconSize: _squareButtonIconSize,
                         width: _squareButtonSize,
                         selected: aiDenoiseActive,
-                        onTap: onOpenAiDenoise,
+                        onTap: locked ? null : onOpenAiDenoise,
                         tooltip: l10n.aiDenoiseButton,
                       ),
                     ],
@@ -8626,7 +8634,7 @@ class _ViewerToolbar extends StatelessWidget {
                         iconSize: _squareButtonIconSize,
                         width: _squareButtonSize,
                         selected: colorizeActive,
-                        onTap: onOpenColorize,
+                        onTap: locked ? null : onOpenColorize,
                         tooltip: l10n.colorizeButton,
                       ),
                     ],
@@ -8641,7 +8649,7 @@ class _ViewerToolbar extends StatelessWidget {
                         iconSize: _squareButtonIconSize,
                         width: _squareButtonSize,
                         selected: beforeAfterMode,
-                        onTap: onToggleBeforeAfter,
+                        onTap: locked ? null : onToggleBeforeAfter,
                         tooltip: l10n.beforeAfterButton,
                       ),
                     ],
@@ -8669,7 +8677,7 @@ class _ViewerToolbar extends StatelessWidget {
                     child: SizedBox(
                       height: _squareButtonSize,
                       child: ElevatedButton.icon(
-                        onPressed: exporting ? null : onExport,
+                        onPressed: (exporting || locked) ? null : onExport,
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(horizontal: 16),
                           backgroundColor: Colors.transparent,

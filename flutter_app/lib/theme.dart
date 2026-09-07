@@ -64,6 +64,100 @@ class DarkmoonColors {
   static const sliderInactiveTrack = Color(0xFF3C3E43);
 }
 
+/// The selected tab drawn the way a browser draws one: a box open at the
+/// bottom, so the tab and the panel under it read as one surface.
+///
+/// Two things make that work, and both are why this is a hand-rolled
+/// [Decoration] rather than a [BoxDecoration].
+///
+/// The outline is drawn on three sides only — left, top, right, with the
+/// top corners rounded and the bottom ones square. A [Border] cannot skip a
+/// side *and* round the corners next to it (`BorderRadius` with a partial
+/// `Border` throws), so the path is built by hand.
+///
+/// And the rule Flutter paints under the whole tab bar has to stop at the
+/// selected tab. That rule sits behind the bar (`_DividerPainter` is the
+/// `painter` of a `CustomPaint` whose child is the bar), and the indicator
+/// paints over it, so covering its last pixel row with [background] is
+/// enough. Hence the colour: it is not a fill, it is the surface the tab
+/// opens onto, and it has to match what is actually behind the bar or the
+/// erasure shows up as a seam.
+@immutable
+class BrowserTabIndicator extends Decoration {
+  const BrowserTabIndicator({
+    this.background = DarkmoonColors.panel,
+    this.outline = DarkmoonColors.divider,
+    this.radius = 4.0,
+  });
+
+  /// The surface behind the tab bar — see the note above on why the
+  /// indicator needs to know it.
+  final Color background;
+
+  final Color outline;
+
+  /// Top corners only. Deliberately small: Photoshop's are square, and
+  /// fully square looked wrong beside the app's own rounded controls.
+  final double radius;
+
+  @override
+  BoxPainter createBoxPainter([VoidCallback? onChanged]) =>
+      _BrowserTabPainter(this);
+
+  @override
+  bool operator ==(Object other) =>
+      other is BrowserTabIndicator &&
+      other.background == background &&
+      other.outline == outline &&
+      other.radius == radius;
+
+  @override
+  int get hashCode => Object.hash(background, outline, radius);
+}
+
+class _BrowserTabPainter extends BoxPainter {
+  _BrowserTabPainter(this.decoration);
+
+  final BrowserTabIndicator decoration;
+
+  @override
+  void paint(Canvas canvas, Offset offset, ImageConfiguration configuration) {
+    final size = configuration.size;
+    if (size == null || size.isEmpty) {
+      return;
+    }
+    final rect = offset & size;
+    final r = decoration.radius;
+
+    // Erase the bar's rule where this tab sits.
+    canvas.drawRect(
+      Rect.fromLTRB(rect.left, rect.bottom - 1, rect.right, rect.bottom),
+      Paint()..color = decoration.background,
+    );
+
+    // Half-pixel inset so a 1px stroke lands on the pixel grid instead of
+    // straddling two and coming out as a 2px smear.
+    final left = rect.left + 0.5;
+    final right = rect.right - 0.5;
+    final top = rect.top + 0.5;
+    final path = Path()
+      ..moveTo(left, rect.bottom)
+      ..lineTo(left, top + r)
+      ..arcToPoint(Offset(left + r, top), radius: Radius.circular(r))
+      ..lineTo(right - r, top)
+      ..arcToPoint(Offset(right, top + r), radius: Radius.circular(r))
+      ..lineTo(right, rect.bottom);
+
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1
+        ..color = decoration.outline,
+    );
+  }
+}
+
 /// Height of a tab across the app.
 ///
 /// Shorter than Material's own 46: these sit above dense control panels
@@ -135,29 +229,24 @@ ThemeData buildDarkmoonTheme() {
         return DarkmoonColors.divider;
       }),
     ),
-    // Photoshop-style tabs, set once here so every TabBar in the app
-    // agrees: the selected tab is a filled panel rather than a label with
-    // a bar under it, and the unselected ones sit flat on the background.
-    //
-    // An outline, not a fill: the selected tab is marked by a box around
-    // it and by its label going bright, with nothing painted behind. The
-    // radius is deliberately small — Photoshop's are square, and going
-    // fully square looked wrong beside the app's own rounded buttons and
-    // cards.
-    tabBarTheme: TabBarThemeData(
-      indicator: BoxDecoration(
-        border: Border.all(color: DarkmoonColors.divider),
-        borderRadius: BorderRadius.circular(4),
-      ),
-      // The fill has to cover the whole tab, not just the label, or it
-      // reads as a highlighted word instead of a tab.
+    // Browser-style tabs, set once here so every TabBar in the app agrees.
+    // The selected one is a box open at the bottom that swallows the rule
+    // running under the bar; the unselected ones sit flat on the
+    // background with that rule passing under them. See
+    // [BrowserTabIndicator] — it defaults to the controls panel's own
+    // background, so a TabBar on any other surface has to say so (the
+    // dialogs do).
+    tabBarTheme: const TabBarThemeData(
+      indicator: BrowserTabIndicator(),
+      // The indicator has to cover the whole tab, not just the label, or
+      // it reads as a boxed word instead of a tab.
       indicatorSize: TabBarIndicatorSize.tab,
       labelColor: DarkmoonColors.textPrimary,
       unselectedLabelColor: DarkmoonColors.textMuted,
       dividerColor: DarkmoonColors.divider,
-      overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-      labelStyle: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
-      unselectedLabelStyle: const TextStyle(fontSize: 12.5),
+      overlayColor: WidgetStatePropertyAll(Colors.transparent),
+      labelStyle: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
+      unselectedLabelStyle: TextStyle(fontSize: 12.5),
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style:

@@ -449,6 +449,12 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             TabBar(
+              // The theme's indicator erases the bar's rule with the
+              // controls panel's background; on a dialog that is the
+              // wrong near-black and shows as a seam.
+              indicator: const BrowserTabIndicator(
+                background: DarkmoonColors.dialogBackground,
+              ),
               controller: _tabController,
               tabs: [
                 Tab(height: kTabHeight, text: l10n.aiDenoiseTabClassic),
