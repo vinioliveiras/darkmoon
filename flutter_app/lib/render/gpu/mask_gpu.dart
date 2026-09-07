@@ -65,17 +65,7 @@ Future<Uint8List> renderRgbaWithMasksGpu(
     );
     final alphaImage = await _alphaToImage(alpha, width, height);
 
-    final layerParams = RenderParams.fromValues(
-      mask.values,
-      curves: mask.curves,
-      asShotKelvin: globalParams.asShotKelvin,
-      asShotTint: globalParams.asShotTint,
-      // Base "profile" curve is the base image's alone — a mask layer
-      // renders over the already-profiled result, so re-applying it would
-      // double the contrast under the mask (mirrors render.dart's
-      // renderRgbWithMasks).
-      baseContrast: 0,
-    );
+    final layerParams = maskLayerParams(mask, globalParams);
     final layerImage = await renderImageGpu(
       current,
       width,

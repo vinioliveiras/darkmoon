@@ -85,19 +85,7 @@ Uint8List renderRgbWithMasks(
       layerBuffer,
       width,
       height,
-      RenderParams.fromValues(
-        mask.values,
-        curves: mask.curves,
-        asShotKelvin: globalParams.asShotKelvin,
-        asShotTint: globalParams.asShotTint,
-        // The base "profile" curve belongs to the base image only — a mask
-        // layer re-runs the pipeline over the already-profiled buffer, so
-        // letting it apply again would double the contrast under the mask.
-        baseContrast: 0,
-        // Inherited, never re-derived: a mask layer renders over the same
-        // frame as the global layer, so its radii must scale identically.
-        renderScale: globalParams.renderScale,
-      ),
+      maskLayerParams(mask, globalParams),
     );
     final alpha = computeMaskAlpha(
       mask,

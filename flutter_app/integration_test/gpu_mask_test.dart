@@ -224,5 +224,35 @@ void main() {
         ),
       ], 'disabled mask');
     });
+
+    testWidgets('a mask layer inherits the global renderScale', (tester) async {
+      // The case this file could not see. Every other test here leaves
+      // renderScale at its default, where the two paths agree whatever
+      // they do with it — and the GPU path was building its own layer
+      // params and leaving it out, so every mask rendered its
+      // neighbourhood stages as if the frame were the reference size. On
+      // an export-sized frame that made a mask's Sharpen do nothing at
+      // all. Anything that gives the global params a scale catches it;
+      // this one does.
+      await expectMatchesCpu(
+        const RenderParams(exposure: 2).withRenderScaleFor(3000, 2000),
+        [
+          const MaskLayer(
+            id: 'm1',
+            name: 'Scaled',
+            type: MaskType.radialGradient,
+            radial: RadialGradientGeometry(
+              centerX: 0.5,
+              centerY: 0.5,
+              radius: 0.4,
+              feather: 0.3,
+            ),
+            // The stages renderScale actually reaches.
+            values: {'Clarity': 60, 'Texture': 60, 'SharpenAmount': 60},
+          ),
+        ],
+        'scaled mask layer',
+      );
+    });
   });
 }

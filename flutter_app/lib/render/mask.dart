@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'luminance.dart' show luminanceRgb;
+import 'render_params.dart';
 import 'tone_curve.dart';
 
 /// A linear gradient mask: full effect on the [startX]/[startY] side,
@@ -227,6 +228,33 @@ enum MaskType {
 /// own independent slider values (same flat `{sliderName: value}` shape
 /// as the global adjustments — built into a [RenderParams] the same way),
 /// whether it's currently applied, and whether its region is inverted.
+/// The render params one mask layer is applied with.
+///
+/// Shared by the CPU and GPU mask paths because they drifted apart when
+/// they were not. The GPU path built its own copy and left [renderScale]
+/// out, so every mask layer rendered its neighbourhood stages as if the
+/// frame were the reference size no matter how big it actually was.
+/// Measured on the CPU renderer at a full-quality preview's scale and at
+/// an export's, against the same values at the reference scale: Sharpen
+/// went from doing nothing at all to a mean of 6.8 levels, Texture from a
+/// third of its strength to full, Clarity from about 58%. Which is
+/// exactly how it was reported — a mask's effect being far too weak.
+///
+/// [baseContrast] is zero because the base "profile" curve belongs to the
+/// base image alone; a mask layer renders over the already-profiled
+/// buffer, so applying it again would double the contrast under the mask.
+RenderParams maskLayerParams(MaskLayer mask, RenderParams globalParams) =>
+    RenderParams.fromValues(
+      mask.values,
+      curves: mask.curves,
+      asShotKelvin: globalParams.asShotKelvin,
+      asShotTint: globalParams.asShotTint,
+      baseContrast: 0,
+      // Inherited, never re-derived: a mask layer renders over the same
+      // frame as the global layer, so its radii must scale identically.
+      renderScale: globalParams.renderScale,
+    );
+
 class MaskLayer {
   const MaskLayer({
     required this.id,
