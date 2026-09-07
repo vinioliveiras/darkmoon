@@ -132,16 +132,7 @@
   "aiDenoiseEnhanceStageSharpen": "Aplicando nitidez",
   "aiDenoiseEnhanceStageColorize": "Colorindo",
   "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
-  "@aiDenoiseEnhanceTileProgress": {
-    "placeholders": {
-      "stage": {
-        "type": "String"
-      },
-      "percent": {
-        "type": "int"
-      }
-    }
-  },
+  "@aiDenoiseEnhanceTileProgress": {"placeholders": {"stage": {"type": "String"}, "percent": {"type": "int"}}},
   "exportPanelButton": "Exportar",
   "exportingButton": "Exportando...",
   "exportStageDecoding": "Decodificando RAW...",
@@ -208,13 +199,7 @@
   "confirmClearCatalogMessage": "Isso apaga permanentemente todas as edições salvas de todas as fotos. Essa ação não pode ser desfeita.",
   "confirmPruneMissingMessage": "Isso remove edições, curvas, máscaras, presets e itens de arquivos recentes salvos de fotos que não existem mais no disco. Essa ação não pode ser desfeita.",
   "pruneMissingResultMessage": "{count, plural, =0{Nenhuma foto ausente encontrada} =1{1 foto ausente removida do catálogo} other{{count} fotos ausentes removidas do catálogo}}",
-  "@pruneMissingResultMessage": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
+  "@pruneMissingResultMessage": {"placeholders": {"count": {"type": "int"}}},
   "clearButton": "Limpar",
   "closeButton": "Fechar",
   "filmstripResetEditsAction": "Resetar todas as edições",
@@ -379,7 +364,5 @@
   "colorProfileEditLabel": "Editar",
   "colorProfileDuplicateLabel": "Duplicar",
   "colorProfileImportLabel": "Importar...",
-  "colorProfileEyedropper": "Escolher uma cor da foto",
-  "colorProfilePreviewUsePhoto": "Usar a foto atual",
-  "colorProfilePreviewUseReference": "Usar a carta de referencia"
+  "colorProfileEyedropper": "Escolher uma cor da foto"
 }

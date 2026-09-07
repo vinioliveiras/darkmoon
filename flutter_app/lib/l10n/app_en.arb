@@ -14,43 +14,16 @@
   "dialogOpenFileTitle": "Open RAW File",
   "loadingFolder": "Loading folder...",
   "loadingPhotos": "Loading photos... ({loaded}/{total})",
-  "@loadingPhotos": {
-    "placeholders": {
-      "loaded": {
-        "type": "int"
-      },
-      "total": {
-        "type": "int"
-      }
-    }
-  },
+  "@loadingPhotos": {"placeholders": {"loaded": {"type": "int"}, "total": {"type": "int"}}},
   "loadingImage": "Loading {name}...",
-  "@loadingImage": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
+  "@loadingImage": {"placeholders": {"name": {"type": "String"}}},
   "applyingAdjustments": "Applying adjustments...",
   "emptyStateOpenFolder": "Open a folder with RAW files to get started",
   "noFolderOpen": "No folder open",
   "decodingPhoto": "{name}\n(decoding...)",
-  "@decodingPhoto": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
+  "@decodingPhoto": {"placeholders": {"name": {"type": "String"}}},
   "photoNotFoundMessage": "{name}\ncan't be found — it may have been moved, renamed or deleted outside darkmoon",
-  "@photoNotFoundMessage": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
+  "@photoNotFoundMessage": {"placeholders": {"name": {"type": "String"}}},
   "sidebarRecentFilesSection": "RECENT FILES",
   "sidebarFoldersSection": "FOLDERS",
   "sidebarRemoveFolderTooltip": "Remove folder",
@@ -61,13 +34,7 @@
   "presetSaveNewTooltip": "Save current edits as a preset",
   "presetEmptyHint": "No presets yet",
   "presetAmountDialogTitle": "Apply \"{name}\"",
-  "@presetAmountDialogTitle": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
+  "@presetAmountDialogTitle": {"placeholders": {"name": {"type": "String"}}},
   "presetAmountLabel": "Color Profile Strength",
   "presetAmountApplyButton": "Apply",
   "presetRenameLabel": "Rename",
@@ -81,31 +48,13 @@
   "presetExportManyDialogTitle": "Export presets",
   "presetImportDialogTitle": "Import presets",
   "presetDeleteConfirmMessage": "Delete the preset \"{name}\"? This can't be undone.",
-  "@presetDeleteConfirmMessage": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
+  "@presetDeleteConfirmMessage": {"placeholders": {"name": {"type": "String"}}},
   "presetDeleteManyConfirmMessage": "Delete {count} presets? This can't be undone.",
-  "@presetDeleteManyConfirmMessage": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
+  "@presetDeleteManyConfirmMessage": {"placeholders": {"count": {"type": "int"}}},
   "presetSelectTooltip": "Select presets",
   "presetSelectAllTooltip": "Select all",
   "presetSelectedCount": "{count} selected",
-  "@presetSelectedCount": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
+  "@presetSelectedCount": {"placeholders": {"count": {"type": "int"}}},
   "beforeLabel": "Before",
   "afterLabel": "After",
   "zoomFit": "Fit",
@@ -162,13 +111,7 @@
   "aiDenoiseCloudDisclosure": "Stored only on this device (Windows Credential Manager), sent only to the selected provider. Each apply uploads the full-resolution photo and is billed by your provider account — results are cached so re-opening or exporting the same photo doesn't call it again.",
   "aiDenoiseCloudGenerativeWarning": "This provider regenerates the image from a prompt rather than running a dedicated denoise model — it may alter fine detail (faces, text, texture), not just remove noise.",
   "aiDenoiseCloudFailedMessage": "Cloud AI denoise failed: {error}",
-  "@aiDenoiseCloudFailedMessage": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
+  "@aiDenoiseCloudFailedMessage": {"placeholders": {"error": {"type": "String"}}},
   "aiDenoiseCloudFailedStatus": "Cloud denoise failed",
   "aiDenoiseCloudStartingMessage": "Starting cloud denoise…",
   "aiDenoiseCloudStageUploading": "Uploading photo…",
@@ -186,13 +129,7 @@
   "aiDenoiseEnhanceRawDenoiseUnavailableCaption": "Only available for standard Bayer RAW files (not X-Trans, Foveon, or non-RAW formats).",
   "aiDenoiseEnhanceFailedMessage": "AI Enhance couldn't run on this photo. It's been turned back off.",
   "aiDenoiseCustomModelFallbackMessage": "Your custom denoise model couldn't be used ({error}) — used the default model instead.",
-  "@aiDenoiseCustomModelFallbackMessage": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
+  "@aiDenoiseCustomModelFallbackMessage": {"placeholders": {"error": {"type": "String"}}},
   "aiDenoiseCustomModelFallbackStatus": "Custom model failed, used default",
   "aiDenoiseEnhanceCpuWarning": "Your GPU doesn't support this yet, so it's running on the CPU instead — this will take noticeably longer.",
   "aiDenoiseEnhanceGpuIncompatibleWarning": "Your GPU isn't compatible with this yet, so it'll run on the CPU — expect this to take noticeably longer (up to a couple of minutes on a large photo).",
@@ -205,16 +142,7 @@
   "aiDenoiseEnhanceStageSharpen": "Sharpening",
   "aiDenoiseEnhanceStageColorize": "Colorizing",
   "aiDenoiseEnhanceTileProgress": "{stage} — {percent}%",
-  "@aiDenoiseEnhanceTileProgress": {
-    "placeholders": {
-      "stage": {
-        "type": "String"
-      },
-      "percent": {
-        "type": "int"
-      }
-    }
-  },
+  "@aiDenoiseEnhanceTileProgress": {"placeholders": {"stage": {"type": "String"}, "percent": {"type": "int"}}},
   "exportPanelButton": "Export",
   "exportingButton": "Exporting...",
   "exportStageDecoding": "Decoding RAW...",
@@ -226,16 +154,7 @@
   "exportRapidHint": "Compressed JPEG for social media",
   "exportRapidScaleLabel": "Resolution",
   "exportRapidScaleResultLabel": "≈ {width} × {height} px",
-  "@exportRapidScaleResultLabel": {
-    "placeholders": {
-      "width": {
-        "type": "int"
-      },
-      "height": {
-        "type": "int"
-      }
-    }
-  },
+  "@exportRapidScaleResultLabel": {"placeholders": {"width": {"type": "int"}, "height": {"type": "int"}}},
   "exportFormatLabel": "Format",
   "exportQualityLabel": "Quality",
   "exportDialogConfirm": "Export",
@@ -243,24 +162,12 @@
   "copyButton": "Copy",
   "hideButton": "Hide",
   "exportSuccessMessage": "Exported to {path}",
-  "@exportSuccessMessage": {
-    "placeholders": {
-      "path": {
-        "type": "String"
-      }
-    }
-  },
+  "@exportSuccessMessage": {"placeholders": {"path": {"type": "String"}}},
   "exportDoneStatus": "Done!",
   "exportFailedStatus": "Export failed",
   "aiDenoiseEnhanceFailedStatus": "AI Enhance failed",
   "exportFailureMessage": "Export failed: {error}",
-  "@exportFailureMessage": {
-    "placeholders": {
-      "error": {
-        "type": "String"
-      }
-    }
-  },
+  "@exportFailureMessage": {"placeholders": {"error": {"type": "String"}}},
   "resetTooltip": "Reset",
   "settingsDialogTitle": "Settings",
   "settingsTabGeneral": "General",
@@ -285,13 +192,7 @@
   "settingsDynamicFullPreviewHint": "A moment after an edit settles, re-render at the sensor's native resolution so a zoomed-in view sharpens up. Decoded sources are cached to disk.",
   "settingsFullQualityScaleLabel": "Preview resolution",
   "settingsFullQualityFloorHint": "Capped by the editing preview ({previewPx} px) — no gain at this value.",
-  "@settingsFullQualityFloorHint": {
-    "placeholders": {
-      "previewPx": {
-        "type": "int"
-      }
-    }
-  },
+  "@settingsFullQualityFloorHint": {"placeholders": {"previewPx": {"type": "int"}}},
   "settingsThumbnailThreadsLabel": "Thumbnail loading threads",
   "settingsCustomDenoiseModelLabel": "Custom denoise model",
   "settingsCustomDenoiseModelHint": "Replaces the on-device Denoise model in the AI Denoise dialog's Enhance tab. Must be a drop-in replacement: 3-channel RGB, same-resolution in/out, \"input\"/\"output\" tensor names, [0,1]-normalized — a model that doesn't match will error or produce visibly wrong output, not a clean failure.",
@@ -312,13 +213,7 @@
   "confirmClearCatalogMessage": "This permanently deletes every saved edit for every photo. This can't be undone.",
   "confirmPruneMissingMessage": "This removes saved edits, curves, masks, presets, and recent-file entries for photos that no longer exist on disk. This can't be undone.",
   "pruneMissingResultMessage": "{count, plural, =0{No missing photos found} =1{Removed 1 missing photo from the catalog} other{Removed {count} missing photos from the catalog}}",
-  "@pruneMissingResultMessage": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
+  "@pruneMissingResultMessage": {"placeholders": {"count": {"type": "int"}}},
   "clearButton": "Clear",
   "closeButton": "Close",
   "filmstripResetEditsAction": "Reset all edits",
@@ -328,33 +223,12 @@
   "imageContextPasteEditsAction": "Paste Edits",
   "filmstripResetEditsConfirmTitle": "Reset all edits?",
   "filmstripResetEditsConfirmMessage": "This resets \"{name}\" back to its untouched state — every adjustment, curve, and mask. This can't be undone.",
-  "@filmstripResetEditsConfirmMessage": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
+  "@filmstripResetEditsConfirmMessage": {"placeholders": {"name": {"type": "String"}}},
   "filmstripDeleteConfirmTitle": "Delete photo?",
   "filmstripDeleteConfirmMessage": "This sends \"{name}\" to the Recycle Bin and deletes its saved edits. You can restore the photo from the Recycle Bin, but not its edits.",
-  "@filmstripDeleteConfirmMessage": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      }
-    }
-  },
+  "@filmstripDeleteConfirmMessage": {"placeholders": {"name": {"type": "String"}}},
   "filmstripDeleteFailedMessage": "Couldn't delete \"{name}\": {error}",
-  "@filmstripDeleteFailedMessage": {
-    "placeholders": {
-      "name": {
-        "type": "String"
-      },
-      "error": {
-        "type": "String"
-      }
-    }
-  },
+  "@filmstripDeleteFailedMessage": {"placeholders": {"name": {"type": "String"}, "error": {"type": "String"}}},
   "sectionColorProfile": "COLOR PROFILE",
   "sectionWhiteBalance": "WHITE BALANCE",
   "sectionTone": "TONE",
@@ -508,7 +382,5 @@
   "colorProfileEditLabel": "Edit",
   "colorProfileDuplicateLabel": "Duplicate",
   "colorProfileImportLabel": "Import...",
-  "colorProfileEyedropper": "Pick a colour from the photo",
-  "colorProfilePreviewUsePhoto": "Use the current photo",
-  "colorProfilePreviewUseReference": "Use the reference chart"
+  "colorProfileEyedropper": "Pick a colour from the photo"
 }

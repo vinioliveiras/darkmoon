@@ -1,5 +1,8 @@
+import 'dart:typed_data';
+
 import 'package:darkmoon/l10n/app_localizations.dart';
 import 'package:darkmoon/render/color_profile.dart';
+import 'package:darkmoon/render/color_profile_reference.dart';
 import 'package:darkmoon/widgets/color_profile_editor_dialog.dart';
 import 'package:darkmoon/widgets/color_profile_preview.dart';
 import 'package:darkmoon/widgets/slider_row.dart';
@@ -37,6 +40,7 @@ void main() {
     ColorProfile? initial,
     Set<String> existingNames = const {},
     double? highlightHue,
+    ({Float32List rgb, int width, int height})? photoPreview,
   }) async {
     final drafts = <ColorProfile>[];
     await tester.pumpWidget(
@@ -47,6 +51,7 @@ void main() {
           initial: initial ?? identity(),
           existingNames: existingNames,
           highlightHue: highlightHue,
+          photoPreview: photoPreview,
           onDraftChanged: drafts.add,
           onDraftSettled: drafts.add,
         ),
@@ -210,11 +215,18 @@ void main() {
     );
   });
 
-  group('before/after column', () {
-    testWidgets('shows the source untouched above the profiled version', (
+  group('preview column', () {
+    testWidgets('shows the profile on the chart and on the open photo', (
       tester,
     ) async {
-      await pumpDialog(tester);
+      final photo = (
+        rgb: Float32List.fromList(
+          List<double>.generate(8 * 6 * 3, (i) => (i % 255).toDouble()),
+        ),
+        width: 8,
+        height: 6,
+      );
+      await pumpDialog(tester, photoPreview: photo);
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
 
       await tester.tap(find.text(l10n.colorProfileEditorTabColor));
@@ -230,26 +242,24 @@ void main() {
           .toList();
       expect(previews, hasLength(2));
 
-      // Wiring both panes to the draft, or both to the identity, is an
-      // easy slip and leaves a comparison that shows nothing while
-      // looking entirely plausible.
+      // Two subjects, one profile. A chart that flatters and a photo that
+      // does not is the disagreement worth seeing, so both panes must
+      // carry the same edit — showing the draft on one and not the other
+      // would look plausible and compare nothing.
+      for (final preview in previews) {
+        expect(preview.profile.hueShift[0], 18);
+      }
+      expect(previews.first.sourceWidth, referenceChartWidth);
       expect(
-        previews.first.profile.hueShift.every((v) => v == 0),
-        isTrue,
-        reason: 'the top pane is the source, before anything is applied',
+        previews.last.sourceWidth,
+        8,
+        reason: 'the lower pane is the open photo, not a second chart',
       );
-      expect(
-        previews.last.profile.hueShift[0],
-        18,
-        reason: 'the bottom pane carries the edit being made',
-      );
-      expect(
-        previews.first.source,
-        same(previews.last.source),
-        reason:
-            'both panes must show the same image, or they compare '
-            'nothing',
-      );
+    });
+
+    testWidgets('shows only the chart when no photo is open', (tester) async {
+      await pumpDialog(tester);
+      expect(find.byType(ColorProfilePreview), findsOneWidget);
     });
   });
 

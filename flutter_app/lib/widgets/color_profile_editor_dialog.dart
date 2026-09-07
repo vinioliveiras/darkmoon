@@ -38,14 +38,22 @@ class ColorProfileEditorResult {
 /// Centred, animated and over a dimming barrier, like every other dialog
 /// in the app — user's call, 2026-09-07.
 ///
-/// The preview lives inside the dialog ([ColorProfilePreview]) rather than
-/// being the canvas behind it. That is what the centring and the dimming
-/// made necessary, and it turned out better: it runs `applyColorProfile`
-/// and nothing else, so the profile's effect is isolated from the photo's
-/// own exposure, curves and masks. It opens on a generated reference chart
-/// carrying every hue bin, the memory colours and a neutral ramp — see
-/// `buildReferenceChart` for why a photograph is the weaker choice here —
-/// and switches to the open photo on request.
+/// Two columns: the previews on the left, the controls on the right, so
+/// the change and the control driving it are on screen together.
+///
+/// The previews live inside the dialog ([ColorProfilePreview]) rather than
+/// being the canvas behind it — what the centring and the dimming made
+/// necessary, and better anyway: they run `applyColorProfile` and nothing
+/// else, so the profile's effect is isolated from the photo's own
+/// exposure, curves and masks.
+///
+/// There are two of them, the same profile on different subjects. The
+/// generated chart (`buildReferenceChart`) carries every hue bin, the
+/// memory colours and a neutral ramp, so no control here is left with
+/// nothing to act on; the open photo below it is the one that actually
+/// decides whether a profile is any good. Both at once rather than a
+/// switch: a profile that flatters the chart and ruins skin is precisely
+/// the mistake worth catching, and showing one at a time hides it.
 ///
 /// [onDraftChanged] and [onDraftSettled] report the work in progress to
 /// the editor, which records it so the photo behind is already correct the
@@ -135,11 +143,6 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
   late List<double> _lumMul = List<double>.of(widget.initial.lumMul);
 
   bool _advanced = false;
-
-  /// Which image the preview shows. Opens on the chart: it answers "what
-  /// does this profile do", where the photo answers "what does it do to
-  /// this one".
-  bool _previewUsesPhoto = false;
 
   /// Built once. Regenerating it per frame would be wasted work — it never
   /// changes, only what is applied to it does.
@@ -556,69 +559,39 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
     );
   }
 
-  Widget _previewCaption(String text) => Padding(
-    padding: const EdgeInsets.only(bottom: 4),
-    child: Text(
-      text,
-      style: Theme.of(
-        context,
-      ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
-    ),
-  );
-
-  /// The left column: the source untouched, and the same source with the
-  /// profile applied directly beneath it.
+  /// The left column: the profile applied to two different subjects at
+  /// once.
   ///
-  /// Stacked rather than side by side, and in this order, because the eye
-  /// compares vertically-adjacent edges far better than it compares two
-  /// images separated by a gutter — and because a hue shift of a few
-  /// degrees is invisible unless you have the original immediately next to
-  /// it to compare against.
+  /// The chart on top answers "what does this profile do" — it carries
+  /// every hue bin, the memory colours and a neutral ramp, so no control
+  /// in this dialog is left with nothing to act on. The open photo below
+  /// answers "what does it do to mine", which is the question that
+  /// actually decides whether a profile is any good.
   ///
-  /// "Before" is [ColorProfilePreview] with the identity profile rather
-  /// than a separate straight-to-screen path: applyColorProfile returns
-  /// immediately for an identity, so it is the same pixels, and using one
-  /// widget means the two panes cannot end up scaled or decoded
-  /// differently and quietly misrepresent the difference.
+  /// Both, not one or the other behind a switch: a profile that flatters
+  /// the chart and ruins skin is exactly the mistake worth catching, and
+  /// a switch hides it by only ever showing one of the two.
   Widget _buildPreview(AppLocalizations l10n) {
     final photo = widget.photoPreview;
-    final usePhoto = _previewUsesPhoto && photo != null;
-    final source = usePhoto ? photo.rgb : _referenceChart;
-    final width = usePhoto ? photo.width : referenceChartWidth;
-    final height = usePhoto ? photo.height : referenceChartHeight;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,
       children: [
-        _previewCaption(l10n.beforeLabel),
         ColorProfilePreview(
-          source: source,
-          sourceWidth: width,
-          sourceHeight: height,
-          profile: identityColorProfile,
-        ),
-        const SizedBox(height: 10),
-        _previewCaption(l10n.afterLabel),
-        ColorProfilePreview(
-          source: source,
-          sourceWidth: width,
-          sourceHeight: height,
+          source: _referenceChart,
+          sourceWidth: referenceChartWidth,
+          sourceHeight: referenceChartHeight,
           profile: _draft,
         ),
-        if (photo != null)
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton(
-              onPressed: () =>
-                  setState(() => _previewUsesPhoto = !_previewUsesPhoto),
-              child: Text(
-                _previewUsesPhoto
-                    ? l10n.colorProfilePreviewUseReference
-                    : l10n.colorProfilePreviewUsePhoto,
-              ),
-            ),
+        if (photo != null) ...[
+          const SizedBox(height: 10),
+          ColorProfilePreview(
+            source: photo.rgb,
+            sourceWidth: photo.width,
+            sourceHeight: photo.height,
+            profile: _draft,
           ),
+        ],
       ],
     );
   }

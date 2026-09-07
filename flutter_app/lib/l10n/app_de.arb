@@ -198,13 +198,7 @@
   "confirmClearCatalogMessage": "Dadurch wird jede gespeicherte Bearbeitung für jedes Foto dauerhaft gelöscht. Dies kann nicht rückgängig gemacht werden.",
   "confirmPruneMissingMessage": "Dadurch werden gespeicherte Bearbeitungen, Kurven, Masken, Vorgaben und Einträge zuletzt verwendeter Dateien für Fotos entfernt, die nicht mehr auf der Festplatte vorhanden sind. Dies kann nicht rückgängig gemacht werden.",
   "pruneMissingResultMessage": "{count, plural, =0{Keine fehlenden Fotos gefunden} =1{1 fehlendes Foto aus dem Katalog entfernt} other{{count} fehlende Fotos aus dem Katalog entfernt}}",
-  "@pruneMissingResultMessage": {
-    "placeholders": {
-      "count": {
-        "type": "int"
-      }
-    }
-  },
+  "@pruneMissingResultMessage": {"placeholders": {"count": {"type": "int"}}},
   "clearButton": "Leeren",
   "closeButton": "Schließen",
   "filmstripResetEditsAction": "Alle Bearbeitungen zurücksetzen",
@@ -369,7 +363,5 @@
   "colorProfileEditLabel": "Bearbeiten",
   "colorProfileDuplicateLabel": "Duplizieren",
   "colorProfileImportLabel": "Importieren...",
-  "colorProfileEyedropper": "Eine Farbe aus dem Foto waehlen",
-  "colorProfilePreviewUsePhoto": "Aktuelles Foto verwenden",
-  "colorProfilePreviewUseReference": "Referenztafel verwenden"
+  "colorProfileEyedropper": "Eine Farbe aus dem Foto waehlen"
 }

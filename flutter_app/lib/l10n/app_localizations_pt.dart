@@ -1188,10 +1188,4 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get colorProfileEyedropper => 'Escolher uma cor da foto';
-
-  @override
-  String get colorProfilePreviewUsePhoto => 'Usar a foto atual';
-
-  @override
-  String get colorProfilePreviewUseReference => 'Usar a carta de referencia';
 }
