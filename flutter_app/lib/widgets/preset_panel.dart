@@ -302,12 +302,22 @@ class _PresetRow extends StatelessWidget {
                               : DarkmoonColors.textMuted,
                         )
                       : Icon(
-                          // The checkmark is state, not identity: it
-                          // replaces the preset's own icon only while that
-                          // preset is applied.
-                          applied
-                              ? CupertinoIcons.checkmark_alt
-                              : CupertinoIcons.film,
+                          // Always film outside selection mode, never
+                          // swapped for a checkmark while applied.
+                          //
+                          // Two glyphs sharing one column cannot be made
+                          // to line up: an Icon sizes its box, not the ink
+                          // inside it, and checkmark_alt and film do not
+                          // occupy their 14px the same way. Centring the
+                          // box — which this already does — gets the boxes
+                          // aligned and leaves the drawings visibly
+                          // offset from each other.
+                          //
+                          // "Applied" is still said three ways without it:
+                          // the icon turns accent, the label goes bold and
+                          // primary, and the row takes a tinted
+                          // background.
+                          CupertinoIcons.film,
                           size: 14,
                           color: applied
                               ? DarkmoonColors.accent
