@@ -796,6 +796,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get maskCloneSuffix => 'Kopie';
 
   @override
+  String get maskOkButton => 'OK';
+
+  @override
   String get maskDeleteTooltip => 'Maske löschen';
 
   @override

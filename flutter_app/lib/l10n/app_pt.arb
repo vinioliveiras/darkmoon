@@ -234,6 +234,7 @@
   "maskOpacityLabel": "Opacidade",
   "maskCloneTooltip": "Duplicar máscara",
   "maskCloneSuffix": "cópia",
+  "maskOkButton": "OK",
   "maskDeleteTooltip": "Excluir máscara",
   "maskResetTooltip": "Redefinir esta máscara",
   "maskClearAllTooltip": "Limpar todas as máscaras",

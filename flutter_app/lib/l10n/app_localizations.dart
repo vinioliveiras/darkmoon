@@ -1492,6 +1492,12 @@ abstract class AppLocalizations {
   /// **'copy'**
   String get maskCloneSuffix;
 
+  /// No description provided for @maskOkButton.
+  ///
+  /// In en, this message translates to:
+  /// **'OK'**
+  String get maskOkButton;
+
   /// No description provided for @maskDeleteTooltip.
   ///
   /// In en, this message translates to:

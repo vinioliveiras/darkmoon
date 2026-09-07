@@ -10371,6 +10371,38 @@ class _ControlsPanelState extends State<_ControlsPanel>
                               ),
                             ),
                           ],
+                          // The same pair the Crop panel ends with, and for the same
+                          // reason: both are a mode you are inside, and both need an
+                          // obvious way out. OK just leaves — a mask is committed as
+                          // it is edited, so there is nothing to apply. Cancel throws
+                          // the layer away, which is what makes it a cancel rather
+                          // than a second Done. Both land back on Full Image.
+                          if (widget.activeMaskId != imageMaskId) ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 34,
+                                    child: OutlinedButton(
+                                      onPressed: widget.onDeleteMask,
+                                      child: Text(l10n.cancelButton),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: SizedBox(
+                                    height: 34,
+                                    child: FilledButton(
+                                      onPressed: () => widget.onSelectMask(imageMaskId),
+                                      child: Text(l10n.maskOkButton),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
                       ),
                     ),

@@ -233,6 +233,7 @@
   "maskOpacityLabel": "Deckkraft",
   "maskCloneTooltip": "Maske duplizieren",
   "maskCloneSuffix": "Kopie",
+  "maskOkButton": "OK",
   "maskDeleteTooltip": "Maske löschen",
   "maskResetTooltip": "Diese Maske zurücksetzen",
   "maskClearAllTooltip": "Alle Masken entfernen",
