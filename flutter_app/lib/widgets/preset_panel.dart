@@ -479,11 +479,11 @@ class _PresetThumbnail extends StatelessWidget {
   final PresetThumbnailStore store;
   final String presetId;
 
-  /// Wide rather than square, and sized to show the frame rather than a
-  /// crop of it: a preset changes colour and tone across a whole picture,
-  /// and a square cut out of the middle throws away most of the evidence.
-  static const double _width = 86;
-  static const double _height = 56;
+  /// Square, by request. It centre-crops the frame rather than showing
+  /// all of it, which costs some of the scene — but a preset's whole
+  /// effect is colour and tone, and those read from any part of the
+  /// picture. It also keeps the name column wider.
+  static const double _size = 56;
 
   @override
   Widget build(BuildContext context) {
@@ -492,8 +492,8 @@ class _PresetThumbnail extends StatelessWidget {
       builder: (context, _) {
         final image = store.thumbnailFor(presetId);
         return Container(
-          width: _width,
-          height: _height,
+          width: _size,
+          height: _size,
           decoration: BoxDecoration(
             color: DarkmoonColors.canvas,
             borderRadius: BorderRadius.circular(6),

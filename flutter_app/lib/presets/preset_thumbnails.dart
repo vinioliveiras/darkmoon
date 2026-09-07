@@ -10,10 +10,12 @@ import 'preset.dart';
 
 /// Long edge of a preset thumbnail, in pixels.
 ///
-/// Above the 86px the list draws it at, so it is never upscaled, and with
-/// enough over for a display running at 150%. Measured render cost at
-/// this size is about 14ms, against 5ms at 64 — which would be cheaper
-/// and visibly soft, and softness defeats the point of a preview.
+/// Well above the 56px square the list draws it at, so it is never
+/// upscaled even on a display running at 200%, and with room left if the
+/// list ever shows it bigger. Measured render cost at this size is about
+/// 14ms, against 5ms at 64 — which would be cheaper and, at anything
+/// above 100% scaling, visibly soft. Softness defeats the point of a
+/// preview.
 const int kPresetThumbnailEdge = 128;
 
 /// One tiny render, shaped for `compute()`.
