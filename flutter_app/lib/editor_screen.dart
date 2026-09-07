@@ -9417,7 +9417,9 @@ class _ControlsPanel extends StatefulWidget {
 /// Which tab a section lives under. Three for now; the panel used to be
 /// one long scroll of all eleven, which meant Lens Correction was a dozen
 /// section-heights below the Tone sliders people actually reach for.
-enum _ControlsTab { adjust, colour, details, effects }
+/// Declaration order is the order the tabs appear in: the bar is built
+/// from [_ControlsTab.values].
+enum _ControlsTab { adjust, details, colour, effects }
 
 /// Which tab each entry of [_sections] belongs to.
 ///
@@ -9434,10 +9436,11 @@ const _sectionTabs = <String, _ControlsTab>{
   // Basic for the same reason.
   'WHITE BALANCE': _ControlsTab.adjust,
   'TONE': _ControlsTab.adjust,
-  'PRESENCE': _ControlsTab.adjust,
-  // Sharpening and noise reduction get their own tab (2026-09-07) rather
-  // than sitting at the bottom of Adjust: they are judged at 100% zoom on
-  // a detail, not while setting overall exposure.
+  // Presence (Texture, Clarity, Dehaze and friends) and Detail
+  // (sharpening, noise reduction) both act on local contrast and are both
+  // judged at 100% zoom on a patch of texture, not while setting overall
+  // exposure. They belong together, on their own tab.
+  'PRESENCE': _ControlsTab.details,
   'DETAIL': _ControlsTab.details,
   // The profile is chosen once per photo and then left alone, so it can
   // live a tab away.

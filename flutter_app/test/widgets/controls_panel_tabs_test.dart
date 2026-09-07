@@ -33,7 +33,7 @@ void main() {
   testWidgets('the opening tab carries its own sections', (tester) async {
     await pumpEditor(tester);
 
-    for (final section in ['WHITE BALANCE', 'TONE', 'PRESENCE']) {
+    for (final section in ['WHITE BALANCE', 'TONE']) {
       expect(find.text(section), findsOneWidget, reason: '$section is Adjust');
     }
   });
@@ -64,6 +64,7 @@ void main() {
     await pumpEditor(tester);
 
     for (final section in [
+      'PRESENCE',
       'COLOR PROFILE',
       'COLOR MIXER',
       'COLOR GRADING',
@@ -81,10 +82,11 @@ void main() {
   testWidgets('all four tabs are present', (tester) async {
     await pumpEditor(tester);
 
+    // Declared in tab order: Adjust, Details, Colour, Effects.
     for (final icon in [
       CupertinoIcons.slider_horizontal_3,
-      CupertinoIcons.color_filter,
       CupertinoIcons.zoom_in,
+      CupertinoIcons.color_filter,
       CupertinoIcons.wand_stars,
     ]) {
       expect(find.byIcon(icon), findsOneWidget);
