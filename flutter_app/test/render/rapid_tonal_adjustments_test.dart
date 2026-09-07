@@ -320,16 +320,25 @@ void main() {
     // So the order claim gets its own pixel: (90, 135, 180) sits at
     // saturation 0.5, inside the smoothstep band, where saturating first
     // demonstrably changes the mask Vibrance then applies.
+    //
+    // Both sliders are driven to 100 rather than a mild 30/40. The two
+    // orders always differ; how far apart they land is proportional to
+    // how much the first one moved the pixel, and at calSaturationStrength
+    // 0.10 a Saturation of 30 moves it by less than the rounding this
+    // compares in. That is a statement about the test's own sensitivity,
+    // not about the ordering, so the answer is a bigger push — never a
+    // wider tolerance, which would let a genuinely reordered pipeline
+    // pass.
     const orderSource = [90, 135, 180];
     final ordered = renderRgb(
       1,
       1,
       Uint8List.fromList(orderSource),
-      const RenderParams(baseContrast: 0, saturation: 30, vibrance: 40),
+      const RenderParams(baseContrast: 0, saturation: 100, vibrance: 100),
     );
     _expectPixel(
       ordered,
-      _expectSatThenVibrance(orderSource, saturation: 30, vibrance: 40),
+      _expectSatThenVibrance(orderSource, saturation: 100, vibrance: 100),
       'saturation then vibrance (in-band pixel)',
     );
 
@@ -338,8 +347,8 @@ void main() {
       orderSource[1] / 255.0,
       orderSource[2] / 255.0,
     );
-    swapped = _expectVibrance(swapped, 40);
-    swapped = _expectSaturation(swapped, 30);
+    swapped = _expectVibrance(swapped, 100);
+    swapped = _expectSaturation(swapped, 100);
     expect(
       (swapped.$1 * 255.0).round(),
       isNot(closeTo(ordered[0], 1)),

@@ -107,7 +107,7 @@ const Map<String, double> calGlobalAmountCompressionOverrides = {
 ///   ↑ higher = more aggressive Tint (green/magenta shows up faster)
 ///   ↓ lower  = gentler Tint
 /// default: 0.35   (the old model used 0.25; raised toward Meridian)
-const double calWbTintStrength = 0.30;
+const double calWbTintStrength = 0.35;
 
 /// Working-space gamma the WB gains are applied in.
 /// This is technical — only change it if you know why. Changing it throws
@@ -282,7 +282,7 @@ const double calShadowsFalloff = 4.5;
 ///   ↓ lower (e.g. 0.30) = also reaches the upper-midtones ("strong" effect)
 /// default: 0.32   (2026-09-02: lowered to 0.26, explicit user request —
 /// Whites felt too weak)   [also on GPU: point_ops_post_denoise.frag → rapidWhiteMask]
-const double calWhitesMaskLow = 0.26;
+const double calWhitesMaskLow = 0.32;
 
 /// **Whites** — how much it lifts the white point at the slider's max value.
 ///   ↑ higher = Whites +100 brightens much more
@@ -340,12 +340,12 @@ const double calTextureStrength = 3.0;
 ///   ↑ higher = wider effect/bigger "halo"
 ///   ↓ lower  = more localized effect
 /// default: 25.0
-const double calClaritySigma = 35.0;
+const double calClaritySigma = 25.0;
 
 /// **Clarity** — strength multiplier on top of the slider.
 ///   ↑ higher = stronger Clarity     ↓ lower = weaker
 /// default: 0.65   (2026-09-01: raised from 0.5, explicit user request)
-const double calClarityStrength = 0.75;
+const double calClarityStrength = 0.65;
 
 /// **Dehaze +** — how hard the positive slider pulls transmission down (=
 /// removes haze). This is the main control over Dehaze strength.
@@ -413,7 +413,7 @@ const double calDehazeAddMix = 0.18;
 /// Vibrance +100 barely perceptible (closer to "off" than "gentler").
 /// Weakened again 2026-09-01 (user: "still a bit strong"). Raised back up
 /// 2026-09-02 (explicit user request — wanted it stronger again).
-const double calVibranceStrength = 1.0;
+const double calVibranceStrength = 0.7;
 
 /// **Vibrance** — how much it HOLDS BACK the effect on skin tones (so faces
 /// don't turn orange). 1.0 = holds back nothing; 0.0 = zeroes out on skin.
@@ -432,7 +432,7 @@ const double calVibranceSkinDampen = 0.6;
 /// +100 as only a ~1.01x multiplier, effectively disabling the slider
 /// rather than just softening it. Weakened again 2026-09-01. Weakened
 /// further 2026-09-02 (explicit user request).
-const double calSaturationStrength = 0.3;
+const double calSaturationStrength = 0.10;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  COLOR — Color Mixer / HSL (8 bands)                                      ║
@@ -449,7 +449,7 @@ const double calSaturationStrength = 0.3;
 ///   ↓ lower  = rotates less (0.6 = original Solstice behavior)
 /// ⚠️ changes older presets that touched Mixer Hue (they'll rotate further).
 /// default: 1.0   (original Solstice: 0.6)   [also on GPU: point_ops_post_denoise.frag]
-const double calMixerHueStrength = 0.8;
+const double calMixerHueStrength = 1.0;
 
 /// **Mixer → effective band width** — the "sharpness" of the gaussian that
 /// decides how much each band (Red, Orange…) influences a pixel of a given
@@ -496,7 +496,7 @@ const double calMixerLuminanceStrength = 0.5;
 ///   ↑ higher = stronger Sharpen at the same value
 ///   ↓ lower  = gentler
 /// default: 1.0
-const double calSharpenStrength = 2.0;
+const double calSharpenStrength = 1.0;
 
 /// **Sharpen → Detail** — how much the Detail slider injects the finest
 /// detail (vs. the coarser edges).
