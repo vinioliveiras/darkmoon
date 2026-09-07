@@ -9968,7 +9968,23 @@ class _ControlsPanelState extends State<_ControlsPanel>
       collapsed: _collapsed.contains(key),
       onTap: () => _toggleSection(key),
       enabled: enabled,
-      onEnabledChanged: onEnabledChanged,
+      // Switching a section off collapses it, and switching it back on
+      // opens it again. A section that is off does nothing, so leaving
+      // its sliders on screen is noise; and a section that is on but
+      // still collapsed reads as broken, since nothing you can see
+      // changed when you enabled it.
+      onEnabledChanged: onEnabledChanged == null
+          ? null
+          : (value) {
+              setState(() {
+                if (value) {
+                  _collapsed.remove(key);
+                } else {
+                  _collapsed.add(key);
+                }
+              });
+              onEnabledChanged(value);
+            },
       body: _CollapsibleSection(
         collapsed: _collapsed.contains(key),
         child: Column(
