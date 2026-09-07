@@ -90,8 +90,8 @@ void main() {
     // widget.
     for (final icon in [
       CupertinoIcons.slider_horizontal_3,
-      CupertinoIcons.dial,
-      CupertinoIcons.circle_grid_hex_fill,
+      CupertinoIcons.circle_righthalf_fill,
+      CupertinoIcons.circle_grid_hex,
       CupertinoIcons.fx,
     ]) {
       expect(

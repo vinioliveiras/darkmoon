@@ -9484,8 +9484,8 @@ class _ControlsPanelState extends State<_ControlsPanel>
 
   IconData _tabIcon(_ControlsTab tab) => switch (tab) {
     _ControlsTab.adjust => CupertinoIcons.slider_horizontal_3,
-    _ControlsTab.details => CupertinoIcons.dial,
-    _ControlsTab.colour => CupertinoIcons.circle_grid_hex_fill,
+    _ControlsTab.details => CupertinoIcons.circle_righthalf_fill,
+    _ControlsTab.colour => CupertinoIcons.circle_grid_hex,
     _ControlsTab.effects => CupertinoIcons.fx,
   };
 

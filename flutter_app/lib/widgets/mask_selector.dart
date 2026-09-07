@@ -66,7 +66,7 @@ class MaskSelector extends StatelessWidget {
       : masks.where((m) => m.id == activeId).firstOrNull;
 
   IconData _typeIcon(MaskType type) => switch (type) {
-    MaskType.linearGradient => CupertinoIcons.slider_horizontal_3,
+    MaskType.linearGradient => CupertinoIcons.arrowtriangle_down_fill,
     MaskType.radialGradient => CupertinoIcons.circle_fill,
     MaskType.brush => CupertinoIcons.paintbrush,
     MaskType.colorRange => CupertinoIcons.eyedropper,
