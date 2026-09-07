@@ -2331,6 +2331,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Nothing straight enough to level by. Straighten by hand.'**
   String get transformLevelNothingFound;
+
+  /// No description provided for @transformAutoButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Auto'**
+  String get transformAutoButton;
+
+  /// No description provided for @transformAutoTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Level the photo and correct its perspective in one step'**
+  String get transformAutoTooltip;
+
+  /// No description provided for @transformAutoNothingFound.
+  ///
+  /// In en, this message translates to:
+  /// **'Nothing straight enough to correct by. Adjust by hand.'**
+  String get transformAutoNothingFound;
 }
 
 class _AppLocalizationsDelegate

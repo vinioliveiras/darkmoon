@@ -1209,4 +1209,15 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get transformLevelNothingFound =>
       'Nothing straight enough to level by. Straighten by hand.';
+
+  @override
+  String get transformAutoButton => 'Auto';
+
+  @override
+  String get transformAutoTooltip =>
+      'Level the photo and correct its perspective in one step';
+
+  @override
+  String get transformAutoNothingFound =>
+      'Nothing straight enough to correct by. Adjust by hand.';
 }

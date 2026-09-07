@@ -373,5 +373,8 @@
   "settingsPanelLayoutHint": "As abas agrupam as secoes em Ajustes, Cor e Efeitos. As mascaras ficam fixas acima nos dois modos.",
   "controlsTabDetails": "Detalhes",
   "transformLevelButton": "Nivelar",
-  "transformLevelNothingFound": "Nada reto o bastante para nivelar. Endireite manualmente."
+  "transformLevelNothingFound": "Nada reto o bastante para nivelar. Endireite manualmente.",
+  "transformAutoButton": "Auto",
+  "transformAutoTooltip": "Nivela a foto e corrige a perspectiva de uma vez",
+  "transformAutoNothingFound": "Nada reto o bastante para corrigir. Ajuste manualmente."
 }

@@ -372,5 +372,8 @@
   "settingsPanelLayoutHint": "Registerkarten gruppieren die Abschnitte in Anpassen, Farbe und Effekte. Masken bleiben in beiden Faellen oben angeheftet.",
   "controlsTabDetails": "Details",
   "transformLevelButton": "Ausrichten",
-  "transformLevelNothingFound": "Nichts Gerades zum Ausrichten gefunden. Bitte manuell drehen."
+  "transformLevelNothingFound": "Nichts Gerades zum Ausrichten gefunden. Bitte manuell drehen.",
+  "transformAutoButton": "Auto",
+  "transformAutoTooltip": "Richtet das Foto aus und korrigiert die Perspektive in einem Schritt",
+  "transformAutoNothingFound": "Nichts Gerades zum Korrigieren gefunden. Bitte manuell anpassen."
 }

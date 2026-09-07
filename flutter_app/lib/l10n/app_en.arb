@@ -391,5 +391,8 @@
   "settingsPanelLayoutHint": "Tabs group the sections into Adjust, Colour and Effects. Masks stay pinned above them either way.",
   "controlsTabDetails": "Details",
   "transformLevelButton": "Level",
-  "transformLevelNothingFound": "Nothing straight enough to level by. Straighten by hand."
+  "transformLevelNothingFound": "Nothing straight enough to level by. Straighten by hand.",
+  "transformAutoButton": "Auto",
+  "transformAutoTooltip": "Level the photo and correct its perspective in one step",
+  "transformAutoNothingFound": "Nothing straight enough to correct by. Adjust by hand."
 }

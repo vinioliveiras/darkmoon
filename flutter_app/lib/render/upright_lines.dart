@@ -56,6 +56,19 @@ class DetectedLine {
     return rho / cos;
   }
 
+  /// Where this line crosses the vertical centre line of the image, in
+  /// pixels from the centre — or null when it runs too close to vertical
+  /// to cross it usefully. The mirror of [xAtCentre], for the horizontals.
+  double? get yAtCentre {
+    final theta = thetaDeg * math.pi / 180.0;
+    final sin = math.sin(theta);
+    if (sin.abs() < 1e-6) {
+      return null;
+    }
+    // x = 0 at the centre line, so y*sin(theta) = rho.
+    return rho / sin;
+  }
+
   @override
   String toString() =>
       'DetectedLine(theta=${thetaDeg.toStringAsFixed(1)}, '

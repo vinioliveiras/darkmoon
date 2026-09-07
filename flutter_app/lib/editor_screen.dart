@@ -67,6 +67,7 @@ import 'render/crop_transform.dart';
 import 'render/render_params.dart';
 import 'render/tone_curve.dart';
 import 'render/upright.dart';
+import 'render/upright_auto.dart';
 import 'render/white_balance.dart';
 import 'settings/app_settings.dart';
 import 'theme.dart';
@@ -1494,6 +1495,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// another isolate and takes a moment on a large preview, so the button
   /// has to say it is working rather than look like it ignored the click.
   bool _levelBusy = false;
+  bool _uprightBusy = false;
   ColorProfile? _pendingProfileDraft;
 
   /// True while the Straighten slider is actively being dragged (item 28)
@@ -5629,7 +5631,57 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
-  /// The neutral preview as luma, for [_levelPhoto].
+  /// Auto mode of the Upright set: levels the photo *and* corrects the
+  /// perspective its edges reveal, in one press.
+  ///
+  /// Shares [_levelSource] and the same isolate discipline as
+  /// [_levelPhoto]; what differs is that it writes three sliders instead
+  /// of one, and that it replaces rather than adds — pressing Auto twice
+  /// should land in the same place, not compound.
+  Future<void> _uprightAuto() async {
+    if (_uprightBusy) {
+      return;
+    }
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null) {
+      return;
+    }
+    setState(() => _uprightBusy = true);
+    try {
+      final source = await _levelSource(selected.path);
+      if (source == null || !mounted) {
+        return;
+      }
+      final correction = await compute(
+        uprightAutoForRequest,
+        UprightAutoRequest(source.luma, source.width, source.height),
+      );
+      if (!mounted) {
+        return;
+      }
+      if (correction == null) {
+        // Same judgement as Level: plenty of photographs have nothing
+        // straight in them, and guessing would be worse than saying so.
+        _showTransientStatus(
+          AppLocalizations.of(context)!.transformAutoNothingFound,
+        );
+        return;
+      }
+      _onCropTransformChangeEnd(
+        _cropTransform.copyWith(
+          straightenAngle: correction.straightenAngle,
+          vertical: correction.vertical,
+          horizontal: correction.horizontal,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _uprightBusy = false);
+      }
+    }
+  }
+
+  /// The neutral preview as luma, for [_levelPhoto] and [_uprightAuto].
   ///
   /// Box-averaged down rather than point-sampled. Nearest-neighbour would
   /// alias every edge into a staircase, and a staircased edge is exactly
@@ -7265,6 +7317,8 @@ class _EditorScreenState extends State<EditorScreen>
                             onCreateColorProfile: _openColorProfileEditor,
                             onLevel: _levelPhoto,
                             levelBusy: _levelBusy,
+                            onUpright: _uprightAuto,
+                            uprightBusy: _uprightBusy,
                             tabbedLayout: _settings.tabbedControlsPanel,
                             onImportColorProfile: _importColorProfile,
                             onEditColorProfile: _editSelectedColorProfile,
@@ -8889,6 +8943,8 @@ class _CropTransformPanel extends StatelessWidget {
     required this.onToggleGuidedMode,
     required this.onLevel,
     required this.levelBusy,
+    required this.onUpright,
+    required this.uprightBusy,
   });
 
   /// Measures the photo and straightens it — the Level mode of PENDING
@@ -8898,6 +8954,11 @@ class _CropTransformPanel extends StatelessWidget {
   /// True while that measurement is running, so the button can say so
   /// instead of looking like it did nothing.
   final bool levelBusy;
+
+  /// Measures the photo and both straightens and de-keystones it — the
+  /// Auto mode of the same set.
+  final VoidCallback onUpright;
+  final bool uprightBusy;
 
   final CropTransformParams params;
   final ValueChanged<CropTransformParams> onChanged;
@@ -8986,6 +9047,13 @@ class _CropTransformPanel extends StatelessWidget {
                 label: l10n.transformLevelButton,
                 tooltip: l10n.transformLevelButton,
                 onTap: levelBusy ? null : onLevel,
+              ),
+              // Auto is Level plus perspective, so it belongs in the same
+              // group and after it: the more it does, the further right.
+              _ToolbarSegment(
+                label: l10n.transformAutoButton,
+                tooltip: l10n.transformAutoTooltip,
+                onTap: uprightBusy ? null : onUpright,
               ),
             ],
           ),
@@ -9394,6 +9462,8 @@ class _ControlsPanel extends StatefulWidget {
     required this.onCreateColorProfile,
     required this.onLevel,
     required this.levelBusy,
+    required this.onUpright,
+    required this.uprightBusy,
     required this.tabbedLayout,
     required this.onImportColorProfile,
     required this.onEditColorProfile,
@@ -9504,6 +9574,11 @@ class _ControlsPanel extends StatefulWidget {
   /// button, and [levelBusy] while that runs.
   final VoidCallback onLevel;
   final bool levelBusy;
+
+  /// Fired by the Crop panel's Auto button — Level plus the perspective
+  /// correction — and [uprightBusy] while that runs.
+  final VoidCallback onUpright;
+  final bool uprightBusy;
   final VoidCallback onImportColorProfile;
   final VoidCallback onEditColorProfile;
   final VoidCallback onDuplicateColorProfile;
@@ -9693,6 +9768,8 @@ class _ControlsPanelState extends State<_ControlsPanel>
     onToggleGuidedMode: widget.onToggleGuidedMode,
     onLevel: widget.onLevel,
     levelBusy: widget.levelBusy,
+    onUpright: widget.onUpright,
+    uprightBusy: widget.uprightBusy,
   );
 
   Widget _buildControlsTabBar(AppLocalizations l10n) => TabBar(

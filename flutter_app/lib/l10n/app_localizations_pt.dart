@@ -1217,4 +1217,15 @@ class AppLocalizationsPt extends AppLocalizations {
   @override
   String get transformLevelNothingFound =>
       'Nada reto o bastante para nivelar. Endireite manualmente.';
+
+  @override
+  String get transformAutoButton => 'Auto';
+
+  @override
+  String get transformAutoTooltip =>
+      'Nivela a foto e corrige a perspectiva de uma vez';
+
+  @override
+  String get transformAutoNothingFound =>
+      'Nada reto o bastante para corrigir. Ajuste manualmente.';
 }

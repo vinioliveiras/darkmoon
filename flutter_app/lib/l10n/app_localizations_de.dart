@@ -1228,4 +1228,15 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get transformLevelNothingFound =>
       'Nichts Gerades zum Ausrichten gefunden. Bitte manuell drehen.';
+
+  @override
+  String get transformAutoButton => 'Auto';
+
+  @override
+  String get transformAutoTooltip =>
+      'Richtet das Foto aus und korrigiert die Perspektive in einem Schritt';
+
+  @override
+  String get transformAutoNothingFound =>
+      'Nichts Gerades zum Korrigieren gefunden. Bitte manuell anpassen.';
 }

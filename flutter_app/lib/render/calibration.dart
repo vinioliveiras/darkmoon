@@ -61,7 +61,7 @@ library;
 ///     values
 ///   ↓ lower  = default Amount (100%) renders gentler
 /// default: 0.3   (original/unset: 1.0 — Amount was a 1:1 pass-through)
-const double calGlobalAmountCompression = 0.35;
+const double calGlobalAmountCompression = 0.30;
 
 /// Per-slider override of [calGlobalAmountCompression] — a slider key
 /// present here (matching its `_SliderSpec` name in `editor_screen.dart`,
@@ -333,7 +333,7 @@ const double calTextureSigma = 3.5;
 ///   ↑ higher = stronger Texture     ↓ lower = weaker
 /// default: 3.0   (user raised to 2.0, then 2.3, then 2.7, then asked
 /// for more — 2026-09-02)
-const double calTextureStrength = 4.0;
+const double calTextureStrength = 3.0;
 
 /// **Clarity** — radius (in pixels) of the local contrast. Deliberately
 /// large (mid-range contrast, more like "definition").
@@ -569,3 +569,85 @@ const double calDenoiseLumaStrengthScale = 1.0;
 ///   ↓ lower  = more conservative
 /// default: 1.0
 const double calDenoiseChromaStrengthScale = 1.0;
+
+// ╔══════════════════════════════════════════════════════════════════════════╗
+// ║  UPRIGHT (Crop & Transform — Auto / Level)                                ║
+// ╚══════════════════════════════════════════════════════════════════════════╝
+//
+// These tune a MEASUREMENT, not a render stage: Auto reads the photo and
+// writes the Straighten/Vertical/Horizontal sliders, which the geometry
+// pass then applies exactly as if they had been dragged by hand. So
+// there is no GPU counterpart to keep in step here — the correction runs
+// in `applyCropTransform`, ahead of the colour pipeline and shared by
+// both paths.
+
+/// **Upright** — how far from vertical (or horizontal) an edge may lean
+/// and still be counted as part of that family.
+///   ↑ higher = takes in more edges, including ones that belong to
+///              nothing (a roofline read as a leaning wall)
+///   ↓ lower  = only near-perfect edges count, so steep perspectives
+///              stop being measurable at all
+/// default: 35
+const double calUprightMaxTiltDeg = 35.0;
+
+/// **Upright** — how far off the fitted trend an edge may sit before the
+/// second pass discards it, as a multiple of the median miss.
+///   ↑ higher = keeps stray edges, which drag the correction
+///   ↓ lower  = discards aggressively, and can throw away a real family
+/// default: 2.5
+const double calUprightOutlierCutoff = 2.5;
+
+/// **Upright** — how much of the frame the measured edges must span
+/// before their fan-out is believed, as a fraction of width/height.
+///   ↑ higher = only corrects when edges are found across the frame
+///   ↓ lower  = corrects from edges clustered in one place, which is
+///              extrapolation and swings wildly
+/// default: 0.25
+const double calUprightMinSpread = 0.25;
+
+/// **Upright** — corrections smaller than this (slider units) are left at
+/// zero, since they are within the measurement's own noise.
+///   ↑ higher = Auto ignores mild perspective
+///   ↓ lower  = Auto nudges photos that did not need it
+/// default: 2
+const double calUprightDeadZone = 2.0;
+
+/// **Upright** — how many candidate edges the detector may return.
+///   ↑ higher = more evidence, more time, more junk edges
+///   ↓ lower  = faster, but a busy photo may lose the real family
+/// default: 40
+const double calUprightMaxLines = 40;
+
+/// **Upright** — how strong an edge must be, relative to the strongest in
+/// the photo, to be a candidate at all.
+///   ↑ higher = only bold edges count
+///   ↓ lower  = faint edges join in, and with them their noise
+/// default: 0.2
+const double calUprightLineFloor = 0.2;
+
+/// **Upright** — slider units per unit of measured vertical fan-out.
+///
+/// Set by measurement, not taste: `upright_auto_calibration_test.dart`
+/// drives synthetic perspectives through the real geometry pass and
+/// bisects for the slider value that leaves no convergence behind.
+/// Across a five-fold range of perspective strength that value came back
+/// at 133-161 units of slider per unit of fan-out; this is the middle of
+/// it. The spread is real — the geometry pass anchors the bottom edge, so
+/// its response is not quite linear — and it costs about a tenth of the
+/// correction at the extremes, which is well inside what the eye reads as
+/// upright.
+///   ↑ higher = over-corrects, tipping verticals the other way
+///   ↓ lower  = leaves some convergence in
+/// default: 140 (measured)
+const double calUprightVerticalGain = 140.0;
+
+/// **Upright** — the same, for horizontal fan-out.
+///
+/// **Negative on purpose.** The two axes measure tilt against different
+/// references, so their fan-out comes out opposite in sign for the same
+/// physical perspective; the sign lives here rather than being hidden in
+/// the measurement. Flipping it would tip a photo further over instead of
+/// correcting it. Measured at -97 to -112 over the same range, which is
+/// tighter than the vertical axis manages.
+/// default: -101 (measured)
+const double calUprightHorizontalGain = -101.0;
