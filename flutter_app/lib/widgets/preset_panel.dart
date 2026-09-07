@@ -282,27 +282,40 @@ class _PresetRow extends StatelessWidget {
           padding: const EdgeInsets.only(left: 12, right: 4, top: 5, bottom: 5),
           child: Row(
             children: [
-              if (selectionMode)
-                Icon(
-                  selected
-                      ? CupertinoIcons.checkmark_circle_fill
-                      : CupertinoIcons.circle,
-                  size: 14,
-                  color: selected
-                      ? DarkmoonColors.accent
-                      : DarkmoonColors.textMuted,
-                )
-              else
-                Icon(
-                  // The checkmark is state, not identity: it replaces the
-                  // preset's own icon only while that preset is applied.
-                  applied ? CupertinoIcons.checkmark_alt : CupertinoIcons.film,
-                  size: 14,
-                  color: applied
-                      ? DarkmoonColors.accent
-                      : DarkmoonColors.textMuted,
+              // Fixed-width centred slot, the same idea as the trailing one
+              // below. An Icon sizes its box but not the glyph inside it,
+              // and these three glyphs do not share optical metrics — film
+              // is wider than checkmark_alt — so drawn straight into the
+              // row they sat at visibly different offsets and the column
+              // of icons read as ragged.
+              SizedBox(
+                width: 16,
+                child: Center(
+                  child: selectionMode
+                      ? Icon(
+                          selected
+                              ? CupertinoIcons.checkmark_circle_fill
+                              : CupertinoIcons.circle,
+                          size: 14,
+                          color: selected
+                              ? DarkmoonColors.accent
+                              : DarkmoonColors.textMuted,
+                        )
+                      : Icon(
+                          // The checkmark is state, not identity: it
+                          // replaces the preset's own icon only while that
+                          // preset is applied.
+                          applied
+                              ? CupertinoIcons.checkmark_alt
+                              : CupertinoIcons.film,
+                          size: 14,
+                          color: applied
+                              ? DarkmoonColors.accent
+                              : DarkmoonColors.textMuted,
+                        ),
                 ),
-              const SizedBox(width: 8),
+              ),
+              const SizedBox(width: 6),
               Expanded(
                 child: Text(
                   preset.name,
