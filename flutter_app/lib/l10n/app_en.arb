@@ -508,5 +508,7 @@
   "colorProfileEditLabel": "Edit",
   "colorProfileDuplicateLabel": "Duplicate",
   "colorProfileImportLabel": "Import...",
-  "colorProfileEyedropper": "Pick a colour from the photo"
+  "colorProfileEyedropper": "Pick a colour from the photo",
+  "colorProfilePreviewUsePhoto": "Use the current photo",
+  "colorProfilePreviewUseReference": "Use the reference chart"
 }

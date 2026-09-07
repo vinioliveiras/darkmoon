@@ -5495,20 +5495,78 @@ class _EditorScreenState extends State<EditorScreen>
     await _openColorProfileEditor(initial: draft, highlightHue: hue);
   }
 
+  /// The open photo as a small packed-RGB buffer, for the profile editor's
+  /// "current photo" preview source.
+  ///
+  /// Reads [_neutralPreviews], not the displayed render: the editor's
+  /// preview applies the profile and nothing else, so handing it a frame
+  /// that already carries the photo's exposure, curves and masks would
+  /// make it impossible to tell which part of what you see is the profile.
+  ///
+  /// Downscaled hard. The preview re-runs applyColorProfile on the CPU for
+  /// every frame of a slider drag, and a full-resolution buffer would turn
+  /// that into a stutter for detail nobody can see in a 400px-wide box.
+  Future<({Float32List rgb, int width, int height})?>
+  _profilePreviewSource() async {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    final neutral = selected == null ? null : _neutralPreviews[selected.path];
+    if (neutral == null) {
+      return null;
+    }
+    // Own a handle across the readback — a render landing mid-await would
+    // otherwise dispose this out from under us.
+    final image = neutral.clone();
+    final ByteData? bytes;
+    try {
+      bytes = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    } finally {
+      image.dispose();
+    }
+    if (bytes == null) {
+      return null;
+    }
+
+    const targetWidth = 384;
+    final scale = neutral.width <= targetWidth
+        ? 1
+        : (neutral.width / targetWidth).ceil();
+    final w = neutral.width ~/ scale;
+    final h = neutral.height ~/ scale;
+    if (w < 1 || h < 1) {
+      return null;
+    }
+    final rgba = bytes.buffer.asUint8List();
+    final rgb = Float32List(w * h * 3);
+    for (var y = 0; y < h; y++) {
+      for (var x = 0; x < w; x++) {
+        final src = ((y * scale) * neutral.width + x * scale) * 4;
+        final dst = (y * w + x) * 3;
+        rgb[dst] = rgba[src].toDouble();
+        rgb[dst + 1] = rgba[src + 1].toDouble();
+        rgb[dst + 2] = rgba[src + 2].toDouble();
+      }
+    }
+    return (rgb: rgb, width: w, height: h);
+  }
+
   /// Opens the colour profile editor, previewing on the current photo.
   Future<void> _openColorProfileEditor({
     ColorProfile? initial,
     double? highlightHue,
   }) async {
+    final photoPreview = await _profilePreviewSource();
+    if (!mounted) {
+      return;
+    }
     final existingNames = _userColorProfiles.values
         .map((profile) => profile.name)
         .toSet();
-    final result = await showDialog<ColorProfileEditorResult>(
+    // showAnimatedDialog with its default dimming barrier, exactly like
+    // Settings — user's call, 2026-09-07. The transparent barrier this had
+    // before existed so the canvas could serve as the live preview; the
+    // dialog carries its own preview now, so the canvas no longer has to.
+    final result = await showAnimatedDialog<ColorProfileEditorResult>(
       context: context,
-      // Not the usual dimming barrier: the photo around this dialog is the
-      // preview, and dimming it would misrepresent the colours being
-      // judged.
-      barrierColor: Colors.transparent,
       builder: (context) => ColorProfileEditorDialog(
         initial:
             initial ??
@@ -5520,10 +5578,14 @@ class _EditorScreenState extends State<EditorScreen>
               id: newColorProfileId(),
             ),
         highlightHue: highlightHue,
+        photoPreview: photoPreview,
         existingNames: existingNames,
+        // No render on the live stream any more. The dialog's own
+        // preview is what the user is watching, and the canvas behind a
+        // dimmed barrier is not worth a GPU pass per frame of a drag. The
+        // draft is still recorded so any render that does happen uses it.
         onDraftChanged: (draft) {
           setState(() => _draftColorProfile = draft);
-          _scheduleRender(live: true);
         },
         onDraftSettled: (draft) {
           setState(() => _draftColorProfile = draft);

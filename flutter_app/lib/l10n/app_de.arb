@@ -369,5 +369,7 @@
   "colorProfileEditLabel": "Bearbeiten",
   "colorProfileDuplicateLabel": "Duplizieren",
   "colorProfileImportLabel": "Importieren...",
-  "colorProfileEyedropper": "Eine Farbe aus dem Foto waehlen"
+  "colorProfileEyedropper": "Eine Farbe aus dem Foto waehlen",
+  "colorProfilePreviewUsePhoto": "Aktuelles Foto verwenden",
+  "colorProfilePreviewUseReference": "Referenztafel verwenden"
 }

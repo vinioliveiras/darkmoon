@@ -2277,6 +2277,18 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pick a colour from the photo'**
   String get colorProfileEyedropper;
+
+  /// No description provided for @colorProfilePreviewUsePhoto.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the current photo'**
+  String get colorProfilePreviewUsePhoto;
+
+  /// No description provided for @colorProfilePreviewUseReference.
+  ///
+  /// In en, this message translates to:
+  /// **'Use the reference chart'**
+  String get colorProfilePreviewUseReference;
 }
 
 class _AppLocalizationsDelegate

@@ -1199,4 +1199,10 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get colorProfileEyedropper => 'Eine Farbe aus dem Foto waehlen';
+
+  @override
+  String get colorProfilePreviewUsePhoto => 'Aktuelles Foto verwenden';
+
+  @override
+  String get colorProfilePreviewUseReference => 'Referenztafel verwenden';
 }

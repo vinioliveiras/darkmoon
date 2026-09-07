@@ -19,6 +19,18 @@ void main() {
     id: id,
   );
 
+  /// The default 800x600 test surface squeezes an AlertDialog this tall
+  /// until its tab area collapses and the sliders under test are never
+  /// built — a failure that looks like a missing widget and is really a
+  /// window size. Give every case room.
+  setUp(() {
+    final view =
+        TestWidgetsFlutterBinding.instance.platformDispatcher.implicitView!;
+    view.physicalSize = const Size(1400, 1200);
+    view.devicePixelRatio = 1.0;
+    addTearDown(view.reset);
+  });
+
   Future<List<ColorProfile>> pumpDialog(
     WidgetTester tester, {
     ColorProfile? initial,

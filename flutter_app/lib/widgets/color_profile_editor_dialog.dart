@@ -1,31 +1,18 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../render/color_profile.dart';
+import '../render/color_profile_reference.dart';
+import '../render/hsl.dart';
 import '../render/tone_curve.dart';
 import '../theme.dart';
+import 'color_profile_preview.dart';
 import 'dialog_chrome.dart';
 import 'slider_row.dart';
 import 'tone_curve_editor.dart';
 
-/// Creates or edits a user-authored "darkmoon Color" profile.
-///
-/// There is no preview widget inside this dialog. [onDraftChanged] pushes
-/// the work-in-progress profile into the editor, which renders it through
-/// the same GPU pipeline everything else uses, so what you see while
-/// editing is the real thing rather than an approximation that could
-/// disagree with the saved result.
-///
-/// Centred, like every other dialog in the app — user's call, 2026-09-07,
-/// after seeing it right-aligned. Right alignment kept the whole canvas
-/// visible while editing; centring trades some of that for consistency.
-/// The barrier stays transparent so what remains visible around the
-/// dialog still updates live, and dimming the photo would misrepresent
-/// the colours being judged.
-///
-/// [onDraftChanged] fires continuously (live, low-res preview) and
-/// [onDraftSettled] once a gesture ends (full-quality), matching the
-/// convention every slider in this app already follows.
 /// Why the editor closed.
 ///
 /// Picking a colour needs the photo, and the photo is behind a modal
@@ -45,6 +32,25 @@ class ColorProfileEditorResult {
   final bool pickHue;
 }
 
+/// Creates or edits a user-authored "darkmoon Color" profile.
+///
+/// Centred, animated and over a dimming barrier, like every other dialog
+/// in the app — user's call, 2026-09-07.
+///
+/// The preview lives inside the dialog ([ColorProfilePreview]) rather than
+/// being the canvas behind it. That is what the centring and the dimming
+/// made necessary, and it turned out better: it runs `applyColorProfile`
+/// and nothing else, so the profile's effect is isolated from the photo's
+/// own exposure, curves and masks. It opens on a generated reference chart
+/// carrying every hue bin, the memory colours and a neutral ramp — see
+/// `buildReferenceChart` for why a photograph is the weaker choice here —
+/// and switches to the open photo on request.
+///
+/// [onDraftChanged] and [onDraftSettled] report the work in progress to
+/// the editor, which records it so the photo behind is already correct the
+/// moment the dialog closes. Neither drives a render any more: the canvas
+/// sits behind a dimming barrier while this is open, and a GPU pass per
+/// frame of a drag for something nobody can see is pure waste.
 class ColorProfileEditorDialog extends StatefulWidget {
   const ColorProfileEditorDialog({
     super.key,
@@ -53,7 +59,14 @@ class ColorProfileEditorDialog extends StatefulWidget {
     required this.onDraftChanged,
     required this.onDraftSettled,
     this.highlightHue,
+    this.photoPreview,
   });
+
+  /// The open photo, downscaled to packed RGB (0..255, three floats per
+  /// pixel) for the preview's "current photo" source. Null when no photo
+  /// is open, which is the one case where only the reference chart is
+  /// offered.
+  final ({Float32List rgb, int width, int height})? photoPreview;
 
   /// A hue in degrees just sampled from the photo. The dialog opens on the
   /// Colour tab with the range (or bin) that owns it marked, which is the
@@ -121,6 +134,15 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
   late List<double> _lumMul = List<double>.of(widget.initial.lumMul);
 
   bool _advanced = false;
+
+  /// Which image the preview shows. Opens on the chart: it answers "what
+  /// does this profile do", where the photo answers "what does it do to
+  /// this one".
+  bool _previewUsesPhoto = false;
+
+  /// Built once. Regenerating it per frame would be wasted work — it never
+  /// changes, only what is applied to it does.
+  late final Float32List _referenceChart = buildReferenceChart();
 
   /// Which range or bin the last sampled colour landed in, or null.
   late final int? _highlightBin = widget.highlightHue == null
@@ -238,6 +260,44 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
     }
   }
 
+  /// The hue, in degrees, a bin sits at.
+  static double _binHue(int bin) => bin * (360.0 / colorProfileBins);
+
+  static Color _swatch(double hue, double sat, double value) {
+    final (r, g, b) = hsvToRgb(hue % 360.0, sat, value);
+    return Color.fromARGB(
+      255,
+      (r * 255).round().clamp(0, 255),
+      (g * 255).round().clamp(0, 255),
+      (b * 255).round().clamp(0, 255),
+    );
+  }
+
+  /// Track gradients showing what each slider actually does at this hue,
+  /// the way White Balance's own sliders show warm-to-cool. Without them
+  /// three identically-grey tracks per range give no clue which is which,
+  /// and the label is the only thing distinguishing them.
+  ///
+  /// Seven stops: enough that the ramp reads as continuous, few enough to
+  /// stay cheap to rebuild on every frame of a drag.
+  static const _stops = 7;
+
+  static List<Color> _hueTrack(double hue) => [
+    for (var i = 0; i < _stops; i++)
+      // Matches the slider's own -30..+30 degree range, so the colour
+      // under the handle is the colour the handle produces.
+      _swatch(hue - 30 + 60 * i / (_stops - 1), 0.75, 0.85),
+  ];
+
+  static List<Color> _satTrack(double hue) => [
+    for (var i = 0; i < _stops; i++) _swatch(hue, i / (_stops - 1), 0.85),
+  ];
+
+  static List<Color> _lumTrack(double hue) => [
+    for (var i = 0; i < _stops; i++)
+      _swatch(hue, 0.65, 0.25 + 0.7 * i / (_stops - 1)),
+  ];
+
   double _rangeValue(List<double> table, int firstBin) =>
       table[(firstBin + _binsPerRange ~/ 2) % colorProfileBins];
 
@@ -326,6 +386,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
       30,
       0,
       (v) => _setRange(_hueShift, range.firstBin, v),
+      track: _hueTrack(_binHue(range.firstBin + _binsPerRange ~/ 2)),
     ),
     _slider(
       l10n.colorProfileEditorSaturation,
@@ -334,6 +395,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
       100,
       0,
       (v) => _setRange(_satMul, range.firstBin, 1 + v / 100),
+      track: _satTrack(_binHue(range.firstBin + _binsPerRange ~/ 2)),
     ),
     _slider(
       l10n.colorProfileEditorLuminance,
@@ -342,6 +404,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
       100,
       0,
       (v) => _setRange(_lumMul, range.firstBin, 1 + v / 100),
+      track: _lumTrack(_binHue(range.firstBin + _binsPerRange ~/ 2)),
     ),
   ];
 
@@ -360,9 +423,15 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
         ),
       ),
     ),
-    _slider(l10n.colorProfileEditorHue, _hueShift[bin], -30, 30, 0, (v) {
-      _hueShift[bin] = v;
-    }),
+    _slider(
+      l10n.colorProfileEditorHue,
+      _hueShift[bin],
+      -30,
+      30,
+      0,
+      (v) => _hueShift[bin] = v,
+      track: _hueTrack(_binHue(bin)),
+    ),
     _slider(
       l10n.colorProfileEditorSaturation,
       (_satMul[bin] - 1) * 100,
@@ -370,6 +439,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
       100,
       0,
       (v) => _satMul[bin] = 1 + v / 100,
+      track: _satTrack(_binHue(bin)),
     ),
     _slider(
       l10n.colorProfileEditorLuminance,
@@ -378,6 +448,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
       100,
       0,
       (v) => _lumMul[bin] = 1 + v / 100,
+      track: _lumTrack(_binHue(bin)),
     ),
   ];
 
@@ -387,8 +458,9 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
     double min,
     double max,
     double defaultValue,
-    void Function(double) write,
-  ) => Padding(
+    void Function(double) write, {
+    List<Color>? track,
+  }) => Padding(
     padding: const EdgeInsets.only(bottom: 8),
     child: SliderRow(
       name: name,
@@ -396,6 +468,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
       max: max,
       value: value.clamp(min, max),
       defaultValue: defaultValue,
+      trackColors: track,
       onChanged: (v) {
         setState(() => write(v));
         _changed();
@@ -482,6 +555,35 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
     );
   }
 
+  Widget _buildPreview(AppLocalizations l10n) {
+    final photo = widget.photoPreview;
+    final usePhoto = _previewUsesPhoto && photo != null;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ColorProfilePreview(
+          source: usePhoto ? photo.rgb : _referenceChart,
+          sourceWidth: usePhoto ? photo.width : referenceChartWidth,
+          sourceHeight: usePhoto ? photo.height : referenceChartHeight,
+          profile: _draft,
+        ),
+        if (photo != null)
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: () =>
+                  setState(() => _previewUsesPhoto = !_previewUsesPhoto),
+              child: Text(
+                _previewUsesPhoto
+                    ? l10n.colorProfilePreviewUseReference
+                    : l10n.colorProfilePreviewUsePhoto,
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -496,8 +598,13 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
         closeTooltip: l10n.closeButton,
       ),
       content: SizedBox(
-        width: 420,
-        height: 520,
+        width: 440,
+        // Taller than Settings' 460 because the preview sits above the
+        // tabs and the Colour tab holds three sliders per range. At 520 —
+        // what this was before the preview arrived — the tab area was
+        // squeezed to the point that the first range's sliders fell off
+        // the bottom.
+        height: 620,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -520,7 +627,9 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
                 Tab(text: l10n.colorProfileEditorTabBase),
               ],
             ),
-            const SizedBox(height: 14),
+            const SizedBox(height: 12),
+            _buildPreview(l10n),
+            const SizedBox(height: 12),
             Expanded(
               child: TabBarView(
                 controller: _tabController,
