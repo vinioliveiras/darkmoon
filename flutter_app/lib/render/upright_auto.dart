@@ -25,6 +25,7 @@ class ConvergenceFit {
     required this.slope,
     required this.spread,
     required this.count,
+    required this.scatter,
   });
 
   /// Change in the lines' tilt (as a tangent) per pixel of position
@@ -42,6 +43,14 @@ class ConvergenceFit {
   final double spread;
 
   final int count;
+
+  /// How far a typical line's tilt sits from the fitted trend, in the same
+  /// tangent units as the values themselves.
+  ///
+  /// This is what tells a family from a coincidence. Three lines always
+  /// have a slope through them; whether that slope means anything depends
+  /// on whether the rest of the lines agree, and this is that agreement.
+  final double scatter;
 }
 
 /// Signed tilt away from vertical, degrees in (-90, 90].
@@ -65,20 +74,32 @@ double _tiltFromHorizontal(double angleDeg) {
 /// Fits how [lines] fan out — the near-vertical ones when [verticals] is
 /// true, the near-horizontal ones otherwise. Null when there is not
 /// enough evidence to fit anything.
+///
+/// The slope is a Theil-Sen estimate: the median of the slope through
+/// every pair of lines. An earlier version used least squares with one
+/// reweighting pass, on the reasoning that a full robust estimator was
+/// more machinery than a handful of lines could justify. That was wrong,
+/// and a photograph of a hillside proved it — a terrace of houses climbing
+/// a slope puts a dozen genuinely diagonal rooflines through the tilt
+/// gate, they are not outliers against the true horizontals but a rival
+/// population, and least squares splits the difference between the two.
+/// Reweighting cannot help: with that many of them the median residual
+/// itself is inflated, so nothing crosses the cutoff. A median of pairwise
+/// slopes has no such failure — it ignores a minority outright and, when
+/// there are two populations of comparable size, lands on neither rather
+/// than between them, which is what [ConvergenceFit.scatter] then reports.
 ConvergenceFit? fitConvergence(
   List<DetectedLine> lines, {
   required bool verticals,
 }) {
   final positions = <double>[];
   final values = <double>[];
-  final weights = <double>[];
   for (final line in lines) {
     final tilt = verticals
         ? _tiltFromVertical(line.angleDeg)
         : _tiltFromHorizontal(line.angleDeg);
     // A line tilted further than this is not a member of the family; it
-    // is some other edge in the photo, and letting it into the fit drags
-    // the slope toward whatever it happens to be doing.
+    // is some other edge in the photo.
     if (tilt.abs() > calUprightMaxTiltDeg) {
       continue;
     }
@@ -88,62 +109,9 @@ ConvergenceFit? fitConvergence(
     }
     positions.add(position);
     values.add(math.tan(tilt * math.pi / 180.0));
-    weights.add(line.strength);
   }
   if (positions.length < 3) {
     return null;
-  }
-
-  ({double slope, double intercept})? solve(List<double> w) {
-    var sw = 0.0;
-    var sx = 0.0;
-    var sy = 0.0;
-    var sxx = 0.0;
-    var sxy = 0.0;
-    for (var i = 0; i < positions.length; i++) {
-      final weight = w[i];
-      sw += weight;
-      sx += weight * positions[i];
-      sy += weight * values[i];
-      sxx += weight * positions[i] * positions[i];
-      sxy += weight * positions[i] * values[i];
-    }
-    if (sw <= 0) {
-      return null;
-    }
-    final denominator = sxx - sx * sx / sw;
-    if (denominator.abs() < 1e-9) {
-      return null;
-    }
-    final slope = (sxy - sx * sy / sw) / denominator;
-    return (slope: slope, intercept: (sy - slope * sx) / sw);
-  }
-
-  var fit = solve(weights);
-  if (fit == null) {
-    return null;
-  }
-
-  // One reweighting pass. A photo usually holds a few strong edges that
-  // belong to no family at all — a diagonal roof, a guy wire — and they
-  // pass the tilt gate while sitting far off the trend. Dropping whatever
-  // the first fit could not explain is enough to be rid of them; a full
-  // robust regression is more machinery than the handful of lines here
-  // can justify.
-  final residuals = <double>[
-    for (var i = 0; i < positions.length; i++)
-      (values[i] - (fit.intercept + fit.slope * positions[i])).abs(),
-  ];
-  final sorted = [...residuals]..sort();
-  final median = sorted[sorted.length ~/ 2];
-  if (median > 0) {
-    final kept = <double>[
-      for (var i = 0; i < positions.length; i++)
-        residuals[i] > median * calUprightOutlierCutoff ? 0.0 : weights[i],
-    ];
-    if (kept.where((w) => w > 0).length >= 3) {
-      fit = solve(kept) ?? fit;
-    }
   }
 
   var lowest = double.infinity;
@@ -152,10 +120,52 @@ ConvergenceFit? fitConvergence(
     lowest = math.min(lowest, position);
     highest = math.max(highest, position);
   }
+  final spread = highest - lowest;
+  if (spread <= 0) {
+    return null;
+  }
+
+  double median(List<double> of) {
+    final sorted = [...of]..sort();
+    final middle = sorted.length ~/ 2;
+    return sorted.length.isOdd
+        ? sorted[middle]
+        : (sorted[middle - 1] + sorted[middle]) / 2;
+  }
+
+  // Pairs too close together in position divide by almost nothing and
+  // return a slope of almost anything, so they are left out rather than
+  // allowed to widen the median's tails.
+  final minSeparation = spread * calUprightMinPairSeparation;
+  final pairSlopes = <double>[];
+  for (var i = 0; i < positions.length; i++) {
+    for (var j = i + 1; j < positions.length; j++) {
+      final run = positions[j] - positions[i];
+      if (run.abs() < minSeparation) {
+        continue;
+      }
+      pairSlopes.add((values[j] - values[i]) / run);
+    }
+  }
+  if (pairSlopes.length < 3) {
+    return null;
+  }
+
+  final slope = median(pairSlopes);
+  final intercept = median([
+    for (var i = 0; i < positions.length; i++)
+      values[i] - slope * positions[i],
+  ]);
+  final scatter = median([
+    for (var i = 0; i < positions.length; i++)
+      (values[i] - (intercept + slope * positions[i])).abs(),
+  ]);
+
   return ConvergenceFit(
-    slope: fit.slope,
-    spread: highest - lowest,
+    slope: slope,
+    spread: spread,
     count: positions.length,
+    scatter: scatter,
   );
 }
 
@@ -187,20 +197,39 @@ double _correctionFrom(ConvergenceFit? fit, double extent, double gain) {
   if (fit == null || fit.spread < extent * calUprightMinSpread) {
     return 0;
   }
+  // Three lines are enough to have a slope and not enough to know whether
+  // it means anything.
+  if (fit.count < calUprightMinLines) {
+    return 0;
+  }
   // The slope is per pixel, so scaling by the frame's own extent is what
   // makes the number mean the same thing on a preview and on a full-size
   // frame. Without it Auto would correct a downscaled photo harder than
   // the same photo at full resolution.
-  final correction = fit.slope * extent * gain;
+  final fanOut = fit.slope * extent;
+  // The trend has to be bigger than the disagreement about it. Without
+  // this the fit always answers, and on a photo whose edges are not a
+  // family at all it answers with noise — which is how a straight-on
+  // façade came back asking for 26 units of horizontal keystone.
+  if (fanOut.abs() < fit.scatter * calUprightMinAgreement) {
+    return 0;
+  }
+  final correction = fanOut * gain;
   if (correction.abs() < calUprightDeadZone) {
     return 0;
   }
   return correction.clamp(-100.0, 100.0);
 }
 
-/// Measures [luma] and returns the Upright Auto correction, or null when
-/// the photo holds nothing straight enough to go on.
-UprightCorrection? uprightAutoFor(Uint8List luma, int width, int height) {
+/// Both axes as the geometry measures them, before Auto decides which of
+/// them it is willing to act on.
+///
+/// Separate from [uprightAutoFor] because the two questions are
+/// different: this one is "what do the edges say", which is a matter of
+/// measurement, and Auto's is "which of that can be believed", which is a
+/// matter of judgement. The Vertical and Full modes still to come will
+/// want the measurement without Auto's judgement.
+UprightCorrection? uprightMeasureFor(Uint8List luma, int width, int height) {
   if (width < 32 || height < 32) {
     return null;
   }
@@ -231,10 +260,54 @@ UprightCorrection? uprightAutoFor(Uint8List luma, int width, int height) {
   // angles that matter for levelling. See upright.dart.
   final straighten = levelRotationFor(luma, width, height) ?? 0.0;
 
-  final correction = UprightCorrection(
+  return UprightCorrection(
     straightenAngle: straighten,
     vertical: vertical,
     horizontal: horizontal,
+  );
+}
+
+/// Measures [luma] and returns the Upright Auto correction, or null when
+/// the photo holds nothing straight enough to go on.
+///
+/// **Auto never applies the horizontal axis**, and that is a deliberate
+/// retreat from an earlier version that did.
+///
+/// The two axes are not equally trustworthy, because the world is not
+/// symmetric. A building's verticals are vertical by construction, so
+/// verticals that fan out across a frame are nearly always perspective.
+/// Horizontals are not like that at all: hillsides, rooflines climbing a
+/// slope, riverbanks and shorelines are all genuinely tilted, and a
+/// terrace of houses up a hill puts a whole population of them in the
+/// frame with the level water below.
+///
+/// The trap is that such a photo does not merely confuse the measurement,
+/// it satisfies it. Roofs high in the frame, water low, tilt varying
+/// smoothly between them: that is a textbook converging family, and it
+/// was measured fitting one with a scatter of 0.018 against a fan-out of
+/// 0.63 — better agreement than a real, mild perspective manages. No
+/// threshold on strength, count, spread or agreement separates the two,
+/// because as geometry they are the same thing. Only knowing that one set
+/// of edges is a roof and the other is a wall would, and lines carry no
+/// such thing.
+///
+/// So the choice is which way to be wrong. A photo needing horizontal
+/// keystone is uncommon; a photo containing something sloped is not. Auto
+/// declining to touch it costs the rare case a slider drag, and applying
+/// it costs the common case a visibly skewed photo — which is exactly
+/// what a straight-on façade with a hill behind it got: 26 units of
+/// horizontal keystone it did not want.
+///
+/// The measurement stays, tested and calibrated, in [uprightMeasureFor].
+UprightCorrection? uprightAutoFor(Uint8List luma, int width, int height) {
+  final measured = uprightMeasureFor(luma, width, height);
+  if (measured == null) {
+    return null;
+  }
+  final correction = UprightCorrection(
+    straightenAngle: measured.straightenAngle,
+    vertical: measured.vertical,
+    horizontal: 0,
   );
   return correction.isEmpty ? null : correction;
 }

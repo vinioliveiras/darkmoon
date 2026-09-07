@@ -70,6 +70,37 @@ Uint8List _converging({
   return rgb;
 }
 
+/// Draws lines given as (tilt from horizontal in degrees, where the line
+/// crosses the vertical centre line) — the natural way to describe a
+/// scene's horizontals, as against [_converging]'s vanishing point.
+Uint8List _tilted(List<(double, double)> lines) {
+  final rgb = Uint8List(_w * _h * 3);
+  for (final (tilt, y0) in lines) {
+    final a = tilt * math.pi / 180.0;
+    final nx = -math.sin(a);
+    final ny = math.cos(a);
+    for (var y = 0; y < _h; y++) {
+      for (var x = 0; x < _w; x++) {
+        final px = x - _w / 2;
+        final py = y - _h / 2;
+        final distance = (px * nx + (py - y0) * ny).abs();
+        final coverage = ((4.0 - distance) / 3.0).clamp(0.0, 1.0);
+        if (coverage <= 0) {
+          continue;
+        }
+        final value = (coverage * 255).round();
+        final i = (y * _w + x) * 3;
+        if (value > rgb[i]) {
+          rgb[i] = value;
+          rgb[i + 1] = value;
+          rgb[i + 2] = value;
+        }
+      }
+    }
+  }
+  return rgb;
+}
+
 Uint8List _luma(Uint8List rgb, int width, int height) {
   final out = Uint8List(width * height);
   for (var i = 0; i < width * height; i++) {
@@ -214,7 +245,10 @@ void main() {
       }
     }
 
-    final correction = uprightAutoFor(_luma(horizontal, _w, _h), _w, _h)!;
+    // uprightMeasureFor, not uprightAutoFor: Auto declines this axis, for
+    // reasons documented on it. The gain still has to be right, because
+    // the measurement is what the Vertical and Full modes will use.
+    final correction = uprightMeasureFor(_luma(horizontal, _w, _h), _w, _h)!;
     final corrected = _apply(horizontal, horizontal: correction.horizontal);
     final after = _fanOut(
       corrected.rgb,
@@ -251,6 +285,57 @@ void main() {
       correction?.vertical ?? 0,
       0,
       reason: 'parallel verticals must not be keystoned',
+    );
+  });
+
+  test('Auto declines the horizontal axis, however clear it looks', () {
+    // The measurement sees it plainly...
+    final measured = uprightMeasureFor(_luma(horizontal, _w, _h), _w, _h)!;
+    expect(measured.horizontal.abs(), greaterThan(calUprightDeadZone));
+
+    // ...and Auto still will not act on it. Not caution about weak
+    // evidence — the evidence here is perfect. It is that a hillside
+    // produces evidence just as perfect, and geometry cannot tell the
+    // two apart. See uprightAutoFor.
+    final auto = uprightAutoFor(_luma(horizontal, _w, _h), _w, _h);
+    expect(auto?.horizontal ?? 0, 0);
+  });
+
+  test('a hillside is what makes the horizontal axis untrustworthy', () {
+    // A terrace of roofs climbing a slope, with level water below: roofs
+    // high in the frame, waterline low, tilt varying smoothly between.
+    // Geometrically this IS a converging family, and nothing about it
+    // says "these are roofs".
+    final hillside = _tilted(const [
+      (1.0, 120.0),
+      (-1.0, 90.0),
+      (2.0, 60.0),
+      (18.0, -80.0),
+      (22.0, -40.0),
+      (15.0, -60.0),
+      (20.0, -20.0),
+    ]);
+    final lines = detectLines(
+      _luma(hillside, _w, _h),
+      _w,
+      _h,
+      maxLines: calUprightMaxLines.round(),
+      minStrength: calUprightLineFloor,
+    );
+    final fit = fitConvergence(lines, verticals: false)!;
+
+    expect(
+      (fit.slope * _h).abs(),
+      greaterThan(fit.scatter * calUprightMinAgreement),
+      reason:
+          'this is the point: the agreement gate passes it comfortably, so '
+          'no amount of tightening that gate would have saved the photo '
+          'this was written for',
+    );
+    expect(
+      uprightAutoFor(_luma(hillside, _w, _h), _w, _h)?.horizontal ?? 0,
+      0,
+      reason: 'only declining the axis outright does',
     );
   });
 }

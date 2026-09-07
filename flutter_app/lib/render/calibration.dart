@@ -590,12 +590,34 @@ const double calDenoiseChromaStrengthScale = 1.0;
 /// default: 35
 const double calUprightMaxTiltDeg = 35.0;
 
-/// **Upright** — how far off the fitted trend an edge may sit before the
-/// second pass discards it, as a multiple of the median miss.
-///   ↑ higher = keeps stray edges, which drag the correction
-///   ↓ lower  = discards aggressively, and can throw away a real family
-/// default: 2.5
-const double calUprightOutlierCutoff = 2.5;
+/// **Upright** — how much the measured fan-out must exceed the edges'
+/// disagreement about it before a correction is applied at all.
+///
+/// The single most important number here. Any three lines have a slope
+/// through them; whether it means anything depends on whether the rest
+/// agree. Without this gate Auto always answers, and on a photo whose
+/// edges are not one family it answers with noise.
+///   ↑ higher = only corrects obvious, agreeing perspectives
+///   ↓ lower  = corrects more photos, and gets more of them wrong
+/// default: 2
+const double calUprightMinAgreement = 2.0;
+
+/// **Upright** — how many edges of a family are needed before its slope
+/// is trusted.
+///   ↑ higher = only corrects photos with plenty of structure
+///   ↓ lower  = corrects from very little evidence
+/// default: 4
+const int calUprightMinLines = 4;
+
+/// **Upright** — how far apart two edges must sit, as a fraction of how
+/// far the family spans, for the slope through them to count.
+///
+/// A pair almost on top of each other divides by almost nothing and
+/// returns a slope of almost anything.
+///   ↑ higher = fewer, steadier pairs
+///   ↓ lower  = more pairs, wilder tails
+/// default: 0.15
+const double calUprightMinPairSeparation = 0.15;
 
 /// **Upright** — how much of the frame the measured edges must span
 /// before their fan-out is believed, as a fraction of width/height.
