@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -555,16 +556,54 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
     );
   }
 
+  Widget _previewCaption(String text) => Padding(
+    padding: const EdgeInsets.only(bottom: 4),
+    child: Text(
+      text,
+      style: Theme.of(
+        context,
+      ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
+    ),
+  );
+
+  /// The left column: the source untouched, and the same source with the
+  /// profile applied directly beneath it.
+  ///
+  /// Stacked rather than side by side, and in this order, because the eye
+  /// compares vertically-adjacent edges far better than it compares two
+  /// images separated by a gutter — and because a hue shift of a few
+  /// degrees is invisible unless you have the original immediately next to
+  /// it to compare against.
+  ///
+  /// "Before" is [ColorProfilePreview] with the identity profile rather
+  /// than a separate straight-to-screen path: applyColorProfile returns
+  /// immediately for an identity, so it is the same pixels, and using one
+  /// widget means the two panes cannot end up scaled or decoded
+  /// differently and quietly misrepresent the difference.
   Widget _buildPreview(AppLocalizations l10n) {
     final photo = widget.photoPreview;
     final usePhoto = _previewUsesPhoto && photo != null;
+    final source = usePhoto ? photo.rgb : _referenceChart;
+    final width = usePhoto ? photo.width : referenceChartWidth;
+    final height = usePhoto ? photo.height : referenceChartHeight;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
+      mainAxisSize: MainAxisSize.min,
       children: [
+        _previewCaption(l10n.beforeLabel),
         ColorProfilePreview(
-          source: usePhoto ? photo.rgb : _referenceChart,
-          sourceWidth: usePhoto ? photo.width : referenceChartWidth,
-          sourceHeight: usePhoto ? photo.height : referenceChartHeight,
+          source: source,
+          sourceWidth: width,
+          sourceHeight: height,
+          profile: identityColorProfile,
+        ),
+        const SizedBox(height: 10),
+        _previewCaption(l10n.afterLabel),
+        ColorProfilePreview(
+          source: source,
+          sourceWidth: width,
+          sourceHeight: height,
           profile: _draft,
         ),
         if (photo != null)
@@ -587,6 +626,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final media = MediaQuery.sizeOf(context);
     final name = _nameController.text.trim();
     return AlertDialog(
       backgroundColor: DarkmoonColors.dialogBackground,
@@ -598,45 +638,62 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
         closeTooltip: l10n.closeButton,
       ),
       content: SizedBox(
-        width: 440,
-        // Taller than Settings' 460 because the preview sits above the
-        // tabs and the Colour tab holds three sliders per range. At 520 —
-        // what this was before the preview arrived — the tab area was
-        // squeezed to the point that the first range's sliders fell off
-        // the bottom.
-        height: 620,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
+        // Two columns: the before/after pair on the left, the controls on
+        // the right. Wider than the app's other dialogs by necessity — the
+        // point is having the comparison and the control that drives it on
+        // screen at the same time, which a single column could not do
+        // without pushing one of them off the bottom.
+        // Clamped to what the window can actually give: an AlertDialog
+        // does not shrink a fixed-size child, it overflows, and darkmoon
+        // is perfectly usable in a small window. Below the threshold the
+        // preview column narrows first, since the controls have a floor
+        // under which the sliders stop being usable.
+        width: math.min(800.0, media.width - 96),
+        height: math.min(620.0, media.height - 160),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TabBar(
-              controller: _tabController,
-              labelColor: DarkmoonColors.textPrimary,
-              unselectedLabelColor: DarkmoonColors.textMuted,
-              indicatorColor: DarkmoonColors.accent,
-              indicatorSize: TabBarIndicatorSize.label,
-              dividerColor: DarkmoonColors.divider,
-              overlayColor: const WidgetStatePropertyAll(Colors.transparent),
-              labelStyle: const TextStyle(
-                fontSize: 12.5,
-                fontWeight: FontWeight.w600,
-              ),
-              unselectedLabelStyle: const TextStyle(fontSize: 12.5),
-              tabs: [
-                Tab(text: l10n.colorProfileEditorTabTone),
-                Tab(text: l10n.colorProfileEditorTabColor),
-                Tab(text: l10n.colorProfileEditorTabBase),
-              ],
+            SizedBox(
+              width: math.max(200.0, math.min(320.0, media.width - 96 - 460)),
+              child: SingleChildScrollView(child: _buildPreview(l10n)),
             ),
-            const SizedBox(height: 12),
-            _buildPreview(l10n),
-            const SizedBox(height: 12),
+            const SizedBox(width: 20),
             Expanded(
-              child: TabBarView(
-                controller: _tabController,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _buildToneTab(l10n),
-                  _buildColorTab(l10n),
-                  _buildBaseTab(l10n),
+                  TabBar(
+                    controller: _tabController,
+                    labelColor: DarkmoonColors.textPrimary,
+                    unselectedLabelColor: DarkmoonColors.textMuted,
+                    indicatorColor: DarkmoonColors.accent,
+                    indicatorSize: TabBarIndicatorSize.label,
+                    dividerColor: DarkmoonColors.divider,
+                    overlayColor: const WidgetStatePropertyAll(
+                      Colors.transparent,
+                    ),
+                    labelStyle: const TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    unselectedLabelStyle: const TextStyle(fontSize: 12.5),
+                    tabs: [
+                      Tab(text: l10n.colorProfileEditorTabTone),
+                      Tab(text: l10n.colorProfileEditorTabColor),
+                      Tab(text: l10n.colorProfileEditorTabBase),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildToneTab(l10n),
+                        _buildColorTab(l10n),
+                        _buildBaseTab(l10n),
+                      ],
+                    ),
+                  ),
                 ],
               ),
             ),

@@ -1,6 +1,7 @@
 import 'package:darkmoon/l10n/app_localizations.dart';
 import 'package:darkmoon/render/color_profile.dart';
 import 'package:darkmoon/widgets/color_profile_editor_dialog.dart';
+import 'package:darkmoon/widgets/color_profile_preview.dart';
 import 'package:darkmoon/widgets/slider_row.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -207,6 +208,49 @@ void main() {
           'sampling an untouched curve must not introduce a tone curve, '
           'which would change every pixel of the photo',
     );
+  });
+
+  group('before/after column', () {
+    testWidgets('shows the source untouched above the profiled version', (
+      tester,
+    ) async {
+      await pumpDialog(tester);
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+      await tester.tap(find.text(l10n.colorProfileEditorTabColor));
+      await tester.pumpAndSettle();
+      final hueSliders = find.byWidgetPredicate(
+        (w) => w is SliderRow && w.name == l10n.colorProfileEditorHue,
+      );
+      tester.widget<SliderRow>(hueSliders.first).onChanged(18);
+      await tester.pump();
+
+      final previews = tester
+          .widgetList<ColorProfilePreview>(find.byType(ColorProfilePreview))
+          .toList();
+      expect(previews, hasLength(2));
+
+      // Wiring both panes to the draft, or both to the identity, is an
+      // easy slip and leaves a comparison that shows nothing while
+      // looking entirely plausible.
+      expect(
+        previews.first.profile.hueShift.every((v) => v == 0),
+        isTrue,
+        reason: 'the top pane is the source, before anything is applied',
+      );
+      expect(
+        previews.last.profile.hueShift[0],
+        18,
+        reason: 'the bottom pane carries the edit being made',
+      );
+      expect(
+        previews.first.source,
+        same(previews.last.source),
+        reason:
+            'both panes must show the same image, or they compare '
+            'nothing',
+      );
+    });
   });
 
   group('eyedropper round trip', () {
