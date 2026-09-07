@@ -641,9 +641,18 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
                       Colors.transparent,
                     ),
                     tabs: [
-                      Tab(text: l10n.colorProfileEditorTabTone),
-                      Tab(text: l10n.colorProfileEditorTabColor),
-                      Tab(text: l10n.colorProfileEditorTabBase),
+                      Tab(
+                        height: kTabHeight,
+                        text: l10n.colorProfileEditorTabTone,
+                      ),
+                      Tab(
+                        height: kTabHeight,
+                        text: l10n.colorProfileEditorTabColor,
+                      ),
+                      Tab(
+                        height: kTabHeight,
+                        text: l10n.colorProfileEditorTabBase,
+                      ),
                     ],
                   ),
                   const SizedBox(height: 14),

@@ -9695,7 +9695,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
     tabs: [
       for (final tab in _ControlsTab.values)
         Tab(
-          height: 40,
+          height: kTabHeight,
           icon: Tooltip(
             message: _tabLabel(l10n, tab),
             child: Semantics(

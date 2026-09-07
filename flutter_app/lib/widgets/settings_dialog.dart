@@ -147,9 +147,9 @@ class _SettingsDialogState extends State<SettingsDialog>
             TabBar(
               controller: _tabController,
               tabs: [
-                Tab(text: l10n.settingsTabGeneral),
-                Tab(text: l10n.settingsTabPerformance),
-                Tab(text: l10n.settingsTabData),
+                Tab(height: kTabHeight, text: l10n.settingsTabGeneral),
+                Tab(height: kTabHeight, text: l10n.settingsTabPerformance),
+                Tab(height: kTabHeight, text: l10n.settingsTabData),
               ],
             ),
             const SizedBox(height: 14),

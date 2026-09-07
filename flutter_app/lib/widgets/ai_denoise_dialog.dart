@@ -451,9 +451,9 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
             TabBar(
               controller: _tabController,
               tabs: [
-                Tab(text: l10n.aiDenoiseTabClassic),
-                Tab(text: l10n.aiDenoiseTabEnhance),
-                Tab(text: l10n.aiDenoiseTabCloud),
+                Tab(height: kTabHeight, text: l10n.aiDenoiseTabClassic),
+                Tab(height: kTabHeight, text: l10n.aiDenoiseTabEnhance),
+                Tab(height: kTabHeight, text: l10n.aiDenoiseTabCloud),
               ],
             ),
             const SizedBox(height: 14),

@@ -64,6 +64,13 @@ class DarkmoonColors {
   static const sliderInactiveTrack = Color(0xFF3C3E43);
 }
 
+/// Height of a tab across the app.
+///
+/// Shorter than Material's own 46: these sit above dense control panels
+/// and dialogs where vertical space is the scarce thing, and a tab marked
+/// by an outline does not need the height a filled one does to read.
+const double kTabHeight = 34.0;
+
 /// Trailing space a vertical scroll view must leave for the scrollbar.
 ///
 /// Flutter's desktop `Scrollbar` overlays the content it scrolls rather
@@ -132,14 +139,14 @@ ThemeData buildDarkmoonTheme() {
     // agrees: the selected tab is a filled panel rather than a label with
     // a bar under it, and the unselected ones sit flat on the background.
     //
-    // The fill is [DarkmoonColors.surfaceRaised], the same token every
-    // other raised control uses, so this reads as one more surface rather
-    // than a new colour. The radius is deliberately small — Photoshop's
-    // are square, and going fully square looked wrong beside the app's
-    // own rounded buttons and cards.
+    // An outline, not a fill: the selected tab is marked by a box around
+    // it and by its label going bright, with nothing painted behind. The
+    // radius is deliberately small — Photoshop's are square, and going
+    // fully square looked wrong beside the app's own rounded buttons and
+    // cards.
     tabBarTheme: TabBarThemeData(
       indicator: BoxDecoration(
-        color: DarkmoonColors.surfaceRaised,
+        border: Border.all(color: DarkmoonColors.divider),
         borderRadius: BorderRadius.circular(4),
       ),
       // The fill has to cover the whole tab, not just the label, or it
