@@ -1,5 +1,6 @@
 import 'package:darkmoon/main.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:darkmoon/widgets/mask_selector.dart';
 import 'package:flutter/material.dart' show TabBar;
 import 'package:flutter_test/flutter_test.dart';
 
@@ -104,5 +105,27 @@ void main() {
       orderedEquals(([...lefts]..sort())),
       reason: 'the tabs must read left to right in their declared order',
     );
+  });
+
+  group('where the mask block sits', () {
+    // It is built once and placed in one of two spots depending on the
+    // layout — pinned above the tabs, or inside the one scroll view with
+    // the sections. Hoisting it out of the tree to allow that is exactly
+    // the edit that could leave it in both.
+    testWidgets('there is only ever one of it', (tester) async {
+      await pumpEditor(tester);
+      expect(find.byType(MaskSelector), findsOneWidget);
+    });
+
+    testWidgets('with tabs on it is pinned above them', (tester) async {
+      await pumpEditor(tester);
+      expect(
+        tester.getRect(find.byType(MaskSelector)).bottom,
+        lessThanOrEqualTo(tester.getRect(find.byType(TabBar)).top),
+        reason:
+            'a mask is what every section below applies to, so it must not '
+            'scroll away to reach a slider',
+      );
+    });
   });
 }

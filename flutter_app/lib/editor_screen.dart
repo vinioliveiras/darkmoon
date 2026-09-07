@@ -10046,6 +10046,283 @@ class _ControlsPanelState extends State<_ControlsPanel>
     final isColorRangeActive = activeMask?.type == MaskType.colorRange;
     final isLuminanceActive = activeMask?.type == MaskType.luminance;
     final l10n = AppLocalizations.of(context)!;
+    // Hoisted out of the tree because where it goes depends on the
+    // layout: pinned above the tabs in the tabbed panel, and inside
+    // the one scroll view with everything else in the flat list, which
+    // is the behaviour turning the tabs off is meant to restore.
+    final masksBlock = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        MaskSelector(
+          masks: widget.masks,
+          activeId: widget.activeMaskId,
+          onSelect: widget.onSelectMask,
+          onAdd: widget.onAddMask,
+          onToggleEnabled: widget.onToggleMaskEnabled,
+          onToggleInverted: widget.onToggleMaskInverted,
+          onClone: widget.onCloneMask,
+          onDelete: widget.onDeleteMask,
+          onOpacityChanged: widget.onMaskOpacityChanged,
+          onOpacityChangeEnd: widget.onMaskOpacityChangeEnd,
+          overlayVisible: widget.maskOverlayVisible,
+          onToggleOverlayVisible:
+              widget.onToggleMaskOverlayVisible,
+          overlayOpacity: widget.maskOverlayOpacity,
+        ),
+        if (isBrushActive) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SliderRow(
+              name: l10n.maskBrushSizeLabel,
+              min: 0.01,
+              max: 0.4,
+              value: widget.brushRadius,
+              decimals: 2,
+              onChanged: widget.onBrushRadiusChanged,
+              onChangeEnd: widget.onBrushRadiusChanged,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SliderRow(
+              name: l10n.maskBrushHardnessLabel,
+              min: 0,
+              max: 1,
+              value: widget.brushHardness,
+              decimals: 2,
+              onChanged: widget.onBrushHardnessChanged,
+              onChangeEnd: widget.onBrushHardnessChanged,
+            ),
+          ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.maskBrushEraseLabel,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyMedium,
+                ),
+              ),
+              // Same 34x21 SizedBox+FittedBox a section
+              // header's switch uses, so the two read as
+              // the same control. FittedBox rather than
+              // Transform.scale for the reason documented
+              // there: scale shrinks only the painting and
+              // leaves a full-size box reserving space.
+              SizedBox(
+                width: 34,
+                height: 21,
+                child: FittedBox(
+                  child: Switch(
+                    value: widget.brushErase,
+                    onChanged: (_) =>
+                        widget.onToggleBrushErase(),
+                    materialTapTargetSize:
+                        MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 6),
+              SizedBox(
+                height: 32,
+                width: 32,
+                child: IconButton(
+                  tooltip: l10n.maskUndoStrokeTooltip,
+                  onPressed: widget.onUndoStroke,
+                  icon: const Icon(
+                    CupertinoIcons.arrow_uturn_left,
+                    size: 15,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          if (isFlowActive)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: SliderRow(
+                name: l10n.flowAmountLabel,
+                min: 1,
+                max: 100,
+                value: widget.brushFlow,
+                decimals: 0,
+                defaultValue: defaultFlowAmount,
+                onChanged: widget.onBrushFlowChanged,
+                onChangeEnd: widget.onBrushFlowChanged,
+              ),
+            ),
+        ],
+        if (isColorRangeActive) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: Color.fromARGB(
+                    255,
+                    activeMask!.colorRange.r.round().clamp(
+                      0,
+                      255,
+                    ),
+                    activeMask.colorRange.g.round().clamp(
+                      0,
+                      255,
+                    ),
+                    activeMask.colorRange.b.round().clamp(
+                      0,
+                      255,
+                    ),
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: DarkmoonColors.border,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  l10n.colorRangeHint,
+                  style: const TextStyle(
+                    color: DarkmoonColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SliderRow(
+              name: l10n.colorRangeToleranceLabel,
+              min: 0,
+              max: 100,
+              value: activeMask.colorRange.tolerance,
+              decimals: 0,
+              onChanged: widget.onColorRangeToleranceChanged,
+              onChangeEnd:
+                  widget.onColorRangeToleranceChangeEnd,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SliderRow(
+              name: l10n.colorRangeFeatherLabel,
+              min: 0,
+              max: 100,
+              value: activeMask.colorRange.feather,
+              decimals: 0,
+              onChanged: widget.onColorRangeFeatherChanged,
+              onChangeEnd:
+                  widget.onColorRangeFeatherChangeEnd,
+            ),
+          ),
+        ],
+        if (isLuminanceActive) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  color: Color.fromARGB(
+                    255,
+                    activeMask!.luminance.targetLuma
+                        .round()
+                        .clamp(0, 255),
+                    activeMask.luminance.targetLuma
+                        .round()
+                        .clamp(0, 255),
+                    activeMask.luminance.targetLuma
+                        .round()
+                        .clamp(0, 255),
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: DarkmoonColors.border,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  l10n.luminanceHint,
+                  style: const TextStyle(
+                    color: DarkmoonColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SliderRow(
+              name: l10n.luminanceToleranceLabel,
+              min: 0,
+              max: 100,
+              value: activeMask.luminance.tolerance,
+              decimals: 0,
+              onChanged: widget.onLuminanceToleranceChanged,
+              onChangeEnd:
+                  widget.onLuminanceToleranceChangeEnd,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SliderRow(
+              name: l10n.luminanceFeatherLabel,
+              min: 0,
+              max: 100,
+              value: activeMask.luminance.feather,
+              decimals: 0,
+              onChanged: widget.onLuminanceFeatherChanged,
+              onChangeEnd: widget.onLuminanceFeatherChangeEnd,
+            ),
+          ),
+        ],
+        // The same pair the Crop panel ends with, and for the same
+        // reason: both are a mode you are inside, and both need an
+        // obvious way out. OK just leaves — a mask is committed as
+        // it is edited, so there is nothing to apply. Cancel throws
+        // the layer away, which is what makes it a cancel rather
+        // than a second Done. Both land back on Full Image.
+        if (widget.activeMaskId != imageMaskId) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: SizedBox(
+                  height: 34,
+                  child: OutlinedButton(
+                    onPressed: widget.onDeleteMask,
+                    child: Text(l10n.cancelButton),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: SizedBox(
+                  height: 34,
+                  child: FilledButton(
+                    onPressed: () => widget.onSelectMask(imageMaskId),
+                    child: Text(l10n.maskOkButton),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ],
+    );
+
     return Container(
       width: _controlsPanelWidth,
       color: DarkmoonColors.panel,
@@ -10145,6 +10422,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                   // flex 1 against the sections' 2 leaves it at most a third of
                   // the free space, which is the ceiling the constant was
                   // trying to express.
+                  if (widget.tabbedLayout)
                   ConstrainedBox(
                     constraints: BoxConstraints(
                       // Half of whatever is left once the histogram and the tab
@@ -10163,278 +10441,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                         _controlsPanelInset,
                         8,
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          MaskSelector(
-                            masks: widget.masks,
-                            activeId: widget.activeMaskId,
-                            onSelect: widget.onSelectMask,
-                            onAdd: widget.onAddMask,
-                            onToggleEnabled: widget.onToggleMaskEnabled,
-                            onToggleInverted: widget.onToggleMaskInverted,
-                            onClone: widget.onCloneMask,
-                            onDelete: widget.onDeleteMask,
-                            onOpacityChanged: widget.onMaskOpacityChanged,
-                            onOpacityChangeEnd: widget.onMaskOpacityChangeEnd,
-                            overlayVisible: widget.maskOverlayVisible,
-                            onToggleOverlayVisible:
-                                widget.onToggleMaskOverlayVisible,
-                            overlayOpacity: widget.maskOverlayOpacity,
-                          ),
-                          if (isBrushActive) ...[
-                            const SizedBox(height: 8),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: SliderRow(
-                                name: l10n.maskBrushSizeLabel,
-                                min: 0.01,
-                                max: 0.4,
-                                value: widget.brushRadius,
-                                decimals: 2,
-                                onChanged: widget.onBrushRadiusChanged,
-                                onChangeEnd: widget.onBrushRadiusChanged,
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: SliderRow(
-                                name: l10n.maskBrushHardnessLabel,
-                                min: 0,
-                                max: 1,
-                                value: widget.brushHardness,
-                                decimals: 2,
-                                onChanged: widget.onBrushHardnessChanged,
-                                onChangeEnd: widget.onBrushHardnessChanged,
-                              ),
-                            ),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: Text(
-                                    l10n.maskBrushEraseLabel,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodyMedium,
-                                  ),
-                                ),
-                                // Same 34x21 SizedBox+FittedBox a section
-                                // header's switch uses, so the two read as
-                                // the same control. FittedBox rather than
-                                // Transform.scale for the reason documented
-                                // there: scale shrinks only the painting and
-                                // leaves a full-size box reserving space.
-                                SizedBox(
-                                  width: 34,
-                                  height: 21,
-                                  child: FittedBox(
-                                    child: Switch(
-                                      value: widget.brushErase,
-                                      onChanged: (_) =>
-                                          widget.onToggleBrushErase(),
-                                      materialTapTargetSize:
-                                          MaterialTapTargetSize.shrinkWrap,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 6),
-                                SizedBox(
-                                  height: 32,
-                                  width: 32,
-                                  child: IconButton(
-                                    tooltip: l10n.maskUndoStrokeTooltip,
-                                    onPressed: widget.onUndoStroke,
-                                    icon: const Icon(
-                                      CupertinoIcons.arrow_uturn_left,
-                                      size: 15,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            if (isFlowActive)
-                              Padding(
-                                padding: const EdgeInsets.only(top: 8),
-                                child: SliderRow(
-                                  name: l10n.flowAmountLabel,
-                                  min: 1,
-                                  max: 100,
-                                  value: widget.brushFlow,
-                                  decimals: 0,
-                                  defaultValue: defaultFlowAmount,
-                                  onChanged: widget.onBrushFlowChanged,
-                                  onChangeEnd: widget.onBrushFlowChanged,
-                                ),
-                              ),
-                          ],
-                          if (isColorRangeActive) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    color: Color.fromARGB(
-                                      255,
-                                      activeMask!.colorRange.r.round().clamp(
-                                        0,
-                                        255,
-                                      ),
-                                      activeMask.colorRange.g.round().clamp(
-                                        0,
-                                        255,
-                                      ),
-                                      activeMask.colorRange.b.round().clamp(
-                                        0,
-                                        255,
-                                      ),
-                                    ),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: DarkmoonColors.border,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    l10n.colorRangeHint,
-                                    style: const TextStyle(
-                                      color: DarkmoonColors.textMuted,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: SliderRow(
-                                name: l10n.colorRangeToleranceLabel,
-                                min: 0,
-                                max: 100,
-                                value: activeMask.colorRange.tolerance,
-                                decimals: 0,
-                                onChanged: widget.onColorRangeToleranceChanged,
-                                onChangeEnd:
-                                    widget.onColorRangeToleranceChangeEnd,
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: SliderRow(
-                                name: l10n.colorRangeFeatherLabel,
-                                min: 0,
-                                max: 100,
-                                value: activeMask.colorRange.feather,
-                                decimals: 0,
-                                onChanged: widget.onColorRangeFeatherChanged,
-                                onChangeEnd:
-                                    widget.onColorRangeFeatherChangeEnd,
-                              ),
-                            ),
-                          ],
-                          if (isLuminanceActive) ...[
-                            const SizedBox(height: 8),
-                            Row(
-                              children: [
-                                Container(
-                                  width: 32,
-                                  height: 32,
-                                  decoration: BoxDecoration(
-                                    color: Color.fromARGB(
-                                      255,
-                                      activeMask!.luminance.targetLuma
-                                          .round()
-                                          .clamp(0, 255),
-                                      activeMask.luminance.targetLuma
-                                          .round()
-                                          .clamp(0, 255),
-                                      activeMask.luminance.targetLuma
-                                          .round()
-                                          .clamp(0, 255),
-                                    ),
-                                    borderRadius: BorderRadius.circular(6),
-                                    border: Border.all(
-                                      color: DarkmoonColors.border,
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Expanded(
-                                  child: Text(
-                                    l10n.luminanceHint,
-                                    style: const TextStyle(
-                                      color: DarkmoonColors.textMuted,
-                                      fontSize: 11,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 8),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: SliderRow(
-                                name: l10n.luminanceToleranceLabel,
-                                min: 0,
-                                max: 100,
-                                value: activeMask.luminance.tolerance,
-                                decimals: 0,
-                                onChanged: widget.onLuminanceToleranceChanged,
-                                onChangeEnd:
-                                    widget.onLuminanceToleranceChangeEnd,
-                              ),
-                            ),
-                            Padding(
-                              padding: const EdgeInsets.only(bottom: 8),
-                              child: SliderRow(
-                                name: l10n.luminanceFeatherLabel,
-                                min: 0,
-                                max: 100,
-                                value: activeMask.luminance.feather,
-                                decimals: 0,
-                                onChanged: widget.onLuminanceFeatherChanged,
-                                onChangeEnd: widget.onLuminanceFeatherChangeEnd,
-                              ),
-                            ),
-                          ],
-                          // The same pair the Crop panel ends with, and for the same
-                          // reason: both are a mode you are inside, and both need an
-                          // obvious way out. OK just leaves — a mask is committed as
-                          // it is edited, so there is nothing to apply. Cancel throws
-                          // the layer away, which is what makes it a cancel rather
-                          // than a second Done. Both land back on Full Image.
-                          if (widget.activeMaskId != imageMaskId) ...[
-                            const SizedBox(height: 12),
-                            Row(
-                              children: [
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 34,
-                                    child: OutlinedButton(
-                                      onPressed: widget.onDeleteMask,
-                                      child: Text(l10n.cancelButton),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Expanded(
-                                  child: SizedBox(
-                                    height: 34,
-                                    child: FilledButton(
-                                      onPressed: () => widget.onSelectMask(imageMaskId),
-                                      child: Text(l10n.maskOkButton),
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
+                      child: masksBlock,
                     ),
                   ),
                   if (widget.tabbedLayout) _buildControlsTabBar(l10n),
@@ -10459,6 +10466,15 @@ class _ControlsPanelState extends State<_ControlsPanel>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
+                          // Flat list: the masks scroll with everything
+                          // else, which is what the old panel did and what
+                          // turning the tabs off is for. Pinning them in
+                          // both layouts made "single list" not quite the
+                          // layout it replaced.
+                          if (!widget.tabbedLayout) ...[
+                            masksBlock,
+                            const SizedBox(height: 8),
+                          ],
                           for (final entry in _sections.entries.where(
                             (e) => _inTab(_tabOf(e.key)),
                           )) ...[
