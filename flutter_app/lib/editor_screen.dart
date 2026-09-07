@@ -8936,6 +8936,15 @@ class _CropTransformPanel extends StatelessWidget {
                 tooltip: l10n.cropGuidedTooltip,
                 onTap: onToggleGuidedMode,
               ),
+              // Beside Guided, since both are Upright modes: one works out
+              // the correction on its own, the other is told. Grouping them
+              // says that; the button sitting apart above the Straighten
+              // slider did not.
+              _ToolbarSegment(
+                label: l10n.transformLevelButton,
+                tooltip: l10n.transformLevelButton,
+                onTap: levelBusy ? null : onLevel,
+              ),
             ],
           ),
           if (guidedModeActive) ...[
@@ -8949,22 +8958,6 @@ class _CropTransformPanel extends StatelessWidget {
             ),
           ],
           const SizedBox(height: 10),
-          // Above the Straighten slider it drives, so the relationship
-          // between the two is visible rather than something to discover.
-          Align(
-            alignment: Alignment.centerLeft,
-            child: TextButton.icon(
-              onPressed: levelBusy ? null : onLevel,
-              icon: levelBusy
-                  ? const SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(strokeWidth: 1.6),
-                    )
-                  : const Icon(CupertinoIcons.wand_stars, size: 15),
-              label: Text(l10n.transformLevelButton),
-            ),
-          ),
           SliderRow(
             name: l10n.transformStraightenLabel,
             min: -45,
