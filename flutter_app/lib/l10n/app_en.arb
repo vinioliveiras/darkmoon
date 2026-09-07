@@ -382,5 +382,12 @@
   "colorProfileEditLabel": "Edit",
   "colorProfileDuplicateLabel": "Duplicate",
   "colorProfileImportLabel": "Import...",
-  "colorProfileEyedropper": "Pick a colour from the photo"
+  "colorProfileEyedropper": "Pick a colour from the photo",
+  "controlsTabAdjust": "Adjust",
+  "controlsTabColour": "Colour",
+  "controlsTabEffects": "Effects",
+  "settingsPanelLayoutLabel": "Editing panel",
+  "settingsPanelLayoutTabbed": "Tabs",
+  "settingsPanelLayoutFlat": "One long list",
+  "settingsPanelLayoutHint": "Tabs group the sections into Adjust, Colour and Effects. Masks stay pinned above them either way."
 }

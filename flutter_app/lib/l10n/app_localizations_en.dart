@@ -1180,4 +1180,26 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get colorProfileEyedropper => 'Pick a colour from the photo';
+
+  @override
+  String get controlsTabAdjust => 'Adjust';
+
+  @override
+  String get controlsTabColour => 'Colour';
+
+  @override
+  String get controlsTabEffects => 'Effects';
+
+  @override
+  String get settingsPanelLayoutLabel => 'Editing panel';
+
+  @override
+  String get settingsPanelLayoutTabbed => 'Tabs';
+
+  @override
+  String get settingsPanelLayoutFlat => 'One long list';
+
+  @override
+  String get settingsPanelLayoutHint =>
+      'Tabs group the sections into Adjust, Colour and Effects. Masks stay pinned above them either way.';
 }

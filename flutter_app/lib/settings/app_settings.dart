@@ -65,6 +65,7 @@ class AppSettings {
     this.fastPreview = true,
     this.previewResolution = defaultPreviewMaxDimension,
     this.useGpuRender = true,
+    this.tabbedControlsPanel = true,
     this.dynamicFullPreview = true,
     this.fullQualityPercent = 40,
     this.thumbnailConcurrency = 4,
@@ -105,6 +106,16 @@ class AppSettings {
   /// `_renderPreviewNow`'s doc comment for the "Not Responding" freeze
   /// this avoids).
   final bool useGpuRender;
+
+  /// Whether the editing panel groups its sections into Adjust / Colour /
+  /// Effects tabs, with Masks pinned above them, instead of listing all
+  /// eleven sections in one scroll.
+  ///
+  /// Defaults on: it is the layout the panel was redesigned around, and
+  /// the single list put Lens Correction a dozen section-heights below the
+  /// Tone sliders. Off restores the flat list for anyone who would rather
+  /// scroll than switch.
+  final bool tabbedControlsPanel;
 
   /// When true, a beat after an edit settles the editor decodes the
   /// photo's *native*-resolution source once and, from then on, runs
@@ -197,6 +208,7 @@ class AppSettings {
     bool? fastPreview,
     int? previewResolution,
     bool? useGpuRender,
+    bool? tabbedControlsPanel,
     bool? dynamicFullPreview,
     int? fullQualityPercent,
     int? thumbnailConcurrency,
@@ -214,6 +226,7 @@ class AppSettings {
     fastPreview: fastPreview ?? this.fastPreview,
     previewResolution: previewResolution ?? this.previewResolution,
     useGpuRender: useGpuRender ?? this.useGpuRender,
+    tabbedControlsPanel: tabbedControlsPanel ?? this.tabbedControlsPanel,
     dynamicFullPreview: dynamicFullPreview ?? this.dynamicFullPreview,
     fullQualityPercent: (fullQualityPercent ?? this.fullQualityPercent).clamp(
       25,
@@ -253,6 +266,7 @@ class AppSettings {
     fastPreview: fastPreview,
     previewResolution: previewResolution,
     useGpuRender: useGpuRender,
+    tabbedControlsPanel: tabbedControlsPanel,
     dynamicFullPreview: dynamicFullPreview,
     fullQualityPercent: fullQualityPercent,
     thumbnailConcurrency: thumbnailConcurrency,
@@ -282,6 +296,7 @@ class AppSettings {
     fastPreview: fastPreview,
     previewResolution: previewResolution,
     useGpuRender: useGpuRender,
+    tabbedControlsPanel: tabbedControlsPanel,
     dynamicFullPreview: dynamicFullPreview,
     fullQualityPercent: fullQualityPercent,
     thumbnailConcurrency: thumbnailConcurrency,
@@ -327,6 +342,8 @@ Future<AppSettings> loadSettings() async {
           (raw['previewResolution'] as num?)?.toInt() ??
           defaults.previewResolution,
       useGpuRender: raw['useGpuRender'] as bool? ?? defaults.useGpuRender,
+      tabbedControlsPanel:
+          raw['tabbedControlsPanel'] as bool? ?? defaults.tabbedControlsPanel,
       dynamicFullPreview:
           raw['dynamicFullPreview'] as bool? ?? defaults.dynamicFullPreview,
       fullQualityPercent:
@@ -372,6 +389,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'fastPreview': settings.fastPreview,
       'previewResolution': settings.previewResolution,
       'useGpuRender': settings.useGpuRender,
+      'tabbedControlsPanel': settings.tabbedControlsPanel,
       'dynamicFullPreview': settings.dynamicFullPreview,
       'fullQualityPercent': settings.fullQualityPercent,
       'thumbnailConcurrency': settings.thumbnailConcurrency,

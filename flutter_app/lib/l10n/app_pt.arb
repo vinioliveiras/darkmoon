@@ -364,5 +364,12 @@
   "colorProfileEditLabel": "Editar",
   "colorProfileDuplicateLabel": "Duplicar",
   "colorProfileImportLabel": "Importar...",
-  "colorProfileEyedropper": "Escolher uma cor da foto"
+  "colorProfileEyedropper": "Escolher uma cor da foto",
+  "controlsTabAdjust": "Ajustes",
+  "controlsTabColour": "Cor",
+  "controlsTabEffects": "Efeitos",
+  "settingsPanelLayoutLabel": "Painel de edicao",
+  "settingsPanelLayoutTabbed": "Abas",
+  "settingsPanelLayoutFlat": "Lista unica",
+  "settingsPanelLayoutHint": "As abas agrupam as secoes em Ajustes, Cor e Efeitos. As mascaras ficam fixas acima nos dois modos."
 }

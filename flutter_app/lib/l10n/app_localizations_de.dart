@@ -1199,4 +1199,26 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get colorProfileEyedropper => 'Eine Farbe aus dem Foto waehlen';
+
+  @override
+  String get controlsTabAdjust => 'Anpassen';
+
+  @override
+  String get controlsTabColour => 'Farbe';
+
+  @override
+  String get controlsTabEffects => 'Effekte';
+
+  @override
+  String get settingsPanelLayoutLabel => 'Bearbeitungsbereich';
+
+  @override
+  String get settingsPanelLayoutTabbed => 'Registerkarten';
+
+  @override
+  String get settingsPanelLayoutFlat => 'Eine lange Liste';
+
+  @override
+  String get settingsPanelLayoutHint =>
+      'Registerkarten gruppieren die Abschnitte in Anpassen, Farbe und Effekte. Masken bleiben in beiden Faellen oben angeheftet.';
 }

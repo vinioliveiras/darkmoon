@@ -216,6 +216,33 @@ class _SettingsDialogState extends State<SettingsDialog>
               ),
             ],
           ),
+          Row(
+            children: [
+              Expanded(
+                child: Text(l10n.settingsPanelLayoutLabel, style: _labelStyle),
+              ),
+              StyledDropdown<bool>(
+                value: _settings.tabbedControlsPanel,
+                width: 170,
+                items: [
+                  StyledDropdownItem(
+                    value: true,
+                    label: l10n.settingsPanelLayoutTabbed,
+                  ),
+                  StyledDropdownItem(
+                    value: false,
+                    label: l10n.settingsPanelLayoutFlat,
+                  ),
+                ],
+                onChanged: (value) =>
+                    _update(_settings.copyWith(tabbedControlsPanel: value)),
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text(l10n.settingsPanelLayoutHint, style: _hintStyle),
+          ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             dense: true,

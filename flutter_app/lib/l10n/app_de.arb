@@ -363,5 +363,12 @@
   "colorProfileEditLabel": "Bearbeiten",
   "colorProfileDuplicateLabel": "Duplizieren",
   "colorProfileImportLabel": "Importieren...",
-  "colorProfileEyedropper": "Eine Farbe aus dem Foto waehlen"
+  "colorProfileEyedropper": "Eine Farbe aus dem Foto waehlen",
+  "controlsTabAdjust": "Anpassen",
+  "controlsTabColour": "Farbe",
+  "controlsTabEffects": "Effekte",
+  "settingsPanelLayoutLabel": "Bearbeitungsbereich",
+  "settingsPanelLayoutTabbed": "Registerkarten",
+  "settingsPanelLayoutFlat": "Eine lange Liste",
+  "settingsPanelLayoutHint": "Registerkarten gruppieren die Abschnitte in Anpassen, Farbe und Effekte. Masken bleiben in beiden Faellen oben angeheftet."
 }

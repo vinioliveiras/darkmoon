@@ -1188,4 +1188,26 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get colorProfileEyedropper => 'Escolher uma cor da foto';
+
+  @override
+  String get controlsTabAdjust => 'Ajustes';
+
+  @override
+  String get controlsTabColour => 'Cor';
+
+  @override
+  String get controlsTabEffects => 'Efeitos';
+
+  @override
+  String get settingsPanelLayoutLabel => 'Painel de edicao';
+
+  @override
+  String get settingsPanelLayoutTabbed => 'Abas';
+
+  @override
+  String get settingsPanelLayoutFlat => 'Lista unica';
+
+  @override
+  String get settingsPanelLayoutHint =>
+      'As abas agrupam as secoes em Ajustes, Cor e Efeitos. As mascaras ficam fixas acima nos dois modos.';
 }

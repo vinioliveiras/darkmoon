@@ -2277,6 +2277,48 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Pick a colour from the photo'**
   String get colorProfileEyedropper;
+
+  /// No description provided for @controlsTabAdjust.
+  ///
+  /// In en, this message translates to:
+  /// **'Adjust'**
+  String get controlsTabAdjust;
+
+  /// No description provided for @controlsTabColour.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour'**
+  String get controlsTabColour;
+
+  /// No description provided for @controlsTabEffects.
+  ///
+  /// In en, this message translates to:
+  /// **'Effects'**
+  String get controlsTabEffects;
+
+  /// No description provided for @settingsPanelLayoutLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Editing panel'**
+  String get settingsPanelLayoutLabel;
+
+  /// No description provided for @settingsPanelLayoutTabbed.
+  ///
+  /// In en, this message translates to:
+  /// **'Tabs'**
+  String get settingsPanelLayoutTabbed;
+
+  /// No description provided for @settingsPanelLayoutFlat.
+  ///
+  /// In en, this message translates to:
+  /// **'One long list'**
+  String get settingsPanelLayoutFlat;
+
+  /// No description provided for @settingsPanelLayoutHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Tabs group the sections into Adjust, Colour and Effects. Masks stay pinned above them either way.'**
+  String get settingsPanelLayoutHint;
 }
 
 class _AppLocalizationsDelegate

@@ -112,6 +112,44 @@ void main() {
       },
     );
 
+    testWidgets('the panel layout dropdown reports the chosen value', (
+      tester,
+    ) async {
+      AppSettings? saved;
+      await tester.pumpWidget(
+        _wrap(
+          SettingsDialog(
+            settings: const AppSettings(),
+            onChanged: (value) => saved = value,
+            onClearThumbnails: () {},
+            onClearCatalog: () {},
+            onPruneMissing: () {},
+          ),
+        ),
+      );
+      // The wrapper opens the dialog from a button rather than showing it
+      // directly, so nothing exists until it is tapped.
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+
+      // Tabs are the default, so the dropdown must be showing that and the
+      // only thing it can be changed to is the flat list.
+      expect(find.text(l10n.settingsPanelLayoutTabbed), findsOneWidget);
+
+      await tester.tap(find.text(l10n.settingsPanelLayoutTabbed));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text(l10n.settingsPanelLayoutFlat).last);
+      await tester.pumpAndSettle();
+
+      expect(saved, isNotNull);
+      expect(
+        saved!.tabbedControlsPanel,
+        isFalse,
+        reason: 'turning the layout off has to reach the saved settings',
+      );
+    });
+
     testWidgets('the full-preview scale row shows up once that switch is on', (
       tester,
     ) async {
