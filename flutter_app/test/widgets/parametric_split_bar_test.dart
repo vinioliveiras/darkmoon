@@ -12,10 +12,13 @@ import 'package:flutter_test/flutter_test.dart';
 /// Gestures are driven with `startGesture` rather than `tester.drag` so
 /// the pointer path is explicit. That matters here: the widget's reset
 /// gesture is recognised from the drag lifecycle rather than by a tap
-/// recogniser, precisely so that pan is the arena's only member and a
-/// handle moves from the first pixel. These tests are what caught the two
-/// earlier attempts, where adding a tap or double-tap recogniser made the
-/// handles either sluggish or completely undraggable.
+/// recogniser, precisely so that one drag recogniser is the arena's only
+/// member and a handle moves from the first pixel. These tests are what
+/// caught the two earlier attempts, where adding a tap or double-tap
+/// recogniser made the handles either sluggish or completely undraggable.
+///
+/// What none of them caught is the last group below: every one of these
+/// pumps the bar on its own, and on its own it always worked.
 void main() {
   const width = 300.0;
   // Mirrors ParametricSplitBar's own geometry.
@@ -168,5 +171,83 @@ void main() {
       contains(('ParamCurveShadowSplit', 25.0)),
       reason: 'a reset must commit too, or the full-quality render never runs',
     );
+  });
+
+  group('inside the scrolling panel it actually lives in', () {
+    // The bar is not used on its own. It sits in the controls panel,
+    // inside a scroll view, and there the recogniser it uses has to be
+    // one the arena can tell apart from the scroll's own vertical drag.
+    // A pan recogniser is not: it accepts every direction, so it is just
+    // another competitor for the same gesture, and it lost every time —
+    // horizontal drags included. The handles were undraggable in the app
+    // while all five tests above passed.
+    Future<double?> dragInScrollView(
+      WidgetTester tester,
+      Offset delta,
+    ) async {
+      double? reported;
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: SingleChildScrollView(
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: width,
+                    child: ParametricSplitBar(
+                      shadowSplit: 25,
+                      midtoneSplit: 50,
+                      highlightSplit: 75,
+                      onChanged: (name, value) {
+                        if (name == 'ParamCurveMidtoneSplit') {
+                          reported = value;
+                        }
+                      },
+                      onChangeEnd: (_, _) {},
+                    ),
+                  ),
+                  const SizedBox(height: 2000),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+      final rect = tester.getRect(find.byType(ParametricSplitBar));
+      await tester.dragFrom(
+        Offset(rect.left + inset + usable * 0.5, rect.center.dy),
+        delta,
+      );
+      await tester.pumpAndSettle();
+      return reported;
+    }
+
+    testWidgets('a horizontal drag still moves the handle', (tester) async {
+      expect(
+        await dragInScrollView(tester, const Offset(40, 0)),
+        isNotNull,
+        reason: 'the scroll view must not swallow the drag',
+      );
+    });
+
+    testWidgets('so does a drag that is not perfectly horizontal', (
+      tester,
+    ) async {
+      // What a hand actually does.
+      expect(
+        await dragInScrollView(tester, const Offset(40, 12)),
+        isNotNull,
+      );
+    });
+
+    testWidgets('a vertical drag scrolls the panel instead', (tester) async {
+      expect(
+        await dragInScrollView(tester, const Offset(6, 40)),
+        isNull,
+        reason:
+            'the bar must not capture a gesture meant for the panel, or it '
+            'becomes a dead strip you cannot scroll past',
+      );
+    });
   });
 }

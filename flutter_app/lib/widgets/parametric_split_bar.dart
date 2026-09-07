@@ -206,15 +206,23 @@ class _ParametricSplitBarState extends State<ParametricSplitBar> {
           cursor: SystemMouseCursors.resizeLeftRight,
           child: GestureDetector(
             behavior: HitTestBehavior.opaque,
-            // Pan is deliberately the only recogniser here — see
-            // [_handlePanDown]. onPanDown, not onPanStart, grabs the
-            // handle: it fires on pointer-down, so the grab is decided
-            // before any movement rather than after the drag is
+            // Horizontal, not pan, and that is the whole reason the
+            // handles work at all in the panel. A pan recogniser accepts
+            // any direction, so against the scrolling panel this control
+            // lives in it is just another competitor for the same
+            // gesture — and it loses, every time, in every direction.
+            // Measured: standalone a drag moved the handle, and the same
+            // drag inside a SingleChildScrollView never delivered a
+            // single update. A horizontal recogniser is the one the
+            // arena can tell apart from the scroll's vertical one.
+            //
+            // Down, not start: it fires on pointer-down, so the handle is
+            // grabbed before any movement rather than after the drag is
             // recognised.
-            onPanDown: (d) => _handlePanDown(d, width),
-            onPanUpdate: (d) => _handlePanUpdate(d, width),
-            onPanEnd: (_) => _handlePanEnd(),
-            onPanCancel: _handlePanEnd,
+            onHorizontalDragDown: (d) => _handlePanDown(d, width),
+            onHorizontalDragUpdate: (d) => _handlePanUpdate(d, width),
+            onHorizontalDragEnd: (_) => _handlePanEnd(),
+            onHorizontalDragCancel: _handlePanEnd,
             child: CustomPaint(
               painter: _SplitBarPainter(
                 values: _values,
