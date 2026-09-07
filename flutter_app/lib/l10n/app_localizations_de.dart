@@ -1246,7 +1246,21 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get transformAutoTooltip =>
-      'Richtet das Foto aus und korrigiert die Perspektive in einem Schritt';
+      'Richtet das Foto aus und korrigiert stuerzende Vertikalen';
+
+  @override
+  String get transformVerticalButton => 'Vertikal';
+
+  @override
+  String get transformVerticalTooltip =>
+      'Ausrichten und stuerzende Vertikalen korrigieren, auch bei schwachen Hinweisen';
+
+  @override
+  String get transformFullButton => 'Voll';
+
+  @override
+  String get transformFullTooltip =>
+      'Korrigiert auch stuerzende Horizontalen — fuer Architektur, da es Landschaften verzerrt';
 
   @override
   String get transformAutoNothingFound =>

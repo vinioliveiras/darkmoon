@@ -2365,8 +2365,32 @@ abstract class AppLocalizations {
   /// No description provided for @transformAutoTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Level the photo and correct its perspective in one step'**
+  /// **'Level the photo and correct converging verticals'**
   String get transformAutoTooltip;
+
+  /// No description provided for @transformVerticalButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Vertical'**
+  String get transformVerticalButton;
+
+  /// No description provided for @transformVerticalTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Level and correct converging verticals, even on faint evidence'**
+  String get transformVerticalTooltip;
+
+  /// No description provided for @transformFullButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Full'**
+  String get transformFullButton;
+
+  /// No description provided for @transformFullTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Also correct converging horizontals — for architecture, since it will skew a landscape'**
+  String get transformFullTooltip;
 
   /// No description provided for @transformAutoNothingFound.
   ///

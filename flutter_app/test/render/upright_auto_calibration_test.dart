@@ -101,6 +101,36 @@ Uint8List _tilted(List<(double, double)> lines) {
   return rgb;
 }
 
+/// Near-vertical lines given as (tilt from vertical in degrees, where the
+/// line crosses the horizontal centre line).
+Uint8List _verticals(List<(double, double)> lines) {
+  final rgb = Uint8List(_w * _h * 3);
+  for (final (tilt, x0) in lines) {
+    final a = (90.0 + tilt) * math.pi / 180.0;
+    final nx = -math.sin(a);
+    final ny = math.cos(a);
+    for (var y = 0; y < _h; y++) {
+      for (var x = 0; x < _w; x++) {
+        final px = x - _w / 2;
+        final py = y - _h / 2;
+        final distance = ((px - x0) * nx + py * ny).abs();
+        final coverage = ((4.0 - distance) / 3.0).clamp(0.0, 1.0);
+        if (coverage <= 0) {
+          continue;
+        }
+        final value = (coverage * 255).round();
+        final i = (y * _w + x) * 3;
+        if (value > rgb[i]) {
+          rgb[i] = value;
+          rgb[i + 1] = value;
+          rgb[i + 2] = value;
+        }
+      }
+    }
+  }
+  return rgb;
+}
+
 Uint8List _luma(Uint8List rgb, int width, int height) {
   final out = Uint8List(width * height);
   for (var i = 0; i < width * height; i++) {
@@ -195,7 +225,7 @@ void main() {
     }
 
     // What Auto itself would do, put through the real pass.
-    final correction = uprightAutoFor(_luma(vertical, _w, _h), _w, _h)!;
+    final correction = uprightFor(_luma(vertical, _w, _h), _w, _h, UprightMode.auto)!;
     final corrected = _apply(vertical, vertical: correction.vertical);
     final after = _fanOut(
       corrected.rgb,
@@ -284,7 +314,7 @@ void main() {
     final fan = _fanOut(parallel, _w, _h, verticals: true)!;
     expect(fan.abs(), lessThan(0.02));
 
-    final correction = uprightAutoFor(_luma(parallel, _w, _h), _w, _h);
+    final correction = uprightFor(_luma(parallel, _w, _h), _w, _h, UprightMode.auto);
     expect(
       correction?.vertical ?? 0,
       0,
@@ -301,7 +331,7 @@ void main() {
     // evidence — the evidence here is perfect. It is that a hillside
     // produces evidence just as perfect, and geometry cannot tell the
     // two apart. See uprightAutoFor.
-    final auto = uprightAutoFor(_luma(horizontal, _w, _h), _w, _h);
+    final auto = uprightFor(_luma(horizontal, _w, _h), _w, _h, UprightMode.auto);
     expect(auto?.horizontal ?? 0, 0);
   });
 
@@ -337,9 +367,84 @@ void main() {
           'this was written for',
     );
     expect(
-      uprightAutoFor(_luma(hillside, _w, _h), _w, _h)?.horizontal ?? 0,
+      uprightFor(_luma(hillside, _w, _h), _w, _h, UprightMode.auto)?.horizontal ?? 0,
       0,
       reason: 'only declining the axis outright does',
     );
+  });
+
+  group('the modes differ in what they are willing to do', () {
+    test('Full applies the horizontal axis Auto declines', () {
+      final before = _fanOut(horizontal, _w, _h, verticals: false)!;
+
+      final auto = uprightFor(
+        _luma(horizontal, _w, _h),
+        _w,
+        _h,
+        UprightMode.auto,
+      );
+      expect(auto?.horizontal ?? 0, 0);
+
+      final full = uprightFor(
+        _luma(horizontal, _w, _h),
+        _w,
+        _h,
+        UprightMode.full,
+      )!;
+      expect(full.horizontal.abs(), greaterThan(calUprightDeadZone));
+
+      final corrected = _apply(horizontal, horizontal: full.horizontal);
+      final after = _fanOut(
+        corrected.rgb,
+        corrected.width,
+        corrected.height,
+        verticals: false,
+      );
+      expect(
+        after!.abs(),
+        lessThan(before.abs() * 0.25),
+        reason: 'having agreed to correct it, Full must actually correct it',
+      );
+    });
+
+    test('Vertical acts on evidence Auto will not', () {
+      // A real but slight convergence with the edges disagreeing about it
+      // — the case Auto exists to walk away from. Someone choosing
+      // Vertical has already decided the photo needs it, so the question
+      // is only how much.
+      final scattered = _verticals(const [
+        (1.5, -120.0),
+        (-1.9, -60.0),
+        (1.0, 0.0),
+        (-0.7, 60.0),
+        (2.8, 120.0),
+      ]);
+      final luma = _luma(scattered, _w, _h);
+
+      expect(
+        uprightFor(luma, _w, _h, UprightMode.auto)?.vertical ?? 0,
+        0,
+        reason: 'the edges do not agree, so Auto must not guess',
+      );
+      expect(
+        uprightFor(luma, _w, _h, UprightMode.vertical)?.vertical ?? 0,
+        isNot(0),
+        reason: 'Vertical was asked for, so it applies what it measured',
+      );
+    });
+
+    test('Vertical never touches the horizontal axis', () {
+      final vertical = uprightFor(
+        _luma(horizontal, _w, _h),
+        _w,
+        _h,
+        UprightMode.vertical,
+      );
+      expect(
+        vertical?.horizontal ?? 0,
+        0,
+        reason: 'only Full opts into that axis',
+      );
+    });
   });
 }

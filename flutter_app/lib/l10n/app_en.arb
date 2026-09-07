@@ -397,6 +397,10 @@
   "transformLevelButton": "Level",
   "transformLevelNothingFound": "Nothing straight enough to level by. Straighten by hand.",
   "transformAutoButton": "Auto",
-  "transformAutoTooltip": "Level the photo and correct its perspective in one step",
+  "transformAutoTooltip": "Level the photo and correct converging verticals",
+  "transformVerticalButton": "Vertical",
+  "transformVerticalTooltip": "Level and correct converging verticals, even on faint evidence",
+  "transformFullButton": "Full",
+  "transformFullTooltip": "Also correct converging horizontals — for architecture, since it will skew a landscape",
   "transformAutoNothingFound": "Nothing straight enough to correct by. Adjust by hand."
 }

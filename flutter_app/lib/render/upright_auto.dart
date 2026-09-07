@@ -237,11 +237,20 @@ class UprightCorrection {
 
 /// Turns a fitted convergence into a Transform slider value, or 0 when
 /// the fit does not earn one.
+///
+/// [demandAgreement] is what separates the modes. The structural checks
+/// below — enough lines, spread across enough of the frame — are about
+/// whether a measurement is possible at all, and every mode wants them.
+/// The agreement check and the dead zone are about whether a correction
+/// is *wanted*, which is a judgement, and only Auto has to make it: when
+/// someone picks Vertical they have already decided the photo needs
+/// straightening, and the software's job narrows to how much.
 double _correctionFrom(
   ConvergenceFit? fit,
   double extent,
   double gain, {
   double gainSlope = 0,
+  required bool demandAgreement,
 }) {
   if (fit == null || fit.spread < extent * calUprightMinSpread) {
     return 0;
@@ -260,28 +269,54 @@ double _correctionFrom(
   // this the fit always answers, and on a photo whose edges are not a
   // family at all it answers with noise — which is how a straight-on
   // façade came back asking for 26 units of horizontal keystone.
-  if (fanOut.abs() < fit.scatter * calUprightMinAgreement) {
+  if (demandAgreement && fanOut.abs() < fit.scatter * calUprightMinAgreement) {
     return 0;
   }
   // The gain is not constant: the geometry pass anchors the bottom edge,
   // so a steep perspective needs proportionally more slider than a gentle
   // one. See calUprightVerticalGainSlope.
   final correction = fanOut * (gain + gainSlope * fanOut.abs());
-  if (correction.abs() < calUprightDeadZone) {
+  if (demandAgreement && correction.abs() < calUprightDeadZone) {
     return 0;
   }
   return correction.clamp(-100.0, 100.0);
 }
 
-/// Both axes as the geometry measures them, before Auto decides which of
-/// them it is willing to act on.
+/// Which correction the user asked for.
+enum UprightMode {
+  /// Decide for me. Levels and corrects converging verticals, declines
+  /// when the evidence does not hold together, and never touches the
+  /// horizontal axis — see [uprightFor] for why that axis needs asking
+  /// for.
+  auto,
+
+  /// Level and correct the verticals, on whatever evidence there is.
+  vertical,
+
+  /// The same, plus the horizontal axis.
+  ///
+  /// The honest warning: this is the mode that will skew a landscape. A
+  /// hillside of rooflines is, as geometry, indistinguishable from
+  /// converging horizontals, so Full takes the photographer's word for it
+  /// that the near-horizontal edges in this frame are architecture.
+  full,
+}
+
+/// Both axes as the geometry measures them, with no judgement about
+/// whether either is wanted.
 ///
-/// Separate from [uprightAutoFor] because the two questions are
-/// different: this one is "what do the edges say", which is a matter of
-/// measurement, and Auto's is "which of that can be believed", which is a
-/// matter of judgement. The Vertical and Full modes still to come will
-/// want the measurement without Auto's judgement.
-UprightCorrection? uprightMeasureFor(Uint8List luma, int width, int height) {
+/// Kept separate from [uprightFor] because the two questions are
+/// different: this one is "what do the edges say", which is measurement,
+/// and [uprightFor]'s is "which of that to act on", which is not.
+UprightCorrection? uprightMeasureFor(Uint8List luma, int width, int height) =>
+    _measure(luma, width, height, demandAgreement: false);
+
+UprightCorrection? _measure(
+  Uint8List luma,
+  int width,
+  int height, {
+  required bool demandAgreement,
+}) {
   if (width < 32 || height < 32) {
     return null;
   }
@@ -301,11 +336,13 @@ UprightCorrection? uprightMeasureFor(Uint8List luma, int width, int height) {
     width.toDouble(),
     calUprightVerticalGain,
     gainSlope: calUprightVerticalGainSlope,
+    demandAgreement: demandAgreement,
   );
   final horizontal = _correctionFrom(
     fitConvergence(lines, verticals: false),
     height.toDouble(),
     calUprightHorizontalGain,
+    demandAgreement: demandAgreement,
   );
   // Straighten comes from the orientation estimator rather than these
   // lines: it pools every edge in the frame instead of the handful that
@@ -320,11 +357,11 @@ UprightCorrection? uprightMeasureFor(Uint8List luma, int width, int height) {
   );
 }
 
-/// Measures [luma] and returns the Upright Auto correction, or null when
+/// Measures [luma] and returns the correction for [mode], or null when
 /// the photo holds nothing straight enough to go on.
 ///
-/// **Auto never applies the horizontal axis**, and that is a deliberate
-/// retreat from an earlier version that did.
+/// **Only [UprightMode.full] applies the horizontal axis**, and that is a
+/// deliberate retreat from a first version where Auto did.
 ///
 /// The two axes are not equally trustworthy, because the world is not
 /// symmetric. A building's verticals are vertical by construction, so
@@ -344,37 +381,46 @@ UprightCorrection? uprightMeasureFor(Uint8List luma, int width, int height) {
 /// of edges is a roof and the other is a wall would, and lines carry no
 /// such thing.
 ///
-/// So the choice is which way to be wrong. A photo needing horizontal
-/// keystone is uncommon; a photo containing something sloped is not. Auto
-/// declining to touch it costs the rare case a slider drag, and applying
-/// it costs the common case a visibly skewed photo — which is exactly
-/// what a straight-on façade with a hill behind it got: 26 units of
-/// horizontal keystone it did not want.
-///
-/// The measurement stays, tested and calibrated, in [uprightMeasureFor].
-UprightCorrection? uprightAutoFor(Uint8List luma, int width, int height) {
-  final measured = uprightMeasureFor(luma, width, height);
+/// Which is why the axis is offered rather than applied. Auto cannot know
+/// and so declines; someone choosing Full is telling it that the
+/// near-horizontal edges in this frame are architecture, which is a thing
+/// they can see and the geometry cannot.
+UprightCorrection? uprightFor(
+  Uint8List luma,
+  int width,
+  int height,
+  UprightMode mode,
+) {
+  final measured = _measure(
+    luma,
+    width,
+    height,
+    // Auto is the only mode that has to decide whether a correction is
+    // wanted at all. The others were asked for.
+    demandAgreement: mode == UprightMode.auto,
+  );
   if (measured == null) {
     return null;
   }
   final correction = UprightCorrection(
     straightenAngle: measured.straightenAngle,
     vertical: measured.vertical,
-    horizontal: 0,
+    horizontal: mode == UprightMode.full ? measured.horizontal : 0,
   );
   return correction.isEmpty ? null : correction;
 }
 
 /// A photo's luma handed across an isolate boundary, for [uprightAutoFor].
 class UprightAutoRequest {
-  const UprightAutoRequest(this.luma, this.width, this.height);
+  const UprightAutoRequest(this.luma, this.width, this.height, this.mode);
 
   final Uint8List luma;
   final int width;
   final int height;
+  final UprightMode mode;
 }
 
 /// `compute()` entry point — the per-pixel work here is the same class as
 /// a render and has no business on the UI isolate.
 UprightCorrection? uprightAutoForRequest(UprightAutoRequest request) =>
-    uprightAutoFor(request.luma, request.width, request.height);
+    uprightFor(request.luma, request.width, request.height, request.mode);

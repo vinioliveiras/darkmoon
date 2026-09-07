@@ -5638,7 +5638,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// [_levelPhoto]; what differs is that it writes three sliders instead
   /// of one, and that it replaces rather than adds — pressing Auto twice
   /// should land in the same place, not compound.
-  Future<void> _uprightAuto() async {
+  Future<void> _uprightAuto(UprightMode mode) async {
     if (_uprightBusy) {
       return;
     }
@@ -5654,7 +5654,7 @@ class _EditorScreenState extends State<EditorScreen>
       }
       final correction = await compute(
         uprightAutoForRequest,
-        UprightAutoRequest(source.luma, source.width, source.height),
+        UprightAutoRequest(source.luma, source.width, source.height, mode),
       );
       if (!mounted) {
         return;
@@ -5671,6 +5671,9 @@ class _EditorScreenState extends State<EditorScreen>
         _cropTransform.copyWith(
           straightenAngle: correction.straightenAngle,
           vertical: correction.vertical,
+          // Every mode writes this. The ones that do not correct the axis
+          // report zero for it, and leaving a previous run's value behind
+          // would make the modes compound instead of replace.
           horizontal: correction.horizontal,
         ),
       );
@@ -8956,9 +8959,9 @@ class _CropTransformPanel extends StatelessWidget {
   /// instead of looking like it did nothing.
   final bool levelBusy;
 
-  /// Measures the photo and both straightens and de-keystones it — the
-  /// Auto mode of the same set.
-  final VoidCallback onUpright;
+  /// Measures the photo and both straightens and de-keystones it, as far
+  /// as the chosen mode allows.
+  final ValueChanged<UprightMode> onUpright;
   final bool uprightBusy;
 
   final CropTransformParams params;
@@ -9040,21 +9043,39 @@ class _CropTransformPanel extends StatelessWidget {
                 tooltip: l10n.cropGuidedTooltip,
                 onTap: onToggleGuidedMode,
               ),
-              // Beside Guided, since both are Upright modes: one works out
-              // the correction on its own, the other is told. Grouping them
-              // says that; the button sitting apart above the Straighten
-              // slider did not.
+              // Beside Guided, as asked: one works the correction out on
+              // its own, the other is told.
               _ToolbarSegment(
                 label: l10n.transformLevelButton,
                 tooltip: l10n.transformLevelButton,
                 onTap: levelBusy ? null : onLevel,
               ),
-              // Auto is Level plus perspective, so it belongs in the same
-              // group and after it: the more it does, the further right.
+            ],
+          ),
+          const SizedBox(height: 6),
+          // The three perspective modes get their own row, ordered by how
+          // much each will do: Auto corrects the verticals when it is sure
+          // of them, Vertical does regardless, Full adds the horizontals
+          // too. Three labels is what this panel's width comfortably takes
+          // — a fourth left German's "Ausrichten" ellipsised.
+          _ToolbarPill(
+            children: [
               _ToolbarSegment(
                 label: l10n.transformAutoButton,
                 tooltip: l10n.transformAutoTooltip,
-                onTap: uprightBusy ? null : onUpright,
+                onTap: uprightBusy ? null : () => onUpright(UprightMode.auto),
+              ),
+              _ToolbarSegment(
+                label: l10n.transformVerticalButton,
+                tooltip: l10n.transformVerticalTooltip,
+                onTap: uprightBusy
+                    ? null
+                    : () => onUpright(UprightMode.vertical),
+              ),
+              _ToolbarSegment(
+                label: l10n.transformFullButton,
+                tooltip: l10n.transformFullTooltip,
+                onTap: uprightBusy ? null : () => onUpright(UprightMode.full),
               ),
             ],
           ),
@@ -9580,9 +9601,9 @@ class _ControlsPanel extends StatefulWidget {
   final VoidCallback onLevel;
   final bool levelBusy;
 
-  /// Fired by the Crop panel's Auto button — Level plus the perspective
-  /// correction — and [uprightBusy] while that runs.
-  final VoidCallback onUpright;
+  /// Fired by the Crop panel's Auto/Vertical/Full buttons — Level plus
+  /// the perspective correction — and [uprightBusy] while that runs.
+  final ValueChanged<UprightMode> onUpright;
   final bool uprightBusy;
   final VoidCallback onImportColorProfile;
   final VoidCallback onEditColorProfile;

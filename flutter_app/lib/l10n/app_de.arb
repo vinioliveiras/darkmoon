@@ -378,6 +378,10 @@
   "transformLevelButton": "Ausrichten",
   "transformLevelNothingFound": "Nichts Gerades zum Ausrichten gefunden. Bitte manuell drehen.",
   "transformAutoButton": "Auto",
-  "transformAutoTooltip": "Richtet das Foto aus und korrigiert die Perspektive in einem Schritt",
+  "transformAutoTooltip": "Richtet das Foto aus und korrigiert stuerzende Vertikalen",
+  "transformVerticalButton": "Vertikal",
+  "transformVerticalTooltip": "Ausrichten und stuerzende Vertikalen korrigieren, auch bei schwachen Hinweisen",
+  "transformFullButton": "Voll",
+  "transformFullTooltip": "Korrigiert auch stuerzende Horizontalen — fuer Architektur, da es Landschaften verzerrt",
   "transformAutoNothingFound": "Nichts Gerades zum Korrigieren gefunden. Bitte manuell anpassen."
 }

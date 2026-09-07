@@ -1227,7 +1227,21 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get transformAutoTooltip =>
-      'Level the photo and correct its perspective in one step';
+      'Level the photo and correct converging verticals';
+
+  @override
+  String get transformVerticalButton => 'Vertical';
+
+  @override
+  String get transformVerticalTooltip =>
+      'Level and correct converging verticals, even on faint evidence';
+
+  @override
+  String get transformFullButton => 'Full';
+
+  @override
+  String get transformFullTooltip =>
+      'Also correct converging horizontals — for architecture, since it will skew a landscape';
 
   @override
   String get transformAutoNothingFound =>

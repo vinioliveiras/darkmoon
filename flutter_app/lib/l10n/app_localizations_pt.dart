@@ -1235,7 +1235,21 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get transformAutoTooltip =>
-      'Nivela a foto e corrige a perspectiva de uma vez';
+      'Nivela a foto e corrige verticais convergentes';
+
+  @override
+  String get transformVerticalButton => 'Vertical';
+
+  @override
+  String get transformVerticalTooltip =>
+      'Nivela e corrige verticais convergentes, mesmo com pouca evidencia';
+
+  @override
+  String get transformFullButton => 'Total';
+
+  @override
+  String get transformFullTooltip =>
+      'Corrige tambem horizontais convergentes — para arquitetura, porque inclina paisagem';
 
   @override
   String get transformAutoNothingFound =>

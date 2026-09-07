@@ -379,6 +379,10 @@
   "transformLevelButton": "Nivelar",
   "transformLevelNothingFound": "Nada reto o bastante para nivelar. Endireite manualmente.",
   "transformAutoButton": "Auto",
-  "transformAutoTooltip": "Nivela a foto e corrige a perspectiva de uma vez",
+  "transformAutoTooltip": "Nivela a foto e corrige verticais convergentes",
+  "transformVerticalButton": "Vertical",
+  "transformVerticalTooltip": "Nivela e corrige verticais convergentes, mesmo com pouca evidencia",
+  "transformFullButton": "Total",
+  "transformFullTooltip": "Corrige tambem horizontais convergentes — para arquitetura, porque inclina paisagem",
   "transformAutoNothingFound": "Nada reto o bastante para corrigir. Ajuste manualmente."
 }
