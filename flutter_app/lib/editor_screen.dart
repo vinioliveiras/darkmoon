@@ -9486,9 +9486,12 @@ class _ControlsPanelState extends State<_ControlsPanel>
 
   IconData _tabIcon(_ControlsTab tab) => switch (tab) {
     _ControlsTab.adjust => CupertinoIcons.slider_horizontal_3,
-    _ControlsTab.colour => CupertinoIcons.color_filter,
-    _ControlsTab.details => CupertinoIcons.zoom_in,
-    _ControlsTab.effects => CupertinoIcons.wand_stars,
+    // Material rather than Cupertino for these three, by name, at the
+    // user's request (2026-09-07). cupertino_icons is a subset of SF
+    // Symbols and has no equivalent for any of them.
+    _ControlsTab.details => Icons.blur_circular,
+    _ControlsTab.colour => Icons.bubble_chart,
+    _ControlsTab.effects => Icons.filter_b_and_w,
   };
 
   /// Icons only, by request. The name still reaches a tooltip and the

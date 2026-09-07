@@ -1,5 +1,6 @@
 import 'package:darkmoon/main.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart' show Icons;
 import 'package:flutter_test/flutter_test.dart';
 
 /// Guards the coupling that made five sections disappear.
@@ -85,9 +86,9 @@ void main() {
     // Declared in tab order: Adjust, Details, Colour, Effects.
     for (final icon in [
       CupertinoIcons.slider_horizontal_3,
-      CupertinoIcons.zoom_in,
-      CupertinoIcons.color_filter,
-      CupertinoIcons.wand_stars,
+      Icons.blur_circular,
+      Icons.bubble_chart,
+      Icons.filter_b_and_w,
     ]) {
       expect(find.byIcon(icon), findsOneWidget);
     }
