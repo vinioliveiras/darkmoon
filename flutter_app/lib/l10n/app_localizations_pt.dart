@@ -1217,6 +1217,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get settingsTabStyleIcons => 'Icones';
 
   @override
+  String get settingsPresetThumbnailsLabel => 'Previa dos presets';
+
+  @override
+  String get settingsPresetThumbnailsHint =>
+      'Mostra cada preset aplicado na foto atual';
+
+  @override
   String get settingsPanelLayoutHint =>
       'As abas agrupam as secoes em Ajustes, Cor e Efeitos. As mascaras ficam fixas acima nos dois modos.';
 

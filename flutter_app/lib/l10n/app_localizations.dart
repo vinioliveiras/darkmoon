@@ -2332,6 +2332,18 @@ abstract class AppLocalizations {
   /// **'Icons'**
   String get settingsTabStyleIcons;
 
+  /// No description provided for @settingsPresetThumbnailsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Preset previews'**
+  String get settingsPresetThumbnailsLabel;
+
+  /// No description provided for @settingsPresetThumbnailsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Show each preset applied to the current photo'**
+  String get settingsPresetThumbnailsHint;
+
   /// No description provided for @settingsPanelLayoutHint.
   ///
   /// In en, this message translates to:

@@ -374,6 +374,8 @@
   "settingsTabStyleLabel": "Rotulos das abas",
   "settingsTabStyleText": "Texto",
   "settingsTabStyleIcons": "Icones",
+  "settingsPresetThumbnailsLabel": "Previa dos presets",
+  "settingsPresetThumbnailsHint": "Mostra cada preset aplicado na foto atual",
   "settingsPanelLayoutHint": "As abas agrupam as secoes em Ajustes, Cor e Efeitos. As mascaras ficam fixas acima nos dois modos.",
   "controlsTabDetails": "Detalhes",
   "transformLevelButton": "Nivelar",

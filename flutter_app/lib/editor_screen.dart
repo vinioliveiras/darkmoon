@@ -39,6 +39,7 @@ import 'native/edit_source_colorize.dart';
 import 'native/libraw.dart' show RawMetadata, extractRawMetadata;
 import 'native/thumbnail_loader.dart';
 import 'presets/preset.dart';
+import 'presets/preset_thumbnails.dart';
 import 'presets/preset_store.dart';
 import 'presets/preset_xmp.dart';
 import 'profiles/color_profile_store.dart';
@@ -1496,6 +1497,10 @@ class _EditorScreenState extends State<EditorScreen>
   /// has to say it is working rather than look like it ignored the click.
   bool _levelBusy = false;
   bool _uprightBusy = false;
+
+  /// The current photo rendered through each preset, for the preset
+  /// list's previews. Fed by [_syncPresetThumbnails].
+  final PresetThumbnailStore _presetThumbnails = PresetThumbnailStore();
   ColorProfile? _pendingProfileDraft;
 
   /// True while the Straighten slider is actively being dragged (item 28)
@@ -2488,6 +2493,7 @@ class _EditorScreenState extends State<EditorScreen>
     _zoomAnimController.dispose();
     _lifecycleListener.dispose();
     _shortcutsFocusNode.dispose();
+    _presetThumbnails.dispose();
     super.dispose();
   }
 
@@ -5684,6 +5690,41 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
+  /// Points the preset thumbnails at whatever is selected now.
+  ///
+  /// Called from build, which is the one place that reliably runs after
+  /// every change that matters — a different photo, its sources finishing
+  /// their decode, the colour profile changing. [PresetThumbnailStore]
+  /// makes that affordable: it compares the signature and returns
+  /// immediately when nothing has changed, and defers its notification so
+  /// that calling it mid-build cannot mark a listener dirty during the
+  /// same build.
+  void _syncPresetThumbnails() {
+    final path = _selectedIndex == null ? null : _files[_selectedIndex!].path;
+    final source = path == null ? null : _editSources[path]?.live;
+    final profile = _effectiveColorProfile;
+    _presetThumbnails.setSource(
+      // Everything a thumbnail depends on except the preset itself. The
+      // profile belongs here because a thumbnail is this photo seen
+      // *through* it, so changing it makes every cached one wrong.
+      signature: [
+        path ?? '',
+        profile?.name ?? '',
+        _effectiveBaseContrast,
+        source?.width ?? 0,
+      ].join('|'),
+      source: source,
+      paramsFor: (preset) => RenderParams.fromValues(
+        preset.values,
+        curves: preset.curves,
+        asShotKelvin: path == null ? wbDefaultKelvin : _asShotFor(path).kelvin,
+        asShotTint: path == null ? wbDefaultTint : _asShotFor(path).tint,
+        baseContrast: _effectiveBaseContrast,
+        colorProfile: profile,
+      ),
+    );
+  }
+
   /// The neutral preview as luma, for [_levelPhoto] and [_uprightAuto].
   ///
   /// Box-averaged down rather than point-sampled. Nearest-neighbour would
@@ -6932,6 +6973,7 @@ class _EditorScreenState extends State<EditorScreen>
   @override
   Widget build(BuildContext context) {
     final selected = _selectedIndex != null ? _files[_selectedIndex!] : null;
+    _syncPresetThumbnails();
     return CallbackShortcuts(
       bindings: {
         const SingleActivator(LogicalKeyboardKey.backslash): () {
@@ -7162,6 +7204,9 @@ class _EditorScreenState extends State<EditorScreen>
                                     color: DarkmoonColors.panel,
                                     child: PresetPanel(
                                       presets: _presets,
+                                      thumbnails: _settings.presetThumbnails
+                                          ? _presetThumbnails
+                                          : null,
                                       enabled: selected != null,
                                       isApplied: _matchesAppliedPreset,
                                       onApply: _applyPreset,

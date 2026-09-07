@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../presets/preset.dart';
+import '../presets/preset_thumbnails.dart';
 import '../theme.dart';
 
 /// Meridian-style Presets panel — sits below the folder tree in the same
@@ -25,7 +26,13 @@ class PresetPanel extends StatefulWidget {
     required this.onDelete,
     required this.onDeleteMany,
     required this.onExportMany,
+    this.thumbnails,
   });
+
+  /// Renders the current photo through each preset. Null when the
+  /// preview is switched off in Settings, which is the whole of what
+  /// switching it off does — no thumbnails asked for, none rendered.
+  final PresetThumbnailStore? thumbnails;
 
   final List<Preset> presets;
 
@@ -190,25 +197,29 @@ class _PresetPanelState extends State<PresetPanel> {
                     ),
                   ),
                 )
-              : SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      for (final preset in widget.presets)
-                        _PresetRow(
-                          preset: preset,
-                          enabled: widget.enabled,
-                          applied: widget.isApplied(preset),
-                          selectionMode: _selectionMode,
-                          selected: _selectedIds.contains(preset.id),
-                          onApply: () => widget.onApply(preset),
-                          onToggleSelected: () => _toggleSelected(preset.id),
-                          onRename: () => widget.onRename(preset),
-                          onExport: () => widget.onExport(preset),
-                          onDelete: () => widget.onDelete(preset),
-                        ),
-                    ],
-                  ),
+              // A builder, not a Column: it constructs only the rows on
+              // screen, and a row asks for its thumbnail when it is built.
+              // That is what keeps a library of eighty presets from
+              // queueing eighty renders the moment the panel opens.
+              : ListView.builder(
+                  padding: const EdgeInsets.only(right: kScrollbarGutter),
+                  itemCount: widget.presets.length,
+                  itemBuilder: (context, index) {
+                    final preset = widget.presets[index];
+                    return _PresetRow(
+                      preset: preset,
+                      enabled: widget.enabled,
+                      applied: widget.isApplied(preset),
+                      selectionMode: _selectionMode,
+                      selected: _selectedIds.contains(preset.id),
+                      thumbnails: widget.thumbnails,
+                      onApply: () => widget.onApply(preset),
+                      onToggleSelected: () => _toggleSelected(preset.id),
+                      onRename: () => widget.onRename(preset),
+                      onExport: () => widget.onExport(preset),
+                      onDelete: () => widget.onDelete(preset),
+                    );
+                  },
                 ),
         ),
       ],
@@ -242,13 +253,14 @@ class _HeaderIconButton extends StatelessWidget {
   }
 }
 
-class _PresetRow extends StatelessWidget {
+class _PresetRow extends StatefulWidget {
   const _PresetRow({
     required this.preset,
     required this.enabled,
     required this.applied,
     required this.selectionMode,
     required this.selected,
+    required this.thumbnails,
     required this.onApply,
     required this.onToggleSelected,
     required this.onRename,
@@ -261,6 +273,7 @@ class _PresetRow extends StatelessWidget {
   final bool applied;
   final bool selectionMode;
   final bool selected;
+  final PresetThumbnailStore? thumbnails;
   final VoidCallback onApply;
   final VoidCallback onToggleSelected;
   final VoidCallback onRename;
@@ -268,7 +281,40 @@ class _PresetRow extends StatelessWidget {
   final VoidCallback onDelete;
 
   @override
+  State<_PresetRow> createState() => _PresetRowState();
+}
+
+class _PresetRowState extends State<_PresetRow> {
+  @override
+  void initState() {
+    super.initState();
+    _request();
+  }
+
+  @override
+  void didUpdateWidget(_PresetRow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _request();
+  }
+
+  /// Asking on build is safe and is the point: the store answers at once
+  /// when the thumbnail is cached or already queued, so a row scrolling
+  /// back into view costs nothing, and a row that has never been seen is
+  /// the only thing that ever queues work.
+  void _request() => widget.thumbnails?.request(widget.preset);
+
+  @override
   Widget build(BuildContext context) {
+    final preset = widget.preset;
+    final enabled = widget.enabled;
+    final applied = widget.applied;
+    final selectionMode = widget.selectionMode;
+    final selected = widget.selected;
+    final onApply = widget.onApply;
+    final onToggleSelected = widget.onToggleSelected;
+    final onRename = widget.onRename;
+    final onExport = widget.onExport;
+    final onDelete = widget.onDelete;
     final l10n = AppLocalizations.of(context)!;
     return Material(
       color: selected
@@ -325,6 +371,13 @@ class _PresetRow extends StatelessWidget {
                         ),
                 ),
               ),
+              if (widget.thumbnails != null) ...[
+                const SizedBox(width: 8),
+                _PresetThumbnail(
+                  store: widget.thumbnails!,
+                  presetId: preset.id,
+                ),
+              ],
               const SizedBox(width: 6),
               Expanded(
                 child: Text(
@@ -388,6 +441,47 @@ class _PresetRow extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+/// The current photo rendered through one preset, or an empty well while
+/// that render is still queued.
+///
+/// The well is drawn either way so the row does not change height when
+/// the image arrives — a list that reflows as you scroll it is worse than
+/// one that starts blank.
+class _PresetThumbnail extends StatelessWidget {
+  const _PresetThumbnail({required this.store, required this.presetId});
+
+  final PresetThumbnailStore store;
+  final String presetId;
+
+  static const double _size = 64;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListenableBuilder(
+      listenable: store,
+      builder: (context, _) {
+        final image = store.thumbnailFor(presetId);
+        return Container(
+          width: _size,
+          height: _size,
+          decoration: BoxDecoration(
+            color: DarkmoonColors.canvas,
+            borderRadius: BorderRadius.circular(4),
+            border: Border.all(color: DarkmoonColors.border),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: image == null
+              ? null
+              // Cloned because RawImage's render object takes ownership of
+              // what it is handed and disposes it, and the store still
+              // needs this one for every other row and rebuild.
+              : RawImage(image: image.clone(), fit: BoxFit.cover),
+        );
+      },
     );
   }
 }

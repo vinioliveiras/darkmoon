@@ -373,6 +373,8 @@
   "settingsTabStyleLabel": "Tab-Beschriftung",
   "settingsTabStyleText": "Text",
   "settingsTabStyleIcons": "Symbole",
+  "settingsPresetThumbnailsLabel": "Vorgaben-Vorschau",
+  "settingsPresetThumbnailsHint": "Zeigt jede Vorgabe auf das aktuelle Foto angewendet",
   "settingsPanelLayoutHint": "Registerkarten gruppieren die Abschnitte in Anpassen, Farbe und Effekte. Masken bleiben in beiden Faellen oben angeheftet.",
   "controlsTabDetails": "Details",
   "transformLevelButton": "Ausrichten",

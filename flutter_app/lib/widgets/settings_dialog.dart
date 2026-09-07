@@ -275,6 +275,21 @@ class _SettingsDialogState extends State<SettingsDialog>
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             dense: true,
+            title: Text(
+              l10n.settingsPresetThumbnailsLabel,
+              style: _labelStyle,
+            ),
+            subtitle: Text(
+              l10n.settingsPresetThumbnailsHint,
+              style: _hintStyle,
+            ),
+            value: _settings.presetThumbnails,
+            onChanged: (v) =>
+                _update(_settings.copyWith(presetThumbnails: v)),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
             title: Text(l10n.settingsRawOnlyLabel, style: _labelStyle),
             subtitle: Text(l10n.settingsRawOnlyHint, style: _hintStyle),
             value: _settings.rawOnly,

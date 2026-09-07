@@ -392,6 +392,8 @@
   "settingsTabStyleLabel": "Tab labels",
   "settingsTabStyleText": "Text",
   "settingsTabStyleIcons": "Icons",
+  "settingsPresetThumbnailsLabel": "Preset previews",
+  "settingsPresetThumbnailsHint": "Show each preset applied to the current photo",
   "settingsPanelLayoutHint": "Tabs group the sections into Adjust, Colour and Effects. Masks stay pinned above them either way.",
   "controlsTabDetails": "Details",
   "transformLevelButton": "Level",

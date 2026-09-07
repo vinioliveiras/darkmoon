@@ -1228,6 +1228,13 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsTabStyleIcons => 'Symbole';
 
   @override
+  String get settingsPresetThumbnailsLabel => 'Vorgaben-Vorschau';
+
+  @override
+  String get settingsPresetThumbnailsHint =>
+      'Zeigt jede Vorgabe auf das aktuelle Foto angewendet';
+
+  @override
   String get settingsPanelLayoutHint =>
       'Registerkarten gruppieren die Abschnitte in Anpassen, Farbe und Effekte. Masken bleiben in beiden Faellen oben angeheftet.';
 
