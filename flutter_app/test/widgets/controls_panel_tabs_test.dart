@@ -1,6 +1,6 @@
 import 'package:darkmoon/main.dart';
 import 'package:flutter/cupertino.dart';
-import 'package:flutter/material.dart' show Icons;
+import 'package:flutter/material.dart' show TabBar;
 import 'package:flutter_test/flutter_test.dart';
 
 /// Guards the coupling that made five sections disappear.
@@ -84,13 +84,20 @@ void main() {
     await pumpEditor(tester);
 
     // Declared in tab order: Adjust, Details, Colour, Effects.
+    //
+    // Scoped to the TabBar rather than searched app-wide: sparkles is also
+    // the toolbar's AI Denoise button, so a bare byIcon would find two and
+    // the assertion would be about the wrong thing.
     for (final icon in [
       CupertinoIcons.slider_horizontal_3,
-      Icons.blur_circular,
-      Icons.bubble_chart,
-      Icons.filter_b_and_w,
+      CupertinoIcons.dial,
+      CupertinoIcons.circle_grid_hex_fill,
+      CupertinoIcons.sparkles,
     ]) {
-      expect(find.byIcon(icon), findsOneWidget);
+      expect(
+        find.descendant(of: find.byType(TabBar), matching: find.byIcon(icon)),
+        findsOneWidget,
+      );
     }
   });
 }
