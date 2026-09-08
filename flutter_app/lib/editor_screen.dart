@@ -497,7 +497,7 @@ enum ColorProfileMode {
   final double contrastBaseline;
 
   /// Whether Strength's 100% position is damped by
-  /// [calGlobalAmountCompression] (see [_withGlobalEditAmountApplied])
+  /// [calGlobalAmountCompression] (see [withGlobalEditAmountApplied])
   /// or an exact 1:1 pass-through.
   final bool dampened;
 
@@ -569,7 +569,7 @@ ColorProfileMode colorProfileModeOf(Map<String, double> values) {
 /// lives in the same flat `_paramValues` map every other per-photo value
 /// does, 0-200, default 100. Despite the default being the UI's "no-op"
 /// position, this is NOT render-neutral — see [calGlobalAmountCompression]
-/// and [_withGlobalEditAmountApplied]'s doc for what this actually does at
+/// and [withGlobalEditAmountApplied]'s doc for what this actually does at
 /// render time.
 const _globalEditAmountKey = 'GlobalEditAmount';
 
@@ -624,24 +624,61 @@ const defaultFlowAmount = 10.0;
 /// [ColorProfileMode.dampened] is false (see its own doc) — an undamped
 /// profile's Strength 100% means an exact 1:1 pass-through for every key,
 /// override or not.
-Map<String, double> _withGlobalEditAmountApplied(Map<String, double> values) {
+/// Families of runtime-built slider keys that share one compression
+/// entry, longest first so a more specific family would win.
+const _amountCompressionFamilies = ['Mixer', 'Grade'];
+
+/// How much of [key]'s distance from its default survives at Amount 100%.
+///
+/// Exact entry first, then the family its key belongs to, then the global
+/// value. The family step exists because the Colour Mixer's and Colour
+/// Grading's key names are built at runtime — `MixerRedHue`,
+/// `GradeShadowsSaturation` — so there are 36 of them and listing each
+/// would be a wall of duplicates.
+double _amountCompressionFor(String key) {
+  final exact = calGlobalAmountCompressionOverrides[key];
+  if (exact != null) {
+    return exact;
+  }
+  for (final family in _amountCompressionFamilies) {
+    if (key.startsWith(family)) {
+      final value = calGlobalAmountCompressionOverrides[family];
+      if (value != null) {
+        return value;
+      }
+    }
+  }
+  return calGlobalAmountCompression;
+}
+
+Map<String, double> withGlobalEditAmountApplied(Map<String, double> values) {
   final amount = values[_globalEditAmountKey] ?? 100.0;
   final dampened = colorProfileModeOf(values).dampened;
   final defaults = _defaultParamValues();
   final scaleKeys = defaults.keys.toSet()
     ..remove('Temperature')
     ..remove('Tint')
-    ..remove(_globalEditAmountKey);
+    ..remove(_globalEditAmountKey)
+    // The Colour Mixer and Colour Grading build their keys at runtime, so
+    // they are not in [_defaultParamValues] and this loop simply never
+    // reached them — the Amount slider did nothing at all to either, and a
+    // preset whose look came mostly from the mixer ignored Amount
+    // outright. Exactly the bug fixed for the tone curves on 2026-09-01,
+    // still open here until 2026-09-08. Their neutral is 0, which is what
+    // the `?? 0` below already gives them.
+    ..addAll([
+      for (final channel in _mixerChannels)
+        for (final suffix in _hslSuffixes) 'Mixer$channel$suffix',
+      for (final range in _gradeRanges)
+        for (final suffix in _hslSuffixes) 'Grade$range$suffix',
+    ]);
   final scaled = <String, double>{...values};
   for (final key in scaleKeys) {
     final value = values[key];
     if (value == null) {
       continue;
     }
-    final compression = dampened
-        ? (calGlobalAmountCompressionOverrides[key] ??
-              calGlobalAmountCompression)
-        : 1.0;
+    final compression = dampened ? _amountCompressionFor(key) : 1.0;
     final fraction = amount / 100.0 * compression;
     final base = defaults[key] ?? 0;
     scaled[key] = base + (value - base) * fraction;
@@ -761,7 +798,7 @@ Map<String, double> _defaultParamValues() {
     // Not a real slider — a synthetic entry so Reset/first-open/photo-
     // switch all naturally land on 100% (no-op) like everything else here,
     // without a separate special case anywhere else in this file. Removed
-    // from [_withGlobalEditAmountApplied]'s own scaling set explicitly —
+    // from [withGlobalEditAmountApplied]'s own scaling set explicitly —
     // it must never scale itself.
     _globalEditAmountKey: 100.0,
     for (final specs in _sections.values)
@@ -1200,7 +1237,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// passed at either of this file's two real render call sites — the
   /// slider visibly moved but the per-hue correction always rendered at
   /// full authored strength regardless, since nothing read the slider's
-  /// value for it. `_withGlobalEditAmountApplied` reads the same
+  /// value for it. `withGlobalEditAmountApplied` reads the same
   /// [_globalEditAmountKey] but only ever touches `_paramValues`'
   /// continuous sliders — the loaded [ColorProfile] tables live in
   /// [_colorProfiles], a separate structure it never reaches.
@@ -1910,7 +1947,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// *entire* current edit (this preset's values *and* whatever the
   /// sliders get manually adjusted to afterward), rather than something
   /// that rewrites `_paramValues` itself on every drag. See
-  /// [_withGlobalEditAmountApplied]'s doc for why: the old design made
+  /// [withGlobalEditAmountApplied]'s doc for why: the old design made
   /// dragging Amount visibly overwrite the right-hand sliders (confusing,
   /// and silently discarded any manual tweaks made since the preset was
   /// applied) and stopped doing anything at all once a manual edit had
@@ -1931,7 +1968,7 @@ class _EditorScreenState extends State<EditorScreen>
       ..remove('Temperature')
       ..remove('Tint')
       // Amount is a separate, persistent setting (see
-      // _withGlobalEditAmountApplied) — applying a preset never resets it.
+      // withGlobalEditAmountApplied) — applying a preset never resets it.
       ..remove(_globalEditAmountKey)
       // Same reasoning as Amount, real bug fixed 2026-09-01: an XMP-derived
       // preset never carries this key (it's darkmoon-specific), so the
@@ -5328,7 +5365,7 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   /// The Amount slider under the preset list — see
-  /// [_globalEditAmountKey]/[_withGlobalEditAmountApplied]. Deliberately
+  /// [_globalEditAmountKey]/[withGlobalEditAmountApplied]. Deliberately
   /// NOT [_onParamChanged]/[_onParamChangeEnd]: those clear
   /// [_appliedPresetId] on every change (a manual slider edit un-links
   /// the preset), but Amount isn't a manual edit to any one slider — the
@@ -5932,13 +5969,13 @@ class _EditorScreenState extends State<EditorScreen>
   /// param values (CPU preview, GPU preview, and export all read through
   /// this one function, so both get Amount applied automatically with no
   /// separate wiring). See [_withCategoriesApplied]'s and
-  /// [_withGlobalEditAmountApplied]'s own doc comments.
+  /// [withGlobalEditAmountApplied]'s own doc comments.
   Map<String, double> _effectiveParamValues() {
     final path = _selectedIndex == null ? null : _files[_selectedIndex!].path;
     final asShot = path == null
         ? (kelvin: wbDefaultKelvin, tint: wbDefaultTint)
         : _asShotFor(path);
-    return _withGlobalEditAmountApplied(
+    return withGlobalEditAmountApplied(
       _withCategoriesApplied(
         _paramValues,
         asShotKelvin: asShot.kelvin,
@@ -5955,7 +5992,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// Real bug (2026-09-01, user report): a preset that leans heavily on
   /// its Tone/Color Curve (vs. flat sliders) barely responded to Amount at
   /// all, while a slider-heavy preset responded strongly — because Amount
-  /// only ever scaled [_paramValues] ([_withGlobalEditAmountApplied]);
+  /// only ever scaled [_paramValues] ([withGlobalEditAmountApplied]);
   /// curves stayed at full strength regardless. `lerpPhotoCurves` already
   /// existed for exactly this ("used for a preset's Amount slider", see
   /// its own doc in tone_curve.dart) and already had test coverage — it
@@ -9631,7 +9668,7 @@ class _ControlsPanel extends StatefulWidget {
   final VoidCallback onReset;
 
   /// How strongly the *entire current edit* renders, 0..200% — see the
-  /// top-level `_globalEditAmountKey`/`_withGlobalEditAmountApplied`. Sits
+  /// top-level `_globalEditAmountKey`/`withGlobalEditAmountApplied`. Sits
   /// just below the histogram (2026-09-01) — previously lived in the
   /// viewer toolbar under the preset sidebar.
   final double presetAmount;

@@ -79,22 +79,27 @@ const double calGlobalAmountCompression = 1.0;
 const Map<String, double> calGlobalAmountCompressionOverrides = {
   'ColorProfileAmount': 1.0,
   'Exposure': 3.0,
-  'Contrast': 0.8,
-  'Shadow': 0.5,
+  'Contrast': 0.5,
+  'Shadows': 0.6,
   'Texture': 0.3,
-  'Sharpen': 0.5,
-  'Blacks': 0.5,
+  'SharpenAmount': 0.5,
+  'Blacks': 0.6,
   'Vibrance': 0.8,
   'Saturation': 0.5,
-  'Dehaze': 0.2,
-  'Clarity': 0.5,
-  'Mixer': 0.5,
-  'MixerHue': 0.2,
-  'MixerHueStrength': 0.2,
-  'MixerSaturation': 0.6,
-  'MixerHueSaturation': 0.5,
-  'MixerHueLuminance': 0.5,
-  'MixerLuminance': 0.3,
+  'Dehaze': 0.3,
+  'Clarity': 0.6,
+  // Family entries: any key starting with these uses them unless it has
+  // an exact entry of its own, so 'Mixer' covers all 24 Colour Mixer
+  // sliders and 'Grade' all 12 Colour Grading ones.
+  //
+  // Both are 1.0 on purpose. Until 2026-09-08 neither family was reached
+  // by this scaling at all — their keys are built at runtime and were
+  // never in the map it iterates — so every look built so far, and every
+  // saved preset, assumes them at full strength. Damping them now would
+  // quietly restyle the whole library. They are live and tunable from
+  // here; changing them is a deliberate act, not a default.
+  'Mixer': 1.0,
+  'Grade': 1.0,
   // Real bug found 2026-09-02: dragging the "Color Profile Contrast"
   // slider (ColorProfileAmount) barely changed the render even across
   // its full range, because it fell back to the global 0.3 fraction like
@@ -104,9 +109,16 @@ const Map<String, double> calGlobalAmountCompressionOverrides = {
   // whole 30% rule was never meant to touch that quietly, since it's
   // itself a stand-in for a fixed baked-in curve, not a "how much of a
   // preset's edit" knob.
-
-
-
+  //
+  // Removed 2026-09-08 as unreachable under any naming: 'Shadow' (the
+  // slider is 'Shadows'), 'Sharpen' ('SharpenAmount' and three shape
+  // sliders), and 'MixerHueStrength' / 'MixerHueSaturation' /
+  // 'MixerHueLuminance' / 'MixerHue' / 'MixerSaturation' /
+  // 'MixerLuminance', none of which is a key or a family prefix — a
+  // mixer key reads MixerRedHue, so only the 'Mixer' family above can
+  // catch it. The first two are restored under their real names; the
+  // rest were never doing anything, and reviving their values would have
+  // cut the mixer to a fifth.
 };
 
 // Temperature/Tint deliberately have NO entry here, not even 1.0: they
@@ -479,14 +491,14 @@ const double calSaturationStrength = 0.10;
 ///   ↓ lower  = gentler, finer control over that colour
 /// default: 1.0 for all eight
 const Map<String, double> calMixerBandStrength = {
-  'Red': 1.0,
-  'Orange': 1.0,
-  'Yellow': 1.0,
+  'Red': 0.5,
+  'Orange': 0.5,
+  'Yellow': 0.5,
   'Green': 1.0,
   'Aqua': 1.0,
   'Blue': 1.0,
-  'Purple': 1.0,
-  'Magenta': 1.0,
+  'Purple': 0.5,
+  'Magenta': 0.5,
 };
 
 /// **Mixer → Hue** — how many degrees of hue rotation each slider unit
