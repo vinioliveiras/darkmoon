@@ -61,7 +61,7 @@ library;
 ///     values
 ///   ↓ lower  = default Amount (100%) renders gentler
 /// default: 0.3   (original/unset: 1.0 — Amount was a 1:1 pass-through)
-const double calGlobalAmountCompression = 1.0;
+const double calGlobalAmountCompression = 0.3;
 
 /// Per-slider override of [calGlobalAmountCompression] — a slider key
 /// present here (matching its `_SliderSpec` name in `editor_screen.dart`,
@@ -81,8 +81,18 @@ const Map<String, double> calGlobalAmountCompressionOverrides = {
   'Exposure': 3.0,
   'Contrast': 0.5,
   'Shadows': 0.6,
-  'Texture': 0.3,
-  'SharpenAmount': 0.5,
+  'Texture': 0.4,
+  // Undamped, and deliberately so: sharpening is the counterweight to a
+  // denoise that is not damped at all. Measured on a detailed frame at
+  // preview scale, mean absolute Laplacian against the untouched source:
+  // no denoise 19.9, medium denoise 15.9, and denoise plus a Sharpen of
+  // 60 only reaches 16.9 once halved. Damping one side of that balance
+  // and not the other is what makes a photo read as a painting.
+  //
+  // This entry was written as 'Sharpen' and never matched a slider, so
+  // until 2026-09-08 it did nothing and its 0.5 was never tried against a
+  // real photograph.
+  'SharpenAmount': 1.0,
   'Blacks': 0.6,
   'Vibrance': 0.8,
   'Saturation': 0.5,
