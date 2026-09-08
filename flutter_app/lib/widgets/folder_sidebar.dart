@@ -73,7 +73,7 @@ class FolderSidebar extends StatelessWidget {
     // fresh install that hid it would be a dead end.
     final header = _SidebarSectionHeader(
       l10n.sidebarFoldersSection,
-      leading: PopupMenuButton<VoidCallback>(
+      trailing: PopupMenuButton<VoidCallback>(
         tooltip: l10n.sidebarOpenTooltip,
         offset: const Offset(0, 28),
         itemBuilder: (context) => [
@@ -98,7 +98,13 @@ class FolderSidebar extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            header,
+            // The populated branch draws this inside a scroll view that
+            // reserves the scrollbar's gutter; without the same inset here
+            // the button would jump sideways the moment a folder is added.
+            Padding(
+              padding: const EdgeInsets.only(right: kScrollbarGutter),
+              child: header,
+            ),
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.fromLTRB(12, 2, 12, 12),
@@ -180,31 +186,32 @@ class FolderSidebar extends StatelessWidget {
 }
 
 class _SidebarSectionHeader extends StatelessWidget {
-  const _SidebarSectionHeader(this.label, {this.leading});
+  const _SidebarSectionHeader(this.label, {this.trailing});
 
   final String label;
 
-  /// Sits to the left of the label, flush with the column's own left edge
-  /// — the button that adds to a section reads as part of that section's
-  /// heading rather than floating above the list.
-  final Widget? leading;
+  /// Sits at the right end of the heading, in the same column as the
+  /// remove buttons on the folder rows below it: those are 8px in from
+  /// their row's right edge, and the padding here puts this button's
+  /// glyph at the same 8 once its own tap padding is counted.
+  final Widget? trailing;
 
   @override
   Widget build(BuildContext context) {
     final text = Text(label, style: Theme.of(context).textTheme.labelSmall);
-    if (leading == null) {
+    if (trailing == null) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
         child: text,
       );
     }
     return Padding(
-      // Less on the left than the plain header, and tighter vertically:
-      // the button carries its own padding, so indenting it as well would
-      // push it out of line with the rows underneath and make the heading
-      // taller than its neighbours.
-      padding: const EdgeInsets.fromLTRB(6, 4, 12, 2),
-      child: Row(children: [leading!, const SizedBox(width: 2), text]),
+      // Same 12 on the left as the plain header, so the two section
+      // titles line up with each other. Tighter vertically because the
+      // button is taller than the label and would otherwise make this
+      // heading stand off from its neighbour.
+      padding: const EdgeInsets.fromLTRB(12, 4, 2, 2),
+      child: Row(children: [Expanded(child: text), trailing!]),
     );
   }
 }
