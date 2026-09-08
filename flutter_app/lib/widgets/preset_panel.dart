@@ -1,10 +1,17 @@
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
+import '../animations_config.dart';
 import '../l10n/app_localizations.dart';
 import '../presets/preset.dart';
 import '../presets/preset_thumbnails.dart';
 import '../theme.dart';
+
+/// How long entering or leaving selection mode takes. Matches the folder
+/// tree's expand/collapse, which is the other place in this sidebar where
+/// a control grows out of nothing.
+const _selectionModeDuration = Duration(milliseconds: 180);
+const _selectionModeCurve = Curves.easeOutCubic;
 
 /// Meridian-style Presets panel — sits below the folder tree in the same
 /// left sidebar. Save the current photo's edits as a new preset, click a
@@ -127,61 +134,91 @@ class _PresetPanelState extends State<PresetPanel> {
           child: Row(
             children: [
               Expanded(
-                child: Text(
-                  _selectionMode
-                      ? l10n.presetSelectedCount(_selectedIds.length)
-                      : l10n.sidebarPresetsSection,
-                  style: Theme.of(context).textTheme.labelSmall,
+                // Keyed on the mode, not on the text: within selection
+                // mode the count changes on every tap, and cross-fading
+                // the header on each one reads as flicker rather than as
+                // feedback.
+                child: AnimatedSwitcher(
+                  duration: AnimationsConfig.duration(
+                    context,
+                    _selectionModeDuration,
+                  ),
+                  switchInCurve: _selectionModeCurve,
+                  switchOutCurve: _selectionModeCurve,
+                  child: Text(
+                    _selectionMode
+                        ? l10n.presetSelectedCount(_selectedIds.length)
+                        : l10n.sidebarPresetsSection,
+                    key: ValueKey(_selectionMode),
+                    style: Theme.of(context).textTheme.labelSmall,
+                  ),
                 ),
               ),
-              if (_selectionMode) ...[
-                _HeaderIconButton(
+              // Both sets of buttons are always here, interleaved so the
+              // two that share the checkmark glyph sit in the same place:
+              // entering selection mode then reads as the header growing
+              // around a control that stayed put, rather than as one bar
+              // being replaced by another.
+              _CollapsibleSlot(
+                visible: _selectionMode,
+                child: _HeaderIconButton(
                   tooltip: l10n.presetSelectAllTooltip,
                   icon: _selectedIds.length == widget.presets.length
                       ? CupertinoIcons.checkmark_circle_fill
                       : CupertinoIcons.checkmark_circle,
                   onPressed: _toggleSelectAll,
                 ),
-                const SizedBox(width: 10),
-                _HeaderIconButton(
+              ),
+              _CollapsibleSlot(
+                visible: !_selectionMode && widget.presets.isNotEmpty,
+                child: _HeaderIconButton(
+                  tooltip: l10n.presetSelectTooltip,
+                  icon: CupertinoIcons.checkmark_circle,
+                  onPressed: widget.presets.isEmpty
+                      ? null
+                      : () => _enterSelectionMode(widget.presets.first.id),
+                ),
+              ),
+              _CollapsibleSlot(
+                visible: _selectionMode,
+                child: _HeaderIconButton(
                   tooltip: l10n.presetExportManyTooltip,
                   icon: CupertinoIcons.tray_arrow_up,
                   onPressed: _selectedIds.isEmpty ? null : _bulkExport,
                 ),
-                const SizedBox(width: 10),
-                _HeaderIconButton(
-                  tooltip: l10n.presetDeleteLabel,
-                  icon: CupertinoIcons.trash,
-                  onPressed: _selectedIds.isEmpty ? null : _confirmBulkDelete,
-                ),
-                const SizedBox(width: 10),
-                _HeaderIconButton(
-                  tooltip: l10n.cancelButton,
-                  icon: CupertinoIcons.xmark,
-                  onPressed: _exitSelectionMode,
-                ),
-              ] else ...[
-                if (widget.presets.isNotEmpty) ...[
-                  _HeaderIconButton(
-                    tooltip: l10n.presetSelectTooltip,
-                    icon: CupertinoIcons.checkmark_circle,
-                    onPressed: () =>
-                        _enterSelectionMode(widget.presets.first.id),
-                  ),
-                  const SizedBox(width: 10),
-                ],
-                _HeaderIconButton(
+              ),
+              _CollapsibleSlot(
+                visible: !_selectionMode,
+                child: _HeaderIconButton(
                   tooltip: l10n.presetImportTooltip,
                   icon: CupertinoIcons.tray_arrow_down,
                   onPressed: widget.onImport,
                 ),
-                const SizedBox(width: 10),
-                _HeaderIconButton(
+              ),
+              _CollapsibleSlot(
+                visible: _selectionMode,
+                child: _HeaderIconButton(
+                  tooltip: l10n.presetDeleteLabel,
+                  icon: CupertinoIcons.trash,
+                  onPressed: _selectedIds.isEmpty ? null : _confirmBulkDelete,
+                ),
+              ),
+              _CollapsibleSlot(
+                visible: !_selectionMode,
+                child: _HeaderIconButton(
                   tooltip: l10n.presetSaveNewTooltip,
                   icon: CupertinoIcons.add,
                   onPressed: widget.enabled ? widget.onSaveNew : null,
                 ),
-              ],
+              ),
+              _CollapsibleSlot(
+                visible: _selectionMode,
+                child: _HeaderIconButton(
+                  tooltip: l10n.cancelButton,
+                  icon: CupertinoIcons.xmark,
+                  onPressed: _exitSelectionMode,
+                ),
+              ),
             ],
           ),
         ),
@@ -223,6 +260,64 @@ class _PresetPanelState extends State<PresetPanel> {
                 ),
         ),
       ],
+    );
+  }
+}
+
+/// A header slot that grows in from nothing and fades in when [visible],
+/// and collapses back out when not.
+///
+/// The horizontal twin of the folder tree's expand/collapse, and the
+/// reason the header can morph between its two sets of buttons instead of
+/// swapping them: an [AnimatedSwitcher] across the whole group would size
+/// itself to whichever set is wider for the duration of the cross-fade and
+/// snap at the end, which is the jump this exists to avoid. Every button
+/// is always in the tree; only its width and opacity move.
+///
+/// The gap between buttons lives inside the slot so it collapses with it —
+/// a fixed `SizedBox` between slots would leave a growing run of dead
+/// space as buttons disappeared.
+class _CollapsibleSlot extends StatelessWidget {
+  const _CollapsibleSlot({
+    required this.visible,
+    required this.child,
+    this.gap = 10,
+  });
+
+  final bool visible;
+  final Widget child;
+
+  /// Leading space, folded into the slot so it collapses with it. Zero for
+  /// a slot that is already first in its row.
+  final double gap;
+
+  @override
+  Widget build(BuildContext context) {
+    final duration = AnimationsConfig.duration(
+      context,
+      _selectionModeDuration,
+    );
+    return ClipRect(
+      child: AnimatedAlign(
+        duration: duration,
+        curve: _selectionModeCurve,
+        alignment: Alignment.centerLeft,
+        widthFactor: visible ? 1.0 : 0.0,
+        child: AnimatedOpacity(
+          duration: duration,
+          curve: _selectionModeCurve,
+          opacity: visible ? 1.0 : 0.0,
+          // A collapsed slot is still a hit target at zero width in some
+          // layouts, and a button nobody can see must not be pressable.
+          child: IgnorePointer(
+            ignoring: !visible,
+            child: Padding(
+              padding: EdgeInsets.only(left: gap),
+              child: child,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -341,11 +436,16 @@ class _PresetRowState extends State<_PresetRow> {
             ),
             child: Row(
               children: [
-                if (selectionMode)
-                  // Only in selection mode now. Outside it the thumbnail
-                  // is what identifies the row, so a leading glyph beside
-                  // a picture of the preset is just clutter.
-                  Padding(
+                // Only in selection mode: outside it the thumbnail is what
+                // identifies the row, so a leading glyph beside a picture
+                // of the preset is just clutter. It slides the row's
+                // contents aside as it grows rather than appearing under
+                // them, which is what makes entering the mode read as one
+                // movement across the whole list.
+                _CollapsibleSlot(
+                  visible: selectionMode,
+                  gap: 0,
+                  child: Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: Icon(
                       selected
@@ -357,6 +457,7 @@ class _PresetRowState extends State<_PresetRow> {
                           : DarkmoonColors.textMuted,
                     ),
                   ),
+                ),
                 if (showThumbnail)
                   _PresetThumbnail(
                     store: widget.thumbnails!,
@@ -421,9 +522,18 @@ class _PresetRowState extends State<_PresetRow> {
               SizedBox(
                 width: 26,
                 height: 26,
-                child: selectionMode
-                    ? null
-                    : PopupMenuButton<VoidCallback>(
+                // Fades rather than vanishing, so the row's right edge
+                // settles at the same moment its left edge does.
+                child: AnimatedOpacity(
+                  duration: AnimationsConfig.duration(
+                    context,
+                    _selectionModeDuration,
+                  ),
+                  curve: _selectionModeCurve,
+                  opacity: selectionMode ? 0.0 : 1.0,
+                  child: IgnorePointer(
+                    ignoring: selectionMode,
+                    child: PopupMenuButton<VoidCallback>(
                         // Uses `child` rather than `icon` — `icon` wraps in
                         // an IconButton, which inherits the app's global
                         // IconButtonTheme (a bordered, filled rounded-square
@@ -457,6 +567,8 @@ class _PresetRowState extends State<_PresetRow> {
                           ),
                         ),
                       ),
+                  ),
+                ),
               ),
               ],
             ),
