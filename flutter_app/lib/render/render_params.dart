@@ -167,6 +167,18 @@ class RenderParams {
   /// [calRadiusReferenceLongEdge] for why the whole thing exists.
   final double renderScale;
 
+  /// [renderScale] for the pixel-domain stages only — the always-on chroma
+  /// smoothing, AI Denoise and Sharpen — capped at
+  /// [calDetailRadiusMaxScale]. Noise and sharpening reach a fixed number
+  /// of real pixels, not a fixed fraction of the frame; see that constant
+  /// for the measurements that forced the split. Everything else
+  /// (Clarity, Dehaze, Texture, the tonal blur) still uses the uncapped
+  /// [renderScale].
+  double get detailScale =>
+      renderScale < calDetailRadiusMaxScale
+      ? renderScale
+      : calDetailRadiusMaxScale;
+
   /// Every field carried across unchanged except [renderScale]. Written
   /// out rather than generated because this class is a plain value type
   /// with no code generation in the project; adding a field here without

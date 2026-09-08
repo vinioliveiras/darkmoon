@@ -63,28 +63,45 @@ Uint8List downscale(Uint8List src, int sw, int sh, int dw, int dh) {
 // dynamic full-quality preview, and the export), so any stage that is
 // resolution-dependent looks different in all three.
 //
-// Grain and Vignette already normalise against a 1080px reference.
-// Sharpen, Texture, Clarity, Dehaze and the always-on baseline chroma
-// smoothing do not: their radii and sigmas are absolute pixel counts, so a
-// sigma-35 Clarity spans 3.4% of a 1024px frame and 0.45% of a 7728px one.
+// Grain and Vignette normalise against a 1080px reference. Texture,
+// Clarity, Dehaze and the tonal blur scale with the frame instead, so a
+// sigma-35 Clarity covers the same 3.4% of the scene at every resolution.
+//
+// Sharpen, AI Denoise and the always-on baseline chroma smoothing sit in
+// neither camp: they are capped at calDetailRadiusMaxScale, because noise
+// and sharpening reach a fixed number of real pixels rather than a fixed
+// fraction of the scene. Uncapped, a 24MP export ran them at 5.9x their
+// tuned radii and photographs came out looking like oil paintings; see
+// that constant, and detail_scale_invariance_test.dart for the guard.
 //
 // Measured 2026-09-03 at a 4x linear ratio (mean absolute byte difference
 // after area-averaging the large render down to the small one):
 //
-//   neutral                1.15   (default sharpen + chroma smoothing)
-//   exposure +20           1.17   control: a pure point op, flat
-//   dehaze 60              1.87
-//   sharpen 100            1.91
-//   clarity 60             3.37
-//   texture 60             3.84
-//   grain 60               6.92   expected: noise, a different pattern by
-//                                 construction, not a resolution bug
+//                          before  after   (after = the three pixel-domain
+//                                           stages capped, 2026-09-08)
+//   neutral                1.15    1.08    default sharpen + chroma smoothing
+//   exposure +20           1.17    1.10    control: a pure point op, flat
+//   dehaze 60              1.87    1.13
+//   sharpen 100            1.91    1.18
+//   clarity 60             3.37    1.30
+//   texture 60             3.84    1.29
+//   grain 60               6.92    6.90    expected: noise, a different
+//                                          pattern by construction, not a
+//                                          resolution bug
 //
-// Left as a characterisation test rather than a failing one: normalising
-// those sigmas changes the look of every existing edit and preset, so it
-// is a product decision, not a bug fix to slip in. The control case is
-// asserted so this test still fails if a *point* op ever picks up a
-// resolution dependency.
+// Only Sharpen was capped of those, yet Clarity fell 3.37 -> 1.30 and
+// Texture 3.84 -> 1.29 without being touched. The always-on chroma
+// smoothing runs underneath every one of these renders, so most of what
+// each row appeared to measure was actually that one stage drifting with
+// resolution — it was the largest single source of preview-to-export
+// divergence in the renderer, larger than Clarity, Texture and Dehaze
+// together, and it has no slider to turn it off.
+//
+// Left as a characterisation test rather than a failing one for the
+// stages that still scale: normalising their sigmas changes the look of
+// every existing edit and preset, so it is a product decision, not a bug
+// fix to slip in. The control case is asserted so this test still fails
+// if a *point* op ever picks up a resolution dependency.
 void main() {
   const smallW = 512, smallH = 384;
   const bigW = 2048, bigH = 1536; // 4x linear, the preview -> export ratio
@@ -205,13 +222,6 @@ void main() {
       });
     }
 
-    expectResponds(
-      'sharpen',
-      const RenderParams(
-        baseContrast: 0,
-        sharpen: SharpenParams(amount: 100, radius: 3),
-      ),
-    );
     expectResponds('texture', const RenderParams(baseContrast: 0, texture: 70));
     expectResponds('clarity', const RenderParams(baseContrast: 0, clarity: 70));
     expectResponds('dehaze', const RenderParams(baseContrast: 0, dehaze: 70));
@@ -221,16 +231,67 @@ void main() {
       // The tonal blur only feeds _applyRapidShadowsBlacks' detail term,
       // whose detailRatio is clamped to [0.8, 1.25] by construction — so
       // however far its sigma moves, its influence on the output is
-      // bounded. It responds (0.70), just not as loudly as the stages
-      // whose blur *is* the effect.
-      minResponse: 0.4,
+      // bounded. It responds, just not as loudly as the stages whose blur
+      // *is* the effect.
+      //
+      // Was 0.70 against a 0.4 floor until 2026-09-08. Most of that was
+      // never the tonal blur: the always-on chroma smoothing runs in every
+      // one of these renders and used to scale too, so it moved between
+      // scale 1 and 3 in the shadows case exactly as it did in all the
+      // others. Capping it left this stage's own response, 0.19.
+      minResponse: 0.1,
     );
-    expectResponds(
+  });
+
+  // The inverse guard, for the three stages that must *stop* responding.
+  // detail_scale_invariance_test.dart asserts the same property on the
+  // rendered pixels; this one keeps it next to the stages it is the
+  // exception to, so a future "wire everything to renderScale" sweep has
+  // to read why these three are not in that list.
+  group('pixel-domain stages ignore renderScale', () {
+    const w = 768, h = 512;
+    final photo = scene(w, h);
+
+    void expectFlat(String label, RenderParams base) {
+      test(label, () {
+        final atOne = renderRgb(w, h, photo, base.withRenderScaleFor(1024, 683));
+        final atThree = renderRgb(
+          w,
+          h,
+          photo,
+          base.withRenderScaleFor(3072, 2048),
+        );
+        var worst = 0;
+        for (var i = 0; i < atOne.length; i++) {
+          final d = (atOne[i] - atThree[i]).abs();
+          if (d > worst) worst = d;
+        }
+        expect(
+          worst,
+          0,
+          reason:
+              '$label changed between renderScale 1 and 3. Its radius is in '
+              'real pixels and must not follow the frame — see '
+              'calDetailRadiusMaxScale.',
+        );
+      });
+    }
+
+    expectFlat(
+      'sharpen',
+      const RenderParams(
+        baseContrast: 0,
+        sharpen: SharpenParams(amount: 100, radius: 3),
+      ),
+    );
+    expectFlat(
       'ai denoise',
       const RenderParams(
         baseContrast: 0,
         aiDenoise: AiDenoiseParams(level: AiDenoiseLevel.strong),
       ),
     );
+    // Always on, no slider — the one of the three a user cannot turn off.
+    expectFlat('baseline chroma smoothing', const RenderParams(baseContrast: 0));
   });
 }

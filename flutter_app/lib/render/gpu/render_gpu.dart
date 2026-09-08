@@ -107,12 +107,15 @@ Future<ui.Image> renderImageGpu(
   final afterExposureAndWb = chain.add(
     await _runPreDenoise(source, width, height, params),
   );
+  // detailScale, not renderScale, on all three of chroma smoothing,
+  // denoise and sharpen — mirrors render.dart's CPU ordering exactly. See
+  // calDetailRadiusMaxScale.
   final afterChromaSmoothing = chain.add(
     await runBaselineChromaSmoothingGpu(
       afterExposureAndWb,
       width,
       height,
-      params.renderScale,
+      params.detailScale,
     ),
   );
   final afterAiDenoise = chain.add(
@@ -121,7 +124,7 @@ Future<ui.Image> renderImageGpu(
       width,
       height,
       params.aiDenoise,
-      params.renderScale,
+      params.detailScale,
     ),
   );
   final lut = chain.add(
@@ -133,7 +136,7 @@ Future<ui.Image> renderImageGpu(
       width,
       height,
       params.sharpen,
-      params.renderScale,
+      params.detailScale,
     ),
   );
   final afterTexture = chain.add(

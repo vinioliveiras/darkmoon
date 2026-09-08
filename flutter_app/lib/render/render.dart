@@ -261,21 +261,23 @@ void applyLocalAdjustmentSteps(
   // smoothing. Matches Meridian's own ordering: its noise reduction is
   // one of the first things applied to the raw sensor data, well before
   // Basic panel tone adjustments.
+  // detailScale, not renderScale: these three reach a fixed number of
+  // real pixels regardless of frame size. See calDetailRadiusMaxScale.
   applyBaselineChromaSmoothing(
     buffer,
     width,
     height,
     rowOffset: rowOffset,
-    scale: params.renderScale,
+    scale: params.detailScale,
   );
   applyAiDenoise(
     buffer,
     width,
     height,
     params.aiDenoise,
-    scale: params.renderScale,
+    scale: params.detailScale,
   );
-  applySharpen(buffer, width, height, params.sharpen, params.renderScale);
+  applySharpen(buffer, width, height, params.sharpen, params.detailScale);
   applyLocalContrast(
     buffer,
     width,

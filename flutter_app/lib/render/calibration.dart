@@ -61,7 +61,7 @@ library;
 ///     values
 ///   ↓ lower  = default Amount (100%) renders gentler
 /// default: 0.3   (original/unset: 1.0 — Amount was a 1:1 pass-through)
-const double calGlobalAmountCompression = 0.3;
+const double calGlobalAmountCompression = 1.0;
 
 /// Per-slider override of [calGlobalAmountCompression] — a slider key
 /// present here (matching its `_SliderSpec` name in `editor_screen.dart`,
@@ -77,7 +77,7 @@ const double calGlobalAmountCompression = 0.3;
 /// change needed beyond this map, [_withGlobalEditAmountApplied] already
 /// reads through it for every key.
 const Map<String, double> calGlobalAmountCompressionOverrides = {
-  'ColorProfileAmount': 1.0,
+  'ColorProfileAmount': 0.3,
   'Exposure': 3.0,
   'Contrast': 0.5,
   'Shadows': 0.6,
@@ -258,6 +258,41 @@ const double calWbAsShotTintScaleFallback = 200.0;
 /// full-quality preview and the export that move to match the preview
 /// rather than the other way round.
 const double calRadiusReferenceLongEdge = 1024.0;
+
+/// Ceiling on [RenderParams.renderScale] for the three *pixel-domain*
+/// stages — the always-on chroma smoothing, AI Denoise and Sharpen.
+///
+/// [calRadiusReferenceLongEdge] scales every neighbourhood radius with the
+/// frame so a slider covers the same fraction of the scene at every
+/// resolution. That is right for Clarity and Dehaze, whose reach is a
+/// property of the composition. It is wrong for noise and sharpening,
+/// whose reach is a property of the sensor: grain is grain-sized in real
+/// pixels no matter how many of them the frame has, and Meridian quotes
+/// its own Detail radii in real pixels for exactly this reason.
+///
+/// Left uncapped, a 24MP export ran at renderScale 5.9 — denoise sigma
+/// 11.7px, its noise window 35px, sharpen radius 5.9px — and the stages
+/// inverted. Measured per frequency band against the untouched source
+/// (fine 0.5-1.2px, mid 1.2-3px, coarse 3-8px), medium denoise plus the
+/// default Sharpen 40:
+///
+///   scale 1.0 (1024px preview)  fine  95%   mid  95%   coarse 99%   halo +1%
+///   scale 5.9 (24MP export)     fine 120%   mid 114%   coarse 92%   halo +18%
+///
+/// At export the denoise stopped removing fine grain (83% of it survived
+/// medium) and ate broad structure instead, while the sharpen overshot
+/// past the original and grew visible rims on hard edges. Flat smoothed
+/// areas plus haloed over-contrasted edges is the recipe for an oil
+/// painting, and that is what photographs came out looking like. The
+/// 1024px preview renders at scale 1.0, so it could never show it.
+///
+///   1.0  = true pixel radii everywhere (Meridian's behaviour). Preview
+///          and export no longer agree on sharpness; neither does any
+///          other RAW editor, and sharpening is judged at 1:1.
+///   2.0  = middle ground, half the drift, still a real cap.
+///   999  = the old, uncapped behaviour.
+/// default: 1.0
+const double calDetailRadiusMaxScale = 1.0;
 
 const double calBaseContrast = 80.0;
 
