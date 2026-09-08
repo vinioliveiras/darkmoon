@@ -1594,14 +1594,16 @@ class _EditorScreenState extends State<EditorScreen>
     MaskType.wholeImage: 0.00,
     MaskType.luminance: 0.20,
     MaskType.flow: 0.01,
-    // The AI types have no geometry to preview, so their overlay is the
-    // computed mask itself — shown at the same strength as Color Range's,
-    // which is the other "you can't see the shape until it's computed"
-    // case.
-    MaskType.subject: 0.20,
-    MaskType.sky: 0.20,
-    MaskType.foreground: 0.20,
-    MaskType.depth: 0.20,
+    // The AI types have no geometry to preview, so their overlay *is* the
+    // answer — it is the only way to see what the model selected, unlike a
+    // gradient or a brush stroke where the shape is visible in the handles
+    // whatever the shading does. Started at Color Range's 0.20 and raised
+    // to 0.5 (2026-09-08, user): faint enough to read the photo through,
+    // strong enough to judge an edge by.
+    MaskType.subject: 0.50,
+    MaskType.sky: 0.50,
+    MaskType.foreground: 0.50,
+    MaskType.depth: 0.50,
   };
 
   /// Resolved model output for the AI mask types, keyed by mask id, for
