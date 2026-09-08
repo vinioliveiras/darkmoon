@@ -126,6 +126,14 @@ class MaskSelector extends StatelessWidget {
                 showBackground: false,
                 width: 34,
                 menuWidth: 190,
+                // Every mask type at once, no scrolling: the list is
+                // fixed and short enough to scan, and hiding half of it
+                // behind a scroll is how a type nobody knows exists gets
+                // added. A generous cap rather than a measured height —
+                // the popup shrink-wraps its content, so this only ever
+                // matters as the ceiling, and StyledDropdown clamps it to
+                // the room actually available.
+                maxMenuHeight: 560,
                 menuAlignRight: true,
                 items: [
                   StyledDropdownItem(

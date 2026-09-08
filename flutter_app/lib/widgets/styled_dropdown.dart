@@ -364,15 +364,32 @@ class _StyledDropdownMenuState<T> extends State<_StyledDropdownMenu<T>> {
 
   @override
   Widget build(BuildContext context) {
-    // Menu is anchored to the button's left edge and sits directly below
-    // it, matching the button's width exactly so the popup looks like a
-    // continuation of the pill rather than a floating detached menu.
-    final menuTop = widget.buttonRect.bottom + 4;
+    // Menu is anchored to the button's left edge, matching the button's
+    // width exactly so the popup looks like a continuation of the pill
+    // rather than a floating detached menu.
     final width = widget.menuWidth ?? widget.buttonRect.width;
     final menuLeft = widget.alignRight
         ? widget.buttonRect.right - width
         : widget.buttonRect.left;
     final filtered = _filteredItems;
+
+    // Below the button by preference, above it when that is where the room
+    // is. Without this the menu is drawn below unconditionally and simply
+    // runs off the bottom of the window — which a caller raising
+    // [StyledDropdown.maxMenuHeight] to fit a long list makes far easier
+    // to hit, since the taller the menu the less often it fits below a
+    // button that is itself part-way down a scrolling panel.
+    const gap = 4.0;
+    const screenMargin = 8.0;
+    final screenHeight = MediaQuery.of(context).size.height;
+    final spaceBelow =
+        screenHeight - widget.buttonRect.bottom - gap - screenMargin;
+    final spaceAbove = widget.buttonRect.top - gap - screenMargin;
+    final openUpward = spaceBelow < widget.maxHeight && spaceAbove > spaceBelow;
+    final maxHeight = widget.maxHeight.clamp(
+      0.0,
+      (openUpward ? spaceAbove : spaceBelow).clamp(0.0, double.infinity),
+    );
 
     return Stack(
       children: [
@@ -385,13 +402,23 @@ class _StyledDropdownMenuState<T> extends State<_StyledDropdownMenu<T>> {
         ),
         Positioned(
           left: menuLeft,
-          top: menuTop,
+          top: openUpward ? null : widget.buttonRect.bottom + gap,
+          // Anchored by its bottom edge when flipped, so the menu grows
+          // upward from the button instead of needing its own height
+          // measured first.
+          bottom: openUpward
+              ? screenHeight - widget.buttonRect.top + gap
+              : null,
           width: width,
           child: _MenuReveal(
             animation: widget.animation,
-            alignment: widget.alignRight
-                ? Alignment.topRight
-                : Alignment.topLeft,
+            alignment: openUpward
+                ? (widget.alignRight
+                      ? Alignment.bottomRight
+                      : Alignment.bottomLeft)
+                : (widget.alignRight
+                      ? Alignment.topRight
+                      : Alignment.topLeft),
             child: Material(
               color: Colors.transparent,
               child: Container(
@@ -411,7 +438,7 @@ class _StyledDropdownMenuState<T> extends State<_StyledDropdownMenu<T>> {
                     ),
                   ],
                 ),
-                constraints: BoxConstraints(maxHeight: widget.maxHeight),
+                constraints: BoxConstraints(maxHeight: maxHeight),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
                   children: [
