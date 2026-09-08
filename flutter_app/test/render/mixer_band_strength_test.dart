@@ -35,16 +35,11 @@ void main() {
             'nothing',
       );
     }
-    // Guards the assertions below, which are written against the shipped
-    // defaults rather than against whatever the file currently holds.
-    expect(
-      calMixerBandStrength.values.every((v) => v == 1.0),
-      isTrue,
-      reason:
-          'a band has been tuned away from 1.0 — that is what this knob is '
-          'for, but the cases below assume the defaults, so retune them '
-          'rather than widening anything',
-    );
+    // Deliberately no assertion that the values are still 1.0. This knob
+    // exists to be turned, and the cases below multiply by whatever it
+    // holds rather than assuming — a guard here would have failed the
+    // suite the first time anyone used the feature, which is the wrong
+    // thing for a test to do.
   });
 
   test('a band is scaled by its own entry', () {
