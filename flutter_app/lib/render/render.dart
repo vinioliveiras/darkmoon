@@ -51,6 +51,12 @@ Uint8List renderRgb(
 /// don't each start over from the untouched source), blended in using
 /// that mask's own per-pixel alpha.
 ///
+/// [aiMaskMaps] holds the resolved model output for any AI mask type
+/// present, keyed by mask id — see `ai_mask_resolver.dart`. A mask whose
+/// map is missing renders as empty rather than failing: the map arrives
+/// asynchronously, and a render that happens first should show the photo,
+/// not an error.
+///
 /// Designed to run via `compute()`: pure function over simple,
 /// isolate-transferable data.
 Uint8List renderRgbWithMasks(
@@ -58,8 +64,9 @@ Uint8List renderRgbWithMasks(
   int height,
   Uint8List sourceRgb,
   RenderParams globalParams,
-  List<MaskLayer> masks,
-) {
+  List<MaskLayer> masks, {
+  Map<String, AiMaskMap> aiMaskMaps = const {},
+}) {
   final buffer = Float32List(sourceRgb.length);
   for (var i = 0; i < sourceRgb.length; i++) {
     buffer[i] = sourceRgb[i].toDouble();
@@ -92,6 +99,7 @@ Uint8List renderRgbWithMasks(
       width,
       height,
       sourceForColorRange: buffer,
+      aiMap: aiMaskMaps[mask.id],
     );
     var p = 0;
     for (var pixel = 0; pixel < alpha.length; pixel++, p += 3) {

@@ -25,6 +25,7 @@ class OnnxModelSpec {
     required this.scaleFactor,
     this.channels = 3,
     this.customAbsolutePath,
+    this.cpuOnly = false,
   });
 
   /// Builds a spec for a user-supplied model file (Settings' "custom
@@ -39,7 +40,8 @@ class OnnxModelSpec {
       inputTileSize = 256,
       scaleFactor = 1,
       channels = 3,
-      customAbsolutePath = absolutePath;
+      customAbsolutePath = absolutePath,
+      cpuOnly = false;
 
   final String fileName;
   final int inputTileSize;
@@ -56,14 +58,32 @@ class OnnxModelSpec {
   /// `_OrtLib.modelPath`) — the mechanism behind Settings' "custom
   /// denoise model" file picker. The chosen file is trusted to already
   /// match [denoiseModelSpec]'s conventions (3-channel RGB, dynamic
-  /// same-resolution in/out, "input"/"output" tensor names, [0,1]
-  /// normalization); there's no way to verify the normalization range
+  /// same-resolution in/out, [0,1] normalization) — except its tensor
+  /// names, which are read off the loaded graph rather than assumed, so a
+  /// model naming its input 'image' (every ESRGAN-family export in
+  /// huggingworld/onnx-image-models does) loads like any other;
+  /// there's no way to verify the normalization range
   /// from the ONNX file itself, so a model that uses a different
   /// convention won't error, it'll just produce visibly wrong (washed
   /// out/oversaturated) output — a real load/inference failure (wrong
   /// channel count, wrong tensor names, corrupt file) does surface as a
   /// normal [OrtException] though, same as any other model.
   final String? customAbsolutePath;
+
+  /// Skips the GPU providers entirely for this model.
+  ///
+  /// Set on the five AI mask models, for both halves of the usual reason
+  /// to want a GPU and not get one. DirectML *crashes* SAM's prompt
+  /// decoder outright — an access violation inside the DML kernels, not a
+  /// placement error this file could catch and fall back from — and it is
+  /// slower besides for every one of the five: measured 2026-09-08 on the
+  /// same photo, DirectML vs CPU was 7.9s vs 3.5s for SAM's encoder, 1.8s
+  /// vs 0.8s for sky segmentation, 1.5s vs 0.9s for depth. These are
+  /// one-shot models run once per photo, where standing the DML device up
+  /// and moving the tensors across costs more than the inference saves,
+  /// unlike the tiled denoise/upscale models that run hundreds of tiles
+  /// through one warm session.
+  final bool cpuOnly;
 
   int get outputTileSize => inputTileSize * scaleFactor;
 
@@ -73,6 +93,35 @@ class OnnxModelSpec {
   /// happens to share a basename, never reuses the wrong cached session),
   /// otherwise just [fileName].
   String get cacheKey => customAbsolutePath ?? fileName;
+}
+
+/// One tensor crossing the FFI boundary in [OnnxModel.runGraph]: the
+/// element data plus the shape to declare for it.
+///
+/// Deliberately dumb — no packing, no normalization, no NCHW conversion,
+/// unlike [OnnxModel.runTile], which does all three. It can, because every
+/// model it serves is the same shape of thing: one image in, one image
+/// out. The models [OnnxModel.runGraph] exists for are not: SAM's decoder
+/// takes point coordinates, point labels, a previous mask, a flag and an
+/// image size alongside the embedding, so there is no one layout to
+/// convert to and the caller lays its own bytes out.
+class OnnxTensorData {
+  /// A float32 tensor. [shape] is the full ONNX shape, batch dimension
+  /// included; [floats] must hold exactly [elementCount] values.
+  OnnxTensorData.float32(this.shape, Float32List this.floats) : bytes = null;
+
+  /// A uint8 tensor — SAM's image encoder takes its 1024x1024 image as
+  /// raw bytes rather than normalized floats, the one model here that
+  /// does.
+  OnnxTensorData.uint8(this.shape, Uint8List this.bytes) : floats = null;
+
+  final List<int> shape;
+  final Float32List? floats;
+  final Uint8List? bytes;
+
+  /// Elements the [shape] describes — the length [floats]/[bytes] must
+  /// have.
+  int get elementCount => shape.fold(1, (a, b) => a * b);
 }
 
 /// 1xDeNoise (MIT, RealPLKSR architecture, huggingface.co/huggingworld/
@@ -156,8 +205,8 @@ const pmridDenoiseModelSpec = OnnxModelSpec(
 /// the pair the author trained them as (2026-08-31, PENDING.md item 35
 /// combo follow-up — restoration-research report's Tier 1). Confirmed
 /// via `onnx.load(...)` (not guessed): fully dynamic input, "input"/
-/// "output" tensor names — this app's own default convention, no
-/// [OnnxModelSpec.inputName] override needed. Crop-tested on a real
+/// "output" tensor names — which the session now reads for itself either
+/// way, so no name is assumed anywhere. Crop-tested on a real
 /// noisy 24MP photo: visibly sharper edges/detail than
 /// [denoiseModelSpec] alone, and much faster per tile (~1.3s vs ~4.4s
 /// on the same 700x700 crop) — worth the extra pass.
@@ -219,6 +268,65 @@ const ddcolorModelSpec = OnnxModelSpec(
   fileName: 'ddcolor_modelscope.onnx',
   inputTileSize: 512,
   scaleFactor: 1,
+);
+
+// The five models behind the AI mask types (`ai_mask_models.dart`). None
+// of them goes through [OnnxModel.runTile]: one takes uint8, one takes six
+// inputs, two have seven outputs, and one returns a rank-3 tensor. They
+// all run through [OnnxModel.runGraph] instead, so [OnnxModelSpec] here is
+// carrying only the file name and the session cache key — the tile
+// geometry fields are set to each model's real fixed input size for
+// documentation value, not because anything reads them.
+
+/// SAM ViT-B image encoder (Apache-2.0, facebookresearch/segment-anything)
+/// — turns one photo into the 1x256x64x64 embedding
+/// [samDecoderModelSpec] then answers prompts against. The expensive half
+/// (seconds, and the reason `ai_mask_cache.dart` exists) and the one model
+/// here whose input tensor is **uint8**, not normalized floats.
+const samEncoderModelSpec = OnnxModelSpec(
+  fileName: 'sam_vit_b_01ec64_encoder.onnx',
+  inputTileSize: 1024,
+  scaleFactor: 1,
+  cpuOnly: true,
+);
+
+/// SAM ViT-B prompt decoder — embedding plus a point or box in, mask out.
+/// Cheap (milliseconds), so re-prompting the same photo doesn't re-encode.
+const samDecoderModelSpec = OnnxModelSpec(
+  fileName: 'sam_vit_b_01ec64_decoder.onnx',
+  inputTileSize: 1024,
+  scaleFactor: 1,
+  cpuOnly: true,
+);
+
+/// Sky segmentation (U-2-Net architecture, xiongzhu666/Sky-Segmentation-
+/// and-Post-processing) — 320x320, ImageNet normalization, seven outputs
+/// of which only the first (the fused one) is used.
+const skySegModelSpec = OnnxModelSpec(
+  fileName: 'skyseg-u2net.onnx',
+  inputTileSize: 320,
+  scaleFactor: 1,
+  cpuOnly: true,
+);
+
+/// U-2-Net salient object detection (Apache-2.0, xuebinqin/U-2-Net) —
+/// identical IO shape to [skySegModelSpec], different training: what
+/// stands out from the background rather than what is sky.
+const foregroundSegModelSpec = OnnxModelSpec(
+  fileName: 'u2net.onnx',
+  inputTileSize: 320,
+  scaleFactor: 1,
+  cpuOnly: true,
+);
+
+/// Depth Anything V2 Small (Apache-2.0, DepthAnything/Depth-Anything-V2) —
+/// 518x518 in, a rank-3 [1, 518, 518] relative-depth map out. Higher means
+/// nearer, and the scale is per-photo, not metric.
+const depthAnythingModelSpec = OnnxModelSpec(
+  fileName: 'depth_anything_v2_vits.onnx',
+  inputTileSize: 518,
+  scaleFactor: 1,
+  cpuOnly: true,
 );
 
 /// Thrown when an ONNX Runtime C API call returns a non-null `OrtStatus*`.
@@ -608,6 +716,90 @@ class OnnxModel {
   final Pointer<OrtMemoryInfo> _memoryInfo;
   final OnnxModelSpec _spec;
 
+  /// The input/output tensor names at index 0, read off the loaded graph
+  /// rather than assumed, and what [_runTile] binds. A declared name could
+  /// only ever agree with the file or lie about it, and a file picker
+  /// cannot ask the user to know its model's tensor names — the wrong ones
+  /// fail with an ORT error naming neither the tensor nor the model.
+  ///
+  /// Index 0 only. A model with several inputs (SAM's decoder) or several
+  /// outputs (U2-Net's seven side outputs) goes through [runGraph], which
+  /// takes its names explicitly.
+  late final String _actualInputName = inputNames.first;
+  late final String _actualOutputName = outputNames.first;
+
+  /// Every input tensor name the loaded graph declares, in declaration
+  /// order. [runGraph] callers need all of them (SAM's decoder has six),
+  /// and the order is the export's own — the same order the reference
+  /// implementation binds them positionally.
+  late final List<String> inputNames = _readIoNames(input: true);
+
+  /// Every output tensor name, in declaration order — U-2-Net declares
+  /// seven (its six side outputs follow the fused one at index 0).
+  late final List<String> outputNames = _readIoNames(input: false);
+
+  List<String> _readIoNames({required bool input}) {
+    final api = _OrtLib.api;
+    final countOut = calloc<Size>();
+    final int count;
+    try {
+      final countFn = input
+          ? api.ref.SessionGetInputCount
+          : api.ref.SessionGetOutputCount;
+      _check(
+        countFn
+            .asFunction<
+              Pointer<OrtStatus> Function(Pointer<OrtSession>, Pointer<Size>)
+            >()(_session, countOut),
+      );
+      count = countOut.value;
+    } finally {
+      calloc.free(countOut);
+    }
+    return [for (var i = 0; i < count; i++) _readIoName(input: input, index: i)];
+  }
+
+  String _readIoName({required bool input, int index = 0}) {
+    final api = _OrtLib.api;
+    final allocOut = calloc<Pointer<OrtAllocator>>();
+    final nameOut = calloc<Pointer<Char>>();
+    try {
+      _check(
+        api.ref.GetAllocatorWithDefaultOptions
+            .asFunction<
+              Pointer<OrtStatus> Function(Pointer<Pointer<OrtAllocator>>)
+            >()(allocOut),
+      );
+      final allocator = allocOut.value;
+      final fn = input
+          ? api.ref.SessionGetInputName
+          : api.ref.SessionGetOutputName;
+      _check(
+        fn
+            .asFunction<
+              Pointer<OrtStatus> Function(
+                Pointer<OrtSession>,
+                int,
+                Pointer<OrtAllocator>,
+                Pointer<Pointer<Char>>,
+              )
+            >()(_session, index, allocator, nameOut),
+      );
+      final name = nameOut.value.cast<Utf8>().toDartString();
+      api.ref.AllocatorFree
+          .asFunction<
+            Pointer<OrtStatus> Function(
+              Pointer<OrtAllocator>,
+              Pointer<Void>,
+            )
+          >()(allocator, nameOut.value.cast());
+      return name;
+    } finally {
+      calloc.free(allocOut);
+      calloc.free(nameOut);
+    }
+  }
+
   /// The execution provider this session actually ended up on.
   final OnnxExecutionProvider provider;
 
@@ -725,9 +917,20 @@ class OnnxModel {
     return const [];
   }
 
+  /// [_providerChain], minus every GPU provider for a
+  /// [OnnxModelSpec.cpuOnly] model. An explicit `DARKMOON_ONNX_EP` still
+  /// wins, so the crash this exists to dodge stays reproducible on demand.
+  static List<OnnxExecutionProvider> _providerChainFor(OnnxModelSpec spec) {
+    if (!spec.cpuOnly) {
+      return _providerChain;
+    }
+    final override = Platform.environment['DARKMOON_ONNX_EP']?.toLowerCase();
+    return override != null && override.isNotEmpty ? _providerChain : const [];
+  }
+
   static OnnxModel _create(OnnxModelSpec spec) {
     final failures = <String>[];
-    for (final provider in _providerChain) {
+    for (final provider in _providerChainFor(spec)) {
       try {
         return _createSession(spec, provider: provider);
       } on OrtException catch (e) {
@@ -945,8 +1148,8 @@ class OnnxModel {
 
     final inputValueOut = calloc<Pointer<OrtValue>>();
     final outputValue = calloc<Pointer<OrtValue>>();
-    final inputNamePtr = 'input'.toNativeUtf8();
-    final outputNamePtr = 'output'.toNativeUtf8();
+    final inputNamePtr = _actualInputName.toNativeUtf8();
+    final outputNamePtr = _actualOutputName.toNativeUtf8();
     final inputNames = calloc<Pointer<Char>>();
     final outputNames = calloc<Pointer<Char>>();
     inputNames[0] = inputNamePtr.cast();
@@ -1043,6 +1246,290 @@ class OnnxModel {
       calloc.free(outputNamePtr);
       calloc.free(inputNames);
       calloc.free(outputNames);
+    }
+  }
+
+  /// Runs an arbitrary set of named tensors through the session and hands
+  /// back the requested outputs exactly as the graph produced them — no
+  /// unpacking, no rescaling, no channel reordering.
+  ///
+  /// [runTile] and its siblings cover the shape every other bundled model
+  /// has: one image tensor in, one image tensor out, both float32, both
+  /// findable at index 0 — which is why they can read the two names off
+  /// the graph and convert layouts on the caller's behalf. SAM fits
+  /// neither half of that. Its encoder's input is *uint8*, and its decoder
+  /// takes six inputs and returns three, so "the tensor at index 0" stops
+  /// being an answer and names have to be passed in.
+  ///
+  /// Blocking native call — run on a background isolate, same convention
+  /// as [runTile].
+  Map<String, OnnxTensorData> runGraph(
+    Map<String, OnnxTensorData> inputs,
+    List<String> outputNames,
+  ) {
+    if (inputs.isEmpty || outputNames.isEmpty) {
+      throw ArgumentError('runGraph needs at least one input and one output');
+    }
+    final api = _OrtLib.api;
+    final inCount = inputs.length;
+    final outCount = outputNames.length;
+
+    // Every native allocation this call makes, tracked so the `finally`
+    // can release them whether Run succeeded or threw partway through
+    // building the input list.
+    final namePtrs = <Pointer<Utf8>>[];
+    final dataPtrs = <Pointer<Void>>[];
+    final shapePtrs = <Pointer<Int64>>[];
+    final inputValues = <Pointer<OrtValue>>[];
+
+    final inputNames = calloc<Pointer<Char>>(inCount);
+    final inputValueArr = calloc<Pointer<OrtValue>>(inCount);
+    final outputNameArr = calloc<Pointer<Char>>(outCount);
+    final outputValueArr = calloc<Pointer<OrtValue>>(outCount);
+
+    try {
+      var i = 0;
+      for (final entry in inputs.entries) {
+        final tensor = entry.value;
+        final rank = tensor.shape.length;
+        final shapePtr = calloc<Int64>(rank);
+        shapePtrs.add(shapePtr);
+        for (var d = 0; d < rank; d++) {
+          shapePtr[d] = tensor.shape[d];
+        }
+
+        final Pointer<Void> dataPtr;
+        final int byteLength;
+        final int elementType;
+        final floats = tensor.floats;
+        if (floats != null) {
+          if (floats.length != tensor.elementCount) {
+            throw ArgumentError(
+              "input '${entry.key}' declares shape ${tensor.shape} "
+              '(${tensor.elementCount} elements) but carries '
+              '${floats.length} floats',
+            );
+          }
+          final buffer = calloc<Float>(floats.length);
+          buffer.asTypedList(floats.length).setAll(0, floats);
+          dataPtr = buffer.cast();
+          byteLength = floats.length * sizeOf<Float>();
+          elementType = ONNXTensorElementDataType
+              .ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT
+              .value;
+        } else {
+          final bytes = tensor.bytes!;
+          if (bytes.length != tensor.elementCount) {
+            throw ArgumentError(
+              "input '${entry.key}' declares shape ${tensor.shape} "
+              '(${tensor.elementCount} elements) but carries '
+              '${bytes.length} bytes',
+            );
+          }
+          final buffer = calloc<Uint8>(bytes.length);
+          buffer.asTypedList(bytes.length).setAll(0, bytes);
+          dataPtr = buffer.cast();
+          byteLength = bytes.length;
+          elementType = ONNXTensorElementDataType
+              .ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8
+              .value;
+        }
+        dataPtrs.add(dataPtr);
+
+        final valueOut = calloc<Pointer<OrtValue>>();
+        try {
+          _check(
+            api.ref.CreateTensorWithDataAsOrtValue
+                .asFunction<
+                  Pointer<OrtStatus> Function(
+                    Pointer<OrtMemoryInfo>,
+                    Pointer<Void>,
+                    int,
+                    Pointer<Int64>,
+                    int,
+                    int,
+                    Pointer<Pointer<OrtValue>> out,
+                  )
+                >()(
+              _memoryInfo,
+              dataPtr,
+              byteLength,
+              shapePtr,
+              rank,
+              elementType,
+              valueOut,
+            ),
+          );
+          inputValues.add(valueOut.value);
+          inputValueArr[i] = valueOut.value;
+        } finally {
+          calloc.free(valueOut);
+        }
+
+        final namePtr = entry.key.toNativeUtf8();
+        namePtrs.add(namePtr);
+        inputNames[i] = namePtr.cast();
+        i++;
+      }
+
+      for (var o = 0; o < outCount; o++) {
+        final namePtr = outputNames[o].toNativeUtf8();
+        namePtrs.add(namePtr);
+        outputNameArr[o] = namePtr.cast();
+      }
+
+      _check(
+        api.ref.Run
+            .asFunction<
+              Pointer<OrtStatus> Function(
+                Pointer<OrtSession>,
+                Pointer<OrtRunOptions>,
+                Pointer<Pointer<Char>>,
+                Pointer<Pointer<OrtValue>>,
+                int,
+                Pointer<Pointer<Char>>,
+                int,
+                Pointer<Pointer<OrtValue>>,
+              )
+            >()(
+          _session,
+          nullptr,
+          inputNames,
+          inputValueArr,
+          inCount,
+          outputNameArr,
+          outCount,
+          outputValueArr,
+        ),
+      );
+
+      final results = <String, OnnxTensorData>{};
+      for (var o = 0; o < outCount; o++) {
+        results[outputNames[o]] = _readFloatOutput(outputValueArr[o]);
+      }
+      return results;
+    } finally {
+      final releaseValue = api.ref.ReleaseValue
+          .asFunction<void Function(Pointer<OrtValue>)>();
+      for (var o = 0; o < outCount; o++) {
+        if (outputValueArr[o] != nullptr) {
+          releaseValue(outputValueArr[o]);
+        }
+      }
+      for (final value in inputValues) {
+        releaseValue(value);
+      }
+      for (final ptr in shapePtrs) {
+        calloc.free(ptr);
+      }
+      for (final ptr in dataPtrs) {
+        calloc.free(ptr);
+      }
+      for (final ptr in namePtrs) {
+        calloc.free(ptr);
+      }
+      calloc.free(inputNames);
+      calloc.free(inputValueArr);
+      calloc.free(outputNameArr);
+      calloc.free(outputValueArr);
+    }
+  }
+
+  /// Copies one float32 output tensor — shape and all — out of native
+  /// memory. Copied rather than viewed because the [OrtValue] backing it
+  /// is released the moment [runGraph]'s `finally` runs.
+  OnnxTensorData _readFloatOutput(Pointer<OrtValue> value) {
+    final api = _OrtLib.api;
+    final infoOut = calloc<Pointer<OrtTensorTypeAndShapeInfo>>();
+    var info = nullptr as Pointer<OrtTensorTypeAndShapeInfo>;
+    try {
+      _check(
+        api.ref.GetTensorTypeAndShape
+            .asFunction<
+              Pointer<OrtStatus> Function(
+                Pointer<OrtValue>,
+                Pointer<Pointer<OrtTensorTypeAndShapeInfo>> out,
+              )
+            >()(value, infoOut),
+      );
+      info = infoOut.value;
+
+      final rankOut = calloc<Size>();
+      final countOut = calloc<Size>();
+      final int rank;
+      final int count;
+      try {
+        _check(
+          api.ref.GetDimensionsCount
+              .asFunction<
+                Pointer<OrtStatus> Function(
+                  Pointer<OrtTensorTypeAndShapeInfo>,
+                  Pointer<Size> out,
+                )
+              >()(info, rankOut),
+        );
+        rank = rankOut.value;
+        _check(
+          api.ref.GetTensorShapeElementCount
+              .asFunction<
+                Pointer<OrtStatus> Function(
+                  Pointer<OrtTensorTypeAndShapeInfo>,
+                  Pointer<Size> out,
+                )
+              >()(info, countOut),
+        );
+        count = countOut.value;
+      } finally {
+        calloc.free(rankOut);
+        calloc.free(countOut);
+      }
+
+      final dims = calloc<Int64>(rank);
+      final shape = <int>[];
+      try {
+        _check(
+          api.ref.GetDimensions
+              .asFunction<
+                Pointer<OrtStatus> Function(
+                  Pointer<OrtTensorTypeAndShapeInfo>,
+                  Pointer<Int64> dimValues,
+                  int dimValuesLength,
+                )
+              >()(info, dims, rank),
+        );
+        for (var d = 0; d < rank; d++) {
+          shape.add(dims[d]);
+        }
+      } finally {
+        calloc.free(dims);
+      }
+
+      final dataOut = calloc<Pointer<Void>>();
+      try {
+        _check(
+          api.ref.GetTensorMutableData
+              .asFunction<
+                Pointer<OrtStatus> Function(
+                  Pointer<OrtValue>,
+                  Pointer<Pointer<Void>> out,
+                )
+              >()(value, dataOut),
+        );
+        return OnnxTensorData.float32(
+          shape,
+          Float32List.fromList(dataOut.value.cast<Float>().asTypedList(count)),
+        );
+      } finally {
+        calloc.free(dataOut);
+      }
+    } finally {
+      if (info != nullptr) {
+        api.ref.ReleaseTensorTypeAndShapeInfo
+            .asFunction<
+              void Function(Pointer<OrtTensorTypeAndShapeInfo>)
+            >()(info);
+      }
+      calloc.free(infoOut);
     }
   }
 }

@@ -105,6 +105,8 @@ MaskLayer _decodeMask(Map<String, dynamic> raw) {
   final radialRaw = raw['radial'] as Map<String, dynamic>?;
   final colorRangeRaw = raw['colorRange'] as Map<String, dynamic>?;
   final luminanceRaw = raw['luminance'] as Map<String, dynamic>?;
+  final subjectRaw = raw['subject'] as Map<String, dynamic>?;
+  final depthRaw = raw['depth'] as Map<String, dynamic>?;
   return MaskLayer(
     id: raw['id'] as String,
     name: raw['name'] as String,
@@ -150,6 +152,21 @@ MaskLayer _decodeMask(Map<String, dynamic> raw) {
             tolerance: (luminanceRaw['tolerance'] as num).toDouble(),
             feather: (luminanceRaw['feather'] as num).toDouble(),
           ),
+    subject: subjectRaw == null
+        ? const SubjectGeometry()
+        : SubjectGeometry(
+            startX: (subjectRaw['startX'] as num).toDouble(),
+            startY: (subjectRaw['startY'] as num).toDouble(),
+            endX: (subjectRaw['endX'] as num).toDouble(),
+            endY: (subjectRaw['endY'] as num).toDouble(),
+          ),
+    depth: depthRaw == null
+        ? const DepthGeometry()
+        : DepthGeometry(
+            near: (depthRaw['near'] as num).toDouble(),
+            far: (depthRaw['far'] as num).toDouble(),
+            feather: (depthRaw['feather'] as num).toDouble(),
+          ),
     values: {
       for (final entry in (raw['values'] as Map<String, dynamic>).entries)
         entry.key: (entry.value as num).toDouble(),
@@ -193,6 +210,17 @@ Map<String, dynamic> _encodeMask(MaskLayer mask) => {
     'targetLuma': mask.luminance.targetLuma,
     'tolerance': mask.luminance.tolerance,
     'feather': mask.luminance.feather,
+  },
+  'subject': {
+    'startX': mask.subject.startX,
+    'startY': mask.subject.startY,
+    'endX': mask.subject.endX,
+    'endY': mask.subject.endY,
+  },
+  'depth': {
+    'near': mask.depth.near,
+    'far': mask.depth.far,
+    'feather': mask.depth.feather,
   },
   'values': mask.values,
   'curves': _encodeCurves(mask.curves),

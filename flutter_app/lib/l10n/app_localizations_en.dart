@@ -606,7 +606,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsCustomDenoiseModelHint =>
-      'Replaces the on-device Denoise model in the AI Denoise dialog\'s Enhance tab. Must be a drop-in replacement: 3-channel RGB, same-resolution in/out, \"input\"/\"output\" tensor names, [0,1]-normalized — a model that doesn\'t match will error or produce visibly wrong output, not a clean failure.';
+      'Replaces the on-device Denoise model in the AI Denoise dialog\'s Enhance tab. Must be a drop-in replacement: 3-channel RGB, same-resolution in/out, [0,1]-normalized (tensor names are read from the model, so any naming works) — a model that doesn\'t match will error or produce visibly wrong output, not a clean failure.';
 
   @override
   String get settingsCustomDenoiseModelDefault => 'Default (RealPLKSR)';
@@ -853,6 +853,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get luminanceFeatherLabel => 'Feather';
+
+  @override
+  String get maskSubject => 'Subject';
+
+  @override
+  String get maskSky => 'Sky';
+
+  @override
+  String get maskForeground => 'Foreground';
+
+  @override
+  String get maskDepth => 'Depth';
+
+  @override
+  String get subjectMaskHint => 'Drag a box around the subject, or tap it';
+
+  @override
+  String get depthNearLabel => 'Near';
+
+  @override
+  String get depthFarLabel => 'Far';
+
+  @override
+  String get depthFeatherLabel => 'Feather';
+
+  @override
+  String get aiMaskComputing => 'Detecting…';
+
+  @override
+  String get aiMaskFailed => 'Detection failed';
 
   @override
   String get luminanceHint => 'Tap the image to pick a brightness';

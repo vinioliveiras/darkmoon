@@ -1189,7 +1189,7 @@ abstract class AppLocalizations {
   /// No description provided for @settingsCustomDenoiseModelHint.
   ///
   /// In en, this message translates to:
-  /// **'Replaces the on-device Denoise model in the AI Denoise dialog\'s Enhance tab. Must be a drop-in replacement: 3-channel RGB, same-resolution in/out, \"input\"/\"output\" tensor names, [0,1]-normalized — a model that doesn\'t match will error or produce visibly wrong output, not a clean failure.'**
+  /// **'Replaces the on-device Denoise model in the AI Denoise dialog\'s Enhance tab. Must be a drop-in replacement: 3-channel RGB, same-resolution in/out, [0,1]-normalized (tensor names are read from the model, so any naming works) — a model that doesn\'t match will error or produce visibly wrong output, not a clean failure.'**
   String get settingsCustomDenoiseModelHint;
 
   /// No description provided for @settingsCustomDenoiseModelDefault.
@@ -1641,6 +1641,66 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Feather'**
   String get luminanceFeatherLabel;
+
+  /// No description provided for @maskSubject.
+  ///
+  /// In en, this message translates to:
+  /// **'Subject'**
+  String get maskSubject;
+
+  /// No description provided for @maskSky.
+  ///
+  /// In en, this message translates to:
+  /// **'Sky'**
+  String get maskSky;
+
+  /// No description provided for @maskForeground.
+  ///
+  /// In en, this message translates to:
+  /// **'Foreground'**
+  String get maskForeground;
+
+  /// No description provided for @maskDepth.
+  ///
+  /// In en, this message translates to:
+  /// **'Depth'**
+  String get maskDepth;
+
+  /// No description provided for @subjectMaskHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Drag a box around the subject, or tap it'**
+  String get subjectMaskHint;
+
+  /// No description provided for @depthNearLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Near'**
+  String get depthNearLabel;
+
+  /// No description provided for @depthFarLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Far'**
+  String get depthFarLabel;
+
+  /// No description provided for @depthFeatherLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Feather'**
+  String get depthFeatherLabel;
+
+  /// No description provided for @aiMaskComputing.
+  ///
+  /// In en, this message translates to:
+  /// **'Detecting…'**
+  String get aiMaskComputing;
+
+  /// No description provided for @aiMaskFailed.
+  ///
+  /// In en, this message translates to:
+  /// **'Detection failed'**
+  String get aiMaskFailed;
 
   /// No description provided for @luminanceHint.
   ///

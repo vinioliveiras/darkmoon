@@ -21,3 +21,10 @@ flutter_app/vcomp140.dll
 # awkward living inside a platform-specific folder).
 flutter_app/native_models/*.onnx
 
+# Dev convenience: `dart run tool/*.dart` harnesses resolve models through
+# DARKMOON_NATIVE_DIR/models, which is the layout the built app has but not
+# the layout the repo has. A junction/symlink here pointing at
+# native_models/ bridges the two without copying a gigabyte.
+flutter_app/windows/native/models/
+flutter_app/linux/native/models/
+

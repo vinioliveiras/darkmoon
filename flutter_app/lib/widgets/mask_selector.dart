@@ -73,6 +73,10 @@ class MaskSelector extends StatelessWidget {
     MaskType.wholeImage => CupertinoIcons.photo,
     MaskType.luminance => CupertinoIcons.sun_max,
     MaskType.flow => CupertinoIcons.drop,
+    MaskType.subject => CupertinoIcons.person_crop_square,
+    MaskType.sky => CupertinoIcons.cloud,
+    MaskType.foreground => CupertinoIcons.square_stack_3d_down_right,
+    MaskType.depth => CupertinoIcons.cube_box,
   };
 
   @override
@@ -158,6 +162,29 @@ class MaskSelector extends StatelessWidget {
                     value: MaskType.wholeImage,
                     label: l10n.maskWholeImage,
                     icon: _typeIcon(MaskType.wholeImage),
+                  ),
+                  // The four a model answers, grouped last so the menu
+                  // reads cheap-and-instant first, then the ones that
+                  // think about it.
+                  StyledDropdownItem(
+                    value: MaskType.subject,
+                    label: l10n.maskSubject,
+                    icon: _typeIcon(MaskType.subject),
+                  ),
+                  StyledDropdownItem(
+                    value: MaskType.sky,
+                    label: l10n.maskSky,
+                    icon: _typeIcon(MaskType.sky),
+                  ),
+                  StyledDropdownItem(
+                    value: MaskType.foreground,
+                    label: l10n.maskForeground,
+                    icon: _typeIcon(MaskType.foreground),
+                  ),
+                  StyledDropdownItem(
+                    value: MaskType.depth,
+                    label: l10n.maskDepth,
+                    icon: _typeIcon(MaskType.depth),
                   ),
                 ],
                 onChanged: onAdd,

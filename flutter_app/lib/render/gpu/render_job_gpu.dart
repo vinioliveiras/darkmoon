@@ -55,6 +55,7 @@ Future<RenderResult> renderJobToJpegGpu(RenderJob job) async {
           geometry.rgbBytes,
           params,
           job.masks,
+          aiMaskMaps: job.aiMaskMaps,
         );
 
   final sidecar = await compute(

@@ -612,7 +612,7 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get settingsCustomDenoiseModelHint =>
-      'Substitui o modelo de Denoise on-device na aba Enhance do diálogo AI Denoise. Precisa ser um substituto direto: RGB 3 canais, mesma resolução de entrada/saída, nomes de tensor \"input\"/\"output\", valores normalizados [0,1] — um modelo que não seguir isso vai dar erro ou produzir um resultado visivelmente errado, não uma falha limpa.';
+      'Substitui o modelo de Denoise on-device na aba Enhance do diálogo AI Denoise. Precisa ser um substituto direto: RGB 3 canais, mesma resolução de entrada/saída, valores normalizados [0,1] (os nomes dos tensores são lidos do próprio modelo, então qualquer nomenclatura funciona) — um modelo que não seguir isso vai dar erro ou produzir um resultado visivelmente errado, não uma falha limpa.';
 
   @override
   String get settingsCustomDenoiseModelDefault => 'Padrão (RealPLKSR)';
@@ -860,6 +860,37 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get luminanceFeatherLabel => 'Suavização';
+
+  @override
+  String get maskSubject => 'Sujeito';
+
+  @override
+  String get maskSky => 'Céu';
+
+  @override
+  String get maskForeground => 'Primeiro Plano';
+
+  @override
+  String get maskDepth => 'Profundidade';
+
+  @override
+  String get subjectMaskHint =>
+      'Arraste uma caixa em volta do sujeito, ou toque nele';
+
+  @override
+  String get depthNearLabel => 'Perto';
+
+  @override
+  String get depthFarLabel => 'Longe';
+
+  @override
+  String get depthFeatherLabel => 'Suavização';
+
+  @override
+  String get aiMaskComputing => 'Detectando…';
+
+  @override
+  String get aiMaskFailed => 'A detecção falhou';
 
   @override
   String get luminanceHint => 'Toque na imagem para escolher um brilho';

@@ -30,6 +30,7 @@ class ExportRequest {
     this.preDecodedRgb,
     this.preDecodedWidth,
     this.preDecodedHeight,
+    this.aiMaskMaps = const {},
   });
 
   final String sourcePath;
@@ -37,6 +38,13 @@ class ExportRequest {
   final RenderParams params;
   final ExportFormat format;
   final List<MaskLayer> masks;
+
+  /// Resolved model output for any AI mask in [masks], keyed by mask id —
+  /// same contract as [RenderJob.aiMaskMaps], and passed in for the same
+  /// reason: this runs in a `compute()` isolate, where inference cannot.
+  /// The editor resolves the maps once and hands the same ones to the
+  /// preview and to the export, so what is exported is what was seen.
+  final Map<String, AiMaskMap> aiMaskMaps;
   final CropTransformParams cropTransform;
 
   /// JPEG quality (1-100). Ignored for other formats.
@@ -197,6 +205,7 @@ Future<ExportResult> _exportPhotoInternal(
             geometry.rgbBytes,
             params,
             request.masks,
+            aiMaskMaps: request.aiMaskMaps,
           );
     mark('render ${geometry.width}x${geometry.height}');
     for (final t in renderTimings) {

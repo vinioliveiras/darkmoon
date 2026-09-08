@@ -14,6 +14,7 @@ import 'package:path/path.dart' as p;
 import 'animations_config.dart';
 import 'catalog/catalog_store.dart';
 import 'catalog/curve_store.dart';
+import 'catalog/ai_mask_cache_dir.dart';
 import 'catalog/mask_store.dart';
 import 'catalog/native_source_cache.dart';
 import 'catalog/photo_preset_store.dart';
@@ -45,6 +46,7 @@ import 'presets/preset_xmp.dart';
 import 'profiles/color_profile_store.dart';
 import 'presets/preset_zip.dart';
 import 'raw_files.dart';
+import 'render/ai_mask_resolver.dart';
 import 'render/ai_denoise.dart';
 import 'render/calibration.dart';
 import 'render/ai_enhance_job.dart'
@@ -84,6 +86,7 @@ import 'widgets/color_wheel.dart';
 import 'widgets/dialog_chrome.dart' show dialogShape;
 import 'widgets/export_dialog.dart';
 import 'widgets/folder_sidebar.dart';
+import 'widgets/ai_mask_overlay.dart';
 import 'widgets/gradient_mask_overlay.dart';
 import 'widgets/histogram_view.dart';
 import 'widgets/lens_correction_panel.dart';
@@ -1591,7 +1594,42 @@ class _EditorScreenState extends State<EditorScreen>
     MaskType.wholeImage: 0.00,
     MaskType.luminance: 0.20,
     MaskType.flow: 0.01,
+    // The AI types have no geometry to preview, so their overlay is the
+    // computed mask itself — shown at the same strength as Color Range's,
+    // which is the other "you can't see the shape until it's computed"
+    // case.
+    MaskType.subject: 0.20,
+    MaskType.sky: 0.20,
+    MaskType.foreground: 0.20,
+    MaskType.depth: 0.20,
   };
+
+  /// Resolved model output for the AI mask types, keyed by mask id, for
+  /// the photo named by [_aiMaskMapsPath] and nothing else.
+  ///
+  /// One photo's worth rather than a cache across photos: these are ~700 KB
+  /// each, the disk cache behind them makes a revisit cheap anyway, and
+  /// this app has already had to go and bound several per-photo maps that
+  /// grew without one (see the 2026-09-03 memory work).
+  final Map<String, AiMaskMap> _aiMaskMaps = {};
+  String? _aiMaskMapsPath;
+
+  /// What each entry in [_aiMaskMaps] was computed for — mask type, prompt
+  /// and frame geometry. A mask whose current signature differs from the
+  /// one recorded here needs re-inference; one that matches is reused as
+  /// the user drags unrelated sliders.
+  final Map<String, String> _aiMaskSignatures = {};
+
+  /// Mask ids currently being computed, and the ones whose model failed
+  /// (with the reason) — both purely so the mask panel can say which of
+  /// "thinking", "done" and "broken" it is.
+  final Set<String> _aiMasksResolving = {};
+  final Map<String, String> _aiMaskFailures = {};
+  bool _aiMaskResolvePending = false;
+
+  /// Resolved once per session, on the main isolate — `path_provider` is
+  /// unavailable inside the isolate that does the actual work.
+  String? _aiMaskCacheDir;
 
   /// Edit-history stack for the currently selected photo — [_historyIndex]
   /// points at the snapshot matching the live [_paramValues]/
@@ -3786,6 +3824,12 @@ class _EditorScreenState extends State<EditorScreen>
     if (sources == null) {
       return;
     }
+    // Every render passes through here — the debounced one, opening a
+    // photo, applying a preset, undo — so this is the one place that
+    // catches every way an AI mask can come into existence or go stale.
+    // Deliberately not awaited: inference takes seconds, and until its map
+    // lands the mask renders as empty rather than holding up the frame.
+    unawaited(_resolveAiMasks(path));
     if (_renderInFlight) {
       _pendingRenderRequest = (path: path, live: live, onStage: onStage);
       final completer = Completer<void>();
@@ -3909,6 +3953,7 @@ class _EditorScreenState extends State<EditorScreen>
         colorProfileStrength: _effectiveColorProfileStrength,
       ),
       masks: _effectiveMasks,
+      aiMaskMaps: _aiMaskMaps,
       cropTransform: cropTransform,
       lensCorrection: _lensCorrection,
       lensProfile: _resolvedLensProfileFor(path),
@@ -6024,6 +6069,151 @@ class _EditorScreenState extends State<EditorScreen>
       ),
   ];
 
+  /// Everything an AI mask's model output depends on, as one string:
+  /// which model, what the user aimed it at, and the geometry of the frame
+  /// the model will be shown.
+  ///
+  /// Deliberately coarse — it decides only *whether to ask*. The
+  /// authoritative key is the hash of the actual frame pixels that
+  /// `ai_mask_resolver.dart` takes, so a signature that changes without
+  /// the pixels changing costs a cache hit, not a re-inference.
+  String _aiMaskSignatureFor(MaskLayer mask) {
+    final crop = _cropTransform
+        .toValues()
+        .entries
+        .map((e) => '${e.key}=${e.value.toStringAsFixed(4)}')
+        .join(',');
+    final lens = _lensCorrection.enabled
+        ? 'lens:${_lensCorrection.manualProfileKeyHash ?? "auto"}:'
+              '${_lensCorrection.distortionAmount}'
+        : 'lens:off';
+    final prompt = mask.type == MaskType.subject
+        ? AiMaskRequest(
+            maskId: mask.id,
+            type: mask.type,
+            subject: mask.subject,
+          ).promptKey
+        : '';
+    return '${mask.type.name}|$prompt|$crop|$lens';
+  }
+
+  /// Runs the models behind any AI mask whose answer is missing or stale,
+  /// then re-renders with the results.
+  ///
+  /// Fire-and-forget, deliberately: inference takes seconds, and a render
+  /// must not wait on it. Until a map lands, its mask contributes nothing
+  /// and the photo renders as if it weren't there — so the first frame
+  /// after adding a Sky mask is the unmasked photo, and the masked one
+  /// follows.
+  Future<void> _resolveAiMasks(String path) async {
+    if (_aiMaskMapsPath != path) {
+      _aiMaskMapsPath = path;
+      _aiMaskMaps.clear();
+      _aiMaskSignatures.clear();
+      _aiMaskFailures.clear();
+    }
+    final wanted = <String, AiMaskRequest>{};
+    final live = <String>{};
+    for (final mask in _currentMasks) {
+      if (!aiMaskTypes.contains(mask.type)) {
+        continue;
+      }
+      live.add(mask.id);
+      if (!mask.enabled) {
+        continue;
+      }
+      if (_aiMaskSignatures[mask.id] == _aiMaskSignatureFor(mask)) {
+        continue;
+      }
+      wanted[mask.id] = AiMaskRequest(
+        maskId: mask.id,
+        type: mask.type,
+        subject: mask.subject,
+      );
+    }
+    // Deleting a mask should not leave its map (or its error) behind.
+    _aiMaskMaps.removeWhere((id, _) => !live.contains(id));
+    _aiMaskSignatures.removeWhere((id, _) => !live.contains(id));
+    _aiMaskFailures.removeWhere((id, _) => !live.contains(id));
+    if (wanted.isEmpty) {
+      return;
+    }
+    if (_aiMasksResolving.isNotEmpty) {
+      // One run at a time — these are CPU-bound and hold a 100 MB model.
+      // The flag makes the run in flight start another when it finishes,
+      // so a box dragged during inference isn't dropped.
+      _aiMaskResolvePending = true;
+      return;
+    }
+
+    final sources = _editSources[path];
+    if (sources == null) {
+      return;
+    }
+    final cacheDir = _aiMaskCacheDir ??= await resolveAiMaskCacheDir();
+    if (!mounted || _aiMaskMapsPath != path) {
+      return;
+    }
+
+    // Snapshot what was asked, so a signature recorded on completion is
+    // the one the answer actually belongs to.
+    final askedSignatures = {
+      for (final mask in _currentMasks)
+        if (wanted.containsKey(mask.id)) mask.id: _aiMaskSignatureFor(mask),
+    };
+    final metadata = _metadata[path];
+    setState(() => _aiMasksResolving.addAll(wanted.keys));
+    AiMaskResolveResult result;
+    try {
+      result = await compute(
+        resolveAiMaskMaps,
+        AiMaskResolveRequest(
+          // The preview source rather than the live or full-quality one,
+          // always: it keeps the map's quality — and the cache key behind
+          // it — from depending on which render happened to trigger this.
+          source: sources.preview,
+          requests: wanted.values.toList(),
+          cacheDir: cacheDir,
+          cropTransform: _cropTransform,
+          lensCorrection: _lensCorrection,
+          lensProfile: _resolvedLensProfileFor(path),
+          focalLengthMm: metadata?.focalLengthMm ?? 0,
+          apertureFNumber: metadata?.apertureFNumber ?? 0,
+        ),
+      );
+    } catch (e) {
+      result = AiMaskResolveResult(
+        maps: const {},
+        failures: {for (final id in wanted.keys) id: '$e'},
+      );
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _aiMasksResolving.removeAll(wanted.keys);
+      if (_aiMaskMapsPath == path) {
+        for (final entry in result.maps.entries) {
+          _aiMaskMaps[entry.key] = entry.value;
+          _aiMaskSignatures[entry.key] = askedSignatures[entry.key]!;
+          _aiMaskFailures.remove(entry.key);
+        }
+        _aiMaskFailures.addAll(result.failures);
+      }
+    });
+    for (final entry in result.failures.entries) {
+      debugPrint('AI mask ${entry.key} failed: ${entry.value}');
+    }
+    if (_aiMaskResolvePending) {
+      _aiMaskResolvePending = false;
+      unawaited(_resolveAiMasks(path));
+      return;
+    }
+    if (result.maps.isNotEmpty && _aiMaskMapsPath == path) {
+      _scheduleRender(live: false);
+    }
+  }
+
   /// Crop/Transform state, derived from the same flat `_paramValues` map
   /// every other global adjustment lives in — deliberately global-only
   /// (see [RenderJob.cropTransform]'s doc comment), so unlike
@@ -6302,6 +6492,10 @@ class _EditorScreenState extends State<EditorScreen>
       MaskType.wholeImage => l10n.maskWholeImage,
       MaskType.luminance => l10n.maskLuminance,
       MaskType.flow => l10n.maskFlow,
+      MaskType.subject => l10n.maskSubject,
+      MaskType.sky => l10n.maskSky,
+      MaskType.foreground => l10n.maskForeground,
+      MaskType.depth => l10n.maskDepth,
     };
     final mask = MaskLayer(
       id: 'mask_${DateTime.now().microsecondsSinceEpoch}',
@@ -6368,6 +6562,13 @@ class _EditorScreenState extends State<EditorScreen>
       radial: source.radial,
       brush: source.brush,
       colorRange: source.colorRange,
+      // Every geometry field, not just the ones that existed when this was
+      // written: `luminance` was already being silently dropped, so
+      // cloning a Luminance mask handed back one aimed at the default
+      // mid-gray. The list has to grow with MaskLayer's.
+      luminance: source.luminance,
+      subject: source.subject,
+      depth: source.depth,
       enabled: source.enabled,
       inverted: source.inverted,
       opacity: source.opacity,
@@ -6529,6 +6730,26 @@ class _EditorScreenState extends State<EditorScreen>
     _updateActiveMask(
       (m) => m.copyWith(luminance: m.luminance.copyWith(feather: value)),
     );
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  /// The Depth band's three sliders share one pair of handlers rather
+  /// than getting three each: they all rewrite the same
+  /// [DepthGeometry], and none of them re-runs the model — the depth map
+  /// is cached, so a drag here is a band-pass over data already in hand.
+  void _onDepthGeometryChanged(DepthGeometry geometry) {
+    if (!_isAdjustingMaskValue) {
+      setState(() => _isAdjustingMaskValue = true);
+    }
+    _updateActiveMask((m) => m.copyWith(depth: geometry));
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onDepthGeometryChangeEnd(DepthGeometry geometry) {
+    setState(() => _isAdjustingMaskValue = false);
+    _updateActiveMask((m) => m.copyWith(depth: geometry));
     _pushHistory();
     _scheduleRender(live: false);
     _scheduleCatalogSave();
@@ -6986,6 +7207,9 @@ class _EditorScreenState extends State<EditorScreen>
           colorProfileStrength: _effectiveColorProfileStrength,
         ),
         masks: _effectiveMasks,
+        // The same maps the preview was rendered with, so an AI mask
+        // exports as what the user was looking at when they hit Export.
+        aiMaskMaps: _aiMaskMaps,
         format: options.format,
         quality: options.quality,
         cropTransform: _cropTransform,
@@ -7340,6 +7564,7 @@ class _EditorScreenState extends State<EditorScreen>
                                       _maskOverlayVisible &&
                                       !_isAdjustingMaskValue,
                                   maskOverlayOpacity: _maskOverlayOpacity,
+                                  aiMaskMaps: _aiMaskMaps,
                                   cropOverlayActive:
                                       !_beforeAfterMode && _cropOverlayActive,
                                   cropTransform: _cropTransform,
@@ -7483,6 +7708,12 @@ class _EditorScreenState extends State<EditorScreen>
                                 _onColorRangeFeatherChanged,
                             onColorRangeFeatherChangeEnd:
                                 _onColorRangeFeatherChangeEnd,
+                            onDepthGeometryChanged:
+                                _onDepthGeometryChanged,
+                            onDepthGeometryChangeEnd:
+                                _onDepthGeometryChangeEnd,
+                            aiMasksResolving: _aiMasksResolving,
+                            aiMaskFailures: _aiMaskFailures,
                             onLuminanceToleranceChanged:
                                 _onLuminanceToleranceChanged,
                             onLuminanceToleranceChangeEnd:
@@ -7693,6 +7924,7 @@ class _ImageArea extends StatelessWidget {
     required this.onSampleWhiteBalance,
     required this.maskOverlayVisible,
     required this.maskOverlayOpacity,
+    required this.aiMaskMaps,
     required this.cropOverlayActive,
     required this.cropTransform,
     required this.cropAspectRatio,
@@ -7782,6 +8014,10 @@ class _ImageArea extends StatelessWidget {
   /// How opaque that overlay's shading is (0..1), independently per mask
   /// type — see [_EditorScreenState._maskOverlayOpacity].
   final Map<MaskType, double> maskOverlayOpacity;
+
+  /// Resolved model output per mask id, for the AI mask types' overlay —
+  /// see `_EditorScreenState._aiMaskMaps`.
+  final Map<String, AiMaskMap> aiMaskMaps;
 
   /// Whether the Crop Overlay's draggable rectangle is shown — mutually
   /// exclusive with mask editing (the caller only sets one at a time).
@@ -8164,6 +8400,18 @@ class _ImageArea extends StatelessWidget {
                             : onSampleColor,
                         mask: mask,
                         previewImage: frame.image,
+                        showOverlay: maskOverlayVisible,
+                        overlayOpacity: maskOverlayOpacity[mask.type]!,
+                      )
+                    else if (aiMaskTypes.contains(mask.type))
+                      AiMaskOverlay(
+                        containerSize: containerSize,
+                        imageWidth: source.width,
+                        imageHeight: source.height,
+                        mask: mask,
+                        map: aiMaskMaps[mask.id],
+                        onChanged: onMaskGeometryChanged,
+                        onChangeEnd: onMaskGeometryChangeEnd,
                         showOverlay: maskOverlayVisible,
                         overlayOpacity: maskOverlayOpacity[mask.type]!,
                       )
@@ -9636,6 +9884,10 @@ class _ControlsPanel extends StatefulWidget {
     required this.onColorRangeToleranceChangeEnd,
     required this.onColorRangeFeatherChanged,
     required this.onColorRangeFeatherChangeEnd,
+    required this.onDepthGeometryChanged,
+    required this.onDepthGeometryChangeEnd,
+    required this.aiMasksResolving,
+    required this.aiMaskFailures,
     required this.onLuminanceToleranceChanged,
     required this.onLuminanceToleranceChangeEnd,
     required this.onLuminanceFeatherChanged,
@@ -9772,6 +10024,18 @@ class _ControlsPanel extends StatefulWidget {
   final ValueChanged<double> onColorRangeToleranceChangeEnd;
   final ValueChanged<double> onColorRangeFeatherChanged;
   final ValueChanged<double> onColorRangeFeatherChangeEnd;
+
+  /// Both take the whole rewritten [DepthGeometry] — see
+  /// `_EditorScreenState._onDepthGeometryChanged`.
+  final ValueChanged<DepthGeometry> onDepthGeometryChanged;
+  final ValueChanged<DepthGeometry> onDepthGeometryChangeEnd;
+
+  /// Which masks a model is currently thinking about, and which ones it
+  /// failed on (with the reason) — the panel is the only place that can
+  /// tell the user an AI mask is empty because it is still computing
+  /// rather than because it selected nothing.
+  final Set<String> aiMasksResolving;
+  final Map<String, String> aiMaskFailures;
 
   final ValueChanged<double> onLuminanceToleranceChanged;
   final ValueChanged<double> onLuminanceToleranceChangeEnd;
@@ -10154,6 +10418,8 @@ class _ControlsPanelState extends State<_ControlsPanel>
     final isFlowActive = activeMask?.type == MaskType.flow;
     final isColorRangeActive = activeMask?.type == MaskType.colorRange;
     final isLuminanceActive = activeMask?.type == MaskType.luminance;
+    final isAiMaskActive =
+        activeMask != null && aiMaskTypes.contains(activeMask.type);
     final l10n = AppLocalizations.of(context)!;
     // Hoisted out of the tree because where it goes depends on the
     // layout: pinned above the tabs in the tabbed panel, and inside
@@ -10396,6 +10662,104 @@ class _ControlsPanelState extends State<_ControlsPanel>
               onChangeEnd: widget.onLuminanceFeatherChangeEnd,
             ),
           ),
+        ],
+        if (isAiMaskActive) ...[
+          const SizedBox(height: 8),
+          // One line that says which of the three states this mask is in.
+          // Without it an empty AI mask is unreadable: still thinking,
+          // model missing, and "the model genuinely found no sky" all
+          // look the same on the canvas.
+          if (widget.aiMasksResolving.contains(activeMask.id))
+            Row(
+              children: [
+                const SizedBox(
+                  width: 12,
+                  height: 12,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 1.5,
+                    color: DarkmoonColors.textMuted,
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Text(
+                  l10n.aiMaskComputing,
+                  style: const TextStyle(
+                    color: DarkmoonColors.textMuted,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            )
+          else if (widget.aiMaskFailures.containsKey(activeMask.id))
+            // No error color in the theme, and inventing one here would
+            // be the only red in the app; the brighter of the two text
+            // tones is enough to separate this from the hint it replaces.
+            Text(
+              l10n.aiMaskFailed,
+              style: const TextStyle(
+                color: DarkmoonColors.textPrimary,
+                fontSize: 11,
+              ),
+            )
+          else if (activeMask.type == MaskType.subject)
+            Text(
+              l10n.subjectMaskHint,
+              style: const TextStyle(
+                color: DarkmoonColors.textMuted,
+                fontSize: 11,
+              ),
+            ),
+          if (activeMask.type == MaskType.depth) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SliderRow(
+                name: l10n.depthNearLabel,
+                min: 0,
+                max: 100,
+                value: activeMask.depth.near * 100,
+                decimals: 0,
+                onChanged: (v) => widget.onDepthGeometryChanged(
+                  activeMask.depth.copyWith(near: v / 100),
+                ),
+                onChangeEnd: (v) => widget.onDepthGeometryChangeEnd(
+                  activeMask.depth.copyWith(near: v / 100),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SliderRow(
+                name: l10n.depthFarLabel,
+                min: 0,
+                max: 100,
+                value: activeMask.depth.far * 100,
+                decimals: 0,
+                onChanged: (v) => widget.onDepthGeometryChanged(
+                  activeMask.depth.copyWith(far: v / 100),
+                ),
+                onChangeEnd: (v) => widget.onDepthGeometryChangeEnd(
+                  activeMask.depth.copyWith(far: v / 100),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SliderRow(
+                name: l10n.depthFeatherLabel,
+                min: 0,
+                max: 100,
+                value: activeMask.depth.feather,
+                decimals: 0,
+                onChanged: (v) => widget.onDepthGeometryChanged(
+                  activeMask.depth.copyWith(feather: v),
+                ),
+                onChangeEnd: (v) => widget.onDepthGeometryChangeEnd(
+                  activeMask.depth.copyWith(feather: v),
+                ),
+              ),
+            ),
+          ],
         ],
         // The same pair the Crop panel ends with, and for the same
         // reason: both are a mode you are inside, and both need an

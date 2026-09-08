@@ -33,6 +33,7 @@ class RenderJob {
     this.lensProfile,
     this.focalLengthMm = 0,
     this.apertureFNumber = 0,
+    this.aiMaskMaps = const {},
   });
 
   final EditSource source;
@@ -64,6 +65,15 @@ class RenderJob {
   /// these, not by any slider the user controls.
   final double focalLengthMm;
   final double apertureFNumber;
+
+  /// Resolved model output for any AI mask in [masks], keyed by mask id.
+  ///
+  /// Carried on the job rather than computed inside it because inference
+  /// is asynchronous and expensive, and this job runs synchronously
+  /// (`compute()`) once per slider tick. `ai_mask_resolver.dart` fills
+  /// this in on its own schedule; a mask whose map has not landed yet
+  /// simply renders as empty.
+  final Map<String, AiMaskMap> aiMaskMaps;
 }
 
 class RenderResult {
@@ -287,6 +297,7 @@ Future<RenderResult> renderJobToJpeg(
             correctedRgb,
             params,
             job.masks,
+            aiMaskMaps: job.aiMaskMaps,
           );
   }
   onStage?.call(RenderStage.encoding);

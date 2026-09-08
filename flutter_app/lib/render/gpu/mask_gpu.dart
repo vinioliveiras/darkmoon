@@ -29,8 +29,9 @@ Future<Uint8List> renderRgbaWithMasksGpu(
   int height,
   Uint8List sourceRgb,
   RenderParams globalParams,
-  List<MaskLayer> masks,
-) async {
+  List<MaskLayer> masks, {
+  Map<String, AiMaskMap> aiMaskMaps = const {},
+}) async {
   final source = await decodeRgbImage(sourceRgb, width, height);
   var current = await renderImageGpu(source, width, height, globalParams);
   source.dispose();
@@ -62,6 +63,7 @@ Future<Uint8List> renderRgbaWithMasksGpu(
       width,
       height,
       sourceForColorRange: sourceForColorRange,
+      aiMap: aiMaskMaps[mask.id],
     );
     final alphaImage = await _alphaToImage(alpha, width, height);
 

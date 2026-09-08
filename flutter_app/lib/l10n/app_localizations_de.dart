@@ -617,7 +617,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get settingsCustomDenoiseModelHint =>
-      'Ersetzt das On-Device-Denoise-Modell im Enhance-Tab des KI-Entrauschungsdialogs. Muss ein direkter Ersatz sein: 3-Kanal-RGB, gleiche Auflösung bei Ein-/Ausgabe, Tensor-Namen \"input\"/\"output\", [0,1]-normalisiert — ein Modell, das nicht passt, führt zu einem Fehler oder sichtbar falschem Ergebnis, nicht zu einem sauberen Fehlschlag.';
+      'Ersetzt das On-Device-Denoise-Modell im Enhance-Tab des KI-Entrauschungsdialogs. Muss ein direkter Ersatz sein: 3-Kanal-RGB, gleiche Auflösung bei Ein-/Ausgabe, [0,1]-normalisiert (Tensor-Namen werden aus dem Modell gelesen, jede Benennung funktioniert) — ein Modell, das nicht passt, führt zu einem Fehler oder sichtbar falschem Ergebnis, nicht zu einem sauberen Fehlschlag.';
 
   @override
   String get settingsCustomDenoiseModelDefault => 'Standard (RealPLKSR)';
@@ -869,6 +869,37 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get luminanceFeatherLabel => 'Weichzeichnen';
+
+  @override
+  String get maskSubject => 'Motiv';
+
+  @override
+  String get maskSky => 'Himmel';
+
+  @override
+  String get maskForeground => 'Vordergrund';
+
+  @override
+  String get maskDepth => 'Tiefe';
+
+  @override
+  String get subjectMaskHint =>
+      'Einen Rahmen um das Motiv ziehen oder darauf tippen';
+
+  @override
+  String get depthNearLabel => 'Nah';
+
+  @override
+  String get depthFarLabel => 'Fern';
+
+  @override
+  String get depthFeatherLabel => 'Weichzeichnen';
+
+  @override
+  String get aiMaskComputing => 'Erkennung läuft…';
+
+  @override
+  String get aiMaskFailed => 'Erkennung fehlgeschlagen';
 
   @override
   String get luminanceHint =>
