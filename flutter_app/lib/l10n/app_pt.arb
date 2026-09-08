@@ -1,6 +1,5 @@
 {
   "@@locale": "pt",
-  "menuFile": "Arquivo",
   "menuOpenFile": "Abrir arquivo",
   "menuOpenFolder": "Adicionar pasta",
   "menuSettings": "Configurações",
@@ -21,6 +20,7 @@
   "decodingPhoto": "{name}\n(decodificando...)",
   "photoNotFoundMessage": "{name}\nnão foi encontrada — pode ter sido movida, renomeada ou apagada fora do darkmoon",
   "sidebarRecentFilesSection": "ARQUIVOS RECENTES",
+  "sidebarOpenTooltip": "Abrir um arquivo ou adicionar uma pasta",
   "sidebarFoldersSection": "PASTAS",
   "sidebarRemoveFolderTooltip": "Remover pasta",
   "sidebarRemoveRecentFileTooltip": "Remover dos arquivos recentes",

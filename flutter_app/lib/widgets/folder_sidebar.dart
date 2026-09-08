@@ -33,6 +33,8 @@ class FolderSidebar extends StatelessWidget {
     required this.onRawOnlyChanged,
     required this.includeSubfolders,
     required this.onIncludeSubfoldersChanged,
+    required this.onOpenFile,
+    required this.onOpenFolder,
   });
 
   final List<String> roots;
@@ -55,11 +57,40 @@ class FolderSidebar extends StatelessWidget {
   /// Mirrors [AppSettings.includeSubfolders] — same reasoning as
   /// [rawOnly], shown right alongside it.
   final bool includeSubfolders;
+
+  /// Behind the "+" beside the FOLDERS heading — the two things that
+  /// used to be the File menu.
+  final VoidCallback onOpenFile;
+  final VoidCallback onOpenFolder;
   final ValueChanged<bool> onIncludeSubfoldersChanged;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    // Built once and used by both branches below. The empty state needs it
+    // as much as the populated one — more, in fact: with no top menu bar
+    // any more, this "+" is the only way to open anything at all, and a
+    // fresh install that hid it would be a dead end.
+    final header = _SidebarSectionHeader(
+      l10n.sidebarFoldersSection,
+      leading: PopupMenuButton<VoidCallback>(
+        tooltip: l10n.sidebarOpenTooltip,
+        offset: const Offset(0, 28),
+        itemBuilder: (context) => [
+          PopupMenuItem(value: onOpenFile, child: Text(l10n.menuOpenFile)),
+          PopupMenuItem(value: onOpenFolder, child: Text(l10n.menuOpenFolder)),
+        ],
+        onSelected: (callback) => callback(),
+        child: const Padding(
+          padding: EdgeInsets.all(6),
+          child: Icon(
+            CupertinoIcons.add,
+            size: 15,
+            color: DarkmoonColors.textSecondary,
+          ),
+        ),
+      ),
+    );
     if (roots.isEmpty && recentFiles.isEmpty) {
       return Container(
         width: 300,
@@ -67,9 +98,10 @@ class FolderSidebar extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            header,
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.fromLTRB(12, 2, 12, 12),
                 child: Align(
                   alignment: Alignment.topLeft,
                   child: Text(
@@ -116,7 +148,7 @@ class FolderSidebar extends StatelessWidget {
                       ),
                     const SizedBox(height: 8),
                   ],
-                  _SidebarSectionHeader(l10n.sidebarFoldersSection),
+                  header,
                   for (final root in roots)
                     _FolderNode(
                       key: ValueKey(root),
@@ -148,15 +180,31 @@ class FolderSidebar extends StatelessWidget {
 }
 
 class _SidebarSectionHeader extends StatelessWidget {
-  const _SidebarSectionHeader(this.label);
+  const _SidebarSectionHeader(this.label, {this.leading});
 
   final String label;
 
+  /// Sits to the left of the label, flush with the column's own left edge
+  /// — the button that adds to a section reads as part of that section's
+  /// heading rather than floating above the list.
+  final Widget? leading;
+
   @override
   Widget build(BuildContext context) {
+    final text = Text(label, style: Theme.of(context).textTheme.labelSmall);
+    if (leading == null) {
+      return Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
+        child: text,
+      );
+    }
     return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 6),
-      child: Text(label, style: Theme.of(context).textTheme.labelSmall),
+      // Less on the left than the plain header, and tighter vertically:
+      // the button carries its own padding, so indenting it as well would
+      // push it out of line with the rows underneath and make the heading
+      // taller than its neighbours.
+      padding: const EdgeInsets.fromLTRB(6, 4, 12, 2),
+      child: Row(children: [leading!, const SizedBox(width: 2), text]),
     );
   }
 }

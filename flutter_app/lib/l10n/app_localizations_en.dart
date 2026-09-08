@@ -9,9 +9,6 @@ class AppLocalizationsEn extends AppLocalizations {
   AppLocalizationsEn([String locale = 'en']) : super(locale);
 
   @override
-  String get menuFile => 'File';
-
-  @override
   String get menuOpenFile => 'Open File';
 
   @override
@@ -79,6 +76,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get sidebarRecentFilesSection => 'RECENT FILES';
+
+  @override
+  String get sidebarOpenTooltip => 'Open a file or add a folder';
 
   @override
   String get sidebarFoldersSection => 'FOLDERS';

@@ -7407,12 +7407,6 @@ class _EditorScreenState extends State<EditorScreen>
     return Scaffold(
       body: Column(
         children: [
-          _TopMenuBar(
-            onOpenFile: _openFile,
-            onOpenFolder: _openFolder,
-            onOpenSettings: _openSettings,
-            onOpenAbout: _openAbout,
-          ),
           Expanded(
             child: Stack(
               children: [
@@ -7460,6 +7454,8 @@ class _EditorScreenState extends State<EditorScreen>
                                         _settings.includeSubfolders,
                                     onIncludeSubfoldersChanged:
                                         _setIncludeSubfolders,
+                                    onOpenFile: _openFile,
+                                    onOpenFolder: _openFolder,
                                   ),
                                 ),
                                 Container(
@@ -7498,6 +7494,14 @@ class _EditorScreenState extends State<EditorScreen>
                                           unawaited(_exportPresets(presets)),
                                     ),
                                   ),
+                                ),
+                                // The app's own two windows, at the foot of
+                                // the sidebar rather than in a menu bar of
+                                // their own: they are opened rarely and
+                                // belong nowhere near the editing controls.
+                                _SidebarFooterBar(
+                                  onOpenSettings: _openSettings,
+                                  onOpenAbout: _openAbout,
                                 ),
                               ],
                             ),
@@ -7810,16 +7814,13 @@ class _EditorScreenState extends State<EditorScreen>
   }
 }
 
-class _TopMenuBar extends StatelessWidget {
-  const _TopMenuBar({
-    required this.onOpenFile,
-    required this.onOpenFolder,
+/// Settings and About, side by side under the preset list.
+class _SidebarFooterBar extends StatelessWidget {
+  const _SidebarFooterBar({
     required this.onOpenSettings,
     required this.onOpenAbout,
   });
 
-  final VoidCallback onOpenFile;
-  final VoidCallback onOpenFolder;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenAbout;
 
@@ -7827,36 +7828,19 @@ class _TopMenuBar extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      decoration: const BoxDecoration(
-        color: DarkmoonColors.panel,
-        border: Border(bottom: BorderSide(color: DarkmoonColors.dividerDark)),
-      ),
+      color: DarkmoonColors.panel,
+      padding: const EdgeInsets.fromLTRB(6, 2, 6, 4),
       child: Row(
         children: [
-          PopupMenuButton<VoidCallback>(
-            tooltip: '',
-            offset: const Offset(0, 26),
-            itemBuilder: (context) => [
-              PopupMenuItem(value: onOpenFile, child: Text(l10n.menuOpenFile)),
-              PopupMenuItem(
-                value: onOpenFolder,
-                child: Text(l10n.menuOpenFolder),
-              ),
-            ],
-            onSelected: (callback) => callback(),
-            child: _MenuBarLabel(l10n.menuFile),
+          _SidebarFooterButton(
+            icon: CupertinoIcons.gear_alt,
+            tooltip: l10n.menuSettings,
+            onPressed: onOpenSettings,
           ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: onOpenSettings,
-            child: _MenuBarLabel(l10n.menuSettings),
-          ),
-          const SizedBox(width: 4),
-          GestureDetector(
-            onTap: onOpenAbout,
-            child: _MenuBarLabel(l10n.menuAbout),
+          _SidebarFooterButton(
+            icon: CupertinoIcons.info_circle,
+            tooltip: l10n.menuAbout,
+            onPressed: onOpenAbout,
           ),
         ],
       ),
@@ -7864,21 +7848,27 @@ class _TopMenuBar extends StatelessWidget {
   }
 }
 
-class _MenuBarLabel extends StatelessWidget {
-  const _MenuBarLabel(this.text);
+class _SidebarFooterButton extends StatelessWidget {
+  const _SidebarFooterButton({
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+  });
 
-  final String text;
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-      child: Text(
-        text,
-        style: const TextStyle(
-          color: DarkmoonColors.textSecondary,
-          fontSize: 12.5,
-        ),
+    return SizedBox(
+      width: 28,
+      height: 26,
+      child: IconButton(
+        tooltip: tooltip,
+        padding: EdgeInsets.zero,
+        onPressed: onPressed,
+        icon: Icon(icon, size: 15),
       ),
     );
   }

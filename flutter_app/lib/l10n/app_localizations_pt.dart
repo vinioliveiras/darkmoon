@@ -9,9 +9,6 @@ class AppLocalizationsPt extends AppLocalizations {
   AppLocalizationsPt([String locale = 'pt']) : super(locale);
 
   @override
-  String get menuFile => 'Arquivo';
-
-  @override
   String get menuOpenFile => 'Abrir arquivo';
 
   @override
@@ -79,6 +76,9 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get sidebarRecentFilesSection => 'ARQUIVOS RECENTES';
+
+  @override
+  String get sidebarOpenTooltip => 'Abrir um arquivo ou adicionar uma pasta';
 
   @override
   String get sidebarFoldersSection => 'PASTAS';

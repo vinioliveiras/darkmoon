@@ -1,6 +1,5 @@
 {
   "@@locale": "en",
-  "menuFile": "File",
   "menuOpenFile": "Open File",
   "menuOpenFolder": "Add Folder",
   "menuSettings": "Settings",
@@ -25,6 +24,7 @@
   "photoNotFoundMessage": "{name}\ncan't be found — it may have been moved, renamed or deleted outside darkmoon",
   "@photoNotFoundMessage": {"placeholders": {"name": {"type": "String"}}},
   "sidebarRecentFilesSection": "RECENT FILES",
+  "sidebarOpenTooltip": "Open a file or add a folder",
   "sidebarFoldersSection": "FOLDERS",
   "sidebarRemoveFolderTooltip": "Remove folder",
   "sidebarRemoveRecentFileTooltip": "Remove from recent files",

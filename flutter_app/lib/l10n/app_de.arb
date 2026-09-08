@@ -1,6 +1,5 @@
 {
   "@@locale": "de",
-  "menuFile": "Datei",
   "menuOpenFile": "Datei öffnen",
   "menuOpenFolder": "Ordner hinzufügen",
   "menuSettings": "Einstellungen",
@@ -21,6 +20,7 @@
   "decodingPhoto": "{name}\n(wird dekodiert...)",
   "photoNotFoundMessage": "{name}\nwurde nicht gefunden — die Datei wurde möglicherweise außerhalb von darkmoon verschoben, umbenannt oder gelöscht",
   "sidebarRecentFilesSection": "ZULETZT VERWENDET",
+  "sidebarOpenTooltip": "Datei oeffnen oder Ordner hinzufuegen",
   "sidebarFoldersSection": "ORDNER",
   "sidebarRemoveFolderTooltip": "Ordner entfernen",
   "sidebarRemoveRecentFileTooltip": "Aus zuletzt verwendeten Dateien entfernen",

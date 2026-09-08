@@ -100,12 +100,6 @@ abstract class AppLocalizations {
     Locale('pt'),
   ];
 
-  /// No description provided for @menuFile.
-  ///
-  /// In en, this message translates to:
-  /// **'File'**
-  String get menuFile;
-
   /// No description provided for @menuOpenFile.
   ///
   /// In en, this message translates to:
@@ -225,6 +219,12 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'RECENT FILES'**
   String get sidebarRecentFilesSection;
+
+  /// No description provided for @sidebarOpenTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Open a file or add a folder'**
+  String get sidebarOpenTooltip;
 
   /// No description provided for @sidebarFoldersSection.
   ///
