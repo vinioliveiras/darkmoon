@@ -209,17 +209,22 @@ class BrushGeometry {
       BrushGeometry(strokes: strokes ?? this.strokes);
 }
 
-/// [luminance]: parametric brightness-range selection, same
-/// eyedropper-then-tune shape as [colorRange] (see [LuminanceGeometry]).
-/// [flow]: a Brush variant with a different per-stroke compositing rule —
-/// shares [MaskLayer.brush]'s [BrushGeometry]/stroke storage entirely
-/// rather than getting its own field (see [BrushStroke.flow]'s doc for
-/// why).
+/// [wholeImage]: no geometry at all — every pixel at full weight (see
+/// [_computeWholeImageAlpha]). [luminance]: parametric brightness-range
+/// selection, same eyedropper-then-tune shape as [colorRange] (see
+/// [LuminanceGeometry]). [flow]: a Brush variant with a different
+/// per-stroke compositing rule — shares [MaskLayer.brush]'s
+/// [BrushGeometry]/stroke storage entirely rather than getting its own
+/// field (see [BrushStroke.flow]'s doc for why).
+///
+/// Serialized by *name* (`mask_store.dart`'s `MaskType.values.byName`),
+/// so this list's order is free to change without touching saved photos.
 enum MaskType {
   linearGradient,
   radialGradient,
   brush,
   colorRange,
+  wholeImage,
   luminance,
   flow,
 }
@@ -357,6 +362,8 @@ Float32List computeMaskAlpha(
         sourceForColorRange ?? Float32List(width * height * 3),
         mask.colorRange,
       );
+    case MaskType.wholeImage:
+      _computeWholeImageAlpha(alpha);
     case MaskType.luminance:
       _computeLuminanceAlpha(
         alpha,
@@ -539,6 +546,15 @@ void _computeColorRangeAlpha(
       alpha[i] = 1.0 - (dist - core) / featherSpan;
     }
   }
+}
+
+/// No geometry, no reference — every pixel at full weight. The cheapest
+/// possible mask; only exists so "affects the whole image" is a real,
+/// selectable option alongside the shaped ones (e.g. to run a second,
+/// independently-adjustable pass over the entire photo without needing a
+/// gradient/brush/color-range shape to carry it).
+void _computeWholeImageAlpha(Float32List alpha) {
+  alpha.fillRange(0, alpha.length, 1.0);
 }
 
 /// Same proportional core/feather scale [_computeColorRangeAlpha] uses,

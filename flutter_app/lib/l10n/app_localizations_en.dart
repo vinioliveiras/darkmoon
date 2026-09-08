@@ -840,6 +840,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get colorRangeHint => 'Tap the image to pick a color';
 
   @override
+  String get maskWholeImage => 'Whole Image';
+
+  @override
   String get maskLuminance => 'Luminance Range';
 
   @override
