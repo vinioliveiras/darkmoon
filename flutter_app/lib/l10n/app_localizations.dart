@@ -1642,12 +1642,6 @@ abstract class AppLocalizations {
   /// **'Feather'**
   String get luminanceFeatherLabel;
 
-  /// No description provided for @maskSubject.
-  ///
-  /// In en, this message translates to:
-  /// **'Subject'**
-  String get maskSubject;
-
   /// No description provided for @maskSky.
   ///
   /// In en, this message translates to:
@@ -1665,12 +1659,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Depth'**
   String get maskDepth;
-
-  /// No description provided for @subjectMaskHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Drag a box around the subject, or tap it'**
-  String get subjectMaskHint;
 
   /// No description provided for @depthNearLabel.
   ///

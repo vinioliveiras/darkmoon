@@ -113,22 +113,6 @@ void _evaluate(String path, Directory outDir) {
       outDir,
       '${_stem(name)}-foreground-$label',
     );
-    _report(
-      '$name subject/$label',
-      () => runSubjectMaskModel(
-        runSubjectEmbedding(frame.rgb, frame.width, frame.height),
-        const SubjectGeometry(
-          startX: 0.5,
-          startY: 0.5,
-          endX: 0.5,
-          endY: 0.5,
-        ),
-        frame.width,
-        frame.height,
-      ),
-      outDir,
-      '${_stem(name)}-subject-$label',
-    );
   }
 }
 

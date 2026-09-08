@@ -72,17 +72,18 @@ class OnnxModelSpec {
 
   /// Skips the GPU providers entirely for this model.
   ///
-  /// Set on the five AI mask models, for both halves of the usual reason
-  /// to want a GPU and not get one. DirectML *crashes* SAM's prompt
-  /// decoder outright — an access violation inside the DML kernels, not a
-  /// placement error this file could catch and fall back from — and it is
-  /// slower besides for every one of the five: measured 2026-09-08 on the
-  /// same photo, DirectML vs CPU was 7.9s vs 3.5s for SAM's encoder, 1.8s
-  /// vs 0.8s for sky segmentation, 1.5s vs 0.9s for depth. These are
-  /// one-shot models run once per photo, where standing the DML device up
-  /// and moving the tensors across costs more than the inference saves,
-  /// unlike the tiled denoise/upscale models that run hundreds of tiles
-  /// through one warm session.
+  /// Set on the AI mask models, where DirectML is measurably slower:
+  /// 2026-09-08 on the same photo, DirectML against CPU was 1.8s to 0.8s
+  /// for sky segmentation and 1.5s to 0.9s for depth. These are one-shot
+  /// models run once per photo, where standing the DML device up and
+  /// moving the tensors across costs more than the inference saves, unlike
+  /// the tiled denoise/upscale models that push hundreds of tiles through
+  /// one warm session.
+  ///
+  /// It was also a correctness fix while the SAM-backed Subject mask
+  /// existed: DirectML crashed its prompt decoder outright, an access
+  /// violation inside the DML kernels rather than a placement error this
+  /// file could catch and fall back from.
   final bool cpuOnly;
 
   int get outputTileSize => inputTileSize * scaleFactor;
@@ -99,28 +100,21 @@ class OnnxModelSpec {
 /// element data plus the shape to declare for it.
 ///
 /// Deliberately dumb — no packing, no normalization, no NCHW conversion,
-/// unlike [OnnxModel.runTile], which does all three. It can, because every
-/// model it serves is the same shape of thing: one image in, one image
-/// out. The models [OnnxModel.runGraph] exists for are not: SAM's decoder
-/// takes point coordinates, point labels, a previous mask, a flag and an
-/// image size alongside the embedding, so there is no one layout to
-/// convert to and the caller lays its own bytes out.
+/// unlike [OnnxModel.runTile], which does all three on its caller's
+/// behalf. It can, because every model it serves has the same shape: one
+/// image tensor in, one image tensor out, both at index 0, laid out the
+/// way an image model conventionally wants them. The models
+/// [OnnxModel.runGraph] exists for do not, so the caller lays out its own
+/// bytes and names its own tensors.
 class OnnxTensorData {
-  /// A float32 tensor. [shape] is the full ONNX shape, batch dimension
-  /// included; [floats] must hold exactly [elementCount] values.
-  OnnxTensorData.float32(this.shape, Float32List this.floats) : bytes = null;
-
-  /// A uint8 tensor — SAM's image encoder takes its 1024x1024 image as
-  /// raw bytes rather than normalized floats, the one model here that
-  /// does.
-  OnnxTensorData.uint8(this.shape, Uint8List this.bytes) : floats = null;
+  /// [shape] is the full ONNX shape, batch dimension included; [floats]
+  /// must hold exactly [elementCount] values.
+  OnnxTensorData.float32(this.shape, this.floats);
 
   final List<int> shape;
-  final Float32List? floats;
-  final Uint8List? bytes;
+  final Float32List floats;
 
-  /// Elements the [shape] describes — the length [floats]/[bytes] must
-  /// have.
+  /// Elements the [shape] describes — the length [floats] must have.
   int get elementCount => shape.fold(1, (a, b) => a * b);
 }
 
@@ -270,34 +264,13 @@ const ddcolorModelSpec = OnnxModelSpec(
   scaleFactor: 1,
 );
 
-// The five models behind the AI mask types (`ai_mask_models.dart`). None
-// of them goes through [OnnxModel.runTile]: one takes uint8, one takes six
-// inputs, two have seven outputs, and one returns a rank-3 tensor. They
-// all run through [OnnxModel.runGraph] instead, so [OnnxModelSpec] here is
-// carrying only the file name and the session cache key — the tile
-// geometry fields are set to each model's real fixed input size for
-// documentation value, not because anything reads them.
-
-/// SAM ViT-B image encoder (Apache-2.0, facebookresearch/segment-anything)
-/// — turns one photo into the 1x256x64x64 embedding
-/// [samDecoderModelSpec] then answers prompts against. The expensive half
-/// (seconds, and the reason `ai_mask_cache.dart` exists) and the one model
-/// here whose input tensor is **uint8**, not normalized floats.
-const samEncoderModelSpec = OnnxModelSpec(
-  fileName: 'sam_vit_b_01ec64_encoder.onnx',
-  inputTileSize: 1024,
-  scaleFactor: 1,
-  cpuOnly: true,
-);
-
-/// SAM ViT-B prompt decoder — embedding plus a point or box in, mask out.
-/// Cheap (milliseconds), so re-prompting the same photo doesn't re-encode.
-const samDecoderModelSpec = OnnxModelSpec(
-  fileName: 'sam_vit_b_01ec64_decoder.onnx',
-  inputTileSize: 1024,
-  scaleFactor: 1,
-  cpuOnly: true,
-);
+// The three models behind the AI mask types (`ai_mask_models.dart`). None
+// of them goes through [OnnxModel.runTile]: two declare seven outputs and
+// one returns a rank-3 tensor, and none of them names its tensors what
+// runTile assumes. They run through [OnnxModel.runGraph] instead, so
+// [OnnxModelSpec] here carries only the file name and the session cache
+// key — the tile geometry fields are set to each model's real fixed input
+// size for documentation value, not because anything reads them.
 
 /// Sky segmentation (U-2-Net architecture, xiongzhu666/Sky-Segmentation-
 /// and-Post-processing) — 320x320, ImageNet normalization, seven outputs
@@ -1254,12 +1227,11 @@ class OnnxModel {
   /// unpacking, no rescaling, no channel reordering.
   ///
   /// [runTile] and its siblings cover the shape every other bundled model
-  /// has: one image tensor in, one image tensor out, both float32, both
-  /// findable at index 0 — which is why they can read the two names off
-  /// the graph and convert layouts on the caller's behalf. SAM fits
-  /// neither half of that. Its encoder's input is *uint8*, and its decoder
-  /// takes six inputs and returns three, so "the tensor at index 0" stops
-  /// being an answer and names have to be passed in.
+  /// has: one image tensor in, one image tensor out, both at index 0, laid
+  /// out the way an image model conventionally wants them. The mask models
+  /// do not fit that — two of them declare seven outputs, so "the tensor at
+  /// index 0" stops being an answer and the names have to be passed in, and
+  /// their letterboxed input is built planar rather than packed.
   ///
   /// Blocking native call — run on a background isolate, same convention
   /// as [runTile].
@@ -1298,42 +1270,18 @@ class OnnxModel {
           shapePtr[d] = tensor.shape[d];
         }
 
-        final Pointer<Void> dataPtr;
-        final int byteLength;
-        final int elementType;
         final floats = tensor.floats;
-        if (floats != null) {
-          if (floats.length != tensor.elementCount) {
-            throw ArgumentError(
-              "input '${entry.key}' declares shape ${tensor.shape} "
-              '(${tensor.elementCount} elements) but carries '
-              '${floats.length} floats',
-            );
-          }
-          final buffer = calloc<Float>(floats.length);
-          buffer.asTypedList(floats.length).setAll(0, floats);
-          dataPtr = buffer.cast();
-          byteLength = floats.length * sizeOf<Float>();
-          elementType = ONNXTensorElementDataType
-              .ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT
-              .value;
-        } else {
-          final bytes = tensor.bytes!;
-          if (bytes.length != tensor.elementCount) {
-            throw ArgumentError(
-              "input '${entry.key}' declares shape ${tensor.shape} "
-              '(${tensor.elementCount} elements) but carries '
-              '${bytes.length} bytes',
-            );
-          }
-          final buffer = calloc<Uint8>(bytes.length);
-          buffer.asTypedList(bytes.length).setAll(0, bytes);
-          dataPtr = buffer.cast();
-          byteLength = bytes.length;
-          elementType = ONNXTensorElementDataType
-              .ONNX_TENSOR_ELEMENT_DATA_TYPE_UINT8
-              .value;
+        if (floats.length != tensor.elementCount) {
+          throw ArgumentError(
+            "input '${entry.key}' declares shape ${tensor.shape} "
+            '(${tensor.elementCount} elements) but carries '
+            '${floats.length} floats',
+          );
         }
+        final buffer = calloc<Float>(floats.length);
+        buffer.asTypedList(floats.length).setAll(0, floats);
+        final Pointer<Void> dataPtr = buffer.cast();
+        final byteLength = floats.length * sizeOf<Float>();
         dataPtrs.add(dataPtr);
 
         final valueOut = calloc<Pointer<OrtValue>>();
@@ -1356,7 +1304,9 @@ class OnnxModel {
               byteLength,
               shapePtr,
               rank,
-              elementType,
+              ONNXTensorElementDataType
+                  .ONNX_TENSOR_ELEMENT_DATA_TYPE_FLOAT
+                  .value,
               valueOut,
             ),
           );

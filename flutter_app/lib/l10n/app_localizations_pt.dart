@@ -862,9 +862,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get luminanceFeatherLabel => 'Suavização';
 
   @override
-  String get maskSubject => 'Sujeito';
-
-  @override
   String get maskSky => 'Céu';
 
   @override
@@ -872,10 +869,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get maskDepth => 'Profundidade';
-
-  @override
-  String get subjectMaskHint =>
-      'Arraste uma caixa em volta do sujeito, ou toque nele';
 
   @override
   String get depthNearLabel => 'Perto';

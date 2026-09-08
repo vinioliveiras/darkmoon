@@ -10,30 +10,17 @@ import 'mask.dart';
 import 'render_job.dart';
 import 'render_params.dart';
 
-/// What one AI mask needs answered: which model, and what the user aimed
-/// it at. Only [SubjectGeometry] is a prompt — Sky, Foreground and Depth
-/// ask the same question of every photo.
+/// What one AI mask needs answered: which model to ask.
+///
+/// There is nothing else to carry. All three types ask the same question
+/// of every photo — there is no prompt, which is exactly what makes them
+/// automatic.
 @immutable
 class AiMaskRequest {
-  const AiMaskRequest({
-    required this.maskId,
-    required this.type,
-    this.subject = const SubjectGeometry(),
-  });
+  const AiMaskRequest({required this.maskId, required this.type});
 
   final String maskId;
   final MaskType type;
-  final SubjectGeometry subject;
-
-  /// The part of the cache key the user controls. Rounded to four
-  /// decimals so that nudging a box by a hundredth of a pixel — which no
-  /// model output could resolve — doesn't miss the cache.
-  String get promptKey => type == MaskType.subject
-      ? '${subject.startX.toStringAsFixed(4)},'
-            '${subject.startY.toStringAsFixed(4)},'
-            '${subject.endX.toStringAsFixed(4)},'
-            '${subject.endY.toStringAsFixed(4)}'
-      : '';
 }
 
 /// One `compute()` argument bundle — the frame to look at, and every mask
@@ -125,32 +112,10 @@ Future<AiMaskResolveResult> resolveAiMaskMaps(
     // the levelling is there at all.
     final signature = aiMaskFrameSignature(frame.rgb);
 
-    // At most one embedding per resolve, however many Subject masks the
-    // photo has: the encoder looks at the photo, not at the prompt, so
-    // two subjects share one 3.5-second pass.
-    Float32List? embedding;
-    Future<Float32List> embeddingFor() async {
-      if (embedding != null) {
-        return embedding!;
-      }
-      final key = aiMaskCacheKey(
-        frameSignature: signature,
-        kind: 'sam-embedding',
-      );
-      final cached = await lookupAiMaskEmbedding(request.cacheDir, key);
-      if (cached != null) {
-        return embedding = cached;
-      }
-      final computed = runSubjectEmbedding(frame.rgb, frame.width, frame.height);
-      await storeAiMaskEmbedding(request.cacheDir, key, computed);
-      return embedding = computed;
-    }
-
     for (final req in request.requests) {
       final key = aiMaskCacheKey(
         frameSignature: signature,
         kind: req.type.name,
-        prompt: req.promptKey,
       );
       final cached = await lookupAiMaskMap(request.cacheDir, key);
       if (cached != null) {
@@ -167,12 +132,6 @@ Future<AiMaskResolveResult> resolveAiMaskMaps(
           ),
           MaskType.depth => runDepthMapModel(
             frame.rgb,
-            frame.width,
-            frame.height,
-          ),
-          MaskType.subject => runSubjectMaskModel(
-            await embeddingFor(),
-            req.subject,
             frame.width,
             frame.height,
           ),

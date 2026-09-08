@@ -99,13 +99,38 @@ List<Map<String, dynamic>> _encodeBrush(BrushGeometry brush) => [
     },
 ];
 
+/// Reads a saved mask type, translating the ones that no longer exist.
+///
+/// `MaskType.values.byName` throws on an unknown name, which would take
+/// the whole catalog down rather than the one mask — so retired types are
+/// mapped to their replacement here, and anything genuinely unrecognized
+/// (a file from a newer build) degrades to a linear gradient rather than
+/// losing the photo's other masks with it.
+MaskType _decodeMaskType(String name) {
+  const retired = {
+    // Removed 2026-09-08: SAM-backed, aimed by clicking the photo.
+    // Foreground answers the same question automatically and did it
+    // better, so masks saved as 'subject' become Foreground masks.
+    'subject': MaskType.foreground,
+  };
+  final retiredType = retired[name];
+  if (retiredType != null) {
+    return retiredType;
+  }
+  for (final type in MaskType.values) {
+    if (type.name == name) {
+      return type;
+    }
+  }
+  return MaskType.linearGradient;
+}
+
 MaskLayer _decodeMask(Map<String, dynamic> raw) {
-  final type = MaskType.values.byName(raw['type'] as String);
+  final type = _decodeMaskType(raw['type'] as String);
   final linearRaw = raw['linear'] as Map<String, dynamic>?;
   final radialRaw = raw['radial'] as Map<String, dynamic>?;
   final colorRangeRaw = raw['colorRange'] as Map<String, dynamic>?;
   final luminanceRaw = raw['luminance'] as Map<String, dynamic>?;
-  final subjectRaw = raw['subject'] as Map<String, dynamic>?;
   final depthRaw = raw['depth'] as Map<String, dynamic>?;
   return MaskLayer(
     id: raw['id'] as String,
@@ -151,14 +176,6 @@ MaskLayer _decodeMask(Map<String, dynamic> raw) {
             targetLuma: (luminanceRaw['targetLuma'] as num).toDouble(),
             tolerance: (luminanceRaw['tolerance'] as num).toDouble(),
             feather: (luminanceRaw['feather'] as num).toDouble(),
-          ),
-    subject: subjectRaw == null
-        ? const SubjectGeometry()
-        : SubjectGeometry(
-            startX: (subjectRaw['startX'] as num).toDouble(),
-            startY: (subjectRaw['startY'] as num).toDouble(),
-            endX: (subjectRaw['endX'] as num).toDouble(),
-            endY: (subjectRaw['endY'] as num).toDouble(),
           ),
     depth: depthRaw == null
         ? const DepthGeometry()
@@ -211,12 +228,6 @@ Map<String, dynamic> _encodeMask(MaskLayer mask) => {
     'tolerance': mask.luminance.tolerance,
     'feather': mask.luminance.feather,
   },
-  'subject': {
-    'startX': mask.subject.startX,
-    'startY': mask.subject.startY,
-    'endX': mask.subject.endX,
-    'endY': mask.subject.endY,
-  },
   'depth': {
     'near': mask.depth.near,
     'far': mask.depth.far,
@@ -224,6 +235,18 @@ Map<String, dynamic> _encodeMask(MaskLayer mask) => {
   },
   'values': mask.values,
   'curves': _encodeCurves(mask.curves),
+};
+
+/// Turns the on-disk JSON into mask stacks — split out from
+/// [loadPhotoMasks] so the decoding, including [_decodeMaskType]'s
+/// translation of retired mask types, can be tested without
+/// `path_provider` deciding where the file lives.
+Map<String, List<MaskLayer>> decodePhotoMasksJson(Map<String, dynamic> raw) => {
+  for (final entry in raw.entries)
+    entry.key: [
+      for (final mask in entry.value as List)
+        _decodeMask(mask as Map<String, dynamic>),
+    ],
 };
 
 /// Loads every saved photo's mask stack. Returns an empty map if the file
@@ -234,14 +257,9 @@ Future<Map<String, List<MaskLayer>>> loadPhotoMasks() async {
     if (!await file.exists()) {
       return {};
     }
-    final raw = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
-    return {
-      for (final entry in raw.entries)
-        entry.key: [
-          for (final mask in entry.value as List)
-            _decodeMask(mask as Map<String, dynamic>),
-        ],
-    };
+    return decodePhotoMasksJson(
+      jsonDecode(await file.readAsString()) as Map<String, dynamic>,
+    );
   } catch (e, st) {
     DevLog.logError('loadMasks failed, treating masks as empty', e, st);
     return {};

@@ -10,25 +10,24 @@ import '../render/mask.dart';
 /// Bump when anything changes what a model would produce for the same
 /// photo and prompt — a different model file, different preprocessing, a
 /// different working resolution. (2 = the input is tonally levelled before
-/// inference, `autoLevelForAiMask`.) Folded into every key, same role
+/// inference, `autoLevelForAiMask`; 3 = the SAM-backed Subject type is
+/// gone, and with it the prompt that used to be part of every key.) Folded into every key, same role
 /// `colorize_cache.dart`'s `colorizeCacheVersion` plays there.
-const int aiMaskCacheVersion = 2;
+const int aiMaskCacheVersion = 3;
 
 /// Identifies one cached model output.
 ///
 /// [frameSignature] is a hash of the exact pixels the model was shown —
-/// see [aiMaskFrameSignature]. [kind] separates the models ('sky',
-/// 'depth', ...), and [prompt] carries what the user aimed at, empty for
-/// the three types that have nothing to aim.
+/// see [aiMaskFrameSignature] — and [kind] separates the models ('sky',
+/// 'depth', ...). Nothing else: none of these types takes a prompt.
 ///
 /// `path_provider`-free, like the rest of this file — safe to call from a
 /// background isolate.
 String aiMaskCacheKey({
   required String frameSignature,
   required String kind,
-  String prompt = '',
 }) => sha1
-    .convert(utf8.encode('$frameSignature|$kind|$prompt|v$aiMaskCacheVersion'))
+    .convert(utf8.encode('$frameSignature|$kind|v$aiMaskCacheVersion'))
     .toString();
 
 /// Hashes the frame a map was computed from.
@@ -97,49 +96,5 @@ Future<void> storeAiMaskMap(
     await tmp.rename(dest.path);
   } catch (_) {
     // Best-effort: the caller already holds the map it just computed.
-  }
-}
-
-/// Reads back a SAM embedding stored by [storeAiMaskEmbedding].
-///
-/// Cached separately from the masks it produces, and keyed without a
-/// prompt, because it depends on the photo alone: it costs ~3.5s to
-/// compute and ~4 MB to keep, and every later click or box on the same
-/// photo answers from it in well under a second.
-Future<Float32List?> lookupAiMaskEmbedding(
-  String cacheDir,
-  String key,
-) async {
-  try {
-    final file = _entryFile(cacheDir, key, 'aiembed');
-    if (!await file.exists()) {
-      return null;
-    }
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty || bytes.length % 4 != 0) {
-      return null;
-    }
-    return Float32List.sublistView(bytes);
-  } catch (_) {
-    return null;
-  }
-}
-
-/// Stores a SAM embedding — see [lookupAiMaskEmbedding].
-Future<void> storeAiMaskEmbedding(
-  String cacheDir,
-  String key,
-  Float32List embedding,
-) async {
-  try {
-    final dest = _entryFile(cacheDir, key, 'aiembed');
-    final tmp = File('${dest.path}.tmp');
-    await tmp.writeAsBytes(
-      Uint8List.sublistView(embedding),
-      flush: true,
-    );
-    await tmp.rename(dest.path);
-  } catch (_) {
-    // Best-effort, as above.
   }
 }
