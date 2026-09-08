@@ -342,6 +342,13 @@ Future<ui.Image> _runPostDenoise(
   shader.setFloat(i++, calMixerBandSharpness);
   shader.setFloat(i++, calMixerSaturationStrength);
   shader.setFloat(i++, calMixerLuminanceStrength);
+  // Centres then widths, matching uMixerBands[16]'s own halves.
+  for (final centre in calMixerBandCentres) {
+    shader.setFloat(i++, centre);
+  }
+  for (final width in calMixerBandWidths) {
+    shader.setFloat(i++, width);
+  }
   for (final ch in mixerChannels) {
     shader.setFloat(i++, ch.hue);
     shader.setFloat(i++, ch.saturation);

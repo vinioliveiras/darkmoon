@@ -71,6 +71,17 @@ uniform float uMixerBandSharpness; // Gaussian tightness of each HSL band
 uniform float uMixerSaturationStrength; // scales the raw Saturation slider
 uniform float uMixerLuminanceStrength; // scales the raw Luminance slider
 
+// Band centres (0-7) then band widths (8-15), degrees — matches
+// calibration.dart's calMixerBandCentres/calMixerBandWidths. A uniform
+// rather than literals here: the CPU reads those constants and a second
+// hardcoded copy in this file would silently stop tracking them, which is
+// a bug this project has shipped more than once.
+//
+// Only ever indexed with a compile-time constant below. Runtime-computed
+// indices into a uniform array are miscompiled by SkSL/Impeller, which is
+// why the band loop is unrolled by hand in the first place.
+uniform float uMixerBands[16];
+
 // Color Mixer — color_mixer.dart's applyColorMixer. 8 bands x
 // [hueShift, satShift, lumShift], band order matches
 // ColorMixerValues._channels (red, orange, yellow, green, aqua, blue,
@@ -118,28 +129,6 @@ float linearToSrgb(float value) {
 // (array initializers) — matches color_mixer.dart's _hslRanges via an
 // if-chain instead of an array literal. Exact values Solstice's own
 // HSL_RANGES uses in shader.wgsl (not evenly spaced, not a fixed width).
-float hslRangeCenter(int band) {
-  if (band == 0) return 358.0;
-  if (band == 1) return 25.0;
-  if (band == 2) return 60.0;
-  if (band == 3) return 115.0;
-  if (band == 4) return 180.0;
-  if (band == 5) return 225.0;
-  if (band == 6) return 280.0;
-  return 330.0; // band == 7
-}
-
-float hslRangeWidth(int band) {
-  if (band == 0) return 35.0;
-  if (band == 1) return 45.0;
-  if (band == 2) return 40.0;
-  if (band == 3) return 90.0;
-  if (band == 4) return 60.0;
-  if (band == 5) return 60.0;
-  if (band == 6) return 55.0;
-  return 50.0; // band == 7
-}
-
 // Mirrors color_mixer.dart's _rawHslInfluence exactly (Solstice's
 // get_raw_hsl_influence): a Gaussian falloff around center rather than a
 // hard cutoff.
@@ -384,14 +373,14 @@ void main() {
     float saturationMask = smoothstep(0.05, 0.20, originalSat);
     float luminanceWeight = smoothstep(0.0, 1.0, originalSat);
     if (saturationMask >= 0.001 || luminanceWeight >= 0.001) {
-      float w0 = rawHslInfluence(originalHue, hslRangeCenter(0), hslRangeWidth(0));
-      float w1 = rawHslInfluence(originalHue, hslRangeCenter(1), hslRangeWidth(1));
-      float w2 = rawHslInfluence(originalHue, hslRangeCenter(2), hslRangeWidth(2));
-      float w3 = rawHslInfluence(originalHue, hslRangeCenter(3), hslRangeWidth(3));
-      float w4 = rawHslInfluence(originalHue, hslRangeCenter(4), hslRangeWidth(4));
-      float w5 = rawHslInfluence(originalHue, hslRangeCenter(5), hslRangeWidth(5));
-      float w6 = rawHslInfluence(originalHue, hslRangeCenter(6), hslRangeWidth(6));
-      float w7 = rawHslInfluence(originalHue, hslRangeCenter(7), hslRangeWidth(7));
+      float w0 = rawHslInfluence(originalHue, uMixerBands[0], uMixerBands[8]);
+      float w1 = rawHslInfluence(originalHue, uMixerBands[1], uMixerBands[9]);
+      float w2 = rawHslInfluence(originalHue, uMixerBands[2], uMixerBands[10]);
+      float w3 = rawHslInfluence(originalHue, uMixerBands[3], uMixerBands[11]);
+      float w4 = rawHslInfluence(originalHue, uMixerBands[4], uMixerBands[12]);
+      float w5 = rawHslInfluence(originalHue, uMixerBands[5], uMixerBands[13]);
+      float w6 = rawHslInfluence(originalHue, uMixerBands[6], uMixerBands[14]);
+      float w7 = rawHslInfluence(originalHue, uMixerBands[7], uMixerBands[15]);
       float totalRaw = w0 + w1 + w2 + w3 + w4 + w5 + w6 + w7;
 
       float totalHueShift = 0.0, totalSatMul = 0.0, totalLumAdj = 0.0;

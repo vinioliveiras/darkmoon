@@ -501,6 +501,49 @@ const double calSaturationStrength = 0.10;
 // ║  COLOR — Color Mixer / HSL (8 bands)                                      ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
+/// **Mixer → band centres** — the hue each of the 8 bands is built
+/// around, degrees, in the order Red, Orange, Yellow, Green, Aqua, Blue,
+/// Purple, Magenta.
+///
+/// Not evenly spaced, and deliberately so: Red sits at 358 rather than 0
+/// because the reds people adjust are the warm ones just off pure red.
+const List<double> calMixerBandCentres = [
+  358.0,
+  25.0,
+  60.0,
+  115.0,
+  180.0,
+  225.0,
+  280.0,
+  330.0,
+];
+
+/// **Mixer → band widths** — how far each band reaches, degrees, same
+/// order as [calMixerBandCentres].
+///
+/// This is the knob for "changing one colour should not change its
+/// neighbours". A band's influence is a Gaussian of this width, and the
+/// eight are normalised per pixel, so what matters is each width against
+/// its neighbours' rather than its absolute value.
+///
+/// Green at 90 is the one to know about: it is twice most of the others
+/// and reaches from yellow-green to cyan, so dragging Green moves a third
+/// of the spectrum. Measured on a hue sweep, Green Hue at +100 visibly
+/// moves every hue from 75 to 165 degrees.
+///   ↑ higher = that band takes in more neighbouring hues
+///   ↓ lower  = tighter selection, and more of the spectrum falls to the
+///              bands either side
+const List<double> calMixerBandWidths = [
+  35.0,
+  45.0,
+  40.0,
+  90.0,
+  60.0,
+  60.0,
+  55.0,
+  50.0,
+];
+
 /// **Mixer → per band** — scales one band's Hue/Saturation/Luminance
 /// sliders, on top of the three global strengths below.
 ///

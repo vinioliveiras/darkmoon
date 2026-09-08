@@ -85,11 +85,12 @@ class ColorMixerValues {
   bool get isIdentity => _channels.every((c) => c.isIdentity);
 }
 
-/// One color band's hue center and half-influence width (degrees) — the
-/// exact values Solstice's `HSL_RANGES` uses in shader.wgsl. Notably not
-/// evenly spaced (Red centers on 358°, not 0°; Green is the widest band
-/// at 90°) and not paired with a matching per-band width the way a naive
-/// "45° apart, 45° wide" model would assume.
+/// One color band's hue centre and half-influence width, in degrees.
+///
+/// The numbers live in `calibration.dart` ([calMixerBandCentres] and
+/// [calMixerBandWidths]) rather than here, because the GPU shader needs
+/// the same eight pairs and a second copy of them is the shape of bug
+/// this project has hit repeatedly.
 class _HslRange {
   const _HslRange(this.center, this.width);
   final double center;
@@ -97,15 +98,9 @@ class _HslRange {
 }
 
 /// In the same order as [ColorMixerValues._channels].
-const _hslRanges = [
-  _HslRange(358.0, 35.0), // Red
-  _HslRange(25.0, 45.0), // Orange
-  _HslRange(60.0, 40.0), // Yellow
-  _HslRange(115.0, 90.0), // Green
-  _HslRange(180.0, 60.0), // Aqua
-  _HslRange(225.0, 60.0), // Blue
-  _HslRange(280.0, 55.0), // Purple
-  _HslRange(330.0, 50.0), // Magenta
+final _hslRanges = [
+  for (var i = 0; i < calMixerBandCentres.length; i++)
+    _HslRange(calMixerBandCentres[i], calMixerBandWidths[i]),
 ];
 
 /// A band's raw (pre-normalization) influence on a pixel at [hue] —
