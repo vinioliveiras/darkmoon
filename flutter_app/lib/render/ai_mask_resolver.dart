@@ -120,6 +120,9 @@ Future<AiMaskResolveResult> resolveAiMaskMaps(
       geometry.width,
       geometry.height,
     );
+    // Signature taken *after* levelling, so the cache key is a hash of the
+    // exact pixels the model was shown — see autoLevelForAiMask for why
+    // the levelling is there at all.
     final signature = aiMaskFrameSignature(frame.rgb);
 
     // At most one embedding per resolve, however many Subject masks the
@@ -199,13 +202,19 @@ class _WorkingFrame {
   final int height;
 }
 
+/// The frame every model here is shown: the render's own geometry-corrected
+/// buffer, scaled down to the working resolution and tonally levelled.
 _WorkingFrame _toWorkingResolution(Uint8List rgb, int width, int height) {
   final longSide = width > height ? width : height;
   if (longSide <= aiMaskWorkingMaxDimension) {
-    return _WorkingFrame(rgb, width, height);
+    return _WorkingFrame(autoLevelForAiMask(rgb), width, height);
   }
   final scale = aiMaskWorkingMaxDimension / longSide;
   final dw = (width * scale).round().clamp(1, aiMaskWorkingMaxDimension);
   final dh = (height * scale).round().clamp(1, aiMaskWorkingMaxDimension);
-  return _WorkingFrame(resizeRgbForAiMask(rgb, width, height, dw, dh), dw, dh);
+  return _WorkingFrame(
+    autoLevelForAiMask(resizeRgbForAiMask(rgb, width, height, dw, dh)),
+    dw,
+    dh,
+  );
 }

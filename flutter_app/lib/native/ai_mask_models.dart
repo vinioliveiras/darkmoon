@@ -25,6 +25,75 @@ const List<double> _imagenetStd = [0.229, 0.224, 0.225];
 /// expressed in.
 const int _samInputSize = 1024;
 
+/// Stretches a frame's tonal range to fill 0..255 before any model sees
+/// it — one scale for all three channels, taken from luma, so the range
+/// opens up without shifting a hue (a per-channel stretch would
+/// white-balance the photo as a side effect).
+///
+/// This exists because of what the models are shown. The frame they get is
+/// the decoded source: LibRaw's output with lens correction and crop, and
+/// none of the app's tone work, which lives downstream in the render. On a
+/// RAW that image is flat and often dark, and every model here was trained
+/// on ordinary photographs with a full tonal range — so it is being asked
+/// about a kind of image it never saw.
+///
+/// Measured 2026-09-08 across three of the user's RAWs, against both the
+/// untouched source and the neutral render as alternatives. Sky is the
+/// clearest case: on a night street scene the sky map went from 12.2%
+/// coverage with 8.7% of the map undecided (neither in nor out) to 13.2%
+/// with 1.5% undecided, while the same photo through the neutral render
+/// collapsed to 1.8%. On a hazy daylight RAW, sky went from 8.5%/7.9% to
+/// 10.8%/2.8%. Foreground improved or held on all three. The neutral
+/// render won one of those cases and lost another badly, and would have
+/// tied every cached map to the user's own edits besides; this asks only
+/// that the photo have a full range, which is the one thing every training
+/// set had in common.
+Uint8List autoLevelForAiMask(Uint8List rgb) {
+  final histogram = List<int>.filled(256, 0);
+  for (var i = 0; i < rgb.length; i += 3) {
+    histogram[(rgb[i] * 299 + rgb[i + 1] * 587 + rgb[i + 2] * 114) ~/ 1000]++;
+  }
+  final total = rgb.length ~/ 3;
+  // 1% clipped off each end, so a handful of blown highlights or a black
+  // frame border can't decide the whole stretch. Floored at one pixel:
+  // at zero the search below matches before consuming any bin at all and
+  // reports black as the low end of every frame, which on a flat frame
+  // turns a no-op into a full-contrast stretch of its own noise.
+  final lowTarget = math.max(1, total ~/ 100);
+  final highTarget = math.max(1, total - total ~/ 100);
+  var low = 0;
+  var high = 255;
+  var seen = 0;
+  for (var v = 0; v < 256; v++) {
+    seen += histogram[v];
+    if (seen >= lowTarget) {
+      low = v;
+      break;
+    }
+  }
+  seen = 0;
+  for (var v = 0; v < 256; v++) {
+    seen += histogram[v];
+    if (seen >= highTarget) {
+      high = v;
+      break;
+    }
+  }
+  // So nearly flat that stretching would amplify noise into structure the
+  // model would then confidently mis-segment. A frame that already fills
+  // the range still gets its 1% tails clipped, which is the point of
+  // percentiles rather than the plain min and max.
+  if (high - low < 8) {
+    return rgb;
+  }
+  final scale = 255.0 / (high - low);
+  final out = Uint8List(rgb.length);
+  for (var i = 0; i < rgb.length; i++) {
+    out[i] = ((rgb[i] - low) * scale).clamp(0.0, 255.0).toInt();
+  }
+  return out;
+}
+
 /// Runs the sky segmentation model over a packed-RGB frame, returning the
 /// probability that each pixel is sky.
 ///
@@ -178,8 +247,9 @@ AiMaskMap runSubjectMaskModel(
   Float32List embedding,
   SubjectGeometry geometry,
   int width,
-  int height,
-) {
+  int height, {
+  bool refine = true,
+}) {
   final model = OnnxModel.forSpec(samDecoderModelSpec);
   final names = model.inputNames;
   if (names.length != 6) {
@@ -210,7 +280,8 @@ AiMaskMap runSubjectMaskModel(
   var hasMaskInput = 0.0;
   late Uint8List binaryMask;
 
-  for (var pass = 0; pass < 2; pass++) {
+  final passes = refine ? 2 : 1;
+  for (var pass = 0; pass < passes; pass++) {
     final pointCount = labels.length;
     final outputs = model.runGraph({
       names[0]: OnnxTensorData.float32([1, 256, 64, 64], embedding),
@@ -255,7 +326,7 @@ AiMaskMap runSubjectMaskModel(
     }
     // Nothing selected: a second pass has no answer to refine and would
     // only feed the decoder an empty prior.
-    if (pass == 1 || maskArea == 0) {
+    if (pass == passes - 1 || maskArea == 0) {
       break;
     }
 

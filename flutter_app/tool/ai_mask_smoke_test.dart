@@ -86,6 +86,20 @@ void main(List<String> args) {
         height,
       );
     });
+    _run('subject-norefine', outDir, width, height, () {
+      return runSubjectMaskModel(
+        runSubjectEmbedding(rgb, width, height),
+        SubjectGeometry(
+          startX: subjectX,
+          startY: subjectY,
+          endX: subjectX,
+          endY: subjectY,
+        ),
+        width,
+        height,
+        refine: false,
+      );
+    });
   } finally {
     OnnxModel.releaseAll();
   }

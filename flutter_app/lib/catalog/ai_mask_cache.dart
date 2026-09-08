@@ -9,9 +9,10 @@ import '../render/mask.dart';
 
 /// Bump when anything changes what a model would produce for the same
 /// photo and prompt — a different model file, different preprocessing, a
-/// different working resolution. Folded into every key, same role
+/// different working resolution. (2 = the input is tonally levelled before
+/// inference, `autoLevelForAiMask`.) Folded into every key, same role
 /// `colorize_cache.dart`'s `colorizeCacheVersion` plays there.
-const int aiMaskCacheVersion = 1;
+const int aiMaskCacheVersion = 2;
 
 /// Identifies one cached model output.
 ///
