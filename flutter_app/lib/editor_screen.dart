@@ -7495,14 +7495,6 @@ class _EditorScreenState extends State<EditorScreen>
                                     ),
                                   ),
                                 ),
-                                // The app's own two windows, at the foot of
-                                // the sidebar rather than in a menu bar of
-                                // their own: they are opened rarely and
-                                // belong nowhere near the editing controls.
-                                _SidebarFooterBar(
-                                  onOpenSettings: _openSettings,
-                                  onOpenAbout: _openAbout,
-                                ),
                               ],
                             ),
                           ),
@@ -7738,6 +7730,8 @@ class _EditorScreenState extends State<EditorScreen>
                       ),
                     ),
                     _ViewerToolbar(
+                      onOpenSettings: _openSettings,
+                      onOpenAbout: _openAbout,
                       zoomLabel: _zoomScale == 1.0
                           ? AppLocalizations.of(context)!.zoomFit
                           : '${(_zoomScale * 100).round()}%',
@@ -7809,66 +7803,6 @@ class _EditorScreenState extends State<EditorScreen>
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Settings and About, side by side under the preset list.
-class _SidebarFooterBar extends StatelessWidget {
-  const _SidebarFooterBar({
-    required this.onOpenSettings,
-    required this.onOpenAbout,
-  });
-
-  final VoidCallback onOpenSettings;
-  final VoidCallback onOpenAbout;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Container(
-      color: DarkmoonColors.panel,
-      padding: const EdgeInsets.fromLTRB(6, 2, 6, 4),
-      child: Row(
-        children: [
-          _SidebarFooterButton(
-            icon: CupertinoIcons.gear_alt,
-            tooltip: l10n.menuSettings,
-            onPressed: onOpenSettings,
-          ),
-          _SidebarFooterButton(
-            icon: CupertinoIcons.info_circle,
-            tooltip: l10n.menuAbout,
-            onPressed: onOpenAbout,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SidebarFooterButton extends StatelessWidget {
-  const _SidebarFooterButton({
-    required this.icon,
-    required this.tooltip,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final String tooltip;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 28,
-      height: 26,
-      child: IconButton(
-        tooltip: tooltip,
-        padding: EdgeInsets.zero,
-        onPressed: onPressed,
-        icon: Icon(icon, size: 15),
       ),
     );
   }
@@ -8842,6 +8776,8 @@ class _ViewerToolbar extends StatelessWidget {
     required this.onExport,
     required this.exporting,
     required this.onReset,
+    required this.onOpenSettings,
+    required this.onOpenAbout,
   });
 
   final String zoomLabel;
@@ -8875,6 +8811,12 @@ class _ViewerToolbar extends StatelessWidget {
   final bool exporting;
   final VoidCallback onReset;
 
+  /// The app's own two windows. They sit in the slot the toolbar already
+  /// reserved to line up with the sidebar, which is the only part of this
+  /// bar that was not already carrying something.
+  final VoidCallback onOpenSettings;
+  final VoidCallback onOpenAbout;
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -8894,10 +8836,40 @@ class _ViewerToolbar extends StatelessWidget {
         children: [
           // Lines up under the folder/preset sidebar above — the preset
           // Amount slider used to live here; it now lives in the controls
-          // panel just below the histogram (2026-09-01). Kept as an empty
-          // spacer so the zoom controls in the Row below stay aligned with
-          // the sidebar's actual width, same as before.
-          SizedBox(width: _controlsPanelWidth),
+          // panel just below the histogram (2026-09-01). The width is what
+          // keeps the zoom controls aligned with the sidebar's own edge;
+          // the slot stopped being empty when Settings and About moved out
+          // of the retired menu bar and into the space it was already
+          // holding open.
+          SizedBox(
+            width: _controlsPanelWidth,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: _ToolbarPill(
+                  height: _squareButtonSize,
+                  showChrome: false,
+                  children: [
+                    _ToolbarSegment(
+                      icon: CupertinoIcons.gear_alt,
+                      iconSize: _squareButtonIconSize,
+                      width: _squareButtonSize,
+                      onTap: locked ? null : onOpenSettings,
+                      tooltip: l10n.menuSettings,
+                    ),
+                    _ToolbarSegment(
+                      icon: CupertinoIcons.info_circle,
+                      iconSize: _squareButtonIconSize,
+                      width: _squareButtonSize,
+                      onTap: locked ? null : onOpenAbout,
+                      tooltip: l10n.menuAbout,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
           Expanded(
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
