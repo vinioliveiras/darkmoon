@@ -1,42 +1,37 @@
 import 'package:darkmoon/render/gpu/gpu_pass.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+/// The GPU path used to refuse large frames, because box_blur_h/v silently
+/// truncate above [gpuMaxBoxBlurRadius] — their loop bound has to be a
+/// compile-time constant — and Dehaze's sigma-40 blur outgrows that at
+/// about 3100px. Every settled render on a modern sensor went to the CPU.
+///
+/// runBoxBlurGpu computes a blur too wide for the shaders on a smaller
+/// copy now, so the cap bounds one pass instead of the whole pipeline.
+/// These are the cases that used to be refused.
 void main() {
-  // Radii scale with the frame now, and box_blur_h/v silently truncate
-  // above gpuMaxBoxBlurRadius because their loop bound must be a
-  // compile-time constant. This is the guard that sends such a render to
-  // the CPU instead; getting it wrong means quietly wrong blurs on exactly
-  // the largest, most-detailed previews.
-  //
-  // The numbers below are the real cases: a 7728px sensor (Fujifilm
-  // X100VI) at each Dynamic Full Resolution setting, where the render's
-  // long edge is fullQualityPercent% of the sensor and the scale is that
-  // over calRadiusReferenceLongEdge (1024).
   double scaleFor(int sensorLongEdge, int fullQualityPercent) =>
       sensorLongEdge * fullQualityPercent / 100 / 1024.0;
 
-  test('the default full-quality setting still fits on GPU', () {
-    // 40% of 7728 -> scale 3.02 -> Dehaze radius 121, just under the cap.
-    expect(gpuCanRenderAtScale(scaleFor(7728, 40)), isTrue);
+  test('a full-sensor render is no longer sent to the CPU', () {
+    // 7728px at 100% is scale 7.55, which needs a Dehaze radius of about
+    // 302 against a shader cap of 128. That is what the pyramid is for.
+    expect(gpuCanRenderAtScale(scaleFor(7728, 100)), isTrue);
+    expect(gpuCanRenderAtScale(scaleFor(7728, 60)), isTrue);
   });
 
-  test('a higher full-quality setting falls back to CPU', () {
-    // 60% -> radius 181, over. Without this guard the blur would be
-    // truncated to 128 and silently wrong.
-    expect(gpuCanRenderAtScale(scaleFor(7728, 60)), isFalse);
-    expect(gpuCanRenderAtScale(scaleFor(7728, 100)), isFalse);
-  });
-
-  test('ordinary preview resolutions fit comfortably', () {
+  test('ordinary preview resolutions still fit, unchanged', () {
     expect(gpuCanRenderAtScale(1.0), isTrue);
     expect(gpuCanRenderAtScale(2.0), isTrue);
-    // Every preview resolution the settings offer, on the largest sensor.
     for (final preview in [512, 768, 1024, 1280, 1600, 2048]) {
-      expect(
-        gpuCanRenderAtScale(preview / 1024.0),
-        isTrue,
-        reason: 'preview resolution $preview must never need the CPU path',
-      );
+      expect(gpuCanRenderAtScale(preview / 1024.0), isTrue);
     }
+  });
+
+  test('the shader cap itself is unchanged', () {
+    // The pyramid works around this number; it does not raise it. A change
+    // here means the shaders themselves changed, and the factor choice in
+    // _pyramidBoxBlurGpu is derived from it.
+    expect(gpuMaxBoxBlurRadius, 128);
   });
 }

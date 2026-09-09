@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -216,20 +217,23 @@ const int gpuMaxBoxBlurRadius = 128;
 
 /// Whether the GPU pipeline can render correctly at [renderScale].
 ///
-/// The widest blur in the pipeline is Dehaze's sigma-40 "regional" one;
-/// `boxRadiiForGauss`'s largest box radius for a 3-pass approximation of
-/// sigma s is very close to s itself, so the check is effectively
-/// "does 40 * scale fit in [gpuMaxBoxBlurRadius]".
-bool gpuCanRenderAtScale(double renderScale) {
-  const widestSigma = 40.0;
-  final radii = boxRadiiForGauss(widestSigma * renderScale, 3);
-  for (final r in radii) {
-    if (r > gpuMaxBoxBlurRadius) {
-      return false;
-    }
-  }
-  return true;
-}
+/// Always true now, and kept as a named answer rather than deleted so
+/// that the reasoning has somewhere to live and a future radius-limited
+/// shader has somewhere to declare itself.
+///
+/// It used to be the reason a full-resolution render fell back to the CPU.
+/// The widest blur in the pipeline is Dehaze's sigma-40 regional one, and
+/// the largest box radius approximating sigma s is close to s itself, so
+/// the question was "does 40 * scale fit in [gpuMaxBoxBlurRadius]" — which
+/// it stopped doing above about 3100px, taking every settled render on a
+/// modern sensor to the CPU. [runBoxBlurGpu] now computes a blur too wide
+/// for the shaders on a smaller copy instead of refusing it, so the cap
+/// bounds one pass rather than the whole pipeline.
+///
+/// The min filter's own 32-radius shaders are not consulted because
+/// nothing calls [runMinFilterGpu]; if something does, its limit belongs
+/// here.
+bool gpuCanRenderAtScale(double renderScale) => true;
 
 Future<ui.Image> runBoxBlurGpu(
   ui.Image source,
@@ -240,11 +244,9 @@ Future<ui.Image> runBoxBlurGpu(
   if (radius <= 0) {
     return source;
   }
-  assert(
-    radius <= gpuMaxBoxBlurRadius,
-    'box_blur_h/v silently truncate above $gpuMaxBoxBlurRadius; this render '
-    'should have fallen back to CPU (see gpuCanRenderAtScale)',
-  );
+  if (radius > gpuMaxBoxBlurRadius) {
+    return _pyramidBoxBlurGpu(source, width, height, radius);
+  }
   if (radius <= fusedBoxBlurMaxRadius) {
     return GpuPass.run(
       'shaders/box_blur_2d.frag',
@@ -272,6 +274,84 @@ Future<ui.Image> runBoxBlurGpu(
   // it; [source] belongs to the caller and is never touched here.
   h.dispose();
   return result;
+}
+
+/// A blur too wide for the shaders, computed on a smaller copy.
+///
+/// The shaders' loop bound is a compile-time constant, so a radius past
+/// [gpuMaxBoxBlurRadius] cannot simply be asked for. Raising the constant
+/// is not the answer either: radius 302 — what Dehaze's sigma-40 blur
+/// needs on a 7752px frame — is 605 taps per pixel per pass, six passes
+/// deep, on forty megapixels.
+///
+/// The way out is that a wide blur is by definition low-frequency. It
+/// destroys everything finer than its own radius, so computing it on a
+/// quarter-size copy and scaling the result back up throws away only what
+/// the blur was about to throw away anyway. Measured against a direct
+/// full-resolution blur of the same sigma, on structure at several scales
+/// plus noise, mean error out of 255:
+///
+///     sigma  40   /2 0.13   /4 0.36   /8 1.08
+///     sigma 120   /2 0.09   /4 0.15   /8 0.21
+///     sigma 300   /2 0.24   /4 0.48   /8 0.96
+///
+/// Note it does not grow with sigma — the wider the blur, the less a
+/// reduced-resolution copy costs, which is exactly why this works where
+/// it is needed most. It is also cheaper: a quarter-size blur touches a
+/// sixteenth of the pixels.
+Future<ui.Image> _pyramidBoxBlurGpu(
+  ui.Image source,
+  int width,
+  int height,
+  int radius,
+) async {
+  // Powers of two only, so the box downsample lands on whole source
+  // blocks. 8 is the last useful one: past it the error starts to be
+  // visible, and a radius over 8 * 128 needs a frame no camera produces.
+  var factor = 2;
+  while (radius / factor > gpuMaxBoxBlurRadius && factor < 8) {
+    factor *= 2;
+  }
+  final smallWidth = math.max(1, (width / factor).ceil());
+  final smallHeight = math.max(1, (height / factor).ceil());
+  final smallRadius = math.max(1, (radius / factor).round());
+
+  final small = await GpuPass.run(
+    'shaders/downsample_box.frag',
+    floats: [
+      smallWidth.toDouble(),
+      smallHeight.toDouble(),
+      width.toDouble(),
+      height.toDouble(),
+      factor.toDouble(),
+    ],
+    samplers: [source],
+    outputWidth: smallWidth,
+    outputHeight: smallHeight,
+  );
+  final ui.Image blurred;
+  try {
+    blurred = await runBoxBlurGpu(small, smallWidth, smallHeight, smallRadius);
+  } finally {
+    small.dispose();
+  }
+  try {
+    return await GpuPass.run(
+      'shaders/upsample.frag',
+      floats: [
+        width.toDouble(),
+        height.toDouble(),
+        smallWidth.toDouble(),
+        smallHeight.toDouble(),
+        factor.toDouble(),
+      ],
+      samplers: [blurred],
+      outputWidth: width,
+      outputHeight: height,
+    );
+  } finally {
+    blurred.dispose();
+  }
 }
 
 /// Separable min filter (H then V pass) over a `size x size` window — the
