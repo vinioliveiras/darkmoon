@@ -1178,6 +1178,10 @@ class AppLocalizationsEn extends AppLocalizations {
       'Remaps brightness while keeping colour. Drag a point to reshape, click empty space to add one, right-click to remove.';
 
   @override
+  String get colorProfileEditorPhotoSlidersHint =>
+      'These two apply to the open photo, not to the profile — they are here because a curve only means something once you see how hard it is applied.';
+
+  @override
   String get colorProfileEditorBasicHint =>
       'Eight hue ranges. Each covers three of the profile\'s 24 bins.';
 

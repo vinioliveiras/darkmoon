@@ -19,6 +19,7 @@ class ToneCurveEditor extends StatefulWidget {
     required this.onChanged,
     required this.onChangeEnd,
     this.lineColor = DarkmoonColors.accent,
+    this.aspectRatio = 1,
   });
 
   final List<CurvePoint> points;
@@ -28,6 +29,14 @@ class ToneCurveEditor extends StatefulWidget {
   /// Curve/handle color — the app accent for the master Tone Curve, or a
   /// channel color (red/green/blue) when reused for the Color Curve panel.
   final Color lineColor;
+
+  /// Width over height. Square by default, which is what a curve editor
+  /// wants: the diagonal of an identity curve reads as 45 degrees, and a
+  /// point moved a given distance up means the same as one moved that far
+  /// right. Widen it only where vertical room is worth more than that —
+  /// the profile editor does, to fit the two sliders under it without
+  /// scrolling.
+  final double aspectRatio;
 
   @override
   State<ToneCurveEditor> createState() => _ToneCurveEditorState();
@@ -150,7 +159,7 @@ class _ToneCurveEditorState extends State<ToneCurveEditor> {
   @override
   Widget build(BuildContext context) {
     return AspectRatio(
-      aspectRatio: 1,
+      aspectRatio: widget.aspectRatio,
       child: LayoutBuilder(
         builder: (context, constraints) {
           final size = Size(constraints.maxWidth, constraints.maxHeight);

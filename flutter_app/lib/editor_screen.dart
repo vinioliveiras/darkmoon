@@ -188,8 +188,6 @@ String _sliderLabel(AppLocalizations l10n, String key) {
 /// same reasoning as [_sliderLabel].
 String _sectionLabel(AppLocalizations l10n, String key) {
   switch (key) {
-    case 'COLOR PROFILE':
-      return l10n.sectionColorProfile;
     case 'WHITE BALANCE':
       return l10n.sectionWhiteBalance;
     case 'TONE':
@@ -360,15 +358,9 @@ Map<String, double> _withCategoriesApplied(
       for (final spec in entry.value) {
         // A disabled White Balance section means "no WB shift" — that's
         // the per-photo as-shot value, not the fixed 5500/0 default.
-        // A disabled COLOR PROFILE section means fully raw/off (0), not
-        // its own default (calBaseContrast, a real non-zero S-curve) —
-        // real bug fixed 2026-09-02: without this, toggling the section
-        // off still applied a real amount of contrast, just whatever the
-        // slider happens to default to.
         overrides[spec.name] = switch (spec.name) {
           'Temperature' => asShotKelvin,
           'Tint' => asShotTint,
-          'ColorProfileAmount' => 0.0,
           _ => spec.defaultValue,
         };
       }
@@ -698,22 +690,14 @@ Map<String, double> withGlobalEditAmountApplied(Map<String, double> values) {
   return scaled;
 }
 
+// COLOR PROFILE was a section of its own until 2026-09-09. Its dropdown
+// now leads WHITE BALANCE — the profile is chosen once per photo and then
+// left alone, exactly the shape As Shot white balance has — and its two
+// sliders (Strength, and the ColorProfileAmount contrast) moved into the
+// profile editor, where a tone curve can be judged against the strength it
+// is applied at. Nothing here replaced them, so neither appears in
+// [_sections] any more.
 const _sections = <String, List<_SliderSpec>>{
-  // Amount (the global Amount slider, injected specially — see the
-  // `entry.key == 'COLOR PROFILE'` branch below, since it isn't a plain
-  // _paramValues slider) and ColorProfileAmount (the per-photo/per-preset
-  // override of the fixed "profile" contrast curve — see calBaseContrast
-  // and _baseContrastFor's doc) live together here (2026-09-01,
-  // moved out of a standalone toolbar control and out of TONE
-  // respectively) since conceptually both describe "how much of the
-  // darkmoon Color profile treatment applies," not a tone adjustment.
-  'COLOR PROFILE': [
-    // Range raised 0-60 -> 0-100 -> 0-150 (2026-09-02, explicit user
-    // request — "a boost"), now that ColorProfileAmount is undamped (see
-    // calGlobalAmountCompressionOverrides) and no longer silently
-    // clipped by the Amount slider's own 30% compression.
-    _SliderSpec('ColorProfileAmount', 0, 150, calBaseContrast, decimals: 0),
-  ],
   'WHITE BALANCE': [
     _SliderSpec(
       'Temperature',
@@ -773,6 +757,23 @@ const _sections = <String, List<_SliderSpec>>{
   ],
 };
 
+/// "Color Profile Contrast" — the per-photo override of the fixed
+/// [calBaseContrast] S-curve, read by [_baseContrastFor].
+///
+/// Outside [_sections] since 2026-09-09: its control lives in the colour
+/// profile editor, not in the panel. It still has to be here, because
+/// [_defaultParamValues] is what decides which keys exist at all — a key
+/// missing from it is never seeded, never scaled by the Strength slider,
+/// and never cleared by Reset. Same reasoning as [_vignetteSliders]
+/// below, which is outside [_sections] for its own reasons and listed for
+/// the same one.
+///
+/// Range raised 0-60 -> 0-100 -> 0-150 (2026-09-02, explicit user request
+/// — "a boost").
+const _colorProfileSliders = [
+  _SliderSpec('ColorProfileAmount', 0, 150, calBaseContrast, decimals: 0),
+];
+
 /// Post-Crop Vignette sliders (Meridian's Effects panel) — global-only,
 /// so kept out of [_sections] (which masks also render from) rather than
 /// a fourth entry there.
@@ -819,6 +820,7 @@ Map<String, double> _defaultParamValues() {
     // still needs its non-zero neutrals (Midpoint/Feather = 50) in the
     // defaults map, or Reset / first-open / preset-merge would leave
     // those keys missing and the sliders would snap to 0.
+    for (final spec in _colorProfileSliders) spec.name: spec.defaultValue,
     for (final spec in _vignetteSliders) spec.name: spec.defaultValue,
     for (final spec in _grainSliders) spec.name: spec.defaultValue,
     for (final spec in _parametricCurveSliders) spec.name: spec.defaultValue,
@@ -1210,15 +1212,13 @@ class _EditorScreenState extends State<EditorScreen>
   /// *except* Default and leave its render output alone. Every render
   /// call site should read this, not [_colorProfiles] directly.
   ColorProfile? get _effectiveColorProfile {
-    // Real bug fixed 2026-09-02: this never checked the COLOR PROFILE
-    // section's own enable toggle at all — turning it off reset
-    // ColorProfileAmount (see _withCategoriesApplied) but left the
-    // per-hue table (Vivid/Pastel/Noir's hueShift/satMul/lumMul) applying
-    // at full strength regardless, so "off" never actually meant "100%
-    // raw" the way every other section's toggle does.
-    if ((_paramValues[_categoryEnabledKey('COLOR PROFILE')] ?? 1.0) == 0) {
-      return null;
-    }
+    // The COLOR PROFILE section had an enable toggle, checked here, until
+    // the section itself went away (2026-09-09). Deliberately not carried
+    // over to WHITE BALANCE's toggle, and deliberately not left reading
+    // the old key either: a photo saved with it off would keep rendering
+    // without its profile, with no control anywhere able to say so or put
+    // it back. Choosing Default in the dropdown is what "off" means now,
+    // and that is a control the user can see.
     // The draft outranks whatever this photo selected: that is what makes
     // the editor dialog's preview the real render rather than a separate
     // approximation of one.
@@ -5538,15 +5538,6 @@ class _EditorScreenState extends State<EditorScreen>
     _scheduleRender(live: _settings.fastPreview);
   }
 
-  void _onGlobalEditAmountChangeEnd(double value) {
-    setState(() {
-      _paramValues = {..._paramValues, _globalEditAmountKey: value};
-    });
-    _pushHistory();
-    _scheduleRender(live: false);
-    _scheduleCatalogSave();
-  }
-
   /// The profile being authored right now, if the editor dialog is open.
   ///
   /// [_effectiveColorProfile] returns this ahead of anything the photo
@@ -6171,6 +6162,30 @@ class _EditorScreenState extends State<EditorScreen>
         highlightHue: highlightHue,
         photoPreview: photoPreview,
         existingNames: existingNames,
+        // Photo values, not profile values — see the dialog's own doc.
+        // Null with no photo open, which is also the only case where the
+        // dialog has nothing but the reference chart to preview against.
+        strength: photoPreview == null
+            ? null
+            : _paramValues[_globalEditAmountKey] ?? 100.0,
+        contrast: photoPreview == null
+            ? null
+            : _paramValues['ColorProfileAmount'] ?? calBaseContrast,
+        onStrengthChanged: _onGlobalEditAmountChanged,
+        onContrastChanged: (value) {
+          setState(() {
+            _paramValues = {..._paramValues, 'ColorProfileAmount': value};
+          });
+          _scheduleRender(live: _settings.fastPreview);
+        },
+        // One settled handler for both sliders — each has already written
+        // its own value through its onChanged, so this only has to record
+        // and persist the result.
+        onSlidersSettled: () {
+          _pushHistory();
+          _scheduleRender(live: false);
+          _scheduleCatalogSave();
+        },
         // No render on the live stream any more. The dialog's own
         // preview is what the user is watching, and the canvas behind a
         // dimmed barrier is not worth a GPU pass per frame of a drag. The
@@ -7914,11 +7929,6 @@ class _EditorScreenState extends State<EditorScreen>
                             onChanged: _onActiveChanged,
                             onChangeEnd: _onActiveChangeEnd,
                             onReset: _resetActive,
-                            presetAmount:
-                                _paramValues[_globalEditAmountKey] ?? 100.0,
-                            onPresetAmountChanged: _onGlobalEditAmountChanged,
-                            onPresetAmountChangeEnd:
-                                _onGlobalEditAmountChangeEnd,
                             colorProfileMode: colorProfileModeOf(_paramValues),
                             colorProfileChoice: _colorProfileChoice,
                             userColorProfiles: _userColorProfiles,
@@ -10094,9 +10104,6 @@ class _ControlsPanel extends StatefulWidget {
     required this.onChanged,
     required this.onChangeEnd,
     required this.onReset,
-    required this.presetAmount,
-    required this.onPresetAmountChanged,
-    required this.onPresetAmountChangeEnd,
     required this.colorProfileMode,
     required this.colorProfileChoice,
     required this.userColorProfiles,
@@ -10193,9 +10200,6 @@ class _ControlsPanel extends StatefulWidget {
   /// top-level `_globalEditAmountKey`/`withGlobalEditAmountApplied`. Sits
   /// just below the histogram (2026-09-01) — previously lived in the
   /// viewer toolbar under the preset sidebar.
-  final double presetAmount;
-  final ValueChanged<double> onPresetAmountChanged;
-  final ValueChanged<double> onPresetAmountChangeEnd;
 
   /// COLOR PROFILE section's mode dropdown — see [ColorProfileMode]'s doc.
   final ColorProfileMode colorProfileMode;
@@ -10365,9 +10369,6 @@ const _sectionTabs = <String, _ControlsTab>{
   // exposure. They belong together, on their own tab.
   'PRESENCE': _ControlsTab.details,
   'DETAIL': _ControlsTab.details,
-  // The profile is chosen once per photo and then left alone, so it can
-  // live a tab away.
-  'COLOR PROFILE': _ControlsTab.colour,
 };
 
 class _ControlsPanelState extends State<_ControlsPanel>
@@ -11202,12 +11203,14 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                 v,
                               ),
                               children: [
-                                // Amount isn't a plain _paramValues slider (see
-                                // _globalEditAmountKey's doc), so it's injected
-                                // here by hand rather than as a _SliderSpec —
-                                // same pattern as the White Balance mode row
-                                // below.
-                                if (entry.key == 'COLOR PROFILE') ...[
+                                // The colour profile is chosen once per photo and then
+                                // left alone — the same shape as As Shot white
+                                // balance, which is why it leads this section
+                                // rather than standing as one of its own
+                                // (2026-09-09, user's call). Its two sliders
+                                // went to the profile editor, where a curve can
+                                // actually be judged against them.
+                                if (entry.key == 'WHITE BALANCE') ...[
                                   Padding(
                                     // Matches White Balance's mode row below
                                     // (top: 6, bottom: 14) — was missing the
@@ -11400,48 +11403,6 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                         ],
                                       ),
                                     ),
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    // Faded + non-interactive under Default
-                                    // (2026-09-02, explicit user request):
-                                    // Default has no per-hue ColorProfile
-                                    // loaded at all, so Strength only ever had
-                                    // anything to visibly scale there if some
-                                    // OTHER slider was already off its own
-                                    // default — confusing enough in practice
-                                    // ("moving it does nothing") that the user
-                                    // asked for it disabled outright in this
-                                    // mode rather than left live-but-usually-
-                                    // inert. Trade-off worth knowing: this also
-                                    // blocks using it to damp a manual
-                                    // Exposure/Contrast/etc. edit while still
-                                    // under Default, which used to work.
-                                    child: Opacity(
-                                      opacity:
-                                          widget.colorProfileMode ==
-                                              ColorProfileMode.darkmoonDefault
-                                          ? 0.4
-                                          : 1.0,
-                                      child: IgnorePointer(
-                                        ignoring:
-                                            widget.colorProfileMode ==
-                                            ColorProfileMode.darkmoonDefault,
-                                        child: SliderRow(
-                                          name: l10n.presetAmountLabel,
-                                          min: 0,
-                                          max: 200,
-                                          value: widget.presetAmount,
-                                          decimals: 0,
-                                          valueSuffix: '%',
-                                          defaultValue: 100,
-                                          onChanged:
-                                              widget.onPresetAmountChanged,
-                                          onChangeEnd:
-                                              widget.onPresetAmountChangeEnd,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
                                 ],
                                 if (entry.key == 'WHITE BALANCE')
                                   Padding(

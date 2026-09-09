@@ -383,6 +383,7 @@
   "colorProfileEditorTabColor": "Colour",
   "colorProfileEditorTabBase": "Base",
   "colorProfileEditorToneHint": "Remaps brightness while keeping colour. Drag a point to reshape, click empty space to add one, right-click to remove.",
+  "colorProfileEditorPhotoSlidersHint": "These two apply to the open photo, not to the profile — they are here because a curve only means something once you see how hard it is applied.",
   "colorProfileEditorBasicHint": "Eight hue ranges. Each covers three of the profile's 24 bins.",
   "colorProfileEditorAdvancedHint": "All 24 hue bins, one every 15 degrees.",
   "colorProfileEditorModeBasic": "Basic",

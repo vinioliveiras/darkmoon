@@ -1187,6 +1187,10 @@ class AppLocalizationsPt extends AppLocalizations {
       'Remapeia o brilho preservando a cor. Arraste um ponto para moldar, clique no vazio para adicionar, botão direito para remover.';
 
   @override
+  String get colorProfileEditorPhotoSlidersHint =>
+      'Estes dois valem para a foto aberta, não para o perfil — estão aqui porque uma curva só diz alguma coisa quando você vê com que força ela está sendo aplicada.';
+
+  @override
   String get colorProfileEditorBasicHint =>
       'Oito faixas de matiz. Cada uma cobre três dos 24 bins do perfil.';
 

@@ -1198,6 +1198,10 @@ class AppLocalizationsDe extends AppLocalizations {
       'Bildet die Helligkeit neu ab und behält die Farbe. Punkt ziehen zum Formen, in den freien Bereich klicken zum Hinzufügen, Rechtsklick zum Entfernen.';
 
   @override
+  String get colorProfileEditorPhotoSlidersHint =>
+      'Diese beiden gelten für das geöffnete Foto, nicht für das Profil — sie stehen hier, weil eine Kurve erst dann etwas aussagt, wenn man sieht, wie stark sie angewendet wird.';
+
+  @override
   String get colorProfileEditorBasicHint =>
       'Acht Farbtonbereiche. Jeder deckt drei der 24 Bins des Profils ab.';
 

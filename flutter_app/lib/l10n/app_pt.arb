@@ -364,6 +364,7 @@
   "colorProfileEditorTabColor": "Cor",
   "colorProfileEditorTabBase": "Base",
   "colorProfileEditorToneHint": "Remapeia o brilho preservando a cor. Arraste um ponto para moldar, clique no vazio para adicionar, botão direito para remover.",
+  "colorProfileEditorPhotoSlidersHint": "Estes dois valem para a foto aberta, não para o perfil — estão aqui porque uma curva só diz alguma coisa quando você vê com que força ela está sendo aplicada.",
   "colorProfileEditorBasicHint": "Oito faixas de matiz. Cada uma cobre três dos 24 bins do perfil.",
   "colorProfileEditorAdvancedHint": "Os 24 bins de matiz, um a cada 15 graus.",
   "colorProfileEditorModeBasic": "Básico",

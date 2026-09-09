@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
+import '../render/calibration.dart';
 import '../render/color_profile.dart';
 import '../render/color_profile_reference.dart';
 import '../render/hsl.dart';
@@ -69,6 +70,11 @@ class ColorProfileEditorDialog extends StatefulWidget {
     required this.onDraftSettled,
     this.highlightHue,
     this.photoPreview,
+    this.strength,
+    this.contrast,
+    this.onStrengthChanged,
+    this.onContrastChanged,
+    this.onSlidersSettled,
   });
 
   /// The open photo, downscaled to packed RGB (0..255, three floats per
@@ -90,6 +96,25 @@ class ColorProfileEditorDialog extends StatefulWidget {
   /// Names already taken, so the dialog can warn before saving rather than
   /// letting the store silently append " (2)".
   final Set<String> existingNames;
+
+  /// "Color Profile Strength" (0-200%) and "Color Profile Contrast"
+  /// (0-150) for the open photo, or null when no photo is open.
+  ///
+  /// **These belong to the photo, not to the profile being edited.** They
+  /// live here because this is where a profile is judged — a tone curve
+  /// means nothing until you see how hard it is being applied — but
+  /// moving them changes the open photo and nothing about the saved
+  /// profile. Cancelling the dialog leaves the profile untouched and
+  /// leaves these where the user put them, which is the same as any other
+  /// slider in the panel behind.
+  final double? strength;
+  final double? contrast;
+  final ValueChanged<double>? onStrengthChanged;
+  final ValueChanged<double>? onContrastChanged;
+
+  /// One settled callback for both: they are ordinary photo edits, and a
+  /// settled edit is what triggers a full-quality render.
+  final VoidCallback? onSlidersSettled;
 
   final ValueChanged<ColorProfile> onDraftChanged;
   final ValueChanged<ColorProfile> onDraftSettled;
@@ -227,6 +252,10 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
       ),
       ToneCurveEditor(
         points: _tonePoints,
+        // Wider than tall, unlike the panel's own curve editors. The two
+        // sliders below are what the curve is judged against, and both
+        // have to be reachable without scrolling for that to work.
+        aspectRatio: 1.5,
         onChanged: (points) {
           setState(() => _tonePoints = points);
           _changed();
@@ -236,6 +265,42 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
           _settled();
         },
       ),
+      if (widget.strength != null || widget.contrast != null) ...[
+        const SizedBox(height: 16),
+        Text(
+          l10n.colorProfileEditorPhotoSlidersHint,
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
+        ),
+        const SizedBox(height: 10),
+        if (widget.strength != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: SliderRow(
+              name: l10n.presetAmountLabel,
+              min: 0,
+              max: 200,
+              value: widget.strength!,
+              decimals: 0,
+              valueSuffix: '%',
+              defaultValue: 100,
+              onChanged: widget.onStrengthChanged ?? (_) {},
+              onChangeEnd: (_) => widget.onSlidersSettled?.call(),
+            ),
+          ),
+        if (widget.contrast != null)
+          SliderRow(
+            name: l10n.sliderColorProfileAmount,
+            min: 0,
+            max: 150,
+            value: widget.contrast!,
+            decimals: 0,
+            defaultValue: calBaseContrast,
+            onChanged: widget.onContrastChanged ?? (_) {},
+            onChangeEnd: (_) => widget.onSlidersSettled?.call(),
+          ),
+      ],
     ],
   );
 
