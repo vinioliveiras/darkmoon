@@ -219,17 +219,6 @@ const double calWbAsShotTintScaleFallback = 200.0;
 //    get more contrasty). Re-tune those presets starting from this value,
 //    not from 0.
 //
-// This is the FACTORY value. The user can override it live in
-// Settings → "darkmoon Color Profile" (saved in AppSettings), no rebuild
-// needed. Both CPU and GPU apply the curve.
-/// default: 80.0   (0.0 = off; 2026-08-29: originally 20.0; briefly
-/// lowered to 15.0 on 2026-09-02 — photos opened a bit brighter than the
-/// same RAW in Meridian — then raised past both, to 30.0, then to 80.0,
-/// same day, explicit user request each time. Deliberately not touching
-/// `no_auto_bright` (libraw.dart) for this — that's the decode-time
-/// exposure baseline, and re-opening it risks the whole incident history
-/// in project_darkmoon_color_profile.md; this S-curve is the safer,
-/// purely render-time lever.)
 /// Long edge (px) every neighbourhood-based radius/sigma in this file is
 /// expressed against.
 ///
@@ -252,6 +241,7 @@ const double calWbAsShotTintScaleFallback = 200.0;
 /// therefore keeps the meaning it was hand-tuned to, and it is the
 /// full-quality preview and the export that move to match the preview
 /// rather than the other way round.
+/// default: 1024.0
 const double calRadiusReferenceLongEdge = 1024.0;
 
 /// Ceiling on [RenderParams.renderScale] for the three *pixel-domain*
@@ -289,7 +279,20 @@ const double calRadiusReferenceLongEdge = 1024.0;
 /// default: 1.0
 const double calDetailRadiusMaxScale = 1.0;
 
-const double calBaseContrast = 100.0;
+// This is the FACTORY value, and since 2026-09-09 it applies only under a
+// colour profile that is not Default — Default means the photo arrives as
+// decoded (see ColorProfileMode.darkmoonDefault). The per-photo override
+// lives in the colour profile editor, under the tone curve. Both CPU and
+// GPU apply the curve.
+/// default: 80.0   (0.0 = off; 2026-08-29: originally 20.0; briefly
+/// lowered to 15.0 on 2026-09-02 — photos opened a bit brighter than the
+/// same RAW in Meridian — then raised past both, to 30.0, then to 80.0,
+/// same day, explicit user request each time. Deliberately not touching
+/// `no_auto_bright` (libraw.dart) for this — that's the decode-time
+/// exposure baseline, and re-opening it risks the whole incident history
+/// in project_darkmoon_color_profile.md; this S-curve is the safer,
+/// purely render-time lever.)
+const double calBaseContrast = 80.0;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  BASIC — Exposure / Brightness / Contrast                                 ║
@@ -600,14 +603,14 @@ const List<double> calMixerBandWidths = [
 ///   ↓ lower  = gentler, finer control over that colour
 /// default: 1.0 for all eight
 const Map<String, double> calMixerBandStrength = {
-  'Red': 0.5,
-  'Orange': 0.5,
-  'Yellow': 0.5,
-  'Green': 0.5,
-  'Aqua': 0.5,
-  'Blue': 0.5,
-  'Purple': 0.5,
-  'Magenta': 0.5,
+  'Red': 1.0,
+  'Orange': 1.0,
+  'Yellow': 1.0,
+  'Green': 1.0,
+  'Aqua': 1.0,
+  'Blue': 1.0,
+  'Purple': 1.0,
+  'Magenta': 1.0,
 };
 
 /// **Mixer → Hue** — how many degrees of hue rotation each slider unit
@@ -711,8 +714,11 @@ const double calGrainStrength = 1.0;
 /// the preview and in the export.
 ///   ↑ higher = coarser grain
 ///   ↓ lower  = finer grain
-/// default: 0.8 (at 0)  and  4.8 (at 100)
+/// default: 0.8
 const double calGrainSizePxAt0 = 0.8;
+
+/// The same, for the Size slider at 100 — see [calGrainSizePxAt0].
+/// default: 4.8
 const double calGrainSizePxAt100 = 4.8;
 
 /// **Grain → Roughness** — the slider blends a fine noise (0) with a more
