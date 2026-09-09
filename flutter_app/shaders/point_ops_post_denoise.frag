@@ -82,6 +82,13 @@ uniform float uMixerLuminanceStrength; // scales the raw Luminance slider
 // why the band loop is unrolled by hand in the first place.
 uniform float uMixerBands[16];
 
+// How completely each hue is assigned to a band, 0..1 — matches
+// calibration.dart's calMixerBandNormalisation. 1 divides by the sum of
+// the eight influences, which gives every pixel a band and its full
+// slider value; 0 uses the raw Gaussian, so the adjustment falls off
+// within the band instead of stopping at its boundary.
+uniform float uMixerBandNormalisation;
+
 // Color Mixer — color_mixer.dart's applyColorMixer. 8 bands x
 // [hueShift, satShift, lumShift], band order matches
 // ColorMixerValues._channels (red, orange, yellow, green, aqua, blue,
@@ -384,35 +391,35 @@ void main() {
       float totalRaw = w0 + w1 + w2 + w3 + w4 + w5 + w6 + w7;
 
       float totalHueShift = 0.0, totalSatMul = 0.0, totalLumAdj = 0.0;
-      float n0 = w0 / totalRaw; float hs0 = n0 * saturationMask; float lu0 = n0 * luminanceWeight;
+      float n0 = mix(w0, w0 / totalRaw, uMixerBandNormalisation); float hs0 = n0 * saturationMask; float lu0 = n0 * luminanceWeight;
       totalHueShift += uMixer[0] * uMixerHueStrength * hs0;
       totalSatMul += (uMixer[1] / 100.0 * uMixerSaturationStrength) * hs0;
       totalLumAdj += (uMixer[2] / 100.0 * uMixerLuminanceStrength) * lu0;
-      float n1 = w1 / totalRaw; float hs1 = n1 * saturationMask; float lu1 = n1 * luminanceWeight;
+      float n1 = mix(w1, w1 / totalRaw, uMixerBandNormalisation); float hs1 = n1 * saturationMask; float lu1 = n1 * luminanceWeight;
       totalHueShift += uMixer[3] * uMixerHueStrength * hs1;
       totalSatMul += (uMixer[4] / 100.0 * uMixerSaturationStrength) * hs1;
       totalLumAdj += (uMixer[5] / 100.0 * uMixerLuminanceStrength) * lu1;
-      float n2 = w2 / totalRaw; float hs2 = n2 * saturationMask; float lu2 = n2 * luminanceWeight;
+      float n2 = mix(w2, w2 / totalRaw, uMixerBandNormalisation); float hs2 = n2 * saturationMask; float lu2 = n2 * luminanceWeight;
       totalHueShift += uMixer[6] * uMixerHueStrength * hs2;
       totalSatMul += (uMixer[7] / 100.0 * uMixerSaturationStrength) * hs2;
       totalLumAdj += (uMixer[8] / 100.0 * uMixerLuminanceStrength) * lu2;
-      float n3 = w3 / totalRaw; float hs3 = n3 * saturationMask; float lu3 = n3 * luminanceWeight;
+      float n3 = mix(w3, w3 / totalRaw, uMixerBandNormalisation); float hs3 = n3 * saturationMask; float lu3 = n3 * luminanceWeight;
       totalHueShift += uMixer[9] * uMixerHueStrength * hs3;
       totalSatMul += (uMixer[10] / 100.0 * uMixerSaturationStrength) * hs3;
       totalLumAdj += (uMixer[11] / 100.0 * uMixerLuminanceStrength) * lu3;
-      float n4 = w4 / totalRaw; float hs4 = n4 * saturationMask; float lu4 = n4 * luminanceWeight;
+      float n4 = mix(w4, w4 / totalRaw, uMixerBandNormalisation); float hs4 = n4 * saturationMask; float lu4 = n4 * luminanceWeight;
       totalHueShift += uMixer[12] * uMixerHueStrength * hs4;
       totalSatMul += (uMixer[13] / 100.0 * uMixerSaturationStrength) * hs4;
       totalLumAdj += (uMixer[14] / 100.0 * uMixerLuminanceStrength) * lu4;
-      float n5 = w5 / totalRaw; float hs5 = n5 * saturationMask; float lu5 = n5 * luminanceWeight;
+      float n5 = mix(w5, w5 / totalRaw, uMixerBandNormalisation); float hs5 = n5 * saturationMask; float lu5 = n5 * luminanceWeight;
       totalHueShift += uMixer[15] * uMixerHueStrength * hs5;
       totalSatMul += (uMixer[16] / 100.0 * uMixerSaturationStrength) * hs5;
       totalLumAdj += (uMixer[17] / 100.0 * uMixerLuminanceStrength) * lu5;
-      float n6 = w6 / totalRaw; float hs6 = n6 * saturationMask; float lu6 = n6 * luminanceWeight;
+      float n6 = mix(w6, w6 / totalRaw, uMixerBandNormalisation); float hs6 = n6 * saturationMask; float lu6 = n6 * luminanceWeight;
       totalHueShift += uMixer[18] * uMixerHueStrength * hs6;
       totalSatMul += (uMixer[19] / 100.0 * uMixerSaturationStrength) * hs6;
       totalLumAdj += (uMixer[20] / 100.0 * uMixerLuminanceStrength) * lu6;
-      float n7 = w7 / totalRaw; float hs7 = n7 * saturationMask; float lu7 = n7 * luminanceWeight;
+      float n7 = mix(w7, w7 / totalRaw, uMixerBandNormalisation); float hs7 = n7 * saturationMask; float lu7 = n7 * luminanceWeight;
       totalHueShift += uMixer[21] * uMixerHueStrength * hs7;
       totalSatMul += (uMixer[22] / 100.0 * uMixerSaturationStrength) * hs7;
       totalLumAdj += (uMixer[23] / 100.0 * uMixerLuminanceStrength) * lu7;

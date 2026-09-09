@@ -349,6 +349,7 @@ Future<ui.Image> _runPostDenoise(
   for (final width in calMixerBandWidths) {
     shader.setFloat(i++, width);
   }
+  shader.setFloat(i++, calMixerBandNormalisation);
   for (final ch in mixerChannels) {
     shader.setFloat(i++, ch.hue);
     shader.setFloat(i++, ch.saturation);

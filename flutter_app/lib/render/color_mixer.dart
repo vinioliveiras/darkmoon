@@ -208,7 +208,13 @@ void applyColorMixer(Float32List img, ColorMixerValues mixer) {
     var totalSatMultiplier = 0.0;
     var totalLumAdjust = 0.0;
     for (var c = 0; c < n; c++) {
-      final normalizedInfluence = rawInfluences[c] / totalRawInfluence;
+      // Blended between the normalised weight and the raw Gaussian — see
+      // calMixerBandNormalisation for why that choice is the whole
+      // difference between a surgical colour edit and a filter.
+      final normalised = rawInfluences[c] / totalRawInfluence;
+      final normalizedInfluence =
+          normalised * calMixerBandNormalisation +
+          rawInfluences[c] * (1.0 - calMixerBandNormalisation);
       final hueSatInfluence = normalizedInfluence * saturationMask;
       final lumaInfluence = normalizedInfluence * luminanceWeight;
       // hueAmt/satAmt/lumAmt are precomputed per channel above: hue folds

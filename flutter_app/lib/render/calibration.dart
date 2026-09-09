@@ -86,6 +86,13 @@ const Map<String, double> calGlobalAmountCompressionOverrides = {
   'Saturation': 0.5,
   'Dehaze': 0.3,
   'Clarity': 0.6,
+  // Undamped, and the balance guard in detail_balance_test enforces it.
+  // Sharpening is the counterweight to a denoise that is not damped at
+  // all: measured on a detailed frame at preview scale, a Sharpen of 60
+  // recovers 51% of the detail medium denoise removes when this is 1.0,
+  // and only 15% when it falls through to the global 0.30 — which is the
+  // "photo looks like a painting" report.
+  'SharpenAmount': 1.0,
   // Family entries: any key starting with these uses them unless it has
   // an exact entry of its own, so 'Mixer' covers all 24 Colour Mixer
   // sliders and 'Grade' all 12 Colour Grading ones.
@@ -500,6 +507,32 @@ const double calSaturationStrength = 0.10;
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  COLOR — Color Mixer / HSL (8 bands)                                      ║
 // ╚══════════════════════════════════════════════════════════════════════════╝
+
+/// **Mixer → how completely each hue is assigned to a band**, 0..1.
+///
+/// This is the difference between "surgical" and "filter", and it is not
+/// a width or a sharpness.
+///
+/// At 1 the eight band influences are normalised to sum to 1, so every
+/// pixel is fully assigned to whichever band is nearest and receives that
+/// band's full slider value. Measured on a hue sweep, that means a
+/// yellow-green at 90 degrees and a near-cyan at 150 both move by the
+/// whole of Green's Hue slider, because Green dominates both. Narrowing
+/// the band does not help: it only moves the boundary, and inside it the
+/// response is still all-or-nothing.
+///
+/// At 0 the raw Gaussian is used as-is, so influence falls off *within*
+/// the band — a hue at the centre gets the full adjustment and one near
+/// the edge gets a fraction of it. That graded response is what makes a
+/// colour edit read as surgical rather than as a filter.
+///
+/// The cost of lowering it is that hues sitting between two band centres
+/// receive less total adjustment than before, so an existing preset built
+/// on the mixer will render a little weaker.
+///   ↑ higher = every hue fully claimed by its nearest band
+///   ↓ lower  = graded falloff, edits confined nearer each band's centre
+/// default: 0
+const double calMixerBandNormalisation = 0.0;
 
 /// **Mixer → band centres** — the hue each of the 8 bands is built
 /// around, degrees, in the order Red, Orange, Yellow, Green, Aqua, Blue,

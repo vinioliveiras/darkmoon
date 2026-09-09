@@ -38,9 +38,15 @@ void main() {
       ),
     );
 
-    expect(result[0], closeTo(221, 1));
-    expect(result[1], closeTo(49, 1));
-    expect(result[2], closeTo(49, 1));
+    // Re-captured 2026-09-09, when calMixerBandNormalisation went to 0.
+    // Dropping the per-pixel normalisation raises the response at a
+    // band's centre — the old scheme divided by the sum of all eight
+    // influences, so even a pixel sitting exactly on Red gave Red about
+    // three quarters of the slider. It now gets all of it, which is why a
+    // Saturation of 60 saturates this pixel fully.
+    expect(result[0], closeTo(236, 1));
+    expect(result[1], closeTo(0, 1));
+    expect(result[2], closeTo(0, 1));
   });
 
   test('a hue+saturation push on a deep blue pixel', () {
@@ -82,9 +88,9 @@ void main() {
           're-derive them from the apply_hsl_panel reference) rather than '
           'widening the tolerance.',
     );
-    expect(result[0], closeTo(166, 1));
+    expect(result[0], closeTo(164, 1));
     expect(result[1], closeTo(0, 1));
-    expect(result[2], closeTo(197, 1));
+    expect(result[2], closeTo(201, 1));
   });
 
   test(
