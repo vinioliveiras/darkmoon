@@ -345,14 +345,23 @@ class _HeaderIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 24,
-      width: 24,
-      child: IconButton(
-        tooltip: tooltip,
-        padding: const EdgeInsets.only(right: kScrollbarGutter),
-        onPressed: onPressed,
-        icon: Icon(icon, size: 14),
+    // The gutter is *outside* the button, not inside it. As the button's
+    // own padding it was part of the tap target, so the hover highlight
+    // covered the icon plus fourteen empty pixels to its right and read as
+    // sitting beside the glyph rather than on it — and with only 10 of the
+    // 24 points left over, the 14-point icon did not fit its own box
+    // either (2026-09-09, user's report).
+    return Padding(
+      padding: const EdgeInsets.only(right: kScrollbarGutter),
+      child: SizedBox(
+        height: 24,
+        width: 24,
+        child: IconButton(
+          tooltip: tooltip,
+          padding: EdgeInsets.zero,
+          onPressed: onPressed,
+          icon: Icon(icon, size: 14),
+        ),
       ),
     );
   }
@@ -552,7 +561,11 @@ class _PresetRowState extends State<_PresetRow> {
                         // trigger that's supposed to sit quietly at the end
                         // of a list row, so this stays a bare icon with no
                         // persistent background.
-                        padding: const EdgeInsets.only(right: kScrollbarGutter),
+                        // Zero, with the gutter applied outside this
+                        // button — see _HeaderIconButton. Inside, it is
+                        // part of the hover area and pulls the highlight
+                        // off the glyph.
+                        padding: EdgeInsets.zero,
                         onSelected: (action) => action(),
                         itemBuilder: (context) => [
                           PopupMenuItem(

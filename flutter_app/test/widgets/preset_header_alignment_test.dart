@@ -67,6 +67,46 @@ void main() {
     );
   });
 
+  testWidgets('every action button hovers on its own glyph', (tester) async {
+    // The hover highlight fills the button's tap target, so the icon has
+    // to sit at the centre of it. Both the header buttons and each row's
+    // menu carried the scrollbar gutter as the button's *own* padding,
+    // which made the target fourteen points wider than the glyph and put
+    // the highlight beside it rather than on it (2026-09-09).
+    await headerRect(tester, presets: 3);
+
+    // The loops below pass trivially over an empty panel, and this test
+    // would then guard nothing at all.
+    expect(find.byType(IconButton), findsWidgets);
+
+    for (final button in tester.widgetList<IconButton>(
+      find.byType(IconButton),
+    )) {
+      expect(
+        button.padding,
+        EdgeInsets.zero,
+        reason:
+            'padding inside an icon button is part of what lights up on '
+            'hover — put spacing outside it',
+      );
+    }
+
+    for (final icon in find.byType(Icon).evaluate()) {
+      final iconFinder = find.byWidget(icon.widget);
+      final buttons = find.ancestor(
+        of: iconFinder,
+        matching: find.byType(IconButton),
+      );
+      if (buttons.evaluate().isEmpty) {
+        continue;
+      }
+      expect(
+        tester.getCenter(iconFinder),
+        offsetMoreOrLessEquals(tester.getCenter(buttons.first), epsilon: 0.5),
+      );
+    }
+  });
+
   testWidgets('and does not move when the buttons beside it change', (
     tester,
   ) async {
