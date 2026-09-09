@@ -132,6 +132,50 @@ void main() {
     }
   });
 
+  test('a shape parameter is never scaled, only an amount is', () {
+    // The Amount slider answers "how much of this edit". A radius, a
+    // midpoint, a feather, a grain size are not edits with a size — they
+    // are the shape the edit takes, and scaling one toward its default has
+    // no meaning. Sharpen showed why this matters: SharpenAmount passed
+    // through untouched while SharpenRadius was pulled from 3.0 to 1.6, so
+    // the amount was honoured and the shape it applied at was not
+    // (2026-09-09).
+    //
+    // Each entry is the slider's own default; the probe pushes it ten past
+    // that and checks the whole ten survives.
+    const shape = <String, double>{
+      'SharpenRadius': 1.0,
+      'SharpenDetail': 25,
+      'SharpenMasking': 0,
+      'VignetteMidpoint': 50,
+      'VignetteFeather': 50,
+      'GrainSize': 25,
+      'GrainRoughness': 50,
+    };
+    shape.forEach((key, base) {
+      expect(
+        withGlobalEditAmountApplied({amountKey: 100.0, key: base + 10})[key],
+        closeTo(base + 10, 0.001),
+        reason: "'$key' describes the shape of an effect, not its size",
+      );
+    });
+  });
+
+  test('an amount still is', () {
+    // The other side of the same rule, so "protect the shape parameters"
+    // cannot quietly become "protect everything": these two are what the
+    // Amount slider is for.
+    for (final key in const ['VignetteAmount', 'GrainAmount']) {
+      final scaled =
+          withGlobalEditAmountApplied({amountKey: 100.0, key: 100.0})[key]!;
+      expect(
+        scaled,
+        lessThan(100.0),
+        reason: "'$key' is an amount and has to scale with Amount",
+      );
+    }
+  });
+
   test('Temperature and Tint are never scaled', () {
     // They are not 0-centred deltas, so scaling them toward a default
     // would fight the as-shot-relative white balance model.

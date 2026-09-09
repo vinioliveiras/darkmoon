@@ -96,6 +96,31 @@ const Map<String, double> calGlobalAmountCompressionOverrides = {
   'Clarity': 0.6,
   // Same gap in PRESENCE: Clarity and Dehaze had entries, Texture did not.
   'Texture': 0.6,
+  // ── Shape, not amount (2026-09-09) ──────────────────────────────────
+  //
+  // The Amount slider answers "how much of this edit", and these are not
+  // edits with a size — they are the shape the edit takes. Scaling a
+  // *radius* toward its default has no meaning: a Sharpen Radius of 3.0
+  // was reaching the renderer as 1.6, while SharpenAmount beside it passed
+  // through untouched, so the amount was honoured and the shape it applied
+  // at was not.
+  //
+  // The pipeline already knows this category — Temperature and Tint are
+  // excluded from the scaling loop outright, on the stated grounds that
+  // they "aren't naturally 0-centered deltas". These belong with them.
+  // They are entries here rather than a second exclusion list so the
+  // choice stays visible and adjustable in this file instead of hiding in
+  // editor_screen.dart.
+  //
+  // VignetteAmount and GrainAmount are deliberately NOT here: those really
+  // are amounts, and scaling them is what the slider is for.
+  'SharpenRadius': 1.0,
+  'SharpenDetail': 1.0,
+  'SharpenMasking': 1.0,
+  'VignetteMidpoint': 1.0,
+  'VignetteFeather': 1.0,
+  'GrainSize': 1.0,
+  'GrainRoughness': 1.0,
   // Undamped, and the balance guard in detail_balance_test enforces it.
   // Sharpening is the counterweight to a denoise that is not damped at
   // all: measured on a detailed frame at preview scale, a Sharpen of 60
