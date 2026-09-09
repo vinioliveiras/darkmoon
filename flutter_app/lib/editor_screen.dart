@@ -859,14 +859,6 @@ SingleActivator _cmdShortcut(LogicalKeyboardKey key, {bool shift = false}) =>
 /// [image] is a finished render's own pixels, uploaded straight from the
 /// pipeline's output buffer — no JPEG encode on the way out and no decode
 /// on the way in (see `render_job.dart`'s `RenderResult.previewRgba` for
-/// Width the camera's embedded preview is decoded at.
-///
-/// Comfortably above the 1024px the editor renders for editing, so the
-/// stand-in is never the softer of the two, and far below the 4416px the
-/// file actually holds — decoding that in full costs about 52 MB for
-/// something a render replaces within a second or two.
-const int _embeddedPreviewDecodeWidth = 2048;
-
 /// what that round trip used to cost). [jpegBytes] is the stand-in shown
 /// while that render is still pending — the camera's own embedded preview
 /// where the RAW carries one, the small filmstrip thumbnail otherwise. It
@@ -883,13 +875,15 @@ class PreviewFrame {
   final ui.Image? image;
   final Uint8List? jpegBytes;
 
-  /// Caps the width [jpegBytes] is decoded at.
+  /// Caps the width [jpegBytes] is decoded at, or null for its own size.
   ///
-  /// The embedded preview is 4416px wide on the files this was measured
-  /// against, which decodes to about 52 MB — spent on every selection
-  /// while browsing, for something the render replaces in a second or
-  /// two. Null for the filmstrip thumbnail, which is 200px and would be
-  /// upscaled by a cap rather than saved by one.
+  /// Null everywhere today. It was 2048 for the embedded preview, to hold
+  /// down a decode that costs about 52 MB at the 4416px those files carry
+  /// — real memory, spent on every selection while browsing. Removed on
+  /// the user's call: the stand-in should be the camera's image at the
+  /// quality the camera wrote it, not a reduction of it. Kept as a
+  /// parameter because that trade-off is a setting away from mattering
+  /// again on a machine with less to spare.
   final int? decodeWidth;
 
   /// True while this is the thumbnail stand-in rather than a real render —
@@ -7605,13 +7599,8 @@ class _EditorScreenState extends State<EditorScreen>
                                       ? null
                                       : _embeddedPreviews[selected.path] ??
                                             _thumbnails[selected.path],
-                                  thumbnailDecodeWidth:
-                                      selected != null &&
-                                          _embeddedPreviews.containsKey(
-                                            selected.path,
-                                          )
-                                      ? _embeddedPreviewDecodeWidth
-                                      : null,
+                                  // Uncapped: full quality, by request.
+                                  thumbnailDecodeWidth: null,
                                   preview: selected == null
                                       ? null
                                       : _displayPreview(selected.path),
@@ -8078,10 +8067,10 @@ class _ImageArea extends StatelessWidget {
   /// intermediate methods (`_zoomableImage`/`_fittedImage`/…) — any
   /// descendant context works for [AnimationsConfig.of].
   ///
-  /// A [PreviewFrame] whose `isPlaceholder` is set is the small filmstrip
-  /// thumbnail standing in for [preview] while it's still rendering —
-  /// blurred so it visibly reads as "not the real thing yet" rather than a
-  /// soft/low-quality render.
+  /// A [PreviewFrame] whose `isPlaceholder` is set is standing in for
+  /// [preview] while it's still rendering — the camera's own embedded
+  /// image where the RAW carries one, the 200px filmstrip thumbnail
+  /// otherwise.
   Widget _fadingImage(PreviewFrame frame) {
     return Builder(
       builder: (context) => FadingPreviewImage(
@@ -8615,11 +8604,21 @@ class _FadingPreviewImageState extends State<FadingPreviewImage>
           // pixels' own color past the boundary instead of transparent —
           // .decal fades the whole border toward see-through, reading as
           // a soft vignette instead of a crisp-edged rectangle.
-          // Blurred at the thumbnail's own native size (~200px, see
-          // thumbnailMaxDimension) then magnified several times over by
-          // the FittedBox above to fill the preview area — so this sigma
-          // reads much stronger on screen than the number suggests, and
-          // stays that way regardless of the actual photo's resolution.
+          // Applied at the stand-in's own native size, then scaled by the
+          // FittedBox above — so what this sigma reads as on screen
+          // depends entirely on which stand-in it is. On the 200px
+          // filmstrip thumbnail, magnified several times to fill the
+          // viewport, 4 reads like 40 and says "not the real thing yet"
+          // loudly. On the camera's embedded image, which is wider than
+          // the viewport and scaled *down*, the same 4 is close to
+          // invisible.
+          //
+          // That is the intended outcome and not an oversight: the point
+          // of showing the camera's own image is to show it, and softening
+          // it would defeat that. The cost is that the swap to our render
+          // now reads as a shift in colour and tone rather than as
+          // blurry-to-sharp, because the stand-in no longer looks
+          // provisional.
           imageFilter: ImageFilter.blur(
             sigmaX: 4,
             sigmaY: 4,
