@@ -1600,6 +1600,7 @@ class _EditorScreenState extends State<EditorScreen>
     // whatever the shading does. Started at Color Range's 0.20 and raised
     // to 0.5 (2026-09-08, user): faint enough to read the photo through,
     // strong enough to judge an edge by.
+    MaskType.subject: 0.50,
     MaskType.sky: 0.50,
     MaskType.foreground: 0.50,
     MaskType.depth: 0.50,
@@ -6088,7 +6089,14 @@ class _EditorScreenState extends State<EditorScreen>
         ? 'lens:${_lensCorrection.manualProfileKeyHash ?? "auto"}:'
               '${_lensCorrection.distortionAmount}'
         : 'lens:off';
-    return '${mask.type.name}|$crop|$lens';
+    final prompt = mask.type == MaskType.subject
+        ? AiMaskRequest(
+            maskId: mask.id,
+            type: mask.type,
+            subject: mask.subject,
+          ).promptKey
+        : '';
+    return '${mask.type.name}|$prompt|$crop|$lens';
   }
 
   /// Runs the models behind any AI mask whose answer is missing or stale,
@@ -6119,7 +6127,11 @@ class _EditorScreenState extends State<EditorScreen>
       if (_aiMaskSignatures[mask.id] == _aiMaskSignatureFor(mask)) {
         continue;
       }
-      wanted[mask.id] = AiMaskRequest(maskId: mask.id, type: mask.type);
+      wanted[mask.id] = AiMaskRequest(
+        maskId: mask.id,
+        type: mask.type,
+        subject: mask.subject,
+      );
     }
     // Deleting a mask should not leave its map (or its error) behind.
     _aiMaskMaps.removeWhere((id, _) => !live.contains(id));
@@ -6482,6 +6494,7 @@ class _EditorScreenState extends State<EditorScreen>
       MaskType.wholeImage => l10n.maskWholeImage,
       MaskType.luminance => l10n.maskLuminance,
       MaskType.flow => l10n.maskFlow,
+      MaskType.subject => l10n.maskSubject,
       MaskType.sky => l10n.maskSky,
       MaskType.foreground => l10n.maskForeground,
       MaskType.depth => l10n.maskDepth,
@@ -6556,6 +6569,7 @@ class _EditorScreenState extends State<EditorScreen>
       // cloning a Luminance mask handed back one aimed at the default
       // mid-gray. The list has to grow with MaskLayer's.
       luminance: source.luminance,
+      subject: source.subject,
       depth: source.depth,
       enabled: source.enabled,
       inverted: source.inverted,
@@ -8322,6 +8336,8 @@ class _ImageArea extends StatelessWidget {
                         imageHeight: source.height,
                         mask: mask,
                         map: aiMaskMaps[mask.id],
+                        onChanged: onMaskGeometryChanged,
+                        onChangeEnd: onMaskGeometryChangeEnd,
                         showOverlay: maskOverlayVisible,
                         overlayOpacity: maskOverlayOpacity[mask.type]!,
                       )
@@ -10646,6 +10662,14 @@ class _ControlsPanelState extends State<_ControlsPanel>
               l10n.aiMaskFailed,
               style: const TextStyle(
                 color: DarkmoonColors.textPrimary,
+                fontSize: 11,
+              ),
+            )
+          else if (activeMask.type == MaskType.subject)
+            Text(
+              l10n.subjectMaskHint,
+              style: const TextStyle(
+                color: DarkmoonColors.textMuted,
                 fontSize: 11,
               ),
             ),

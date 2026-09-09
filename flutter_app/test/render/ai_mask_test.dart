@@ -57,7 +57,7 @@ void main() {
       const half = MaskLayer(
         id: 'm',
         name: 'Mask',
-        type: MaskType.foreground,
+        type: MaskType.subject,
         opacity: 40,
       );
       expect(computeMaskAlpha(half, 2, 2, aiMap: map)[0], closeTo(0.4, 1e-6));
@@ -65,7 +65,7 @@ void main() {
       const inverted = MaskLayer(
         id: 'm',
         name: 'Mask',
-        type: MaskType.foreground,
+        type: MaskType.subject,
         inverted: true,
       );
       expect(computeMaskAlpha(inverted, 2, 2, aiMap: map)[0], closeTo(0, 1e-6));

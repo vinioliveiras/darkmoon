@@ -1,16 +1,17 @@
-// End-to-end smoke test for the AI mask models: loads each one,
+// End-to-end smoke test for the four AI mask models: loads each one,
 // runs it on a real photo, and writes the resulting map out as a PNG so
 // the result can be looked at rather than merely asserted to be non-empty.
 //
-// Exists because these are the first models in the app that don't go
-// through OnnxModel.runTile — two have seven outputs, one returns rank 3 —
-// so "the session loaded" is a long way from "the tensors were marshalled
-// correctly", and a silently transposed or mis-normalized input produces a
-// plausible-looking gray smear rather than an error.
+// Exists because these four are the first models in the app that don't go
+// through OnnxModel.runTile — one takes uint8, one takes six inputs, two
+// have seven outputs, one returns rank 3 — so "the session loaded" is a
+// long way from "the tensors were marshalled correctly", and a silently
+// transposed or mis-normalized input produces a plausible-looking gray
+// smear rather than an error.
 //
 // Usage:
 //   set DARKMOON_NATIVE_DIR=windows/native
-//   dart run tool/ai_mask_smoke_test.dart [image]
+//   dart run tool/ai_mask_smoke_test.dart [image] [subjectX subjectY]
 import 'dart:io';
 import 'dart:typed_data';
 
@@ -26,6 +27,8 @@ void log(String message) {
 
 void main(List<String> args) {
   final imagePath = args.isNotEmpty ? args[0] : 'assets/splash/featured.jpg';
+  final subjectX = args.length > 1 ? double.parse(args[1]) : 0.5;
+  final subjectY = args.length > 2 ? double.parse(args[2]) : 0.5;
 
   final decoded = img.decodeImage(File(imagePath).readAsBytesSync());
   if (decoded == null) {
@@ -66,6 +69,37 @@ void main(List<String> args) {
       () => runForegroundMaskModel(rgb, width, height),
     );
     _run('depth', outDir, width, height, () => runDepthMapModel(rgb, width, height));
+    _run('subject', outDir, width, height, () {
+      final sw = Stopwatch()..start();
+      final embedding = runSubjectEmbedding(rgb, width, height);
+      log('  encoder: ${sw.elapsedMilliseconds}ms, '
+          '${embedding.length} floats');
+      return runSubjectMaskModel(
+        embedding,
+        SubjectGeometry(
+          startX: subjectX,
+          startY: subjectY,
+          endX: subjectX,
+          endY: subjectY,
+        ),
+        width,
+        height,
+      );
+    });
+    _run('subject-norefine', outDir, width, height, () {
+      return runSubjectMaskModel(
+        runSubjectEmbedding(rgb, width, height),
+        SubjectGeometry(
+          startX: subjectX,
+          startY: subjectY,
+          endX: subjectX,
+          endY: subjectY,
+        ),
+        width,
+        height,
+        refine: false,
+      );
+    });
   } finally {
     OnnxModel.releaseAll();
   }

@@ -156,6 +156,47 @@ class LuminanceGeometry {
   );
 }
 
+/// What a [MaskType.subject] mask points the segmentation model at: the
+/// rectangle the user dragged over the thing they want selected, in the
+/// image's own 0..1 coordinate space. A degenerate rectangle (start ==
+/// end, i.e. a single click) is a *point* prompt rather than a box one —
+/// the model takes both, and clicking one object is the faster gesture
+/// when it doesn't need bounding.
+///
+/// Unlike every other geometry here, this doesn't describe the mask's
+/// shape — it describes the question asked of the model. The answer
+/// (an [AiMaskMap]) is far too big to live in a mask layer and is cached
+/// separately; see [computeMaskAlpha]'s [AiMaskMap] parameter.
+class SubjectGeometry {
+  const SubjectGeometry({
+    this.startX = 0.35,
+    this.startY = 0.35,
+    this.endX = 0.65,
+    this.endY = 0.65,
+  });
+
+  final double startX;
+  final double startY;
+  final double endX;
+  final double endY;
+
+  /// True when the user clicked rather than dragged — see the class doc.
+  bool get isPoint =>
+      (startX - endX).abs() < 1e-6 && (startY - endY).abs() < 1e-6;
+
+  SubjectGeometry copyWith({
+    double? startX,
+    double? startY,
+    double? endX,
+    double? endY,
+  }) => SubjectGeometry(
+    startX: startX ?? this.startX,
+    startY: startY ?? this.startY,
+    endX: endX ?? this.endX,
+    endY: endY ?? this.endY,
+  );
+}
+
 /// A band-pass over the estimated depth map: covers pixels whose depth
 /// falls between [near] and [far], fading out over the next [feather] of
 /// depth beyond each edge.
@@ -207,7 +248,7 @@ class AiMaskMap {
   final int height;
 
   /// [width] * [height] bytes, row-major. For a segmentation mask
-  /// (Sky/Foreground) 255 means "in"; for Depth, 255 is the
+  /// (Subject/Sky/Foreground) 255 means "in"; for Depth, 255 is the
   /// nearest point in the frame.
   final Uint8List data;
 }
@@ -273,18 +314,14 @@ class BrushGeometry {
 /// [BrushGeometry]/stroke storage entirely rather than getting its own
 /// field (see [BrushStroke.flow]'s doc for why).
 ///
-/// [sky], [foreground] and [depth] are the three whose alpha a neural
-/// network decides rather than a formula. They are why [computeMaskAlpha]
-/// takes an [AiMaskMap]: inference is far too slow and far too
-/// asynchronous to happen inside a pure function that reruns on every
-/// render, so the map is computed once, cached, and handed in.
-///
-/// [sky] and [foreground] differ only in which model produced that map —
-/// the alpha math is identical, so they share [_computeSegmentAlpha].
-/// There was a fourth, `subject`, backed by SAM and aimed by clicking the
-/// photo; it was removed 2026-09-08 because [foreground] found people
-/// more reliably than a click prompt did, and one good automatic answer
-/// beats two the user has to choose between.
+/// [subject], [sky], [foreground] and [depth] are the four whose alpha a
+/// neural network decides rather than a formula. They are why
+/// [computeMaskAlpha] takes an [AiMaskMap]: inference is far too slow and
+/// far too asynchronous to happen inside a pure function that reruns on
+/// every render, so the map is computed once, cached, and handed in. The
+/// three segmentation types differ only in which model and which prompt
+/// produced that map — the alpha math is identical, so they share
+/// [_computeSegmentAlpha].
 ///
 /// Serialized by *name* (`mask_store.dart`'s `MaskType.values.byName`),
 /// so this list's order is free to change without touching saved photos.
@@ -296,6 +333,7 @@ enum MaskType {
   wholeImage,
   luminance,
   flow,
+  subject,
   sky,
   foreground,
   depth,
@@ -304,6 +342,7 @@ enum MaskType {
 /// The types whose alpha comes from a model rather than a formula — the
 /// ones needing an [AiMaskMap] resolved before they can render.
 const aiMaskTypes = <MaskType>{
+  MaskType.subject,
   MaskType.sky,
   MaskType.foreground,
   MaskType.depth,
@@ -350,6 +389,7 @@ class MaskLayer {
     this.brush = const BrushGeometry(),
     this.colorRange = const ColorRangeGeometry(),
     this.luminance = const LuminanceGeometry(),
+    this.subject = const SubjectGeometry(),
     this.depth = const DepthGeometry(),
     this.enabled = true,
     this.inverted = false,
@@ -368,6 +408,9 @@ class MaskLayer {
   final BrushGeometry brush;
   final ColorRangeGeometry colorRange;
   final LuminanceGeometry luminance;
+
+  /// The prompt a [MaskType.subject] mask hands the model — not its shape.
+  final SubjectGeometry subject;
 
   /// The band a [MaskType.depth] mask keeps out of the estimated depth
   /// map. [MaskType.sky] and [MaskType.foreground] have no geometry at
@@ -395,6 +438,7 @@ class MaskLayer {
     BrushGeometry? brush,
     ColorRangeGeometry? colorRange,
     LuminanceGeometry? luminance,
+    SubjectGeometry? subject,
     DepthGeometry? depth,
     bool? enabled,
     bool? inverted,
@@ -410,6 +454,7 @@ class MaskLayer {
     brush: brush ?? this.brush,
     colorRange: colorRange ?? this.colorRange,
     luminance: luminance ?? this.luminance,
+    subject: subject ?? this.subject,
     depth: depth ?? this.depth,
     enabled: enabled ?? this.enabled,
     inverted: inverted ?? this.inverted,
@@ -429,7 +474,7 @@ class MaskLayer {
 /// generic like `sourceRgb` — renaming would touch every call site for
 /// a purely cosmetic reason.)
 ///
-/// [aiMap] is the model output backing a [MaskType.sky]/
+/// [aiMap] is the model output backing a [MaskType.subject]/[MaskType.sky]/
 /// [MaskType.foreground]/[MaskType.depth] mask, resolved by the caller
 /// (`ai_mask_resolver.dart`) before the render starts, since running a
 /// model here is impossible: this function is synchronous by contract —
@@ -472,6 +517,7 @@ Float32List computeMaskAlpha(
       );
     case MaskType.flow:
       _computeFlowAlpha(alpha, width, height, mask.brush);
+    case MaskType.subject:
     case MaskType.sky:
     case MaskType.foreground:
       if (aiMap != null) {
@@ -705,11 +751,12 @@ Float32List _sampleAiMap(AiMaskMap map, int width, int height) {
   return out;
 }
 
-/// Sky/Foreground: the model's map *is* the mask, so this is only the
-/// rescale. Their softness comes from the model — U-2-Net emits a
-/// probability per pixel, not a yes/no — which is why there is no
-/// tolerance or feather knob on top: there is no threshold being taken
-/// that a user could usefully move.
+/// Subject/Sky/Foreground: the model's map *is* the mask, so this is only
+/// the rescale. Their softness comes from the model — U-2-Net emits a
+/// probability per pixel, and SAM's hard output is blurred a couple of
+/// pixels before it ever gets here — which is why there is no tolerance or
+/// feather knob to apply on top: there is no threshold being taken that a
+/// user could usefully move.
 void _computeSegmentAlpha(
   Float32List alpha,
   int width,

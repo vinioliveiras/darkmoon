@@ -65,6 +65,7 @@ void main() {
       l10n.maskLuminance,
       l10n.maskFlow,
       l10n.maskWholeImage,
+      l10n.maskSubject,
       l10n.maskSky,
       l10n.maskForeground,
       l10n.maskDepth,

@@ -871,6 +871,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get luminanceFeatherLabel => 'Weichzeichnen';
 
   @override
+  String get maskSubject => 'Motiv';
+
+  @override
   String get maskSky => 'Himmel';
 
   @override
@@ -878,6 +881,10 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get maskDepth => 'Tiefe';
+
+  @override
+  String get subjectMaskHint =>
+      'Einen Rahmen um das Motiv ziehen oder darauf tippen';
 
   @override
   String get depthNearLabel => 'Nah';

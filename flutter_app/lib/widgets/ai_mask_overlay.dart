@@ -6,16 +6,17 @@ import 'package:flutter/material.dart';
 import '../render/mask.dart';
 import '../theme.dart';
 
-/// The canvas layer for the model-backed mask types.
+/// The canvas layer for the four model-backed mask types.
 ///
 /// Shades exactly the pixels the mask covers, from the same [AiMaskMap]
 /// and the same [computeMaskAlpha] the render uses — so what is shaded
 /// here is what the adjustments will land on, including the Depth band's
 /// Near/Far/feather, which are otherwise impossible to aim.
 ///
-/// Display only, and deliberately: none of these three types takes any
-/// input from the canvas. (The removed Subject type did — a box dragged
-/// over the photo — which is why this was once a gesture surface.)
+/// For [MaskType.subject] it is also the input surface: dragging draws the
+/// box handed to the model, and a tap is a point prompt. The other three
+/// have nothing to aim, so they are display-only and let clicks through to
+/// the canvas beneath.
 class AiMaskOverlay extends StatefulWidget {
   const AiMaskOverlay({
     super.key,
@@ -23,6 +24,8 @@ class AiMaskOverlay extends StatefulWidget {
     required this.imageWidth,
     required this.imageHeight,
     required this.mask,
+    required this.onChanged,
+    required this.onChangeEnd,
     this.map,
     this.showOverlay = true,
     this.overlayOpacity = 0.5,
@@ -34,8 +37,16 @@ class AiMaskOverlay extends StatefulWidget {
   final MaskLayer mask;
 
   /// This mask's resolved model output, or null while it is still being
-  /// computed (or failed) — in which case nothing is shaded.
+  /// computed (or failed) — in which case nothing is shaded, and a Subject
+  /// box can still be drawn.
   final AiMaskMap? map;
+
+  /// Emitted with the whole updated layer, matching the gradient and brush
+  /// overlays: [onChanged] continuously while dragging, [onChangeEnd] once
+  /// on release (which is what commits to history and, for Subject,
+  /// triggers the model).
+  final ValueChanged<MaskLayer> onChanged;
+  final ValueChanged<MaskLayer> onChangeEnd;
 
   final bool showOverlay;
   final double overlayOpacity;
@@ -50,6 +61,13 @@ class _AiMaskOverlayState extends State<AiMaskOverlay> {
   /// Guards against an out-of-order [ui.decodeImageFromPixels] callback
   /// replacing a newer overlay with an older one.
   int _requestId = 0;
+
+  /// The in-progress drag, in normalized image coordinates — null when not
+  /// dragging. Drawn directly rather than round-tripping through the mask,
+  /// so the box tracks the cursor even though the model behind it only
+  /// runs on release.
+  Offset? _dragStart;
+  Offset? _dragCurrent;
 
   @override
   void initState() {
@@ -145,46 +163,130 @@ class _AiMaskOverlayState extends State<AiMaskOverlay> {
     return Rect.fromLTWH((size.width - w) / 2, (size.height - h) / 2, w, h);
   }
 
+  Offset _normalize(Offset local) {
+    final rect = _imageRect();
+    return Offset(
+      ((local.dx - rect.left) / rect.width).clamp(0.0, 1.0),
+      ((local.dy - rect.top) / rect.height).clamp(0.0, 1.0),
+    );
+  }
+
+  MaskLayer _withDrag(Offset start, Offset end) => widget.mask.copyWith(
+    subject: SubjectGeometry(
+      startX: start.dx,
+      startY: start.dy,
+      endX: end.dx,
+      endY: end.dy,
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
-    // IgnorePointer rather than a transparent GestureDetector: panning and
-    // zooming the canvas underneath has to keep working while one of these
-    // masks is selected.
-    return IgnorePointer(
-      child: CustomPaint(
-        size: widget.containerSize,
-        painter: _AiMaskPainter(
-          image: widget.showOverlay ? _alphaImage : null,
-          imageRect: _imageRect(),
-        ),
+    final image = widget.showOverlay ? _alphaImage : null;
+    final dragStart = _dragStart;
+    final dragCurrent = _dragCurrent;
+    final painter = CustomPaint(
+      size: widget.containerSize,
+      painter: _AiMaskPainter(
+        image: image,
+        imageRect: _imageRect(),
+        box: dragStart != null && dragCurrent != null
+            ? Rect.fromPoints(dragStart, dragCurrent)
+            : null,
+      ),
+    );
+    if (widget.mask.type != MaskType.subject) {
+      // Display only — an IgnorePointer rather than a transparent
+      // GestureDetector so panning and zooming the canvas underneath keeps
+      // working while a Sky or Depth mask is selected.
+      return IgnorePointer(child: painter);
+    }
+    return MouseRegion(
+      cursor: SystemMouseCursors.precise,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapUp: (details) {
+          // A degenerate box: SubjectGeometry reads start == end as a
+          // point prompt, which is the faster gesture for one clear
+          // object.
+          final point = _normalize(details.localPosition);
+          widget.onChangeEnd(_withDrag(point, point));
+        },
+        onPanStart: (details) {
+          final point = _normalize(details.localPosition);
+          setState(() {
+            _dragStart = point;
+            _dragCurrent = point;
+          });
+        },
+        onPanUpdate: (details) {
+          setState(() => _dragCurrent = _normalize(details.localPosition));
+        },
+        onPanEnd: (_) {
+          final start = _dragStart;
+          final end = _dragCurrent;
+          setState(() {
+            _dragStart = null;
+            _dragCurrent = null;
+          });
+          if (start == null || end == null) {
+            return;
+          }
+          widget.onChangeEnd(_withDrag(start, end));
+        },
+        child: painter,
       ),
     );
   }
 }
 
-/// Draws the shaded mask — precomputed by [_AiMaskOverlayState], since
-/// [ui.decodeImageFromPixels] is async and [CustomPainter.paint] isn't.
+/// Draws the shaded mask (a precomputed [image], since
+/// [ui.decodeImageFromPixels] is async and [CustomPainter.paint] isn't)
+/// and, while dragging, the Subject prompt box.
 class _AiMaskPainter extends CustomPainter {
-  const _AiMaskPainter({required this.image, required this.imageRect});
+  const _AiMaskPainter({
+    required this.image,
+    required this.imageRect,
+    this.box,
+  });
 
   final ui.Image? image;
   final Rect imageRect;
 
+  /// The in-progress drag, in normalized image coordinates.
+  final Rect? box;
+
   @override
   void paint(Canvas canvas, Size size) {
     final image = this.image;
-    if (image == null) {
+    if (image != null) {
+      canvas.drawImageRect(
+        image,
+        Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
+        imageRect,
+        Paint()..filterQuality = FilterQuality.low,
+      );
+    }
+    final box = this.box;
+    if (box == null) {
       return;
     }
-    canvas.drawImageRect(
-      image,
-      Rect.fromLTWH(0, 0, image.width.toDouble(), image.height.toDouble()),
-      imageRect,
-      Paint()..filterQuality = FilterQuality.low,
+    final rect = Rect.fromLTRB(
+      imageRect.left + box.left * imageRect.width,
+      imageRect.top + box.top * imageRect.height,
+      imageRect.left + box.right * imageRect.width,
+      imageRect.top + box.bottom * imageRect.height,
+    );
+    canvas.drawRect(
+      rect,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = DarkmoonColors.accent,
     );
   }
 
   @override
   bool shouldRepaint(_AiMaskPainter old) =>
-      old.image != image || old.imageRect != imageRect;
+      old.image != image || old.imageRect != imageRect || old.box != box;
 }

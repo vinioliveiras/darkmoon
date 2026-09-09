@@ -855,6 +855,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get luminanceFeatherLabel => 'Feather';
 
   @override
+  String get maskSubject => 'Subject';
+
+  @override
   String get maskSky => 'Sky';
 
   @override
@@ -862,6 +865,9 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get maskDepth => 'Depth';
+
+  @override
+  String get subjectMaskHint => 'Drag a box around the subject, or tap it';
 
   @override
   String get depthNearLabel => 'Near';
