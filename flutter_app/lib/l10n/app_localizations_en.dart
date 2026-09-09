@@ -586,22 +586,6 @@ class AppLocalizationsEn extends AppLocalizations {
       'Renders on the graphics card instead of the CPU; falls back automatically if unsupported';
 
   @override
-  String get settingsDynamicFullPreviewLabel =>
-      'Dynamic full-resolution preview';
-
-  @override
-  String get settingsDynamicFullPreviewHint =>
-      'A moment after an edit settles, re-render at the sensor\'s native resolution so a zoomed-in view sharpens up. Decoded sources are cached to disk.';
-
-  @override
-  String get settingsFullQualityScaleLabel => 'Preview resolution';
-
-  @override
-  String settingsFullQualityFloorHint(int previewPx) {
-    return 'Capped by the editing preview ($previewPx px) — no gain at this value.';
-  }
-
-  @override
   String get settingsThumbnailThreadsLabel => 'Thumbnail loading threads';
 
   @override

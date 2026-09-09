@@ -1037,12 +1037,6 @@ class _EditorScreenState extends State<EditorScreen>
   /// which dispose the outgoing one.
   final Map<String, ui.Image> _renderedPreviews = {};
 
-  /// The full-quality render per photo (phase 2), when the dynamic preview
-  /// is on. Invalidated the moment a new edit's phase-1 render lands, so a
-  /// present entry is always current. Kept separate from [_renderedPreviews]
-  /// so toggling the setting just switches which one the canvas reads —
-  /// nothing has to be re-rendered.
-  final Map<String, ui.Image> _fullQualityPreviews = {};
   final Map<String, Histogram> _histograms = {};
 
   /// Stores [image] as [path]'s entry in [map], disposing whatever it
@@ -1076,11 +1070,10 @@ class _EditorScreenState extends State<EditorScreen>
   ///
   /// [_thumbnails] and [_metadata] are deliberately left alone — a ~200px
   /// JPEG and a handful of numbers per photo, and the filmstrip needs all
-  /// of them on screen at once anyway. [_fullQualityPreviews] and
-  /// [_neutralPreviews] are narrowed harder than the rest, to the selected
-  /// photo alone: they are the largest entries (a full-quality frame is
-  /// tens of megabytes) and neither is ever shown for a photo that is not
-  /// the current one.
+  /// of them on screen at once anyway. [_neutralPreviews] is narrowed
+  /// harder than the rest, to the selected photo alone: its entries are
+  /// the largest, and it is never shown for a photo that is not the
+  /// current one.
   void _trimPhotoCaches() {
     final selectedIndex = _selectedIndex;
     if (selectedIndex == null || selectedIndex >= _files.length) {
@@ -1102,7 +1095,6 @@ class _EditorScreenState extends State<EditorScreen>
     _embeddedPreviews.removeWhere((path, _) => !window.contains(path));
     _histograms.removeWhere((path, _) => !window.contains(path));
     _evictImages(_renderedPreviews, window);
-    _evictImages(_fullQualityPreviews, {selectedPath});
     _evictImages(_neutralPreviews, {selectedPath});
   }
 
@@ -1122,7 +1114,6 @@ class _EditorScreenState extends State<EditorScreen>
   /// photo leaves the filmstrip.
   void _disposePreviewsFor(String path) {
     _renderedPreviews.remove(path)?.dispose();
-    _fullQualityPreviews.remove(path)?.dispose();
     _neutralPreviews.remove(path)?.dispose();
   }
 
@@ -1131,7 +1122,6 @@ class _EditorScreenState extends State<EditorScreen>
   void _disposeAllPreviews() {
     for (final map in [
       _renderedPreviews,
-      _fullQualityPreviews,
       _neutralPreviews,
     ]) {
       for (final image in map.values) {
@@ -1157,17 +1147,12 @@ class _EditorScreenState extends State<EditorScreen>
     return completer.future;
   }
 
-  /// The render to show on the canvas for [path]: the full-quality one
-  /// when the dynamic preview is on and it exists, else the light preview.
-  ui.Image? _displayPreview(String path) {
-    if (_settings.dynamicFullPreview) {
-      final fq = _fullQualityPreviews[path];
-      if (fq != null) {
-        return fq;
-      }
-    }
-    return _renderedPreviews[path];
-  }
+  /// The render to show on the canvas for [path].
+  ///
+  /// One render per photo now. There used to be a second, full-quality
+  /// pass layered over this one; the preview renders at the sensor's own
+  /// resolution by default, so it had nothing left to improve.
+  ui.Image? _displayPreview(String path) => _renderedPreviews[path];
 
   /// Bumped once per *settled* (non-live) render that lands for the
   /// currently-selected photo — an applied edit, preset, reset, undo,
@@ -1371,46 +1356,12 @@ class _EditorScreenState extends State<EditorScreen>
   Timer? _slowRenderTimer;
   static const _slowRenderThreshold = Duration(seconds: 3);
 
-  /// Dynamic full-resolution preview (`AppSettings.dynamicFullPreview`):
-  /// [_dynamicPreviewTimer], armed by [_maybeArmFullQualityDecode] from
-  /// [_selectIndex] when a photo is opened, fires [_ensureFullQualitySource]
-  /// after [_dynamicPreviewOpenDelay] — decoding the photo's native-
-  /// resolution source in the background so every settled render from
-  /// then on (see [_renderPreviewInner]'s phase-2 pass) uses it instead of
-  /// the small [AppSettings.previewResolution] buffer. Switching photos
-  /// cancels the timer and (via [_renderRequestId]) discards a result
-  /// already in flight.
-  ///
-  /// Deliberately keyed off *time the photo has been open*, not "the
-  /// moment an edit settles" (2026-09-02, explicit user request, changed
-  /// from the latter) — arms the same ~5s after opening regardless of
-  /// whether the user has touched a slider yet.
-  Timer? _dynamicPreviewTimer;
-  static const _dynamicPreviewOpenDelay = Duration(seconds: 5);
-
   /// The decoded native-resolution source cache — same [ThumbnailCacheManager]
   /// month-file format / sha1 key as the thumbnail and preview caches, in
   /// its own `previews/native` namespace, trimmed by
   /// [evictNativeSourceCache] since these blobs are big.
   ThumbnailCacheManager? _nativeSourceCache;
   String? _nativeSourceCacheDir;
-
-  /// The selected photo's decoded native-resolution source, held only for
-  /// that one photo (cleared on switch). Populated lazily the first time
-  /// full-quality mode kicks in — from [_nativeSourceCache] if warm,
-  /// otherwise a full RAW decode that then warms the cache.
-  EditSource? _fullQualitySource;
-  String? _fullQualitySourcePath;
-  bool _decodingFullQuality = false;
-
-  /// The native source downscaled once to [_fullQualityWorkingRes] — the
-  /// buffer settled renders run against while full-quality mode is active
-  /// for this photo. Cleared on photo switch / toggle-off / a change to
-  /// the full-quality resolution setting.
-  EditSource? _fullQualityScaled;
-
-  bool _fullQualityReadyFor(String path) =>
-      _fullQualitySourcePath == path && _fullQualitySource != null;
 
   /// Which stage the in-progress AI Denoise render is on — see
   /// [RenderStage]. Only populated for that one render (see
@@ -2430,49 +2381,13 @@ class _EditorScreenState extends State<EditorScreen>
           // the next photo switch.
           final previewResolutionChanged =
               next.previewResolution != _settings.previewResolution;
-          final dynamicFullPreviewChanged =
-              _settings.dynamicFullPreview != next.dynamicFullPreview;
-          final fullQualityResChanged =
-              next.dynamicFullPreview &&
-              next.fullQualityPercent != _settings.fullQualityPercent;
           setState(() {
             _settings = next;
             if (previewResolutionChanged) {
               _editSources.clear();
             }
-            if (dynamicFullPreviewChanged && !next.dynamicFullPreview) {
-              // Off: keep the caches — the canvas just switches to reading
-              // [_renderedPreviews] (the light render, always kept fresh) —
-              // but stop generating new full-quality renders.
-              _dynamicPreviewTimer?.cancel();
-              _fullQualitySource = null;
-              _fullQualitySourcePath = null;
-              _fullQualityScaled = null;
-            } else if (fullQualityResChanged) {
-              // Keep the decoded native source, just re-scale it next
-              // render at the new percentage.
-              _fullQualityScaled = null;
-              for (final image in _fullQualityPreviews.values) {
-                image.dispose();
-              }
-              _fullQualityPreviews.clear();
-            }
           });
           unawaited(saveSettings(next));
-          if (fullQualityResChanged ||
-              (dynamicFullPreviewChanged && next.dynamicFullPreview)) {
-            // Turned on (or changed the resolution) — kick a settled render
-            // so full-quality mode re-engages for the open photo.
-            // _scheduleRender re-arms the native-source decode itself, so
-            // both cases are covered whether or not this photo already had
-            // one in hand.
-            final selected = _selectedIndex == null
-                ? null
-                : _files[_selectedIndex!];
-            if (selected != null) {
-              _scheduleRender(live: false);
-            }
-          }
           if (previewResolutionChanged) {
             unawaited(_loadPreviewCache());
             final selected = _selectedIndex == null
@@ -2596,7 +2511,6 @@ class _EditorScreenState extends State<EditorScreen>
     _renderDebounceTimer?.cancel();
     _catalogSaveTimer?.cancel();
     _slowRenderTimer?.cancel();
-    _dynamicPreviewTimer?.cancel();
     _thumbnailFlushTimer?.cancel();
     _thumbnailUiFlushTimer?.cancel();
     _transientStatusTimer?.cancel();
@@ -3243,7 +3157,6 @@ class _EditorScreenState extends State<EditorScreen>
     _folderGeneration++;
     _renderRequestId++;
     _slowRenderTimer?.cancel();
-    _dynamicPreviewTimer?.cancel();
     _thumbnailUiFlushTimer?.cancel();
     _thumbnailUiFlushTimer = null;
     _completeVisibleThumbnailsReady();
@@ -3287,10 +3200,6 @@ class _EditorScreenState extends State<EditorScreen>
     int generation,
   ) async {
     _resetZoom();
-    _dynamicPreviewTimer?.cancel();
-    _fullQualitySource = null;
-    _fullQualitySourcePath = null;
-    _fullQualityScaled = null;
     setState(() {
       _files = files;
       _selectedIndex = selectedIndex;
@@ -3315,7 +3224,6 @@ class _EditorScreenState extends State<EditorScreen>
       unawaited(
         _loadEditSourceAndRender(files[selectedIndex].path, generation),
       );
-      _maybeArmFullQualityDecode(files[selectedIndex].path);
     }
     // Recreate the gate the preload waits on (releasing any prior waiter),
     // then start both — the preload blocks on _loadThumbnails' progress.
@@ -3454,10 +3362,6 @@ class _EditorScreenState extends State<EditorScreen>
     unawaited(_flushCurrentEdits());
     final path = _files[index].path;
     _resetZoom();
-    _dynamicPreviewTimer?.cancel();
-    _fullQualitySource = null;
-    _fullQualitySourcePath = null;
-    _fullQualityScaled = null;
     setState(() {
       _selectedIndex = index;
       _paramValues = _paramValuesFor(path);
@@ -3480,7 +3384,6 @@ class _EditorScreenState extends State<EditorScreen>
     if (_beforeAfterMode && !_neutralPreviews.containsKey(path)) {
       unawaited(_loadNeutralPreview(path));
     }
-    _maybeArmFullQualityDecode(path);
   }
 
   /// Decodes the full editable RAW buffer for [path] (unless already
@@ -3966,21 +3869,6 @@ class _EditorScreenState extends State<EditorScreen>
           )
         : _cropTransform;
     final metadata = _metadata[path];
-    // Once full-quality editing is active for this photo, a *second*
-    // render pass against the native source (downscaled per
-    // AppSettings.fullQualityPercent) follows the quick preview one below —
-    // so applying a preset shows instantly at preview res, then sharpens.
-    // `onStage != null` (the AI Denoise apply/remove) still gets a phase-2
-    // pass — the progress bar just tracks phase 1 — so the canvas doesn't
-    // stay at preview resolution after toggling denoise.
-    final fullQuality =
-        !live &&
-        _settings.dynamicFullPreview &&
-        _activeMaskId == imageMaskId &&
-        !_cropOverlayActive &&
-        !_beforeAfterMode &&
-        _fullQualityReadyFor(path);
-
     RenderJob buildJob(EditSource src) => RenderJob(
       source: src,
       params: RenderParams.fromValues(
@@ -4037,10 +3925,6 @@ class _EditorScreenState extends State<EditorScreen>
       if (!live) {
         _previewFadeGeneration++;
       }
-      // This phase-1 render is newer than any full-quality one on file for
-      // this photo — drop the stale full render so the canvas shows this
-      // one until phase 2 (if any) replaces it.
-      _setPreviewImage(_fullQualityPreviews, path, null);
       _histograms[path] = firstResult.histogram;
       // Keeps the filmstrip thumbnail in sync with the current edit —
       // only on the settled render (a live tick's thumbnail is superseded
@@ -4051,38 +3935,6 @@ class _EditorScreenState extends State<EditorScreen>
     });
     if (!live) {
       _scheduleThumbnailCacheStore(path, firstResult.thumbnailBytes);
-    }
-
-    // Phase 2 — the full-quality render. Best-effort: if the downscale or
-    // the render fails (a huge image, GPU OOM, …) the phase-1 preview
-    // stays on screen instead of the app hanging.
-    if (fullQuality) {
-      EditSource? fqSource;
-      try {
-        fqSource = await _fullQualityRenderSource();
-      } catch (e) {
-        debugPrint('full-quality downscale failed: $e');
-      }
-      if (fqSource != null && mounted && requestId == _renderRequestId) {
-        try {
-          final fqResult = await _runRenderJob(
-            buildJob(fqSource),
-            allowGpu: true,
-          );
-          final fqImage = await _decodePreviewImage(fqResult);
-          if (mounted && requestId == _renderRequestId) {
-            setState(() {
-              _setPreviewImage(_fullQualityPreviews, path, fqImage);
-              _histograms[path] = fqResult.histogram;
-              _thumbnails[path] = fqResult.thumbnailBytes;
-            });
-          } else {
-            fqImage.dispose();
-          }
-        } catch (e) {
-          debugPrint('full-quality render failed: $e');
-        }
-      }
     }
   }
 
@@ -4129,61 +3981,8 @@ class _EditorScreenState extends State<EditorScreen>
     return compute(renderJobToJpeg, job);
   }
 
-  /// Working resolution (long edge, px) full-quality settled renders run
-  /// at — `AppSettings.fullQualityPercent` of the sensor's native long
-  /// edge (40% by default), never below [AppSettings.previewResolution]
-  /// (so it's never *worse* than the normal preview — but also never
-  /// *better* than it when the percentage lands under that floor, which is
-  /// what Settings' own resulting-size readout exists to make visible).
-  /// Not zoom-dependent:
-  /// once full-quality mode kicks in you're editing the near-full RAW, so
-  /// re-rendering on every zoom change wasn't worth the jank. 100% renders
-  /// the full sensor on every settle — sharp everywhere, but each settle
-  /// pays a longer inline JPEG encode (see `render_job_gpu.dart`).
-  int _fullQualityWorkingRes(EditSource native) => fullQualityWorkingLongEdge(
-    nativeLongEdge: native.width > native.height ? native.width : native.height,
-    fullQualityPercent: _settings.fullQualityPercent,
-    previewResolution: _settings.previewResolution,
-  ).longEdge;
 
-  /// The native source downscaled to [_fullQualityWorkingRes] once, then
-  /// reused for every settled render of this photo (the working res is
-  /// constant now, so it never needs regenerating).
-  Future<EditSource> _fullQualityRenderSource() async {
-    final native = _fullQualitySource!;
-    final cached = _fullQualityScaled;
-    if (cached != null) {
-      return cached;
-    }
-    final scaled = await compute(scaleEditSource, (
-      source: native,
-      maxDim: _fullQualityWorkingRes(native),
-    ));
-    _fullQualityScaled = scaled;
-    return scaled;
-  }
 
-  void _maybeArmFullQualityDecode(String path) {
-    // Nothing to upgrade to when the editing buffer is already the
-    // sensor's own resolution: arming here would decode the RAW a second
-    // time to arrive at the same pixels it is already rendering.
-    if (_settings.previewResolution == nativePreviewResolution) {
-      return;
-    }
-    if (!_settings.dynamicFullPreview ||
-        _activeMaskId != imageMaskId ||
-        _cropOverlayActive ||
-        _beforeAfterMode ||
-        _decodingFullQuality ||
-        _fullQualityReadyFor(path)) {
-      return;
-    }
-    _dynamicPreviewTimer?.cancel();
-    _dynamicPreviewTimer = Timer(
-      _dynamicPreviewOpenDelay,
-      () => unawaited(_ensureFullQualitySource(path)),
-    );
-  }
 
   /// The photo's decoded native-resolution [EditSource] — from the
   /// in-memory full-quality source if it's this photo's, then the shared
@@ -4203,9 +4002,6 @@ class _EditorScreenState extends State<EditorScreen>
     String path, {
     required bool lowPriority,
   }) async {
-    if (_fullQualitySourcePath == path && _fullQualitySource != null) {
-      return _fullQualitySource;
-    }
     if (!isRawFile(path)) {
       return compute(
         lowPriority
@@ -4372,95 +4168,6 @@ class _EditorScreenState extends State<EditorScreen>
     return compute(decodeColorizeCacheEntry, cachedPng);
   }
 
-  /// Decodes [path]'s native source and re-renders the settled view
-  /// against it — from then on [_fullQualityReadyFor] is true for this
-  /// photo and settled renders stay at full quality until it changes.
-  Future<void> _ensureFullQualitySource(String path) async {
-    if (!mounted ||
-        !_settings.dynamicFullPreview ||
-        _decodingFullQuality ||
-        _fullQualityReadyFor(path)) {
-      return;
-    }
-    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
-    if (selected?.path != path) {
-      return;
-    }
-    _decodingFullQuality = true;
-    EditSource? native;
-    try {
-      // Real bug fixed 2026-09-02 ("Colorize applies then the photo goes
-      // back to sepia"): this always called the plain _loadNativeSource,
-      // ignoring AI Enhance/Cloud AI/Colorize entirely — once Dynamic
-      // Full Resolution's native-res source landed, every settled render
-      // switched to rendering that plain (un-enhanced/un-denoised/
-      // un-colorized) buffer instead. Same routing export already uses
-      // (see _exportCurrent's own wantDenoise/wantCloudProvider/
-      // wantColorize block) — the general fix the user asked to check
-      // for, not colorize-specific.
-      final wantDenoise = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
-      final wantUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
-      final wantRawDenoise = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
-      final wantDenoiseAmount =
-          (_paramValues[_neuralDenoiseAmountKey] ?? defaultNeuralDenoiseAmount)
-              .round();
-      final wantUpscaleSharpnessAmount =
-          (_paramValues[_upscaleSharpnessAmountKey] ?? 0.0).round();
-      final wantRestoreDetail = (_paramValues[_restoreDetailKey] ?? 0.0) > 0;
-      final wantRestoreDetailAmount =
-          (_paramValues[_restoreDetailAmountKey] ?? defaultRestoreDetailAmount)
-              .round();
-      final wantCloudProvider = _cloudProviderFromIndex(
-        (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
-      );
-      final wantColorize = (_paramValues[_colorizeKey] ?? 0.0) > 0;
-      final wantColorizeIntensity =
-          (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
-              .round();
-      if (wantDenoise || wantUpscale || wantRawDenoise || wantRestoreDetail) {
-        // Colorize rides along inside the Enhance pipeline when both are
-        // on (it is a pass between denoise and upscale, not a separate
-        // base) — the `else if (wantColorize)` branch below is only for
-        // colorize on its own.
-        native = await _loadEnhancedNativeSource(
-          path,
-          denoise: wantDenoise,
-          upscale: wantUpscale,
-          denoiseAmount: wantDenoiseAmount,
-          rawDenoise: wantRawDenoise,
-          upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
-          restoreDetail: wantRestoreDetail,
-          restoreDetailAmount: wantRestoreDetailAmount,
-          colorize: wantColorize,
-          colorizeIntensity: wantColorizeIntensity,
-        );
-      } else if (wantCloudProvider != null) {
-        native = await _loadCloudDenoisedNativeSource(path, wantCloudProvider);
-      } else if (wantColorize) {
-        native = await _loadColorizedNativeSource(
-          path,
-          intensityPercent: wantColorizeIntensity,
-        );
-      }
-      native ??= await _loadNativeSource(path, lowPriority: true);
-    } finally {
-      _decodingFullQuality = false;
-    }
-    final stillSelected = _selectedIndex == null
-        ? null
-        : _files[_selectedIndex!];
-    if (!mounted ||
-        native == null ||
-        stillSelected?.path != path ||
-        !_settings.dynamicFullPreview) {
-      return;
-    }
-    _fullQualitySource = native;
-    _fullQualitySourcePath = path;
-    _fullQualityScaled = null;
-    // Re-render the settled view, now against the full source.
-    _scheduleRender(live: false);
-  }
 
   /// Renders [path] with neutral (default) params, for the Before/After
   /// comparison — independent of whatever edits are currently applied.
@@ -5374,8 +5081,8 @@ class _EditorScreenState extends State<EditorScreen>
     }
     _viewController.value = target.matrix;
     setState(() => _zoomScale = target.scale);
-    // Zoom no longer triggers any render — full-quality mode renders at a
-    // fixed working resolution (see [_fullQualityWorkingRes]).
+    // Zoom no longer triggers any render — the preview is rendered once,
+    // at [AppSettings.previewResolution], and only scaled on screen.
   }
 
   /// The animated counterpart, for the toolbar's +/- buttons — a single
@@ -7127,18 +6834,6 @@ class _EditorScreenState extends State<EditorScreen>
       return;
     }
     _renderDebounceTimer?.cancel();
-    // Push the pending full-resolution upgrade back rather than killing
-    // it. The native decode is expensive and shouldn't compete with an
-    // active edit — but it decodes the *source*, which no edit
-    // invalidates, and nothing else re-arms it.
-    //
-    // Real bug fixed 2026-09-03: this used to be a bare
-    // `_dynamicPreviewTimer?.cancel()`. Since arming only happens in
-    // _selectIndex, touching any slider within the ~5s open delay killed
-    // the upgrade permanently for that photo — the whole Dynamic Full
-    // Resolution setting silently did nothing unless you opened a photo
-    // and left it completely alone for five seconds first.
-    _maybeArmFullQualityDecode(selected.path);
     _renderDebounceTimer = Timer(_renderDebounce, () {
       unawaited(_renderPreview(selected.path, live: live));
     });
@@ -7256,9 +6951,7 @@ class _EditorScreenState extends State<EditorScreen>
     final srcMs = srcSw.elapsedMilliseconds;
     final srcTiming = nativeForExport == null
         ? null
-        : (_fullQualitySourcePath == selected.path
-              ? 'source (in memory) ${srcMs}ms'
-              : 'source (decode+cache) ${srcMs}ms');
+        : 'source (decode+cache) ${srcMs}ms';
     if (!mounted || _exportCancellation?.isCancelled == true) {
       setState(() {
         _exporting = false;

@@ -595,22 +595,6 @@ class AppLocalizationsDe extends AppLocalizations {
       'Rendert auf der Grafikkarte statt auf der CPU; fällt bei fehlender Unterstützung automatisch zurück';
 
   @override
-  String get settingsDynamicFullPreviewLabel =>
-      'Dynamische Vorschau in voller Auflösung';
-
-  @override
-  String get settingsDynamicFullPreviewHint =>
-      'Kurz nachdem sich eine Bearbeitung gesetzt hat, wird in der nativen Sensorauflösung neu gerendert, damit eine gezoomte Ansicht schärfer wird. Dekodierte Quellen werden auf der Festplatte zwischengespeichert.';
-
-  @override
-  String get settingsFullQualityScaleLabel => 'Vorschauauflösung';
-
-  @override
-  String settingsFullQualityFloorHint(int previewPx) {
-    return 'Durch die Bearbeitungsvorschau begrenzt ($previewPx px) — bei diesem Wert kein Gewinn.';
-  }
-
-  @override
   String get settingsThumbnailThreadsLabel =>
       'Threads für das Laden von Miniaturansichten';
 

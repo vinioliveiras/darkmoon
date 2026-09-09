@@ -13,32 +13,6 @@ void main() {
       );
     });
 
-    test('the dynamic full-quality render defaults to the whole sensor', () {
-      expect(const AppSettings().fullQualityPercent, 100);
-    });
-
-    test('native is never reported as capped by the preview', () {
-      // The warning exists to explain a full-quality render coming out at
-      // the preview's resolution. Native is not a floor under it — it is
-      // already the ceiling — so saying so would be nonsense.
-      final result = fullQualityWorkingLongEdge(
-        nativeLongEdge: 7752,
-        fullQualityPercent: 10,
-        previewResolution: nativePreviewResolution,
-      );
-      expect(result.cappedByPreview, isFalse);
-      expect(result.longEdge, 775);
-    });
-
-    test('a real cap still floors the full-quality render', () {
-      final result = fullQualityWorkingLongEdge(
-        nativeLongEdge: 4000,
-        fullQualityPercent: 10,
-        previewResolution: 1024,
-      );
-      expect(result.cappedByPreview, isTrue);
-      expect(result.longEdge, 1024);
-    });
   });
 
   group('AppSettings.tabbedControlsPanelIcons', () {
@@ -133,66 +107,6 @@ void main() {
       final next = settings.asSingleFileSession(r'D:\Photos\one.jpg');
       expect(next.language, 'pt');
       expect(next.previewResolution, 1600);
-    });
-  });
-
-  group('fullQualityWorkingLongEdge', () {
-    // The floor is the whole point: a full-quality render is never allowed
-    // to come out worse than the ordinary editing preview, which means a
-    // low percentage on a low-megapixel photo silently produces exactly
-    // the preview resolution — the "Dynamic Full Resolution isn't working"
-    // report of 2026-09-03.
-    test('a low percentage on a low-megapixel photo is a no-op', () {
-      // Canon 350D, 3456 px long edge, at the old 30% default.
-      final r = fullQualityWorkingLongEdge(
-        nativeLongEdge: 3456,
-        fullQualityPercent: 30,
-        previewResolution: 1280,
-      );
-      expect(r.longEdge, 1280, reason: 'identical to the plain preview');
-      expect(r.cappedByPreview, isTrue);
-    });
-
-    test('the shipped default clears the floor on the same photo', () {
-      final r = fullQualityWorkingLongEdge(
-        nativeLongEdge: 3456,
-        fullQualityPercent: 40,
-        previewResolution: 1280,
-      );
-      expect(r.longEdge, 1382);
-      expect(r.cappedByPreview, isFalse);
-    });
-
-    test('a high-megapixel photo clears the floor comfortably', () {
-      // Fujifilm X100VI, 7728 px long edge.
-      final r = fullQualityWorkingLongEdge(
-        nativeLongEdge: 7728,
-        fullQualityPercent: 40,
-        previewResolution: 1024,
-      );
-      expect(r.longEdge, 3091);
-      expect(r.cappedByPreview, isFalse);
-    });
-
-    test('never upscales past the sensor', () {
-      final r = fullQualityWorkingLongEdge(
-        nativeLongEdge: 900,
-        fullQualityPercent: 100,
-        previewResolution: 2048,
-      );
-      expect(r.longEdge, 900);
-      // The floor did apply, it just lost to the native cap right after.
-      expect(r.cappedByPreview, isTrue);
-    });
-
-    test('100 percent is the native resolution', () {
-      final r = fullQualityWorkingLongEdge(
-        nativeLongEdge: 6000,
-        fullQualityPercent: 100,
-        previewResolution: 1024,
-      );
-      expect(r.longEdge, 6000);
-      expect(r.cappedByPreview, isFalse);
     });
   });
 }

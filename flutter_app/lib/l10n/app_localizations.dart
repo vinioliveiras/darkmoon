@@ -1156,30 +1156,6 @@ abstract class AppLocalizations {
   /// **'Renders on the graphics card instead of the CPU; falls back automatically if unsupported'**
   String get settingsGpuRenderHint;
 
-  /// No description provided for @settingsDynamicFullPreviewLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Dynamic full-resolution preview'**
-  String get settingsDynamicFullPreviewLabel;
-
-  /// No description provided for @settingsDynamicFullPreviewHint.
-  ///
-  /// In en, this message translates to:
-  /// **'A moment after an edit settles, re-render at the sensor\'s native resolution so a zoomed-in view sharpens up. Decoded sources are cached to disk.'**
-  String get settingsDynamicFullPreviewHint;
-
-  /// No description provided for @settingsFullQualityScaleLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Preview resolution'**
-  String get settingsFullQualityScaleLabel;
-
-  /// No description provided for @settingsFullQualityFloorHint.
-  ///
-  /// In en, this message translates to:
-  /// **'Capped by the editing preview ({previewPx} px) — no gain at this value.'**
-  String settingsFullQualityFloorHint(int previewPx);
-
   /// No description provided for @settingsThumbnailThreadsLabel.
   ///
   /// In en, this message translates to:

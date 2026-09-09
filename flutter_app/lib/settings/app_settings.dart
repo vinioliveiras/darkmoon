@@ -47,34 +47,6 @@ const List<int> previewResolutionOptions = [
 /// branch on it; [fitToMaxDimension] would read it as "shrink to nothing".
 const int nativePreviewResolution = 0;
 
-/// The long-edge resolution a full-quality settled render actually runs
-/// at for a photo whose native long edge is [nativeLongEdge] — and whether
-/// [previewResolution], not [fullQualityPercent], is what decided it.
-///
-/// The floor is why this is worth naming: a full-quality render is never
-/// allowed to come out *worse* than the ordinary editing preview, so a low
-/// percentage on a low-megapixel photo produces exactly the preview
-/// resolution and the whole feature is a silent no-op. Settings surfaces
-/// [cappedByPreview] so that is visible instead of the user concluding the
-/// setting is broken (which is what happened, 2026-09-03).
-({int longEdge, bool cappedByPreview}) fullQualityWorkingLongEdge({
-  required int nativeLongEdge,
-  required int fullQualityPercent,
-  required int previewResolution,
-}) {
-  final requested = (nativeLongEdge * fullQualityPercent / 100).round();
-  // Native is not a floor: it already *is* the ceiling, so a full-quality
-  // render can never come out below it and the warning would be nonsense.
-  final cappedByPreview =
-      previewResolution != nativePreviewResolution &&
-      requested < previewResolution;
-  var target = cappedByPreview ? previewResolution : requested;
-  if (target > nativeLongEdge) {
-    target = nativeLongEdge;
-  }
-  return (longEdge: target, cappedByPreview: cappedByPreview);
-}
-
 /// App-wide settings, mirroring the Python app's `DEFAULT_SETTINGS` (minus
 /// the thumbnail disk cache setting, since this port's cache doesn't have
 /// a size/eviction knob yet to expose).
@@ -87,8 +59,6 @@ class AppSettings {
     this.tabbedControlsPanel = true,
     this.tabbedControlsPanelIcons = false,
     this.presetThumbnails = true,
-    this.dynamicFullPreview = true,
-    this.fullQualityPercent = 100,
     this.thumbnailConcurrency = 4,
     this.rawOnly = false,
     this.includeSubfolders = false,
@@ -156,31 +126,7 @@ class AppSettings {
   /// turning it off is the right answer.
   final bool presetThumbnails;
 
-  /// When true, a beat after an edit settles the editor decodes the
-  /// photo's *native*-resolution source once and, from then on, runs
-  /// every settled render for that photo against it (downscaled to
-  /// [fullQualityPercent] of native) instead of the small
-  /// [previewResolution] buffer — so the on-screen image is near-full
-  /// quality while editing. Live drags still use the tiny buffer. The
-  /// decoded source is cached to disk so re-opening the photo skips the
-  /// slow RAW demosaic. On by default (2026-09-02, explicit user
-  /// request — was off, since it's meaningful extra work per settle;
-  /// see also [_EditorScreenState]'s doc on when this actually arms
-  /// itself, changed the same day to a 5s-since-open delay instead of
-  /// "the moment an edit starts").
-  final bool dynamicFullPreview;
 
-  /// Percent of the sensor's native resolution the full-quality editing
-  /// preview ([dynamicFullPreview]) renders at — 40 by default, 100 for a
-  /// true full-resolution render on every settle. Clamped to [25, 100].
-  ///
-  /// The effective working resolution is never allowed below
-  /// [previewResolution] (see `_EditorScreenState._fullQualityWorkingRes`),
-  /// so a low percentage on a low-megapixel camera can land at or under
-  /// that floor and do nothing at all. Raised from 30 to 40 on 2026-09-03
-  /// for that reason; Settings shows the real resulting size, and says so
-  /// when the floor is what's deciding it.
-  final int fullQualityPercent;
 
   /// How many thumbnails to decode concurrently when a folder is opened.
   final int thumbnailConcurrency;
@@ -250,8 +196,6 @@ class AppSettings {
     bool? tabbedControlsPanel,
     bool? tabbedControlsPanelIcons,
     bool? presetThumbnails,
-    bool? dynamicFullPreview,
-    int? fullQualityPercent,
     int? thumbnailConcurrency,
     bool? rawOnly,
     bool? includeSubfolders,
@@ -271,11 +215,6 @@ class AppSettings {
     tabbedControlsPanelIcons:
         tabbedControlsPanelIcons ?? this.tabbedControlsPanelIcons,
     presetThumbnails: presetThumbnails ?? this.presetThumbnails,
-    dynamicFullPreview: dynamicFullPreview ?? this.dynamicFullPreview,
-    fullQualityPercent: (fullQualityPercent ?? this.fullQualityPercent).clamp(
-      25,
-      100,
-    ),
     thumbnailConcurrency: thumbnailConcurrency ?? this.thumbnailConcurrency,
     rawOnly: rawOnly ?? this.rawOnly,
     includeSubfolders: includeSubfolders ?? this.includeSubfolders,
@@ -313,8 +252,6 @@ class AppSettings {
     tabbedControlsPanel: tabbedControlsPanel,
     tabbedControlsPanelIcons: tabbedControlsPanelIcons,
     presetThumbnails: presetThumbnails,
-    dynamicFullPreview: dynamicFullPreview,
-    fullQualityPercent: fullQualityPercent,
     thumbnailConcurrency: thumbnailConcurrency,
     rawOnly: rawOnly,
     includeSubfolders: includeSubfolders,
@@ -345,8 +282,6 @@ class AppSettings {
     tabbedControlsPanel: tabbedControlsPanel,
     tabbedControlsPanelIcons: tabbedControlsPanelIcons,
     presetThumbnails: presetThumbnails,
-    dynamicFullPreview: dynamicFullPreview,
-    fullQualityPercent: fullQualityPercent,
     thumbnailConcurrency: thumbnailConcurrency,
     rawOnly: rawOnly,
     includeSubfolders: includeSubfolders,
@@ -397,12 +332,6 @@ Future<AppSettings> loadSettings() async {
           defaults.tabbedControlsPanelIcons,
       presetThumbnails:
           raw['presetThumbnails'] as bool? ?? defaults.presetThumbnails,
-      dynamicFullPreview:
-          raw['dynamicFullPreview'] as bool? ?? defaults.dynamicFullPreview,
-      fullQualityPercent:
-          ((raw['fullQualityPercent'] as num?)?.toInt() ??
-                  defaults.fullQualityPercent)
-              .clamp(25, 100),
       thumbnailConcurrency:
           (raw['thumbnailConcurrency'] as num?)?.toInt() ?? defaultConcurrency,
       rawOnly: raw['rawOnly'] as bool? ?? defaults.rawOnly,
@@ -445,8 +374,6 @@ Future<void> saveSettings(AppSettings settings) async {
       'tabbedControlsPanel': settings.tabbedControlsPanel,
       'tabbedControlsPanelIcons': settings.tabbedControlsPanelIcons,
       'presetThumbnails': settings.presetThumbnails,
-      'dynamicFullPreview': settings.dynamicFullPreview,
-      'fullQualityPercent': settings.fullQualityPercent,
       'thumbnailConcurrency': settings.thumbnailConcurrency,
       'rawOnly': settings.rawOnly,
       'includeSubfolders': settings.includeSubfolders,

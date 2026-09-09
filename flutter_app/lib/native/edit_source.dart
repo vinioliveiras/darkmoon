@@ -37,8 +37,8 @@ import 'libraw.dart';
 /// smoothness over settled-view sharpness, not a discovery that the
 /// earlier bump was wrong. See PENDING.md / project_gpu_render_plan.md
 /// for the fuller trail; the real fix (render cheap first, then upgrade
-/// quality, the way `dynamicFullPreview` already does) would let this go
-/// back to 1600 without the stall — not done yet.
+/// quality in the background) would let this go back to 1600 without the
+/// stall — not done yet.
 const int defaultPreviewMaxDimension = 1024;
 
 /// A smaller version of the same buffer: used while a slider is actively
@@ -326,37 +326,12 @@ EditSource? decodeNativeSourceFromCachedJpeg(Uint8List jpegBytes) {
   );
 }
 
-/// [decodeFullQualitySource] at below-normal OS-thread priority — the
-/// dynamic full-resolution preview (`AppSettings.dynamicFullPreview`) is a
-/// background nicety, never something the user is blocked on, so its RAW
-/// decode must yield to the UI isolate. Runs via `compute()`.
+/// [decodeFullQualitySource] at below-normal OS-thread priority — used
+/// when the decode is a background nicety rather than something the user
+/// is blocked on, so it must yield to the UI isolate. Runs via
+/// `compute()`.
 EditSource? decodeFullQualitySourceLowPriority(String path) {
   lowerBackgroundThreadPriority();
   return decodeFullQualitySource(path);
 }
 
-/// Downscales an [EditSource] so its long edge is at most `maxDim` — a
-/// no-op when it's already smaller. Used to render the dynamic full-res
-/// preview at "one pixel per on-screen pixel at the current zoom" instead
-/// of the full sensor resolution (the render cost is where the pain is).
-/// Runs via `compute()` (record arg, since `compute` takes one value).
-EditSource scaleEditSource(({EditSource source, int maxDim}) args) {
-  final s = args.source;
-  final longEdge = s.width > s.height ? s.width : s.height;
-  if (longEdge <= args.maxDim) {
-    return s;
-  }
-  final image = img.Image.fromBytes(
-    width: s.width,
-    height: s.height,
-    bytes: s.rgbBytes.buffer,
-    numChannels: 3,
-    order: img.ChannelOrder.rgb,
-  );
-  final scaled = fitToMaxDimension(image, args.maxDim);
-  return EditSource(
-    width: scaled.width,
-    height: scaled.height,
-    rgbBytes: _rgbBytes(scaled),
-  );
-}

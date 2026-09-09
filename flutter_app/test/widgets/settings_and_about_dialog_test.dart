@@ -90,14 +90,14 @@ void main() {
     });
 
     testWidgets(
-      'the full-preview scale row is hidden while that switch is off — '
-      'its label happens to read the same as the plain preview-resolution '
-      'dropdown\'s: "Preview resolution"',
+      'Performance offers exactly one preview-resolution row — the second '
+      'one belonged to the dynamic full-resolution preview, removed '
+      '2026-09-09, and shared the same label',
       (tester) async {
         await tester.pumpWidget(
           _wrap(
             SettingsDialog(
-              settings: const AppSettings(dynamicFullPreview: false),
+              settings: const AppSettings(),
               onChanged: (_) {},
               onClearThumbnails: () {},
               onClearCatalog: () {},
@@ -209,27 +209,6 @@ void main() {
         findsNothing,
         reason: 'a control with nothing to act on should not be offered',
       );
-    });
-
-    testWidgets('the full-preview scale row shows up once that switch is on', (
-      tester,
-    ) async {
-      await tester.pumpWidget(
-        _wrap(
-          SettingsDialog(
-            settings: const AppSettings(dynamicFullPreview: true),
-            onChanged: (_) {},
-            onClearThumbnails: () {},
-            onClearCatalog: () {},
-            onPruneMissing: () {},
-          ),
-        ),
-      );
-      await tester.tap(find.text('open'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Performance'));
-      await tester.pumpAndSettle();
-      expect(find.text('Preview resolution'), findsNWidgets(2));
     });
   });
 
