@@ -1,7 +1,7 @@
 import 'dart:async';
 import 'dart:io' show Directory, File, Platform, Process;
 import 'dart:ui' as ui;
-import 'dart:ui' show AppExitResponse, ImageFilter;
+import 'dart:ui' show AppExitResponse;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
@@ -8584,56 +8584,21 @@ class _FadingPreviewImageState extends State<FadingPreviewImage>
     super.dispose();
   }
 
-  /// Blurred while the frame is a placeholder — visibly reads as "not the
-  /// real thing yet" rather than just a soft/low-quality render.
+  /// Painted exactly as it arrived while the frame is a placeholder.
+  ///
+  /// It used to be blurred, to read as "not the real thing yet" rather
+  /// than as a soft render. That made sense when the stand-in was the
+  /// 200px filmstrip thumbnail, magnified several times to fill the
+  /// viewport: it was going to look wrong anyway, and a deliberate blur
+  /// was honest about why.
+  ///
+  /// The stand-in is the camera's own image now, wider than the viewport,
+  /// and the whole point of showing it is to show it — its colour, its
+  /// contrast, untouched. Softening it would be softening the one thing
+  /// this is for. What signals "not the real thing yet" instead is the
+  /// swap itself, when the render lands and the rendering visibly changes.
   Widget _layer(PreviewFrame frame) {
-    if (!frame.isPlaceholder) {
-      return _previewFrameWidget(frame, fit: BoxFit.contain);
-    }
-    // Blur the image at its own intrinsic size (letting it lay out
-    // unconstrained inside FittedBox) instead of stretched to the full
-    // box, then let FittedBox scale the already-blurred result down to
-    // fit — this keeps the photo's true aspect ratio (BoxFit.cover here
-    // would distort/crop it when the box's aspect doesn't match, e.g. a
-    // portrait photo in a wide viewport) while still keeping the blur
-    // kernel confined to the photo's own pixels, with no transparent
-    // margin around it for the blur to bleed into.
-    return FittedBox(
-      fit: BoxFit.contain,
-      // ImageFiltered has no clip of its own — the blur paints past the
-      // image's own bounds (that's how a blur naturally grows past its
-      // source), so without this ClipRect the blurred rect visibly
-      // overshoots the real image size, not just its (now-crisp) edges.
-      child: ClipRect(
-        child: ImageFiltered(
-          // TileMode.clamp (not .decal) so the blur samples the edge
-          // pixels' own color past the boundary instead of transparent —
-          // .decal fades the whole border toward see-through, reading as
-          // a soft vignette instead of a crisp-edged rectangle.
-          // Applied at the stand-in's own native size, then scaled by the
-          // FittedBox above — so what this sigma reads as on screen
-          // depends entirely on which stand-in it is. On the 200px
-          // filmstrip thumbnail, magnified several times to fill the
-          // viewport, 4 reads like 40 and says "not the real thing yet"
-          // loudly. On the camera's embedded image, which is wider than
-          // the viewport and scaled *down*, the same 4 is close to
-          // invisible.
-          //
-          // That is the intended outcome and not an oversight: the point
-          // of showing the camera's own image is to show it, and softening
-          // it would defeat that. The cost is that the swap to our render
-          // now reads as a shift in colour and tone rather than as
-          // blurry-to-sharp, because the stand-in no longer looks
-          // provisional.
-          imageFilter: ImageFilter.blur(
-            sigmaX: 4,
-            sigmaY: 4,
-            tileMode: TileMode.clamp,
-          ),
-          child: _previewFrameWidget(frame),
-        ),
-      ),
-    );
+    return _previewFrameWidget(frame, fit: BoxFit.contain);
   }
 
   @override
