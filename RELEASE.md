@@ -24,9 +24,13 @@ Note the `.deb` is the one name **without** a `v` before the version and
 with underscores — that is Debian's required convention, not an
 inconsistency to fix.
 
-Each is roughly 1.2 GB. About 99 MB of that is the application; the rest
-is the ONNX model weights, which ship bundled by decision (2026-09-04).
-Do not add a runtime downloader without being asked.
+Each is roughly 1.7 GB (1.2 GB up to v1.10.0, before the five AI-mask
+models). About 99 MB of that is the application; the rest is the twelve
+ONNX model weights listed in `flutter_app/tool/models.sha256`, which ship
+bundled by decision (2026-09-04). Do not add a runtime downloader without
+being asked. **Every model in the manifest must also be an asset of the
+`models-v1` release** — the workflows fetch from there and refuse a bundle
+that is short; v1.11.0 stalled until the five newer ones were uploaded.
 
 ## 2. Naming and language
 
@@ -122,7 +126,7 @@ gh workflow run release-macos.yml --ref master -f tag=vX.Y.Z
 gh run watch   # or: gh run list --workflow release.yml
 ```
 
-About 25–40 minutes, mostly downloading and packaging 1.2 GB per
+About 25–40 minutes, mostly downloading and packaging 1.7 GB per
 platform. A failed job leaves the release as it was; fix, push, re-run
 with the same tag (`--clobber` on upload makes a re-run harmless).
 
@@ -205,10 +209,11 @@ Do this. Each item on the list has caught something real.
 - [ ] Both workflows green, and the release promoted from prerelease
       (section 6.4)
 - [ ] `releases/latest` resolves to this release (section 4)
-- [ ] All six assets uploaded, each roughly 1.1–1.2 GB
+- [ ] All six assets uploaded, each roughly 1.7 GB
 - [ ] Linux glibc floor still 2.34
 - [ ] Windows smoke test reports a GPU provider
-- [ ] macOS workflow logged `models in bundle: 7 (expected 7)`
+- [ ] All three workflows logged `models in bundle: 12 (expected 12)` (the
+      manifest's line count) and Linux logged `highest GLIBC ... 2.34`
 - [ ] Windows installer installs and uninstalls cleanly, leaving no files
       and no registry entry
 - [ ] `.deb` installs (`dpkg -i`), shows status `ii`, and removes cleanly
@@ -219,7 +224,7 @@ Do this. Each item on the list has caught something real.
 
 Lead with who should care and who should not. If a platform's binary is
 unchanged apart from the version string, say so — asking someone to
-download 1.2 GB for nothing is a real cost.
+download 1.7 GB for nothing is a real cost.
 
 ```markdown
 One-paragraph summary: what arrived, and who this release is for.
