@@ -82,10 +82,20 @@ const Map<String, double> calGlobalAmountCompressionOverrides = {
   'Contrast': 0.5,
   'Shadows': 0.6,
   'Blacks': 0.6,
+  // Added 2026-09-09. These two were the only Basic tonal sliders with no
+  // entry, so they alone fell through to the global fraction while their
+  // four neighbours were protected — the shape of a list filled in a few
+  // at a time, not of a decision. Measured on a real frame over the tones
+  // each governs, at the slider's maximum: Highlights moved 1.75 levels
+  // where Shadows moved 10.4. At 0.6 it moves about 3.5.
+  'Highlights': 0.6,
+  'Whites': 0.6,
   'Vibrance': 0.8,
   'Saturation': 0.5,
   'Dehaze': 0.3,
   'Clarity': 0.6,
+  // Same gap in PRESENCE: Clarity and Dehaze had entries, Texture did not.
+  'Texture': 0.6,
   // Undamped, and the balance guard in detail_balance_test enforces it.
   // Sharpening is the counterweight to a denoise that is not damped at
   // all: measured on a detailed frame at preview scale, a Sharpen of 60
@@ -499,13 +509,21 @@ const double calVibranceSkinDampen = 0.6;
 /// **Saturation** — multiplier on top of the slider (the effect is
 /// 1 + sliderValue/100 * this number).
 ///   ↑ higher = stronger Saturation     ↓ lower = weaker
-/// default: 0.10   (original: 1.0)
-/// 2026-09-01: user set this to 0.1 (10x weaker) wanting less blow-out —
-/// landed on a moderate 2x weakening instead, since 0.1 leaves Saturation
-/// +100 as only a ~1.01x multiplier, effectively disabling the slider
-/// rather than just softening it. Weakened again 2026-09-01. Weakened
-/// further 2026-09-02 (explicit user request).
-const double calSaturationStrength = 0.10;
+/// default: 0.5   (original: 1.0)
+///
+/// Was 0.10 until 2026-09-09, and the comment here had been arguing
+/// against itself for a week: it recorded that the decision was "a
+/// moderate 2x weakening" *because* 0.1 leaves Saturation +100 as roughly
+/// a 1.01x multiplier, "effectively disabling the slider rather than just
+/// softening it" — and then the constant was 0.1 anyway, through three
+/// rounds of further weakening.
+///
+/// Measured before changing it: at 0.10, Saturation at its maximum moved a
+/// real frame by 1.4 levels out of 255, and by 2.8 even with the Amount
+/// slider's damping removed. That is not a soft control, it is an inert
+/// one, which is how it was reported. 0.5 is the value the note above
+/// describes.
+const double calSaturationStrength = 0.5;
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  COLOR — Color Mixer / HSL (8 bands)                                      ║
