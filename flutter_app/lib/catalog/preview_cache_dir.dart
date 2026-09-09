@@ -19,15 +19,25 @@ import '../native/raw_decode_format_version.dart';
 /// namespace instead. Namespaced by [rawDecodeFormatVersion] the same way,
 /// for the same reason but on decode-*params* changes instead of
 /// resolution — see that constant's own doc comment.
-Future<String> resolvePreviewCacheDir(int previewMaxDimension) async {
+Future<String> resolvePreviewCacheDir(
+  int previewMaxDimension, {
+  bool editEmbeddedJpeg = false,
+}) async {
   final documents = await getApplicationDocumentsDirectory();
+  // The two modes decode different pixels from the same file, so they
+  // cannot share a directory: a cached entry carries no record of which
+  // one wrote it, and serving the wrong one shows the wrong photograph
+  // with nothing to indicate why. Embedded-JPEG mode ignores the
+  // resolution cap entirely (see decodeEditSources), so it gets one
+  // directory rather than one per setting.
+  final bucket = editEmbeddedJpeg ? 'embedded' : '${previewMaxDimension}px';
   final dir = Directory(
     p.join(
       documents.path,
       'darkmoon',
       'previews',
       'v$rawDecodeFormatVersion',
-      '${previewMaxDimension}px',
+      bucket,
     ),
   );
   if (!await dir.exists()) {

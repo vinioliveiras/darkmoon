@@ -145,6 +145,16 @@ class _PresetPanelState extends State<PresetPanel> {
                   ),
                   switchInCurve: _selectionModeCurve,
                   switchOutCurve: _selectionModeCurve,
+                  // AnimatedSwitcher's default layout builder stacks its
+                  // children centred, which put this heading in the middle
+                  // of the Expanded instead of at its left edge — visibly
+                  // out of line with the FOLDERS heading above it, a plain
+                  // Text at the same 12px inset (2026-09-09). Same stack,
+                  // anchored to the start instead.
+                  layoutBuilder: (current, previous) => Stack(
+                    alignment: AlignmentDirectional.centerStart,
+                    children: [...previous, if (current != null) current],
+                  ),
                   child: Text(
                     _selectionMode
                         ? l10n.presetSelectedCount(_selectedIds.length)

@@ -1859,7 +1859,10 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   Future<void> _loadPreviewCache() async {
-    final dir = await resolvePreviewCacheDir(_settings.previewResolution);
+    final dir = await resolvePreviewCacheDir(
+      _settings.previewResolution,
+      editEmbeddedJpeg: _settings.editEmbeddedJpeg,
+    );
     if (!mounted) {
       return;
     }
@@ -2445,8 +2448,12 @@ class _EditorScreenState extends State<EditorScreen>
           // next time it's selected, and redecode the one on screen right
           // now so the change is visible immediately instead of only on
           // the next photo switch.
+          // The embedded-JPEG toggle invalidates the same way, and more
+          // completely: it changes *which pixels* the photo is, not just
+          // how many of them.
           final previewResolutionChanged =
-              next.previewResolution != _settings.previewResolution;
+              next.previewResolution != _settings.previewResolution ||
+              next.editEmbeddedJpeg != _settings.editEmbeddedJpeg;
           setState(() {
             _settings = next;
             if (previewResolutionChanged) {
@@ -3625,6 +3632,7 @@ class _EditorScreenState extends State<EditorScreen>
           path,
           (_) {},
           previewMaxDimension: _settings.previewResolution,
+          editEmbeddedJpeg: _settings.editEmbeddedJpeg,
         );
         if (wantAnyPipeline && sources != null && mounted) {
           // Enhance/Cloud was wanted but its cache missed (evicted/
@@ -3757,6 +3765,7 @@ class _EditorScreenState extends State<EditorScreen>
         file.path,
         (_) {},
         previewMaxDimension: _settings.previewResolution,
+          editEmbeddedJpeg: _settings.editEmbeddedJpeg,
         lowPriority: true,
       );
       if (sources == null || !mounted || generation != _folderGeneration) {
@@ -4091,12 +4100,20 @@ class _EditorScreenState extends State<EditorScreen>
     String path, {
     required bool lowPriority,
   }) async {
-    if (!isRawFile(path)) {
+    final request = FullQualityRequest(
+      path,
+      editEmbeddedJpeg: _settings.editEmbeddedJpeg,
+    );
+    // Embedded-JPEG mode skips the cache for the same reason a common
+    // image does, and it is the same reason: there is no expensive
+    // demosaic to skip, so a cache would only add a lossy generation and
+    // a way for the two modes to serve each other's pixels.
+    if (!isRawFile(path) || _settings.editEmbeddedJpeg) {
       return compute(
         lowPriority
             ? decodeFullQualitySourceLowPriority
             : decodeFullQualitySource,
-        path,
+        request,
       );
     }
     final cachedJpeg = await _nativeSourceCache?.lookup(path);
@@ -4108,7 +4125,7 @@ class _EditorScreenState extends State<EditorScreen>
       lowPriority
           ? decodeFullQualitySourceLowPriority
           : decodeFullQualitySource,
-      path,
+      request,
     );
     if (native != null && cachedJpeg == null) {
       final toCache = native;
@@ -4656,6 +4673,7 @@ class _EditorScreenState extends State<EditorScreen>
       path,
       (_) {},
       previewMaxDimension: _settings.previewResolution,
+      editEmbeddedJpeg: _settings.editEmbeddedJpeg,
     );
     if (mounted && normalSources != null) {
       setState(() => _editSources[path] = normalSources);
@@ -4821,6 +4839,7 @@ class _EditorScreenState extends State<EditorScreen>
       },
       intensityPercent: intensityPercent,
       previewMaxDimension: _settings.previewResolution,
+      editEmbeddedJpeg: _settings.editEmbeddedJpeg,
       cancellationToken: cancellation,
     );
     _colorizeCancellation = null;
@@ -4977,6 +4996,7 @@ class _EditorScreenState extends State<EditorScreen>
       denoiseStrengthPercent: denoiseAmount,
       customDenoiseModelPath: _settings.customDenoiseModelPath,
       previewMaxDimension: _settings.previewResolution,
+      editEmbeddedJpeg: _settings.editEmbeddedJpeg,
       cancellationToken: cancellation,
       upscaleSharpnessAmount: upscaleSharpnessAmount,
       enableDetailRestore: restoreDetail,
@@ -5065,6 +5085,7 @@ class _EditorScreenState extends State<EditorScreen>
       provider: provider,
       apiKey: apiKey,
       previewMaxDimension: _settings.previewResolution,
+      editEmbeddedJpeg: _settings.editEmbeddedJpeg,
       cancellationToken: cancellation,
     );
     _cloudDenoiseCancellation = null;
@@ -5721,6 +5742,11 @@ class _EditorScreenState extends State<EditorScreen>
     bool lowPriority = false,
   }) async {
     if (sources.baseToneCurve != null || sources.baseExposureStops != null) {
+      return sources;
+    }
+    // Nothing to match: in this mode the pixels *are* the camera's own
+    // rendering, so a fit would only measure it against itself.
+    if (_settings.editEmbeddedJpeg) {
       return sources;
     }
     final match = await _probeCameraMatch(
@@ -7140,6 +7166,7 @@ class _EditorScreenState extends State<EditorScreen>
     final result = await exportPhotoWithProgress(
       ExportRequest(
         sourcePath: selected.path,
+        editEmbeddedJpeg: _settings.editEmbeddedJpeg,
         destPath: destPath,
         params: RenderParams.fromValues(
           _effectiveParamValues(),

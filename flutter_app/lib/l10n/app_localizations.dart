@@ -1114,6 +1114,24 @@ abstract class AppLocalizations {
   /// **'Lower is faster to open and edit photos; export always uses the full sensor resolution'**
   String get settingsPreviewResolutionHint;
 
+  /// No description provided for @settingsEditEmbeddedJpegLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit the camera\'s JPEG'**
+  String get settingsEditEmbeddedJpegLabel;
+
+  /// No description provided for @settingsEditEmbeddedJpegHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit a RAW as the camera\'s own JPEG rendering rather than as sensor data. It opens faster and starts from the look the camera intended, but a rendered 8-bit image has far less latitude to recover a blown sky or a crushed shadow.'**
+  String get settingsEditEmbeddedJpegHint;
+
+  /// No description provided for @settingsPreviewResolutionEmbeddedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Not used while the camera\'s JPEG is being edited — it is shown at full resolution, like any JPEG or PNG'**
+  String get settingsPreviewResolutionEmbeddedHint;
+
   /// No description provided for @settingsRawOnlyLabel.
   ///
   /// In en, this message translates to:

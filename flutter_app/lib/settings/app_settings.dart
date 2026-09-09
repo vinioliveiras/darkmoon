@@ -31,6 +31,10 @@ const _maxRecentFiles = 15;
 /// render speed, never final output quality.
 const List<int> previewResolutionOptions = [
   nativePreviewResolution,
+  6144,
+  4096,
+  3072,
+  2560,
   2048,
   1600,
   1280,
@@ -38,6 +42,15 @@ const List<int> previewResolutionOptions = [
   768,
   512,
 ];
+
+/// What [AppSettings.previewResolution] starts at.
+///
+/// Not [nativePreviewResolution]: a modern sensor's own resolution is a
+/// lot of pixels to re-render on every slider move, and past a couple of
+/// thousand on the long edge the editing preview is already sharper than
+/// the viewport can show. Native stays one dropdown entry away for anyone
+/// who wants it.
+const int defaultPreviewResolution = 2048;
 
 /// The [AppSettings.previewResolution] value meaning "do not downscale at
 /// all" — edit against the sensor's own resolution.
@@ -54,7 +67,8 @@ class AppSettings {
   const AppSettings({
     this.language = 'auto',
     this.fastPreview = true,
-    this.previewResolution = nativePreviewResolution,
+    this.previewResolution = defaultPreviewResolution,
+    this.editEmbeddedJpeg = false,
     this.useGpuRender = true,
     this.tabbedControlsPanel = true,
     this.tabbedControlsPanelIcons = false,
@@ -85,6 +99,28 @@ class AppSettings {
   /// every adjustment but softer on screen; export always uses the
   /// sensor's native resolution regardless of this setting.
   final int previewResolution;
+
+  /// Edit a RAW as the camera's own JPEG rendering of the same shot,
+  /// rather than as sensor data.
+  ///
+  /// The camera already made every decision a RAW leaves open — white
+  /// balance, tone, colour, sharpening, noise reduction — and wrote the
+  /// result into the file. Turning this on takes that image as the
+  /// photograph and edits it the way any JPEG on disk would be edited:
+  /// faster to open, and it starts from the look the camera intended
+  /// rather than from a neutral decode. It gives up the latitude that
+  /// makes a RAW a RAW — an 8-bit rendered image has far less to recover
+  /// in a blown sky or a crushed shadow.
+  ///
+  /// The preview is not downscaled in this mode, whatever
+  /// [previewResolution] says: the embedded JPEG is already a fraction of
+  /// the sensor's resolution, and capping it again would throw away detail
+  /// for a decode that was cheap to begin with. Common formats (JPEG, PNG,
+  /// TIFF) are treated the same way and always have been.
+  ///
+  /// Applies to the export and the neural pipelines too, not just the
+  /// editing preview — see [decodeSourceImage].
+  final bool editEmbeddedJpeg;
 
   /// GPU-accelerated rendering (`lib/render/gpu/`) for the settled
   /// (non-drag) preview render, instead of the CPU pipeline — on by
@@ -192,6 +228,7 @@ class AppSettings {
     String? language,
     bool? fastPreview,
     int? previewResolution,
+    bool? editEmbeddedJpeg,
     bool? useGpuRender,
     bool? tabbedControlsPanel,
     bool? tabbedControlsPanelIcons,
@@ -210,6 +247,7 @@ class AppSettings {
     language: language ?? this.language,
     fastPreview: fastPreview ?? this.fastPreview,
     previewResolution: previewResolution ?? this.previewResolution,
+    editEmbeddedJpeg: editEmbeddedJpeg ?? this.editEmbeddedJpeg,
     useGpuRender: useGpuRender ?? this.useGpuRender,
     tabbedControlsPanel: tabbedControlsPanel ?? this.tabbedControlsPanel,
     tabbedControlsPanelIcons:
@@ -248,6 +286,7 @@ class AppSettings {
     language: language,
     fastPreview: fastPreview,
     previewResolution: previewResolution,
+    editEmbeddedJpeg: editEmbeddedJpeg,
     useGpuRender: useGpuRender,
     tabbedControlsPanel: tabbedControlsPanel,
     tabbedControlsPanelIcons: tabbedControlsPanelIcons,
@@ -278,6 +317,7 @@ class AppSettings {
     language: language,
     fastPreview: fastPreview,
     previewResolution: previewResolution,
+    editEmbeddedJpeg: editEmbeddedJpeg,
     useGpuRender: useGpuRender,
     tabbedControlsPanel: tabbedControlsPanel,
     tabbedControlsPanelIcons: tabbedControlsPanelIcons,
@@ -324,6 +364,8 @@ Future<AppSettings> loadSettings() async {
       previewResolution:
           (raw['previewResolution'] as num?)?.toInt() ??
           defaults.previewResolution,
+      editEmbeddedJpeg:
+          raw['editEmbeddedJpeg'] as bool? ?? defaults.editEmbeddedJpeg,
       useGpuRender: raw['useGpuRender'] as bool? ?? defaults.useGpuRender,
       tabbedControlsPanel:
           raw['tabbedControlsPanel'] as bool? ?? defaults.tabbedControlsPanel,
@@ -370,6 +412,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'language': settings.language,
       'fastPreview': settings.fastPreview,
       'previewResolution': settings.previewResolution,
+      'editEmbeddedJpeg': settings.editEmbeddedJpeg,
       'useGpuRender': settings.useGpuRender,
       'tabbedControlsPanel': settings.tabbedControlsPanel,
       'tabbedControlsPanelIcons': settings.tabbedControlsPanelIcons,

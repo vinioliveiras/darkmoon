@@ -126,6 +126,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
   int detailRestoreAmount,
   bool enableColorize,
   int colorizeIntensityPercent,
+  bool editEmbeddedJpeg,
   void Function(Object stage) onStage,
 ) async {
   int width;
@@ -185,7 +186,12 @@ Future<EditSourcePair?> _decodeAndEnhance(
     final decoded =
         rawDenoised ??
         (isRawFile(path)
-            ? decodeRawImage(path, fastPreview: false, onStage: onStage)
+            ? decodeSourceImage(
+                path,
+                embeddedJpeg: editEmbeddedJpeg,
+                fastPreview: false,
+                onStage: onStage,
+              )
             : decodeCommonImage(path));
     if (decoded == null) {
       return null;
@@ -484,6 +490,7 @@ class _AiEnhanceDecodeIsolateArgs {
     this.detailRestoreAmount,
     this.enableColorize,
     this.colorizeIntensityPercent,
+    this.editEmbeddedJpeg,
     this.sendPort,
   );
 
@@ -500,6 +507,7 @@ class _AiEnhanceDecodeIsolateArgs {
   final int detailRestoreAmount;
   final bool enableColorize;
   final int colorizeIntensityPercent;
+  final bool editEmbeddedJpeg;
   final SendPort sendPort;
 }
 
@@ -520,6 +528,7 @@ void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
       args.detailRestoreAmount,
       args.enableColorize,
       args.colorizeIntensityPercent,
+      args.editEmbeddedJpeg,
       (stage) => args.sendPort.send(stage),
     );
   } finally {
@@ -572,6 +581,7 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
   // `edit_source_colorize.dart`, keeping its own dedicated disk cache.
   bool enableColorize = false,
   int colorizeIntensityPercent = 0,
+  bool editEmbeddedJpeg = false,
 }) async {
   final receivePort = ReceivePort();
   final isolate = await Isolate.spawn(
@@ -590,6 +600,7 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
       detailRestoreAmount,
       enableColorize,
       colorizeIntensityPercent,
+      editEmbeddedJpeg,
       receivePort.sendPort,
     ),
   );

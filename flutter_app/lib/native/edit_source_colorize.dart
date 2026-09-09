@@ -104,6 +104,7 @@ Future<EditSourcePair?> _decodeAndColorize(
   String cacheDir,
   int previewMaxDimension,
   int intensityPercent,
+  bool editEmbeddedJpeg,
   void Function(Object stage) onStage,
 ) async {
   int width;
@@ -123,7 +124,12 @@ Future<EditSourcePair?> _decodeAndColorize(
     colorizedRgb = cachedImage.getBytes(order: img.ChannelOrder.rgb);
   } else {
     final decoded = isRawFile(path)
-        ? decodeRawImage(path, fastPreview: false, onStage: onStage)
+        ? decodeSourceImage(
+            path,
+            embeddedJpeg: editEmbeddedJpeg,
+            fastPreview: false,
+            onStage: onStage,
+          )
         : decodeCommonImage(path);
     if (decoded == null) {
       return null;
@@ -189,6 +195,7 @@ class _ColorizeIsolateArgs {
     this.cacheDir,
     this.previewMaxDimension,
     this.intensityPercent,
+    this.editEmbeddedJpeg,
     this.sendPort,
   );
 
@@ -196,6 +203,7 @@ class _ColorizeIsolateArgs {
   final String cacheDir;
   final int previewMaxDimension;
   final int intensityPercent;
+  final bool editEmbeddedJpeg;
   final SendPort sendPort;
 }
 
@@ -207,6 +215,7 @@ void _colorizeIsolateEntry(_ColorizeIsolateArgs args) async {
       args.cacheDir,
       args.previewMaxDimension,
       args.intensityPercent,
+      args.editEmbeddedJpeg,
       (stage) => args.sendPort.send(stage),
     );
   } finally {
@@ -232,6 +241,7 @@ Future<EditSourcePair?> decodeEditSourcesWithColorize(
   void Function(Object stage) onStage, {
   required int intensityPercent,
   int previewMaxDimension = defaultPreviewMaxDimension,
+  bool editEmbeddedJpeg = false,
   ColorizeCancellationToken? cancellationToken,
 }) async {
   final receivePort = ReceivePort();
@@ -242,6 +252,7 @@ Future<EditSourcePair?> decodeEditSourcesWithColorize(
       cacheDir,
       previewMaxDimension,
       intensityPercent,
+      editEmbeddedJpeg,
       receivePort.sendPort,
     ),
   );

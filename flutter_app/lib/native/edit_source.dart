@@ -140,11 +140,14 @@ Uint8List _rgbBytes(img.Image image) =>
 EditSourcePair? decodeEditSources(
   String path, {
   int previewMaxDimension = defaultPreviewMaxDimension,
+  bool editEmbeddedJpeg = false,
   void Function(RawDecodeStage stage)? onStage,
 }) {
-  final decoded = isRawFile(path)
-      ? decodeRawImage(path, fastPreview: true, onStage: onStage)
-      : decodeCommonImage(path);
+  final decoded = decodeSourceImage(
+    path,
+    embeddedJpeg: editEmbeddedJpeg,
+    onStage: onStage,
+  );
   if (decoded == null) {
     return null;
   }
@@ -158,7 +161,14 @@ EditSourcePair? decodeEditSources(
   // Zero means native: no cap at all, so the editing buffer is the
   // sensor's own resolution. fitToMaxDimension would read a zero as
   // "shrink to nothing", so it never sees one.
-  final previewImage = previewMaxDimension <= 0
+  //
+  // An already-rendered source is never capped either. The camera's
+  // embedded JPEG is a fraction of the sensor's resolution to begin with,
+  // and it decoded in a fraction of the time, so there is nothing to buy
+  // by throwing detail away — the same reason a JPEG or PNG on disk has
+  // never been capped here.
+  final alreadyRendered = editEmbeddedJpeg || !isRawFile(path);
+  final previewImage = (previewMaxDimension <= 0 || alreadyRendered)
       ? full
       : fitToMaxDimension(full, previewMaxDimension);
   final liveImage = fitToMaxDimension(previewImage, livePreviewMaxDimension);
@@ -183,12 +193,14 @@ class _EditSourcesIsolateArgs {
     this.path,
     this.previewMaxDimension,
     this.sendPort, {
+    this.editEmbeddedJpeg = false,
     this.lowPriority = false,
   });
 
   final String path;
   final int previewMaxDimension;
   final SendPort sendPort;
+  final bool editEmbeddedJpeg;
   final bool lowPriority;
 }
 
@@ -199,6 +211,7 @@ void _decodeEditSourcesIsolateEntry(_EditSourcesIsolateArgs args) {
   final result = decodeEditSources(
     args.path,
     previewMaxDimension: args.previewMaxDimension,
+    editEmbeddedJpeg: args.editEmbeddedJpeg,
     onStage: (stage) => args.sendPort.send(stage),
   );
   args.sendPort.send(result);
@@ -217,6 +230,7 @@ Future<EditSourcePair?> decodeEditSourcesWithProgress(
   String path,
   void Function(RawDecodeStage stage) onProgress, {
   int previewMaxDimension = defaultPreviewMaxDimension,
+  bool editEmbeddedJpeg = false,
   bool lowPriority = false,
 }) async {
   final receivePort = ReceivePort();
@@ -226,6 +240,7 @@ Future<EditSourcePair?> decodeEditSourcesWithProgress(
       path,
       previewMaxDimension,
       receivePort.sendPort,
+      editEmbeddedJpeg: editEmbeddedJpeg,
       lowPriority: lowPriority,
     ),
   );
@@ -370,10 +385,12 @@ EditSourcePair? decodeEditSourcePairFromCachedJpegLowPriority(
 /// they're always decoded at their one native resolution.
 ///
 /// Designed to run via `compute()`.
-EditSource? decodeFullQualitySource(String path) {
-  final decoded = isRawFile(path)
-      ? decodeRawImage(path, fastPreview: false)
-      : decodeCommonImage(path);
+EditSource? decodeFullQualitySource(FullQualityRequest request) {
+  final decoded = decodeSourceImage(
+    request.path,
+    embeddedJpeg: request.editEmbeddedJpeg,
+    fastPreview: false,
+  );
   if (decoded == null) {
     return null;
   }
@@ -421,8 +438,19 @@ EditSource? decodeNativeSourceFromCachedJpeg(Uint8List jpegBytes) {
 /// when the decode is a background nicety rather than something the user
 /// is blocked on, so it must yield to the UI isolate. Runs via
 /// `compute()`.
-EditSource? decodeFullQualitySourceLowPriority(String path) {
+EditSource? decodeFullQualitySourceLowPriority(FullQualityRequest request) {
   lowerBackgroundThreadPriority();
-  return decodeFullQualitySource(path);
+  return decodeFullQualitySource(request);
+}
+
+/// [decodeFullQualitySource]'s single `compute()` argument.
+class FullQualityRequest {
+  const FullQualityRequest(this.path, {required this.editEmbeddedJpeg});
+
+  final String path;
+
+  /// See [decodeSourceImage] — the export has to read the same pixels the
+  /// editor did, or what you see is not what you get.
+  final bool editEmbeddedJpeg;
 }
 

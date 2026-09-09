@@ -10,7 +10,6 @@ import '../raw_files.dart' show isRawFile;
 import 'common_image.dart';
 import 'edit_source.dart';
 import 'image_utils.dart';
-import 'libraw.dart';
 
 /// Sibling to `edit_source_ai_enhance.dart`'s `_decodeAndEnhance`, for the
 /// cloud AI denoise pipeline instead of the on-device ONNX one: full-
@@ -37,6 +36,7 @@ Future<EditSourcePair?> _decodeAndCloudDenoise(
   int previewMaxDimension,
   CloudDenoiseProviderKind provider,
   String apiKey,
+  bool editEmbeddedJpeg,
   void Function(String stage) onStage,
 ) async {
   int width;
@@ -53,7 +53,11 @@ Future<EditSourcePair?> _decodeAndCloudDenoise(
   } else {
     onStage('decoding');
     final decoded = isRawFile(path)
-        ? decodeRawImage(path, fastPreview: false)
+        ? decodeSourceImage(
+            path,
+            embeddedJpeg: editEmbeddedJpeg,
+            fastPreview: false,
+          )
         : decodeCommonImage(path);
     if (decoded == null) {
       return null;
@@ -182,6 +186,7 @@ class _CloudDenoiseDecodeIsolateArgs {
     this.previewMaxDimension,
     this.provider,
     this.apiKey,
+    this.editEmbeddedJpeg,
     this.sendPort,
   );
 
@@ -190,6 +195,7 @@ class _CloudDenoiseDecodeIsolateArgs {
   final int previewMaxDimension;
   final CloudDenoiseProviderKind provider;
   final String apiKey;
+  final bool editEmbeddedJpeg;
   final SendPort sendPort;
 }
 
@@ -203,6 +209,7 @@ void _cloudDenoiseDecodeIsolateEntry(
       args.previewMaxDimension,
       args.provider,
       args.apiKey,
+      args.editEmbeddedJpeg,
       (stage) => args.sendPort.send(stage),
     );
     args.sendPort.send(result);
@@ -273,6 +280,7 @@ Future<CloudDenoiseResult> decodeEditSourcesWithCloudDenoise(
   required CloudDenoiseProviderKind provider,
   required String apiKey,
   int previewMaxDimension = defaultPreviewMaxDimension,
+  bool editEmbeddedJpeg = false,
   CloudDenoiseCancellationToken? cancellationToken,
 }) async {
   final receivePort = ReceivePort();
@@ -284,6 +292,7 @@ Future<CloudDenoiseResult> decodeEditSourcesWithCloudDenoise(
       previewMaxDimension,
       provider,
       apiKey,
+      editEmbeddedJpeg,
       receivePort.sendPort,
     ),
   );

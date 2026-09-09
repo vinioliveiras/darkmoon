@@ -4,12 +4,32 @@ import 'package:darkmoon/settings/app_settings.dart';
 
 void main() {
   group('preview resolution', () {
-    test('defaults to native', () {
-      expect(const AppSettings().previewResolution, nativePreviewResolution);
+    test('defaults to 2048', () {
+      expect(const AppSettings().previewResolution, defaultPreviewResolution);
+      expect(
+        previewResolutionOptions,
+        contains(defaultPreviewResolution),
+        reason: 'the default has to be offered by the dropdown too',
+      );
       expect(
         previewResolutionOptions,
         contains(nativePreviewResolution),
-        reason: 'the default has to be offered by the dropdown too',
+        reason: 'native stays one entry away for anyone who wants it',
+      );
+    });
+
+    test('the list runs high to low, with native first', () {
+      expect(previewResolutionOptions.first, nativePreviewResolution);
+      final capped = previewResolutionOptions.skip(1).toList();
+      expect(
+        capped,
+        orderedEquals(capped.toList()..sort((a, b) => b.compareTo(a))),
+        reason: 'the dropdown reads as a scale, so it has to be ordered',
+      );
+      expect(
+        capped.toSet().length,
+        capped.length,
+        reason: 'a duplicate entry would be two identical dropdown rows',
       );
     });
 

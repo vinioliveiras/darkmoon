@@ -8,8 +8,6 @@ import 'package:image/image.dart' as img;
 
 import '../native/common_image.dart';
 import '../native/image_utils.dart';
-import '../native/libraw.dart';
-import '../raw_files.dart' show isRawFile;
 import '../render/crop_transform.dart';
 import '../render/mask.dart';
 import '../render/render.dart';
@@ -31,9 +29,17 @@ class ExportRequest {
     this.preDecodedWidth,
     this.preDecodedHeight,
     this.aiMaskMaps = const {},
+    this.editEmbeddedJpeg = false,
   });
 
   final String sourcePath;
+
+  /// Read the camera's own JPEG rather than the sensor data — see
+  /// [decodeSourceImage]. Only reached when the editor could not hand over
+  /// an already-decoded source ([preDecodedRgb]); that path already
+  /// carries whichever pixels the editor was showing.
+  final bool editEmbeddedJpeg;
+
   final String destPath;
   final RenderParams params;
   final ExportFormat format;
@@ -138,9 +144,11 @@ Future<ExportResult> _exportPhotoInternal(
       rgbBytes = request.preDecodedRgb!;
       mark('reuse decoded source');
     } else {
-      final decoded = isRawFile(request.sourcePath)
-          ? decodeRawImage(request.sourcePath, fastPreview: false)
-          : decodeCommonImage(request.sourcePath);
+      final decoded = decodeSourceImage(
+        request.sourcePath,
+        embeddedJpeg: request.editEmbeddedJpeg,
+        fastPreview: false,
+      );
       if (decoded == null) {
         return ExportResult.failure('Could not decode ${request.sourcePath}');
       }

@@ -571,6 +571,17 @@ class AppLocalizationsDe extends AppLocalizations {
       'Niedriger ist schneller beim Öffnen und Bearbeiten von Fotos; der Export verwendet immer die volle Sensorauflösung';
 
   @override
+  String get settingsEditEmbeddedJpegLabel => 'Kamera-JPEG bearbeiten';
+
+  @override
+  String get settingsEditEmbeddedJpegHint =>
+      'Bearbeitet eine RAW-Datei anhand der kamerainternen JPEG-Ausgabe statt der Sensordaten. Sie öffnet schneller und beginnt bei dem Look, den die Kamera beabsichtigt hat — ein gerendertes 8-Bit-Bild bietet aber deutlich weniger Spielraum, um einen ausgebrannten Himmel oder abgesoffene Schatten zu retten.';
+
+  @override
+  String get settingsPreviewResolutionEmbeddedHint =>
+      'Wird nicht verwendet, solange das Kamera-JPEG bearbeitet wird — es wird in voller Auflösung angezeigt, wie jedes JPEG oder PNG';
+
+  @override
   String get settingsRawOnlyLabel => 'Nur RAW-Dateien';
 
   @override
