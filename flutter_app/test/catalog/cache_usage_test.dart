@@ -22,9 +22,7 @@ void main() {
     final file = File(p.joinAll([root.path, 'darkmoon', ...parts]));
     file.parent.createSync(recursive: true);
     file.writeAsBytesSync(List.filled(bytes, 0));
-    file.setLastModifiedSync(
-      DateTime.now().subtract(Duration(days: ageDays)),
-    );
+    file.setLastModifiedSync(DateTime.now().subtract(Duration(days: ageDays)));
     return file;
   }
 
@@ -52,13 +50,15 @@ void main() {
       expect(
         usage[CacheCategory.previews],
         1050,
-        reason: 'the camera-match measurements belong with the previews '
+        reason:
+            'the camera-match measurements belong with the previews '
             'they were taken for',
       );
       expect(
         usage[CacheCategory.fullSources],
         9000,
-        reason: 'native/ lives under previews/ but is its own category — '
+        reason:
+            'native/ lives under previews/ but is its own category — '
             'these are the megabyte-scale entries',
       );
       expect(usage[CacheCategory.thumbnails], 300);
@@ -140,10 +140,12 @@ void main() {
       enforceCacheLimit(CacheLimitRequest(root.path, 0));
       removeEmptyCacheDirs(root.path);
       expect(
-        Directory(p.join(root.path, 'darkmoon', 'previews', 'v5', '1024px'))
-            .existsSync(),
+        Directory(
+          p.join(root.path, 'darkmoon', 'previews', 'v5', '1024px'),
+        ).existsSync(),
         isFalse,
-        reason: 'an abandoned resolution should not linger as an empty '
+        reason:
+            'an abandoned resolution should not linger as an empty '
             'folder once its contents are gone',
       );
     });
@@ -170,7 +172,8 @@ void main() {
       expect(
         sizeOf(['previews', 'v5', 'native', 'a.cache']),
         200,
-        reason: 'full-resolution sources live under previews/ but are a '
+        reason:
+            'full-resolution sources live under previews/ but are a '
             'category of their own',
       );
       expect(sizeOf(['thumbnails', 'a.cache']), 300);

@@ -54,8 +54,10 @@ void _evaluate(String path, Directory outDir) {
     return;
   }
   final source = sources.preview;
-  log('  decoded ${source.width}x${source.height}'
-      '  baseExposure=${sources.baseExposureStops?.toStringAsFixed(2) ?? "-"}');
+  log(
+    '  decoded ${source.width}x${source.height}'
+    '  baseExposure=${sources.baseExposureStops?.toStringAsFixed(2) ?? "-"}',
+  );
 
   // Exactly what the resolver feeds the models today.
   final raw = _toWorking(source.rgbBytes, source.width, source.height);
@@ -75,8 +77,10 @@ void _evaluate(String path, Directory outDir) {
   );
   final toned = _toWorking(rendered, source.width, source.height);
 
-  log('  mean luma  raw=${_meanLuma(raw.rgb).toStringAsFixed(1)}'
-      '  rendered=${_meanLuma(toned.rgb).toStringAsFixed(1)}');
+  log(
+    '  mean luma  raw=${_meanLuma(raw.rgb).toStringAsFixed(1)}'
+    '  rendered=${_meanLuma(toned.rgb).toStringAsFixed(1)}',
+  );
 
   // Both inputs written out too: a map is impossible to judge without the
   // photo it came from, and the two inputs are the thing under comparison.
@@ -90,11 +94,7 @@ void _evaluate(String path, Directory outDir) {
   // target (the render changes with every edit). This one asks only that
   // the image look like a photograph with a full range, which is the one
   // thing every training set here had in common.
-  final levelled = _Frame(
-    autoLevelForAiMask(raw.rgb),
-    raw.width,
-    raw.height,
-  );
+  final levelled = _Frame(autoLevelForAiMask(raw.rgb), raw.width, raw.height);
   _writeRgb(levelled, outDir, '${_stem(name)}-input-levelled');
   log('  mean luma  levelled=${_meanLuma(levelled.rgb).toStringAsFixed(1)}');
 
@@ -105,8 +105,12 @@ void _evaluate(String path, Directory outDir) {
   ]) {
     final label = variant.$1;
     final frame = variant.$2;
-    _report('$name sky/$label', () => runSkyMaskModel(frame.rgb, frame.width, frame.height),
-        outDir, '${_stem(name)}-sky-$label');
+    _report(
+      '$name sky/$label',
+      () => runSkyMaskModel(frame.rgb, frame.width, frame.height),
+      outDir,
+      '${_stem(name)}-sky-$label',
+    );
     _report(
       '$name foreground/$label',
       () => runForegroundMaskModel(frame.rgb, frame.width, frame.height),
@@ -117,12 +121,7 @@ void _evaluate(String path, Directory outDir) {
       '$name subject/$label',
       () => runSubjectMaskModel(
         runSubjectEmbedding(frame.rgb, frame.width, frame.height),
-        const SubjectGeometry(
-          startX: 0.5,
-          startY: 0.5,
-          endX: 0.5,
-          endY: 0.5,
-        ),
+        const SubjectGeometry(startX: 0.5, startY: 0.5, endX: 0.5, endY: 0.5),
         frame.width,
         frame.height,
       ),
@@ -161,10 +160,12 @@ void _report(
     if (v > 40 && v < 215) undecided++;
   }
   final n = map.data.length;
-  log('  ${label.padRight(34)} '
-      'coverage=${(100 * covered / n).toStringAsFixed(1)}% '
-      'mean=${(sum / n).toStringAsFixed(1)} '
-      'undecided=${(100 * undecided / n).toStringAsFixed(1)}%');
+  log(
+    '  ${label.padRight(34)} '
+    'coverage=${(100 * covered / n).toStringAsFixed(1)}% '
+    'mean=${(sum / n).toStringAsFixed(1)} '
+    'undecided=${(100 * undecided / n).toStringAsFixed(1)}%',
+  );
 
   final image = img.Image(width: map.width, height: map.height, numChannels: 1);
   for (var y = 0; y < map.height; y++) {

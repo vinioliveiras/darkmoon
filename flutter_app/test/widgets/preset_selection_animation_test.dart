@@ -68,9 +68,7 @@ void main() {
     await pumpPanel(tester);
 
     // The row checkboxes' slots exist collapsed before the mode is on.
-    final collapsed = tester
-        .widgetList<ClipRect>(find.byType(ClipRect))
-        .length;
+    final collapsed = tester.widgetList<ClipRect>(find.byType(ClipRect)).length;
     expect(collapsed, greaterThan(0));
 
     await tester.tap(find.byTooltip('Select presets').first);

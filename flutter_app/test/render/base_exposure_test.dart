@@ -21,10 +21,9 @@ void main() {
       reason: 'a photo with no exposure edit opens at the camera brightness',
     );
     expect(
-      RenderParams.fromValues(
-        const {'Exposure': -0.4},
-        baseExposureStops: 0.6,
-      ).exposure,
+      RenderParams.fromValues(const {
+        'Exposure': -0.4,
+      }, baseExposureStops: 0.6).exposure,
       closeTo(0.6 * calExposureUnitsPerStop - 0.4, 1e-9),
       reason: 'and the slider still reads as a relative adjustment',
     );
@@ -47,10 +46,9 @@ void main() {
     // being applied. Passing it separately puts it out of that reach.
     const damped = {'Exposure': 1.0};
     final withBase = RenderParams.fromValues(damped, baseExposureStops: 0.5);
-    final halfEdit = RenderParams.fromValues(
-      const {'Exposure': 0.5},
-      baseExposureStops: 0.5,
-    );
+    final halfEdit = RenderParams.fromValues(const {
+      'Exposure': 0.5,
+    }, baseExposureStops: 0.5);
     expect(
       withBase.exposure - halfEdit.exposure,
       closeTo(0.5, 1e-9),

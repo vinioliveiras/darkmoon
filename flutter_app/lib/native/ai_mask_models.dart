@@ -112,19 +112,22 @@ AiMaskMap runForegroundMaskModel(Uint8List rgb, int width, int height) =>
 /// letterboxed input, same ImageNet normalization, same seven outputs of
 /// which only the first is the fused prediction, same min-max stretch of
 /// that output into a 0..255 map. Only the weights differ.
-AiMaskMap _runU2Net(
-  OnnxModelSpec spec,
-  Uint8List rgb,
-  int width,
-  int height,
-) {
+AiMaskMap _runU2Net(OnnxModelSpec spec, Uint8List rgb, int width, int height) {
   final model = OnnxModel.forSpec(spec);
   const size = 320;
   final boxed = _letterbox(rgb, width, height, size);
 
-  final outputs = model.runGraph({
-    model.inputNames.first: OnnxTensorData.float32([1, 3, size, size], boxed.chw),
-  }, [model.outputNames.first]);
+  final outputs = model.runGraph(
+    {
+      model.inputNames.first: OnnxTensorData.float32([
+        1,
+        3,
+        size,
+        size,
+      ], boxed.chw),
+    },
+    [model.outputNames.first],
+  );
   final raw = outputs[model.outputNames.first]!.floats!;
 
   // Stretched over the whole padded frame, matching the reference
@@ -135,7 +138,13 @@ AiMaskMap _runU2Net(
   return AiMaskMap(
     width: width,
     height: height,
-    data: _resizeGray(cropped, boxed.validWidth, boxed.validHeight, width, height),
+    data: _resizeGray(
+      cropped,
+      boxed.validWidth,
+      boxed.validHeight,
+      width,
+      height,
+    ),
   );
 }
 
@@ -147,9 +156,17 @@ AiMaskMap runDepthMapModel(Uint8List rgb, int width, int height) {
   const size = 518;
   final boxed = _letterbox(rgb, width, height, size);
 
-  final outputs = model.runGraph({
-    model.inputNames.first: OnnxTensorData.float32([1, 3, size, size], boxed.chw),
-  }, [model.outputNames.first]);
+  final outputs = model.runGraph(
+    {
+      model.inputNames.first: OnnxTensorData.float32([
+        1,
+        3,
+        size,
+        size,
+      ], boxed.chw),
+    },
+    [model.outputNames.first],
+  );
   // Rank-3 ([1, 518, 518]) rather than the rank-4 every other model here
   // returns — element count is the same, and the layout is the same rows.
   final raw = outputs[model.outputNames.first]!.floats!;
@@ -184,7 +201,13 @@ AiMaskMap runDepthMapModel(Uint8List rgb, int width, int height) {
   return AiMaskMap(
     width: width,
     height: height,
-    data: _resizeGray(cropped, boxed.validWidth, boxed.validHeight, width, height),
+    data: _resizeGray(
+      cropped,
+      boxed.validWidth,
+      boxed.validHeight,
+      width,
+      height,
+    ),
   );
 }
 
@@ -200,7 +223,13 @@ Float32List runSubjectEmbedding(Uint8List rgb, int width, int height) {
   final scale = _samInputSize / math.max(width, height);
   final scaledWidth = math.max(1, (width * scale).round());
   final scaledHeight = math.max(1, (height * scale).round());
-  final resized = resizeRgbForAiMask(rgb, width, height, scaledWidth, scaledHeight);
+  final resized = resizeRgbForAiMask(
+    rgb,
+    width,
+    height,
+    scaledWidth,
+    scaledHeight,
+  );
 
   // Top-left aligned, zero-padded to the right and bottom — SAM's own
   // preprocessing, and what its coordinate prompts assume. Note the
@@ -219,12 +248,17 @@ Float32List runSubjectEmbedding(Uint8List rgb, int width, int height) {
     }
   }
 
-  final outputs = model.runGraph({
-    model.inputNames.first: OnnxTensorData.uint8(
-      [1, 3, _samInputSize, _samInputSize],
-      chw,
-    ),
-  }, [model.outputNames.first]);
+  final outputs = model.runGraph(
+    {
+      model.inputNames.first: OnnxTensorData.uint8([
+        1,
+        3,
+        _samInputSize,
+        _samInputSize,
+      ], chw),
+    },
+    [model.outputNames.first],
+  );
   return outputs[model.outputNames.first]!.floats!;
 }
 
@@ -265,7 +299,10 @@ AiMaskMap runSubjectMaskModel(
   var coords = <double>[];
   var labels = <double>[];
   if (geometry.isPoint) {
-    coords = [geometry.startX * width * scale, geometry.startY * height * scale];
+    coords = [
+      geometry.startX * width * scale,
+      geometry.startY * height * scale,
+    ];
     labels = [1];
   } else {
     final x1 = math.min(geometry.startX, geometry.endX) * width * scale;
@@ -283,23 +320,28 @@ AiMaskMap runSubjectMaskModel(
   final passes = refine ? 2 : 1;
   for (var pass = 0; pass < passes; pass++) {
     final pointCount = labels.length;
-    final outputs = model.runGraph({
-      names[0]: OnnxTensorData.float32([1, 256, 64, 64], embedding),
-      names[1]: OnnxTensorData.float32(
-        [1, pointCount, 2],
-        Float32List.fromList(coords),
-      ),
-      names[2]: OnnxTensorData.float32(
-        [1, pointCount],
-        Float32List.fromList(labels),
-      ),
-      names[3]: OnnxTensorData.float32([1, 1, 256, 256], maskInput),
-      names[4]: OnnxTensorData.float32([1], Float32List.fromList([hasMaskInput])),
-      names[5]: OnnxTensorData.float32(
-        [2],
-        Float32List.fromList([height.toDouble(), width.toDouble()]),
-      ),
-    }, [model.outputNames.first]);
+    final outputs = model.runGraph(
+      {
+        names[0]: OnnxTensorData.float32([1, 256, 64, 64], embedding),
+        names[1]: OnnxTensorData.float32([
+          1,
+          pointCount,
+          2,
+        ], Float32List.fromList(coords)),
+        names[2]: OnnxTensorData.float32([
+          1,
+          pointCount,
+        ], Float32List.fromList(labels)),
+        names[3]: OnnxTensorData.float32([1, 1, 256, 256], maskInput),
+        names[4]: OnnxTensorData.float32([
+          1,
+        ], Float32List.fromList([hasMaskInput])),
+        names[5]: OnnxTensorData.float32([
+          2,
+        ], Float32List.fromList([height.toDouble(), width.toDouble()])),
+      },
+      [model.outputNames.first],
+    );
 
     // [1, masks, height, width] — the decoder returns several candidate
     // masks ranked by its own confidence; the first is the one it ranks
@@ -343,7 +385,12 @@ AiMaskMap runSubjectMaskModel(
     // The strongest negative prompt available: the point *inside the
     // mask's own bounding box* that is farthest from the mask. Outside the
     // box it would just be some irrelevant corner of the photo.
-    final outside = _distanceTransform(binaryMask, width, height, inside: false);
+    final outside = _distanceTransform(
+      binaryMask,
+      width,
+      height,
+      inside: false,
+    );
     var farthest = 0.0;
     var farthestIndex = 0;
     for (var y = minY; y <= maxY; y++) {
@@ -428,7 +475,13 @@ _Letterboxed _letterbox(Uint8List rgb, int width, int height, int size) {
   final ratio = math.min(size / width, size / height);
   final validWidth = math.max(1, math.min(size, (width * ratio).round()));
   final validHeight = math.max(1, math.min(size, (height * ratio).round()));
-  final resized = resizeRgbForAiMask(rgb, width, height, validWidth, validHeight);
+  final resized = resizeRgbForAiMask(
+    rgb,
+    width,
+    height,
+    validWidth,
+    validHeight,
+  );
   final pasteX = (size - validWidth) ~/ 2;
   final pasteY = (size - validHeight) ~/ 2;
 

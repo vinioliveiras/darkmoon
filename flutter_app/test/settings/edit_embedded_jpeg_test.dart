@@ -100,7 +100,10 @@ void main() {
     });
 
     test('it carries no camera match — there is nothing to match', () {
-      final decoded = decodeSourceImage(writePng(40, 40, 40), embeddedJpeg: true)!;
+      final decoded = decodeSourceImage(
+        writePng(40, 40, 40),
+        embeddedJpeg: true,
+      )!;
       expect(decoded.baseExposureStops, isNull);
       expect(decoded.baseToneCurve, isNull);
     });
@@ -143,9 +146,7 @@ void main() {
       expect(find.text(l10n.settingsEditEmbeddedJpegLabel), findsOneWidget);
     });
 
-    testWidgets('the resolution row reads the same either way', (
-      tester,
-    ) async {
+    testWidgets('the resolution row reads the same either way', (tester) async {
       // It briefly did not: embedded-JPEG mode was exempt from the cap,
       // so the row had to say it no longer applied. Both modes honour it
       // now — the cap buys a cheaper render on every slider move, which

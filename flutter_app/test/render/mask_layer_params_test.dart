@@ -35,17 +35,16 @@ void main() {
   });
 
   test('it carries the mask own values, not the global ones', () {
-    final global = const RenderParams(exposure: 5).withRenderScaleFor(1024, 768);
+    final global = const RenderParams(
+      exposure: 5,
+    ).withRenderScaleFor(1024, 768);
     final params = maskLayerParams(mask, global);
     expect(params.exposure, 1);
     expect(params.clarity, 40);
   });
 
   test('the base profile curve is the base image alone', () {
-    final params = maskLayerParams(
-      mask,
-      const RenderParams(baseContrast: 80),
-    );
+    final params = maskLayerParams(mask, const RenderParams(baseContrast: 80));
     expect(
       params.baseContrast,
       0,

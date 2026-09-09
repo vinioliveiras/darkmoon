@@ -139,11 +139,9 @@ void main() {
       find.descendant(of: aiRow, matching: find.byType(IconButton)),
     );
     await tester.pumpAndSettle();
-    expect(
-      cleared,
-      [CacheCategory.aiResults],
-      reason: 'the row acted on has to be the row that was clicked',
-    );
+    expect(cleared, [
+      CacheCategory.aiResults,
+    ], reason: 'the row acted on has to be the row that was clicked');
   });
 
   testWidgets('with no handler the rows are a read-only breakdown', (

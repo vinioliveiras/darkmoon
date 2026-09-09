@@ -31,7 +31,8 @@ void main() {
       expect(
         calMixerBandStrength[band],
         isNotNull,
-        reason: '$band has no entry, so hand-editing it would silently do '
+        reason:
+            '$band has no entry, so hand-editing it would silently do '
             'nothing',
       );
     }

@@ -303,10 +303,7 @@ class _CollapsibleSlot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final duration = AnimationsConfig.duration(
-      context,
-      _selectionModeDuration,
-    );
+    final duration = AnimationsConfig.duration(context, _selectionModeDuration);
     return ClipRect(
       child: AnimatedAlign(
         duration: duration,
@@ -534,25 +531,25 @@ class _PresetRowState extends State<_PresetRow> {
                     ],
                   ),
                 ),
-              // Fixed-width trailing slot in *both* modes — an empty box
-              // in selection mode instead of just dropping the menu
-              // button, so switching modes doesn't reflow the name column
-              // and make the list look like it jumped.
-              SizedBox(
-                width: 26,
-                height: 26,
-                // Fades rather than vanishing, so the row's right edge
-                // settles at the same moment its left edge does.
-                child: AnimatedOpacity(
-                  duration: AnimationsConfig.duration(
-                    context,
-                    _selectionModeDuration,
-                  ),
-                  curve: _selectionModeCurve,
-                  opacity: selectionMode ? 0.0 : 1.0,
-                  child: IgnorePointer(
-                    ignoring: selectionMode,
-                    child: PopupMenuButton<VoidCallback>(
+                // Fixed-width trailing slot in *both* modes — an empty box
+                // in selection mode instead of just dropping the menu
+                // button, so switching modes doesn't reflow the name column
+                // and make the list look like it jumped.
+                SizedBox(
+                  width: 26,
+                  height: 26,
+                  // Fades rather than vanishing, so the row's right edge
+                  // settles at the same moment its left edge does.
+                  child: AnimatedOpacity(
+                    duration: AnimationsConfig.duration(
+                      context,
+                      _selectionModeDuration,
+                    ),
+                    curve: _selectionModeCurve,
+                    opacity: selectionMode ? 0.0 : 1.0,
+                    child: IgnorePointer(
+                      ignoring: selectionMode,
+                      child: PopupMenuButton<VoidCallback>(
                         // Uses `child` rather than `icon` — `icon` wraps in
                         // an IconButton, which inherits the app's global
                         // IconButtonTheme (a bordered, filled rounded-square
@@ -590,9 +587,9 @@ class _PresetRowState extends State<_PresetRow> {
                           ),
                         ),
                       ),
+                    ),
                   ),
                 ),
-              ),
               ],
             ),
           ),

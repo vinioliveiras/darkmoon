@@ -88,11 +88,9 @@ void main() {
     await dragHandle(tester, 25, 35);
 
     expect(calls.changed, isNotEmpty);
-    expect(
-      calls.changed.map((c) => c.$1).toSet(),
-      {'ParamCurveShadowSplit'},
-      reason: 'grabbing the leftmost handle must not move another split',
-    );
+    expect(calls.changed.map((c) => c.$1).toSet(), {
+      'ParamCurveShadowSplit',
+    }, reason: 'grabbing the leftmost handle must not move another split');
     expect(
       calls.ended.single.$1,
       'ParamCurveShadowSplit',
@@ -181,10 +179,7 @@ void main() {
     // another competitor for the same gesture, and it lost every time —
     // horizontal drags included. The handles were undraggable in the app
     // while all five tests above passed.
-    Future<double?> dragInScrollView(
-      WidgetTester tester,
-      Offset delta,
-    ) async {
+    Future<double?> dragInScrollView(WidgetTester tester, Offset delta) async {
       double? reported;
       await tester.pumpWidget(
         MaterialApp(
@@ -234,10 +229,7 @@ void main() {
       tester,
     ) async {
       // What a hand actually does.
-      expect(
-        await dragInScrollView(tester, const Offset(40, 12)),
-        isNotNull,
-      );
+      expect(await dragInScrollView(tester, const Offset(40, 12)), isNotNull);
     });
 
     testWidgets('a vertical drag scrolls the panel instead', (tester) async {

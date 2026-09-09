@@ -90,7 +90,6 @@ Future<void> cleanupStalePreviewCacheVersions() async {
   }
 }
 
-
 /// Resolves (creating if needed) the directory the camera-match
 /// measurements live in — `Documents/darkmoon/camera_match/
 /// v{rawDecodeFormatVersion}`.

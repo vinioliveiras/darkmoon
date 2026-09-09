@@ -181,8 +181,7 @@ class RenderParams {
   /// for the measurements that forced the split. Everything else
   /// (Clarity, Dehaze, Texture, the tonal blur) still uses the uncapped
   /// [renderScale].
-  double get detailScale =>
-      renderScale < calDetailRadiusMaxScale
+  double get detailScale => renderScale < calDetailRadiusMaxScale
       ? renderScale
       : calDetailRadiusMaxScale;
 

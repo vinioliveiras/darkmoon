@@ -153,9 +153,7 @@ class PresetThumbnailStore extends ChangeNotifier {
           width: _width,
           height: _height,
           rgb: rgb,
-          params: paramsFor(
-            preset,
-          ).withRenderScaleFor(_width, _height),
+          params: paramsFor(preset).withRenderScaleFor(_width, _height),
         ),
       );
       // The photo can change while an isolate is working. Anything that

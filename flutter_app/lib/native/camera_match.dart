@@ -238,15 +238,13 @@ double? _offsetFrom(
   required double limitStops,
   required double lumaFloor,
 }) {
-  if (ours.meanEncodedLuma < lumaFloor ||
-      camera.meanEncodedLuma < lumaFloor) {
+  if (ours.meanEncodedLuma < lumaFloor || camera.meanEncodedLuma < lumaFloor) {
     return null;
   }
   final stops =
       math.log(camera.meanEncodedLuma / ours.meanEncodedLuma) / math.ln2;
   return stops.clamp(-limitStops, limitStops);
 }
-
 
 // ═══════════════════════════════════════════════════════════════════════
 //  Camera tone match
@@ -350,8 +348,7 @@ List<double>? _toneFrom(
   _ImageStats camera, {
   required double lumaFloor,
 }) {
-  if (ours.meanEncodedLuma < lumaFloor ||
-      camera.meanEncodedLuma < lumaFloor) {
+  if (ours.meanEncodedLuma < lumaFloor || camera.meanEncodedLuma < lumaFloor) {
     return null;
   }
   final ourCdf = _cdf(ours.perceptualHistogram);
@@ -360,13 +357,15 @@ List<double>? _toneFrom(
   var cameraBin = 0;
   for (var k = 0; k < colorProfileTonePoints; k++) {
     final input = k / (colorProfileTonePoints - 1);
-    final sourceBin = (input * (_toneHistogramBins - 1))
-        .round()
-        .clamp(0, _toneHistogramBins - 1);
+    final sourceBin = (input * (_toneHistogramBins - 1)).round().clamp(
+      0,
+      _toneHistogramBins - 1,
+    );
     final target = ourCdf[sourceBin];
     // Monotone in k, so the scan never rewinds — this is one pass over
     // the camera CDF across the whole loop, not 33.
-    while (cameraBin < _toneHistogramBins - 1 && cameraCdf[cameraBin] < target) {
+    while (cameraBin < _toneHistogramBins - 1 &&
+        cameraCdf[cameraBin] < target) {
       cameraBin++;
     }
     var output = cameraBin / (_toneHistogramBins - 1);
@@ -379,7 +378,6 @@ List<double>? _toneFrom(
   // speak of; identity is the honest answer, and the renderer skips it.
   return tone.last <= tone.first ? _identityTone() : tone;
 }
-
 
 /// Both measurements from one decode of [embeddedJpegBytes] and one pass
 /// over each buffer — the form everything in the app actually uses.

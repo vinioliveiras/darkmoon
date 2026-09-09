@@ -63,10 +63,7 @@ void main() {
       test(
         'denoise $level + sharpen $sharpen renders the same at 1024 and 6000',
         () {
-          final sliders = {
-            'AiDenoiseLevel': level,
-            'SharpenAmount': sharpen,
-          };
+          final sliders = {'AiDenoiseLevel': level, 'SharpenAmount': sharpen};
           final preview = renderAsFrame(sliders, 1024);
           final export = renderAsFrame(sliders, 6000);
           var worst = 0;

@@ -39,16 +39,16 @@ void main() {
                   // is where the rule stopped being covered cleanly.
                   padding: EdgeInsets.only(top: shift),
                   child: Container(
-                  width: barWidth,
-                  color: DarkmoonColors.panel,
-                  child: const TabBar(
-                    tabs: [
-                      Tab(height: kTabHeight, text: 'One'),
-                      Tab(height: kTabHeight, text: 'Two'),
-                      Tab(height: kTabHeight, text: 'Three'),
-                    ],
+                    width: barWidth,
+                    color: DarkmoonColors.panel,
+                    child: const TabBar(
+                      tabs: [
+                        Tab(height: kTabHeight, text: 'One'),
+                        Tab(height: kTabHeight, text: 'Two'),
+                        Tab(height: kTabHeight, text: 'Three'),
+                      ],
+                    ),
                   ),
-                ),
                 ),
               ),
             ),
@@ -59,8 +59,7 @@ void main() {
     await tester.pumpAndSettle();
 
     final boundary =
-        boundaryKey.currentContext!.findRenderObject()
-            as RenderRepaintBoundary;
+        boundaryKey.currentContext!.findRenderObject() as RenderRepaintBoundary;
     // Rasterising has to happen outside the test's fake-async zone: the
     // future `toImage` returns is completed by the engine, which that zone
     // never pumps, so awaiting it directly hangs the test forever rather

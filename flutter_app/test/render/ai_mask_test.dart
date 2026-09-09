@@ -77,8 +77,11 @@ void main() {
         MaskLayer(id: 'm', name: 'Mask', type: MaskType.depth, depth: geometry);
 
     /// A one-pixel-per-column ramp from far (0) to near (255).
-    AiMaskMap rampMap(List<int> values) =>
-        AiMaskMap(width: values.length, height: 1, data: Uint8List.fromList(values));
+    AiMaskMap rampMap(List<int> values) => AiMaskMap(
+      width: values.length,
+      height: 1,
+      data: Uint8List.fromList(values),
+    );
 
     test('selects the band between far and near at full strength', () {
       final alpha = computeMaskAlpha(
@@ -93,22 +96,25 @@ void main() {
       expect(alpha[3], 1.0); // depth 1.00 — inside
     });
 
-    test('near and far are interchangeable — the band is the same either way', () {
-      final map = rampMap([0, 96, 160, 255]);
-      final ascending = computeMaskAlpha(
-        depthMask(const DepthGeometry(near: 0.5, far: 1.0, feather: 0)),
-        4,
-        1,
-        aiMap: map,
-      );
-      final descending = computeMaskAlpha(
-        depthMask(const DepthGeometry(near: 1.0, far: 0.5, feather: 0)),
-        4,
-        1,
-        aiMap: map,
-      );
-      expect(ascending, descending);
-    });
+    test(
+      'near and far are interchangeable — the band is the same either way',
+      () {
+        final map = rampMap([0, 96, 160, 255]);
+        final ascending = computeMaskAlpha(
+          depthMask(const DepthGeometry(near: 0.5, far: 1.0, feather: 0)),
+          4,
+          1,
+          aiMap: map,
+        );
+        final descending = computeMaskAlpha(
+          depthMask(const DepthGeometry(near: 1.0, far: 0.5, feather: 0)),
+          4,
+          1,
+          aiMap: map,
+        );
+        expect(ascending, descending);
+      },
+    );
 
     test('feather fades out over its own fraction of the depth range', () {
       // Band is 0.6..1.0 with a 0.2 fade, so depth 0.5 sits halfway down

@@ -427,4 +427,3 @@ class FullQualityRequest {
   /// editor did, or what you see is not what you get.
   final bool editEmbeddedJpeg;
 }
-

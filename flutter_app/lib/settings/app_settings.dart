@@ -200,8 +200,6 @@ class AppSettings {
   /// turning it off is the right answer.
   final bool presetThumbnails;
 
-
-
   /// How many thumbnails to decode concurrently when a folder is opened.
   final int thumbnailConcurrency;
 

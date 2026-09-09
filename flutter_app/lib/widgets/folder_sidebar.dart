@@ -211,7 +211,12 @@ class _SidebarSectionHeader extends StatelessWidget {
       // button is taller than the label and would otherwise make this
       // heading stand off from its neighbour.
       padding: const EdgeInsets.fromLTRB(12, 4, 2, 2),
-      child: Row(children: [Expanded(child: text), trailing!]),
+      child: Row(
+        children: [
+          Expanded(child: text),
+          trailing!,
+        ],
+      ),
     );
   }
 }

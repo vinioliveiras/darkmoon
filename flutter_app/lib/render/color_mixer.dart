@@ -49,6 +49,7 @@ class ColorMixerValues {
         luminance: (values['Mixer${name}Luminance'] ?? 0) * band,
       );
     }
+
     return ColorMixerValues(
       red: channel('Red'),
       orange: channel('Orange'),

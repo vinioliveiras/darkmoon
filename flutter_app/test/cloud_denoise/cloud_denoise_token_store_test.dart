@@ -19,24 +19,20 @@ void main() {
   // comments). `protectBytesForTesting`/`unprotectBytesForTesting` isolate
   // just the DPAPI round-trip, which has no such dependency.
   group('CloudDenoiseTokenStore DPAPI round-trip', () {
-    test(
-      'encrypting then decrypting recovers the exact original bytes',
-      () {
-        final plain = Uint8List.fromList(
-          utf8.encode('sk-a-real-looking-test-token-1234'),
-        );
-        final encrypted = CloudDenoiseTokenStore.protectBytesForTesting(plain);
-        expect(encrypted, isNotNull);
-        expect(encrypted, isNot(equals(plain)));
+    test('encrypting then decrypting recovers the exact original bytes', () {
+      final plain = Uint8List.fromList(
+        utf8.encode('sk-a-real-looking-test-token-1234'),
+      );
+      final encrypted = CloudDenoiseTokenStore.protectBytesForTesting(plain);
+      expect(encrypted, isNotNull);
+      expect(encrypted, isNot(equals(plain)));
 
-        final decrypted = CloudDenoiseTokenStore.unprotectBytesForTesting(
-          encrypted!,
-        );
-        expect(decrypted, isNotNull);
-        expect(utf8.decode(decrypted!), 'sk-a-real-looking-test-token-1234');
-      },
-      skip: !Platform.isWindows ? 'Windows-only (DPAPI)' : false,
-    );
+      final decrypted = CloudDenoiseTokenStore.unprotectBytesForTesting(
+        encrypted!,
+      );
+      expect(decrypted, isNotNull);
+      expect(utf8.decode(decrypted!), 'sk-a-real-looking-test-token-1234');
+    }, skip: !Platform.isWindows ? 'Windows-only (DPAPI)' : false);
 
     test('decrypting garbage bytes fails gracefully (returns null, does '
         'not throw)', () {
@@ -44,21 +40,17 @@ void main() {
       expect(CloudDenoiseTokenStore.unprotectBytesForTesting(garbage), isNull);
     }, skip: !Platform.isWindows ? 'Windows-only (DPAPI)' : false);
 
-    test(
-      'empty input round-trips too',
-      () {
-        final encrypted = CloudDenoiseTokenStore.protectBytesForTesting(
-          Uint8List(0),
-        );
-        expect(encrypted, isNotNull);
-        final decrypted = CloudDenoiseTokenStore.unprotectBytesForTesting(
-          encrypted!,
-        );
-        expect(decrypted, isNotNull);
-        expect(decrypted!.isEmpty, isTrue);
-      },
-      skip: !Platform.isWindows ? 'Windows-only (DPAPI)' : false,
-    );
+    test('empty input round-trips too', () {
+      final encrypted = CloudDenoiseTokenStore.protectBytesForTesting(
+        Uint8List(0),
+      );
+      expect(encrypted, isNotNull);
+      final decrypted = CloudDenoiseTokenStore.unprotectBytesForTesting(
+        encrypted!,
+      );
+      expect(decrypted, isNotNull);
+      expect(decrypted!.isEmpty, isTrue);
+    }, skip: !Platform.isWindows ? 'Windows-only (DPAPI)' : false);
   });
 
   group('CloudDenoiseTokenStore.read/write/delete', () {

@@ -287,17 +287,13 @@ class _SettingsDialogState extends State<SettingsDialog>
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             dense: true,
-            title: Text(
-              l10n.settingsPresetThumbnailsLabel,
-              style: _labelStyle,
-            ),
+            title: Text(l10n.settingsPresetThumbnailsLabel, style: _labelStyle),
             subtitle: Text(
               l10n.settingsPresetThumbnailsHint,
               style: _hintStyle,
             ),
             value: _settings.presetThumbnails,
-            onChanged: (v) =>
-                _update(_settings.copyWith(presetThumbnails: v)),
+            onChanged: (v) => _update(_settings.copyWith(presetThumbnails: v)),
           ),
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
@@ -346,7 +342,10 @@ class _SettingsDialogState extends State<SettingsDialog>
             contentPadding: EdgeInsets.zero,
             dense: true,
             title: Text(l10n.settingsEditEmbeddedJpegLabel, style: _labelStyle),
-            subtitle: Text(l10n.settingsEditEmbeddedJpegHint, style: _hintStyle),
+            subtitle: Text(
+              l10n.settingsEditEmbeddedJpegHint,
+              style: _hintStyle,
+            ),
             value: _settings.editEmbeddedJpeg,
             onChanged: (v) => _update(_settings.copyWith(editEmbeddedJpeg: v)),
           ),

@@ -52,11 +52,7 @@ void main() {
     final store = PresetThumbnailStore();
     addTearDown(store.dispose);
 
-    store.setSource(
-      signature: 'photo-1',
-      source: source(),
-      paramsFor: params,
-    );
+    store.setSource(signature: 'photo-1', source: source(), paramsFor: params);
     expect(store.hasSource, isTrue);
     expect(store.thumbnailFor('a'), isNull, reason: 'nothing asked for yet');
 

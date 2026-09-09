@@ -756,7 +756,9 @@ class OnnxModel {
     } finally {
       calloc.free(countOut);
     }
-    return [for (var i = 0; i < count; i++) _readIoName(input: input, index: i)];
+    return [
+      for (var i = 0; i < count; i++) _readIoName(input: input, index: i),
+    ];
   }
 
   String _readIoName({required bool input, int index = 0}) {
@@ -788,10 +790,7 @@ class OnnxModel {
       final name = nameOut.value.cast<Utf8>().toDartString();
       api.ref.AllocatorFree
           .asFunction<
-            Pointer<OrtStatus> Function(
-              Pointer<OrtAllocator>,
-              Pointer<Void>,
-            )
+            Pointer<OrtStatus> Function(Pointer<OrtAllocator>, Pointer<Void>)
           >()(allocator, nameOut.value.cast());
       return name;
     } finally {
@@ -1525,9 +1524,9 @@ class OnnxModel {
     } finally {
       if (info != nullptr) {
         api.ref.ReleaseTensorTypeAndShapeInfo
-            .asFunction<
-              void Function(Pointer<OrtTensorTypeAndShapeInfo>)
-            >()(info);
+            .asFunction<void Function(Pointer<OrtTensorTypeAndShapeInfo>)>()(
+          info,
+        );
       }
       calloc.free(infoOut);
     }

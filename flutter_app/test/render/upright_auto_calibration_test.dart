@@ -178,11 +178,7 @@ double? _fanOut(
     _h,
     CropTransformParams(vertical: vertical, horizontal: horizontal),
   );
-  return (
-    rgb: result.rgbBytes,
-    width: result.width,
-    height: result.height,
-  );
+  return (rgb: result.rgbBytes, width: result.width, height: result.height);
 }
 
 void main() {
@@ -225,7 +221,12 @@ void main() {
     }
 
     // What Auto itself would do, put through the real pass.
-    final correction = uprightFor(_luma(vertical, _w, _h), _w, _h, UprightMode.auto)!;
+    final correction = uprightFor(
+      _luma(vertical, _w, _h),
+      _w,
+      _h,
+      UprightMode.auto,
+    )!;
     final corrected = _apply(vertical, vertical: correction.vertical);
     final after = _fanOut(
       corrected.rgb,
@@ -314,7 +315,12 @@ void main() {
     final fan = _fanOut(parallel, _w, _h, verticals: true)!;
     expect(fan.abs(), lessThan(0.02));
 
-    final correction = uprightFor(_luma(parallel, _w, _h), _w, _h, UprightMode.auto);
+    final correction = uprightFor(
+      _luma(parallel, _w, _h),
+      _w,
+      _h,
+      UprightMode.auto,
+    );
     expect(
       correction?.vertical ?? 0,
       0,
@@ -331,7 +337,12 @@ void main() {
     // evidence — the evidence here is perfect. It is that a hillside
     // produces evidence just as perfect, and geometry cannot tell the
     // two apart. See uprightAutoFor.
-    final auto = uprightFor(_luma(horizontal, _w, _h), _w, _h, UprightMode.auto);
+    final auto = uprightFor(
+      _luma(horizontal, _w, _h),
+      _w,
+      _h,
+      UprightMode.auto,
+    );
     expect(auto?.horizontal ?? 0, 0);
   });
 
@@ -367,7 +378,13 @@ void main() {
           'this was written for',
     );
     expect(
-      uprightFor(_luma(hillside, _w, _h), _w, _h, UprightMode.auto)?.horizontal ?? 0,
+      uprightFor(
+            _luma(hillside, _w, _h),
+            _w,
+            _h,
+            UprightMode.auto,
+          )?.horizontal ??
+          0,
       0,
       reason: 'only declining the axis outright does',
     );

@@ -416,9 +416,7 @@ class _StyledDropdownMenuState<T> extends State<_StyledDropdownMenu<T>> {
                 ? (widget.alignRight
                       ? Alignment.bottomRight
                       : Alignment.bottomLeft)
-                : (widget.alignRight
-                      ? Alignment.topRight
-                      : Alignment.topLeft),
+                : (widget.alignRight ? Alignment.topRight : Alignment.topLeft),
             child: Material(
               color: Colors.transparent,
               child: Container(

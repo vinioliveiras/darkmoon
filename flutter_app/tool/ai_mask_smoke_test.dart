@@ -41,7 +41,8 @@ void main(List<String> args) {
   // Same working-resolution downscale the real resolver does, so the
   // numbers below are the ones the app will actually see.
   final scale =
-      aiMaskWorkingMaxDimension / (full.width > full.height ? full.width : full.height);
+      aiMaskWorkingMaxDimension /
+      (full.width > full.height ? full.width : full.height);
   final width = scale >= 1 ? full.width : (full.width * scale).round();
   final height = scale >= 1 ? full.height : (full.height * scale).round();
   final working = img.copyResize(full, width: width, height: height);
@@ -60,7 +61,13 @@ void main(List<String> args) {
   final outDir = Directory('build/ai_mask_smoke')..createSync(recursive: true);
 
   try {
-    _run('sky', outDir, width, height, () => runSkyMaskModel(rgb, width, height));
+    _run(
+      'sky',
+      outDir,
+      width,
+      height,
+      () => runSkyMaskModel(rgb, width, height),
+    );
     _run(
       'foreground',
       outDir,
@@ -68,12 +75,20 @@ void main(List<String> args) {
       height,
       () => runForegroundMaskModel(rgb, width, height),
     );
-    _run('depth', outDir, width, height, () => runDepthMapModel(rgb, width, height));
+    _run(
+      'depth',
+      outDir,
+      width,
+      height,
+      () => runDepthMapModel(rgb, width, height),
+    );
     _run('subject', outDir, width, height, () {
       final sw = Stopwatch()..start();
       final embedding = runSubjectEmbedding(rgb, width, height);
-      log('  encoder: ${sw.elapsedMilliseconds}ms, '
-          '${embedding.length} floats');
+      log(
+        '  encoder: ${sw.elapsedMilliseconds}ms, '
+        '${embedding.length} floats',
+      );
       return runSubjectMaskModel(
         embedding,
         SubjectGeometry(
@@ -136,9 +151,11 @@ void _run(
   }
   final mean = sum / map.data.length;
   final coverage = 100 * covered / map.data.length;
-  log('  ${elapsed}ms  ${map.width}x${map.height}  '
-      'min=$min max=$max mean=${mean.toStringAsFixed(1)}  '
-      'coverage=${coverage.toStringAsFixed(1)}%');
+  log(
+    '  ${elapsed}ms  ${map.width}x${map.height}  '
+    'min=$min max=$max mean=${mean.toStringAsFixed(1)}  '
+    'coverage=${coverage.toStringAsFixed(1)}%',
+  );
   if (min == max) {
     log('  WARNING: map is flat — the model produced no signal at all');
   }

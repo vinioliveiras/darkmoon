@@ -58,10 +58,7 @@ void main() {
 
   testWidgets("the camera's own image is not", (tester) async {
     expect(
-      await blurLayers(
-        tester,
-        PreviewFrame.placeholder(flatJpeg(1200)),
-      ),
+      await blurLayers(tester, PreviewFrame.placeholder(flatJpeg(1200))),
       0,
       reason:
           'softening it would hide the colour and contrast it is there to '
@@ -92,7 +89,10 @@ void main() {
       reason: 'the embedded preview is the default stand-in',
     );
     expect(
-      PreviewFrame.placeholder(Uint8List(0), isSmallStandIn: true).isPlaceholder,
+      PreviewFrame.placeholder(
+        Uint8List(0),
+        isSmallStandIn: true,
+      ).isPlaceholder,
       isTrue,
     );
   });

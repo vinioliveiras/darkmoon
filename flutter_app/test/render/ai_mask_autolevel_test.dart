@@ -75,10 +75,7 @@ void main() {
     test('ignores a 1% tail, so a few blown pixels cannot set the scale', () {
       // 99 mid-grey pixels and one blown white: the white must not become
       // the high anchor, or the stretch would be a no-op.
-      final input = ramp([
-        for (var i = 0; i < 99; i++) 100 + i ~/ 3,
-        255,
-      ]);
+      final input = ramp([for (var i = 0; i < 99; i++) 100 + i ~/ 3, 255]);
       final out = autoLevelForAiMask(input);
       expect(out.last, 255);
       // The real content still reached the top of the range.

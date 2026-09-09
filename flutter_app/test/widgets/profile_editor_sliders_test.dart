@@ -42,9 +42,7 @@ void main() {
             strength: 100,
             contrast: 80,
             photoPreview: (
-              rgb: Float32List.fromList(
-                List<double>.filled(4 * 4 * 3, 128.0),
-              ),
+              rgb: Float32List.fromList(List<double>.filled(4 * 4 * 3, 128.0)),
               width: 4,
               height: 4,
             ),
@@ -115,12 +113,12 @@ void main() {
     await pumpDialog(tester);
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     final dialog = tester.getRect(find.byType(AlertDialog));
-    for (final name in [l10n.presetAmountLabel, l10n.sliderColorProfileAmount]) {
+    for (final name in [
+      l10n.presetAmountLabel,
+      l10n.sliderColorProfileAmount,
+    ]) {
       final row = tester.getRect(
-        find.ancestor(
-          of: find.text(name),
-          matching: find.byType(SliderRow),
-        ),
+        find.ancestor(of: find.text(name), matching: find.byType(SliderRow)),
       );
       expect(
         row.bottom,

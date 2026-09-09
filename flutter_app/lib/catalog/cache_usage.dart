@@ -239,7 +239,6 @@ String formatCacheBytes(int bytes) {
       : '${value.round()} ${units[unit]}';
 }
 
-
 /// Arguments for [clearCacheCategories], which runs via `compute()`.
 class ClearCacheRequest {
   const ClearCacheRequest(this.documentsDir, this.categories);
@@ -253,10 +252,7 @@ class ClearCacheRequest {
   factory ClearCacheRequest.of(
     String documentsDir,
     Set<CacheCategory> categories,
-  ) => ClearCacheRequest(
-    documentsDir,
-    {for (final c in categories) c.name},
-  );
+  ) => ClearCacheRequest(documentsDir, {for (final c in categories) c.name});
 
   bool wants(CacheCategory category) => categories.contains(category.name);
 }

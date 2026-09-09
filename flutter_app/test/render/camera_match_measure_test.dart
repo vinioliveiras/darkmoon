@@ -103,7 +103,8 @@ void main() {
           'tone': [0.0, 0.5, 1.0],
         }),
         isNull,
-        reason: 'three points where the profile slot takes '
+        reason:
+            'three points where the profile slot takes '
             '$colorProfileTonePoints',
       );
     });

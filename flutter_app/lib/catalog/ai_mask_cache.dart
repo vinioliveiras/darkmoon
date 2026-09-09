@@ -41,8 +41,7 @@ String aiMaskCacheKey({
 /// resolution all at once, with no field that can be forgotten here when
 /// a new geometry stage is added over there. A few milliseconds against
 /// the seconds of inference it guards.
-String aiMaskFrameSignature(Uint8List rgb) =>
-    sha1.convert(rgb).toString();
+String aiMaskFrameSignature(Uint8List rgb) => sha1.convert(rgb).toString();
 
 File _entryFile(String cacheDir, String key, String extension) =>
     File(p.join(cacheDir, '$key.$extension'));
@@ -80,11 +79,7 @@ Future<AiMaskMap?> lookupAiMaskMap(String cacheDir, String key) async {
 /// image container, because nothing but this file ever reads it and a PNG
 /// encode/decode round trip would cost more than the disk it saves.
 /// tmp-then-rename, same crash-safety as `catalog_store.dart`.
-Future<void> storeAiMaskMap(
-  String cacheDir,
-  String key,
-  AiMaskMap map,
-) async {
+Future<void> storeAiMaskMap(String cacheDir, String key, AiMaskMap map) async {
   try {
     final out = Uint8List(8 + map.data.length);
     out.buffer.asUint32List(0, 2)
@@ -106,10 +101,7 @@ Future<void> storeAiMaskMap(
 /// prompt, because it depends on the photo alone: it costs ~3.5s to
 /// compute and ~4 MB to keep, and every later click or box on the same
 /// photo answers from it in well under a second.
-Future<Float32List?> lookupAiMaskEmbedding(
-  String cacheDir,
-  String key,
-) async {
+Future<Float32List?> lookupAiMaskEmbedding(String cacheDir, String key) async {
   try {
     final file = _entryFile(cacheDir, key, 'aiembed');
     if (!await file.exists()) {
@@ -134,10 +126,7 @@ Future<void> storeAiMaskEmbedding(
   try {
     final dest = _entryFile(cacheDir, key, 'aiembed');
     final tmp = File('${dest.path}.tmp');
-    await tmp.writeAsBytes(
-      Uint8List.sublistView(embedding),
-      flush: true,
-    );
+    await tmp.writeAsBytes(Uint8List.sublistView(embedding), flush: true);
     await tmp.rename(dest.path);
   } catch (_) {
     // Best-effort, as above.

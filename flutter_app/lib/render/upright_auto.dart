@@ -155,8 +155,7 @@ ConvergenceFit? fitConvergence(
 
   final slope = median(pairSlopes);
   final intercept = median([
-    for (var i = 0; i < positions.length; i++)
-      values[i] - slope * positions[i],
+    for (var i = 0; i < positions.length; i++) values[i] - slope * positions[i],
   ]);
   final residuals = [
     for (var i = 0; i < positions.length; i++)

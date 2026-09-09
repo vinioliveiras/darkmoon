@@ -99,14 +99,16 @@ void main() {
     expect(
       exact,
       isNotEmpty,
-      reason: 'with no exact entries left there is nothing here to check '
+      reason:
+          'with no exact entries left there is nothing here to check '
           '— the global factor alone is covered elsewhere',
     );
     for (final key in exact) {
       expect(
         withGlobalEditAmountApplied({amountKey: 100.0, key: 1.0})[key],
         closeTo(calGlobalAmountCompressionOverrides[key]!, 0.001),
-        reason: "'$key' must be scaled by its own entry, not the global "
+        reason:
+            "'$key' must be scaled by its own entry, not the global "
             'default',
       );
     }
@@ -166,8 +168,10 @@ void main() {
     // cannot quietly become "protect everything": these two are what the
     // Amount slider is for.
     for (final key in const ['VignetteAmount', 'GrainAmount']) {
-      final scaled =
-          withGlobalEditAmountApplied({amountKey: 100.0, key: 100.0})[key]!;
+      final scaled = withGlobalEditAmountApplied({
+        amountKey: 100.0,
+        key: 100.0,
+      })[key]!;
       expect(
         scaled,
         lessThan(100.0),

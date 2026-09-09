@@ -254,7 +254,12 @@ void main() {
 
     void expectFlat(String label, RenderParams base) {
       test(label, () {
-        final atOne = renderRgb(w, h, photo, base.withRenderScaleFor(1024, 683));
+        final atOne = renderRgb(
+          w,
+          h,
+          photo,
+          base.withRenderScaleFor(1024, 683),
+        );
         final atThree = renderRgb(
           w,
           h,
@@ -292,6 +297,9 @@ void main() {
       ),
     );
     // Always on, no slider — the one of the three a user cannot turn off.
-    expectFlat('baseline chroma smoothing', const RenderParams(baseContrast: 0));
+    expectFlat(
+      'baseline chroma smoothing',
+      const RenderParams(baseContrast: 0),
+    );
   });
 }

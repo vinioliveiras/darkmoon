@@ -32,7 +32,6 @@ void main() {
         reason: 'a duplicate entry would be two identical dropdown rows',
       );
     });
-
   });
 
   group('AppSettings.tabbedControlsPanelIcons', () {

@@ -328,7 +328,10 @@ DetectedLine _refine(
   var sxy = 0.0;
 
   void consider(int x, int y) {
-    if (x < margin || y < margin || x >= width - margin || y >= height - margin) {
+    if (x < margin ||
+        y < margin ||
+        x >= width - margin ||
+        y >= height - margin) {
       return;
     }
     final i = y * width + x;
@@ -405,8 +408,7 @@ DetectedLine _refine(
   final refinedRadians = refinedTheta * math.pi / 180.0;
   return DetectedLine(
     thetaDeg: refinedTheta,
-    rho:
-        meanX * math.cos(refinedRadians) + meanY * math.sin(refinedRadians),
+    rho: meanX * math.cos(refinedRadians) + meanY * math.sin(refinedRadians),
     strength: line.strength,
   );
 }

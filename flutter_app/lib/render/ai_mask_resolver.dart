@@ -141,7 +141,11 @@ Future<AiMaskResolveResult> resolveAiMaskMaps(
       if (cached != null) {
         return embedding = cached;
       }
-      final computed = runSubjectEmbedding(frame.rgb, frame.width, frame.height);
+      final computed = runSubjectEmbedding(
+        frame.rgb,
+        frame.width,
+        frame.height,
+      );
       await storeAiMaskEmbedding(request.cacheDir, key, computed);
       return embedding = computed;
     }

@@ -2204,12 +2204,11 @@ class _EditorScreenState extends State<EditorScreen>
   /// was opened before*; a write still sitting in memory when the window
   /// closes breaks that promise silently, and only for the photos opened
   /// last.
-  Iterable<ThumbnailCacheManager> get _batchedCaches =>
-      [
-        _thumbnailCache,
-        _previewCache,
-        _cameraMatchCache,
-      ].whereType<ThumbnailCacheManager>();
+  Iterable<ThumbnailCacheManager> get _batchedCaches => [
+    _thumbnailCache,
+    _previewCache,
+    _cameraMatchCache,
+  ].whereType<ThumbnailCacheManager>();
 
   Future<void> _loadEdits() async {
     final edits = await loadCatalog();
