@@ -13,6 +13,14 @@ import 'package:darkmoon/render/render_params.dart';
 /// says "no profile". Most visible in embedded-JPEG mode, where the camera
 /// had already made those decisions and there was nothing left to stand in
 /// for: the image came out with contrast nobody asked for (2026-09-09).
+///
+/// It read as a *saturation* problem first, which is what makes it worth
+/// recording. An S-curve steepens each channel independently, so it pushes
+/// them apart: measured on two X-T5 embedded JPEGs, mean saturation went
+/// 0.373 -> 0.539 and 0.289 -> 0.399, a 38-45% rise. The filmstrip
+/// thumbnail never goes through the render, so it kept the camera's
+/// saturation and the two visibly disagreed. At baseContrast 0 the render
+/// lands on 0.373 and 0.289 — the source values.
 void main() {
   test('Default carries no baseline contrast of its own', () {
     expect(ColorProfileMode.darkmoonDefault.contrastBaseline, 0);
