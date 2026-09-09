@@ -61,7 +61,7 @@ library;
 ///     values
 ///   ↓ lower  = default Amount (100%) renders gentler
 /// default: 0.3   (original/unset: 1.0 — Amount was a 1:1 pass-through)
-const double calGlobalAmountCompression = 0.30;
+const double calGlobalAmountCompression = 1.0;
 
 /// Per-slider override of [calGlobalAmountCompression] — a slider key
 /// present here (matching its `_SliderSpec` name in `editor_screen.dart`,
@@ -78,24 +78,24 @@ const double calGlobalAmountCompression = 0.30;
 /// reads through it for every key.
 const Map<String, double> calGlobalAmountCompressionOverrides = {
   'ColorProfileAmount': 1.0,
-  'Exposure': 3.0,
+  'Exposure': 2.0,
   'Contrast': 0.5,
-  'Shadows': 0.6,
-  'Blacks': 0.6,
+  'Shadows': 0.5,
+  'Blacks': 0.5,
   // Added 2026-09-09. These two were the only Basic tonal sliders with no
   // entry, so they alone fell through to the global fraction while their
   // four neighbours were protected — the shape of a list filled in a few
   // at a time, not of a decision. Measured on a real frame over the tones
   // each governs, at the slider's maximum: Highlights moved 1.75 levels
   // where Shadows moved 10.4. At 0.6 it moves about 3.5.
-  'Highlights': 0.6,
-  'Whites': 0.6,
-  'Vibrance': 0.8,
-  'Saturation': 0.5,
-  'Dehaze': 0.3,
-  'Clarity': 0.6,
+  'Highlights': 0.5,
+  'Whites': 0.5,
+  'Vibrance': 1.0,
+  'Saturation': 0.8,
+  'Dehaze': 0.4,
+  'Clarity': 0.5,
   // Same gap in PRESENCE: Clarity and Dehaze had entries, Texture did not.
-  'Texture': 0.6,
+  'Texture': 0.5,
   // ── Shape, not amount (2026-09-09) ──────────────────────────────────
   //
   // The Amount slider answers "how much of this edit", and these are not
@@ -138,8 +138,8 @@ const Map<String, double> calGlobalAmountCompressionOverrides = {
   // saved preset, assumes them at full strength. Damping them now would
   // quietly restyle the whole library. They are live and tunable from
   // here; changing them is a deliberate act, not a default.
-  'Mixer': 1.0,
-  'Grade': 1.0,
+  'Mixer': 0.5,
+  'Grade': 0.5,
   // Real bug found 2026-09-02: dragging the "Color Profile Contrast"
   // slider (ColorProfileAmount) barely changed the render even across
   // its full range, because it fell back to the global 0.3 fraction like
