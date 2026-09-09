@@ -75,16 +75,30 @@ void main() {
     expect(half[key], closeTo(full[key]! / 2, 0.001));
   });
 
-  test('neither family is damped at full Amount', () {
-    // They were unreachable until now, so every saved preset assumes them
-    // at full strength. Damping them would restyle the library.
-    for (final key in const ['MixerRedHue', 'GradeShadowsSaturation']) {
+  /// One real slider key per family, for the family-fallback checks.
+  /// 'GradeRedHue' is not a grading slider — the grading keys are
+  /// GradeShadowsSaturation and friends — and a made-up key falls outside
+  /// the slider's reach entirely, which is not what a fallback test wants
+  /// to measure.
+  const familyMember = {
+    'Mixer': 'MixerRedHue',
+    'Grade': 'GradeShadowsSaturation',
+  };
+
+  test('at full Amount each family is scaled by its own entry, or passes '
+      'through when it has none', () {
+    // Whatever calibration.dart says the family factor is — 1.0 while the
+    // families were left at full strength for the preset library, 0.5
+    // since the 2026-09-09 recalibration — this reads it rather than
+    // pinning a number the tuning surface is meant to change.
+    familyMember.forEach((family, key) {
+      final factor = calGlobalAmountCompressionOverrides[family] ?? 1.0;
       expect(
         withGlobalEditAmountApplied({amountKey: 100.0, key: 40.0})[key],
-        closeTo(40.0, 0.001),
-        reason: '$key must pass through untouched at Amount 100%',
+        closeTo(40.0 * factor, 0.001),
+        reason: "'$key' must follow the '$family' entry ($factor)",
       );
-    }
+    });
   });
 
   test('every exact entry is the factor its own key is scaled by', () {
@@ -125,7 +139,7 @@ void main() {
       if (compression == null) {
         continue;
       }
-      final key = '${family}RedHue';
+      final key = familyMember[family]!;
       expect(
         withGlobalEditAmountApplied({amountKey: 100.0, key: 1.0})[key],
         closeTo(compression, 0.001),
@@ -166,17 +180,25 @@ void main() {
   test('an amount still is', () {
     // The other side of the same rule, so "protect the shape parameters"
     // cannot quietly become "protect everything": these two are what the
-    // Amount slider is for.
+    // Amount slider is for. Checked at half Amount, not full: whether an
+    // amount is *damped* at 100% is calibration.dart's call (the global
+    // fraction has been 0.3 and is 1.0 today); whether the slider reaches
+    // it at all is the rule this test protects.
     for (final key in const ['VignetteAmount', 'GrainAmount']) {
-      final scaled = withGlobalEditAmountApplied({
+      final full = withGlobalEditAmountApplied({
         amountKey: 100.0,
         key: 100.0,
       })[key]!;
+      final half = withGlobalEditAmountApplied({
+        amountKey: 50.0,
+        key: 100.0,
+      })[key]!;
       expect(
-        scaled,
-        lessThan(100.0),
+        half,
+        lessThan(full),
         reason: "'$key' is an amount and has to scale with Amount",
       );
+      expect(half, closeTo(full / 2, 0.001));
     }
   });
 
