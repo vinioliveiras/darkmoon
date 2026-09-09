@@ -46,11 +46,10 @@ const List<int> previewResolutionOptions = [
 /// What [AppSettings.previewResolution] starts at.
 ///
 /// Not [nativePreviewResolution]: a modern sensor's own resolution is a
-/// lot of pixels to re-render on every slider move, and past a couple of
-/// thousand on the long edge the editing preview is already sharper than
-/// the viewport can show. Native stays one dropdown entry away for anyone
-/// who wants it.
-const int defaultPreviewResolution = 2048;
+/// lot of pixels to re-render on every slider move, and a few thousand on
+/// the long edge is already past what the viewport can show. Native stays
+/// one dropdown entry away for anyone who wants it.
+const int defaultPreviewResolution = 3072;
 
 /// The [AppSettings.previewResolution] value meaning "do not downscale at
 /// all" — edit against the sensor's own resolution.

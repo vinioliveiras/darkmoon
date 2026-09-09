@@ -4,7 +4,7 @@ import 'package:darkmoon/settings/app_settings.dart';
 
 void main() {
   group('preview resolution', () {
-    test('defaults to 2048', () {
+    test('defaults to 3072', () {
       expect(const AppSettings().previewResolution, defaultPreviewResolution);
       expect(
         previewResolutionOptions,
