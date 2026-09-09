@@ -37,7 +37,7 @@ import 'native/edit_source.dart';
 import 'native/edit_source_ai_enhance.dart';
 import 'native/edit_source_cloud_denoise.dart';
 import 'native/edit_source_colorize.dart';
-import 'native/libraw.dart' show RawMetadata, extractRawMetadata;
+import 'native/libraw.dart'    show RawMetadata, extractRawMetadata, extractRawThumbnailJpeg;
 import 'native/thumbnail_loader.dart';
 import 'presets/preset.dart';
 import 'presets/preset_thumbnails.dart';
@@ -859,17 +859,38 @@ SingleActivator _cmdShortcut(LogicalKeyboardKey key, {bool shift = false}) =>
 /// [image] is a finished render's own pixels, uploaded straight from the
 /// pipeline's output buffer — no JPEG encode on the way out and no decode
 /// on the way in (see `render_job.dart`'s `RenderResult.previewRgba` for
-/// what that round trip used to cost). [jpegBytes] is the small filmstrip
-/// thumbnail standing in while that render is still pending; it stays a
-/// JPEG because that is what the on-disk thumbnail cache holds.
+/// Width the camera's embedded preview is decoded at.
+///
+/// Comfortably above the 1024px the editor renders for editing, so the
+/// stand-in is never the softer of the two, and far below the 4416px the
+/// file actually holds — decoding that in full costs about 52 MB for
+/// something a render replaces within a second or two.
+const int _embeddedPreviewDecodeWidth = 2048;
+
+/// what that round trip used to cost). [jpegBytes] is the stand-in shown
+/// while that render is still pending — the camera's own embedded preview
+/// where the RAW carries one, the small filmstrip thumbnail otherwise. It
+/// stays a JPEG because that is the form both of those arrive in.
 @immutable
 class PreviewFrame {
-  const PreviewFrame.rendered(ui.Image this.image) : jpegBytes = null;
+  const PreviewFrame.rendered(ui.Image this.image)
+    : jpegBytes = null,
+      decodeWidth = null;
 
-  const PreviewFrame.placeholder(Uint8List this.jpegBytes) : image = null;
+  const PreviewFrame.placeholder(Uint8List this.jpegBytes, {this.decodeWidth})
+    : image = null;
 
   final ui.Image? image;
   final Uint8List? jpegBytes;
+
+  /// Caps the width [jpegBytes] is decoded at.
+  ///
+  /// The embedded preview is 4416px wide on the files this was measured
+  /// against, which decodes to about 52 MB — spent on every selection
+  /// while browsing, for something the render replaces in a second or
+  /// two. Null for the filmstrip thumbnail, which is 200px and would be
+  /// upscaled by a cap rather than saved by one.
+  final int? decodeWidth;
 
   /// True while this is the thumbnail stand-in rather than a real render —
   /// the canvas blurs it so it visibly reads as "not the real thing yet".
@@ -920,7 +941,12 @@ Widget _previewFrameWidget(PreviewFrame frame, {BoxFit? fit}) {
       filterQuality: FilterQuality.medium,
     );
   }
-  return Image.memory(frame.jpegBytes!, fit: fit, gaplessPlayback: true);
+  return Image.memory(
+    frame.jpegBytes!,
+    fit: fit,
+    gaplessPlayback: true,
+    cacheWidth: frame.decodeWidth,
+  );
 }
 
 class _EditSnapshot {
@@ -990,6 +1016,20 @@ class _EditorScreenState extends State<EditorScreen>
   String? _currentSingleFile;
   final Map<String, Uint8List> _thumbnails = {};
   final Map<String, EditSourcePair> _editSources = {};
+
+  /// The camera's own JPEG, lifted whole out of each RAW.
+  ///
+  /// Every RAW already carries one, and it is not a thumbnail: on the
+  /// X-T5 files this was measured against it is 4416x2944, against a
+  /// 7752x5178 sensor — larger than the 1024px preview the editor renders
+  /// for editing and larger than the full-quality one. The filmstrip was
+  /// already extracting it and throwing all but 200 pixels away.
+  ///
+  /// Shown while the RAW decodes, in place of that 200px thumbnail. It is
+  /// the camera's rendering rather than ours, so it is a stand-in and not
+  /// the edit, but it is a sharp, correctly-coloured stand-in that arrives
+  /// in a fraction of the time.
+  final Map<String, Uint8List> _embeddedPreviews = {};
 
   /// The light preview-resolution render per photo — kept fresh by every
   /// settled render (phase 1). What the canvas shows when the dynamic
@@ -1065,6 +1105,7 @@ class _EditorScreenState extends State<EditorScreen>
     }
 
     _editSources.removeWhere((path, _) => !window.contains(path));
+    _embeddedPreviews.removeWhere((path, _) => !window.contains(path));
     _histograms.removeWhere((path, _) => !window.contains(path));
     _evictImages(_renderedPreviews, window);
     _evictImages(_fullQualityPreviews, {selectedPath});
@@ -3437,6 +3478,10 @@ class _EditorScreenState extends State<EditorScreen>
     // ones we've navigated away from were still holding.
     _trimPhotoCaches();
     unawaited(_saveLastActiveFile(path));
+    // Started before the decode and not awaited: reading a JPEG that is
+    // already in the file takes a fraction of what demosaicing the sensor
+    // does, so this is what the viewport shows for most of the wait.
+    unawaited(_loadEmbeddedPreview(path));
     unawaited(_loadEditSourceAndRender(path, _folderGeneration));
     if (_beforeAfterMode && !_neutralPreviews.containsKey(path)) {
       unawaited(_loadNeutralPreview(path));
@@ -5830,6 +5875,34 @@ class _EditorScreenState extends State<EditorScreen>
     );
   }
 
+  /// Reads the camera's own JPEG out of [path] into [_embeddedPreviews].
+  ///
+  /// Cheap next to a RAW decode and worth doing on every selection: it is
+  /// what stands in for the render while that decode runs, and it is
+  /// several times sharper than the filmstrip thumbnail that used to hold
+  /// that place.
+  ///
+  /// Silent on failure. Not every RAW carries a JPEG preview, and one that
+  /// does not simply keeps the old stand-in rather than reporting anything
+  /// — nothing here is the photograph, only what is shown while the real
+  /// one is on its way.
+  Future<void> _loadEmbeddedPreview(String path) async {
+    if (_embeddedPreviews.containsKey(path) || !isRawFile(path)) {
+      return;
+    }
+    final bytes = await compute(extractRawThumbnailJpeg, path);
+    if (bytes == null || !mounted) {
+      return;
+    }
+    // The photo can be switched while this runs; keeping it is still
+    // right (the cache is keyed by path and trimmed by proximity), but it
+    // must not be allowed to redraw a viewport that has moved on.
+    _embeddedPreviews[path] = bytes;
+    if (_selectedIndex != null && _files[_selectedIndex!].path == path) {
+      setState(() {});
+    }
+  }
+
   /// The neutral preview as luma, for [_levelPhoto] and [_uprightAuto].
   ///
   /// Box-averaged down rather than point-sampled. Nearest-neighbour would
@@ -7520,9 +7593,25 @@ class _EditorScreenState extends State<EditorScreen>
                                   fileMissing:
                                       selected != null &&
                                       _missingFiles.contains(selected.path),
+                                  // The embedded preview when it has been
+                                  // read, the 200px filmstrip thumbnail
+                                  // until then — the second is instant
+                                  // because the strip already had it.
+                                  // The embedded preview once it has been
+                                  // read, the 200px filmstrip thumbnail
+                                  // until then — the second is instant
+                                  // because the strip already had it.
                                   thumbnail: selected == null
                                       ? null
-                                      : _thumbnails[selected.path],
+                                      : _embeddedPreviews[selected.path] ??
+                                            _thumbnails[selected.path],
+                                  thumbnailDecodeWidth:
+                                      selected != null &&
+                                          _embeddedPreviews.containsKey(
+                                            selected.path,
+                                          )
+                                      ? _embeddedPreviewDecodeWidth
+                                      : null,
                                   preview: selected == null
                                       ? null
                                       : _displayPreview(selected.path),
@@ -7827,6 +7916,7 @@ class _ImageArea extends StatelessWidget {
     required this.selected,
     required this.fileMissing,
     required this.thumbnail,
+    required this.thumbnailDecodeWidth,
     required this.preview,
     required this.neutralPreview,
     required this.beforeAfterMode,
@@ -7871,6 +7961,10 @@ class _ImageArea extends StatelessWidget {
   final bool fileMissing;
 
   final Uint8List? thumbnail;
+
+  /// Caps how wide [thumbnail] is decoded — set only when it is the
+  /// camera's embedded preview, which is several thousand pixels wide.
+  final int? thumbnailDecodeWidth;
 
   /// The current render for [selected], already uploaded as a `ui.Image`
   /// (see [PreviewFrame]) — null while it is still being produced, in
@@ -8096,7 +8190,10 @@ class _ImageArea extends StatelessWidget {
     if (rendered != null) {
       frame = PreviewFrame.rendered(rendered);
     } else if (placeholder != null) {
-      frame = PreviewFrame.placeholder(placeholder);
+      frame = PreviewFrame.placeholder(
+        placeholder,
+        decodeWidth: thumbnailDecodeWidth,
+      );
     } else {
       return Text(
         l10n.decodingPhoto(selected!.name),
