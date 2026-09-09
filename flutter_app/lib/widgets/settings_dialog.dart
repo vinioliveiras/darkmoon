@@ -346,7 +346,12 @@ class _SettingsDialogState extends State<SettingsDialog>
                     width: 170,
                     items: [
                       for (final size in previewResolutionOptions)
-                        StyledDropdownItem(value: size, label: '$size px'),
+                        StyledDropdownItem(
+                          value: size,
+                          label: size == nativePreviewResolution
+                              ? l10n.settingsPreviewResolutionNative
+                              : '$size px',
+                        ),
                     ],
                     onChanged: (value) =>
                         _update(_settings.copyWith(previewResolution: value)),

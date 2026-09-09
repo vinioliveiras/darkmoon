@@ -114,7 +114,12 @@ EditSourcePair? decodeEditSources(
     numChannels: 3,
     order: img.ChannelOrder.rgb,
   );
-  final previewImage = fitToMaxDimension(full, previewMaxDimension);
+  // Zero means native: no cap at all, so the editing buffer is the
+  // sensor's own resolution. fitToMaxDimension would read a zero as
+  // "shrink to nothing", so it never sees one.
+  final previewImage = previewMaxDimension <= 0
+      ? full
+      : fitToMaxDimension(full, previewMaxDimension);
   final liveImage = fitToMaxDimension(previewImage, livePreviewMaxDimension);
   return EditSourcePair(
     baseExposureStops: decoded.baseExposureStops,

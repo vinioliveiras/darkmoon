@@ -3,6 +3,44 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:darkmoon/settings/app_settings.dart';
 
 void main() {
+  group('preview resolution', () {
+    test('defaults to native', () {
+      expect(const AppSettings().previewResolution, nativePreviewResolution);
+      expect(
+        previewResolutionOptions,
+        contains(nativePreviewResolution),
+        reason: 'the default has to be offered by the dropdown too',
+      );
+    });
+
+    test('the dynamic full-quality render defaults to the whole sensor', () {
+      expect(const AppSettings().fullQualityPercent, 100);
+    });
+
+    test('native is never reported as capped by the preview', () {
+      // The warning exists to explain a full-quality render coming out at
+      // the preview's resolution. Native is not a floor under it — it is
+      // already the ceiling — so saying so would be nonsense.
+      final result = fullQualityWorkingLongEdge(
+        nativeLongEdge: 7752,
+        fullQualityPercent: 10,
+        previewResolution: nativePreviewResolution,
+      );
+      expect(result.cappedByPreview, isFalse);
+      expect(result.longEdge, 775);
+    });
+
+    test('a real cap still floors the full-quality render', () {
+      final result = fullQualityWorkingLongEdge(
+        nativeLongEdge: 4000,
+        fullQualityPercent: 10,
+        previewResolution: 1024,
+      );
+      expect(result.cappedByPreview, isTrue);
+      expect(result.longEdge, 1024);
+    });
+  });
+
   group('AppSettings.tabbedControlsPanelIcons', () {
     test('defaults to words', () {
       expect(const AppSettings().tabbedControlsPanelIcons, isFalse);

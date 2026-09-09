@@ -4164,6 +4164,12 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   void _maybeArmFullQualityDecode(String path) {
+    // Nothing to upgrade to when the editing buffer is already the
+    // sensor's own resolution: arming here would decode the RAW a second
+    // time to arrive at the same pixels it is already rendering.
+    if (_settings.previewResolution == nativePreviewResolution) {
+      return;
+    }
     if (!_settings.dynamicFullPreview ||
         _activeMaskId != imageMaskId ||
         _cropOverlayActive ||

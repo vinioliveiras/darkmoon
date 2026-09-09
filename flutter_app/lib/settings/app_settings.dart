@@ -6,7 +6,6 @@ import 'package:path_provider/path_provider.dart';
 
 import '../catalog/legacy_filename_migration.dart';
 import '../diagnostics/dev_log.dart';
-import '../native/edit_source.dart' show defaultPreviewMaxDimension;
 
 /// Leave at least two cores for the UI isolate and the preview-cache
 /// prewarm that runs alongside this batch when a folder opens — pinning
@@ -30,7 +29,23 @@ const _maxRecentFiles = 15;
 /// always decodes at the sensor's native resolution regardless of this
 /// setting, so this only trades editing-preview sharpness for decode/
 /// render speed, never final output quality.
-const List<int> previewResolutionOptions = [512, 768, 1024, 1280, 1600, 2048];
+const List<int> previewResolutionOptions = [
+  nativePreviewResolution,
+  2048,
+  1600,
+  1280,
+  1024,
+  768,
+  512,
+];
+
+/// The [AppSettings.previewResolution] value meaning "do not downscale at
+/// all" — edit against the sensor's own resolution.
+///
+/// Zero rather than a large number, so it cannot be mistaken for a cap
+/// that merely happens to be above every sensor. Every consumer has to
+/// branch on it; [fitToMaxDimension] would read it as "shrink to nothing".
+const int nativePreviewResolution = 0;
 
 /// The long-edge resolution a full-quality settled render actually runs
 /// at for a photo whose native long edge is [nativeLongEdge] — and whether
@@ -48,7 +63,11 @@ const List<int> previewResolutionOptions = [512, 768, 1024, 1280, 1600, 2048];
   required int previewResolution,
 }) {
   final requested = (nativeLongEdge * fullQualityPercent / 100).round();
-  final cappedByPreview = requested < previewResolution;
+  // Native is not a floor: it already *is* the ceiling, so a full-quality
+  // render can never come out below it and the warning would be nonsense.
+  final cappedByPreview =
+      previewResolution != nativePreviewResolution &&
+      requested < previewResolution;
   var target = cappedByPreview ? previewResolution : requested;
   if (target > nativeLongEdge) {
     target = nativeLongEdge;
@@ -63,13 +82,13 @@ class AppSettings {
   const AppSettings({
     this.language = 'auto',
     this.fastPreview = true,
-    this.previewResolution = defaultPreviewMaxDimension,
+    this.previewResolution = nativePreviewResolution,
     this.useGpuRender = true,
     this.tabbedControlsPanel = true,
     this.tabbedControlsPanelIcons = false,
     this.presetThumbnails = true,
     this.dynamicFullPreview = true,
-    this.fullQualityPercent = 40,
+    this.fullQualityPercent = 100,
     this.thumbnailConcurrency = 4,
     this.rawOnly = false,
     this.includeSubfolders = false,

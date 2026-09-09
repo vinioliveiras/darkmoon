@@ -1102,6 +1102,12 @@ abstract class AppLocalizations {
   /// **'Preview resolution'**
   String get settingsPreviewResolutionLabel;
 
+  /// No description provided for @settingsPreviewResolutionNative.
+  ///
+  /// In en, this message translates to:
+  /// **'Native'**
+  String get settingsPreviewResolutionNative;
+
   /// No description provided for @settingsPreviewResolutionHint.
   ///
   /// In en, this message translates to:

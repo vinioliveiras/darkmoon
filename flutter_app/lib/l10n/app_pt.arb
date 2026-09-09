@@ -168,6 +168,7 @@
   "settingsLanguageGerman": "Alemão",
   "settingsFastPreviewLabel": "Preview rápido ao arrastar os sliders",
   "settingsPreviewResolutionLabel": "Resolução do preview",
+  "settingsPreviewResolutionNative": "Nativa",
   "settingsPreviewResolutionHint": "Quanto menor, mais rápido para abrir e editar fotos; a exportação sempre usa a resolução total do sensor",
   "settingsRawOnlyLabel": "Somente arquivos RAW",
   "settingsIncludeSubfoldersLabel": "Imagens em subpastas",

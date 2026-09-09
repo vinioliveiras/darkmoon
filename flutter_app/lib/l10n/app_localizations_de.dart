@@ -564,6 +564,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get settingsPreviewResolutionLabel => 'Vorschauauflösung';
 
   @override
+  String get settingsPreviewResolutionNative => 'Nativ';
+
+  @override
   String get settingsPreviewResolutionHint =>
       'Niedriger ist schneller beim Öffnen und Bearbeiten von Fotos; der Export verwendet immer die volle Sensorauflösung';
 
