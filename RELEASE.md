@@ -141,10 +141,12 @@ gh api repos/vinioliveiras/darkmoon/releases/latest --jq .tag_name
 
 ### 6.5 What the runners cannot check
 
-Hosted runners have no GPU. The workflows' smoke tests prove the shipped
-libraries load and run inference, but their provider line reads CPU. The
-"reports DirectML" check in section 8 is therefore still a local one:
-download the Windows zip, and run
+Hosted runners have no real GPU. The workflows' smoke tests prove the
+shipped libraries load and run inference; the Windows one reported
+`provider: WebGPU (gpu=true)` for v1.11.0, which is Dawn on D3D12's
+software adapter, not DirectML on a graphics card. The "reports DirectML"
+check in section 8 is therefore still a local one: download the Windows
+zip, and run
 
 ```bash
 BUNDLE=".../darkmoon"   # the extracted zip
