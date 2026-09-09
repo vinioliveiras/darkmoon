@@ -10,9 +10,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
 import 'animations_config.dart';
+import 'catalog/cache_usage.dart';
 import 'catalog/catalog_store.dart';
 import 'catalog/curve_store.dart';
 import 'catalog/ai_mask_cache_dir.dart';
@@ -1862,6 +1864,7 @@ class _EditorScreenState extends State<EditorScreen>
     unawaited(_loadSettings());
     unawaited(_loadThumbnailCache());
     unawaited(_loadCameraMatchCache());
+    unawaited(_loadCacheRoot());
     unawaited(_loadLensProfiles());
     unawaited(cleanupStalePreviewCacheVersions());
     if (_colorProfileEnabled) {
@@ -1937,8 +1940,86 @@ class _EditorScreenState extends State<EditorScreen>
     await cache.store(path, Uint8List.fromList(jpegBytes));
     await cache.flush();
     if (dir != null) {
-      await evictNativeSourceCache(dir);
+      // The sweep governs the whole previews tree now, not this
+      // directory alone — a full-resolution source and a preview compete
+      // for the same ceiling, so trimming them separately would let the
+      // total sit at the sum of two caps.
+      _scheduleCacheSweep();
     }
+  }
+
+  /// Where every rebuildable cache lives — resolved once, since the
+  /// storage meter and the sweep both need it and neither can call
+  /// path_provider from an isolate.
+  String? _cacheRoot;
+
+  /// What the caches occupy, for the Settings storage meter. Null until
+  /// measured; re-measured whenever something changes it.
+  CacheUsage? _cacheUsage;
+
+  Future<void> _loadCacheRoot() async {
+    final dir = await getApplicationDocumentsDirectory();
+    if (!mounted) {
+      return;
+    }
+    _cacheRoot = dir.path;
+    // Directories abandoned by a decode-format bump are dead on arrival —
+    // never a valid hit again — and nothing had ever deleted them. This
+    // function has existed unused since it was written.
+    unawaited(cleanupStalePreviewCacheVersions());
+    await _sweepCaches();
+  }
+
+  Timer? _cacheSweepTimer;
+
+  /// How long after the last cache write the sweep runs.
+  ///
+  /// Long, deliberately. The sweep walks the whole cache tree, and every
+  /// photo opened in a browsing session writes to that tree — running it
+  /// per write would spend more time counting the cache than filling it,
+  /// and the limit is a ceiling to stay under, not a quota to enforce to
+  /// the byte.
+  static const _cacheSweepDelay = Duration(seconds: 30);
+
+  void _scheduleCacheSweep() {
+    _cacheSweepTimer?.cancel();
+    _cacheSweepTimer = Timer(_cacheSweepDelay, () {
+      unawaited(_sweepCaches());
+    });
+  }
+
+  /// Trims the rebuildable caches to [AppSettings.cacheMaxBytes] and
+  /// re-measures what is left.
+  ///
+  /// Runs on a background isolate: it walks the whole cache tree, which on
+  /// a large library is thousands of files, and doing that on the UI
+  /// isolate would stutter the frame pump for the same reason a render
+  /// does.
+  Future<void> _sweepCaches() async {
+    final root = _cacheRoot;
+    if (root == null) {
+      return;
+    }
+    if (_settings.cacheMaxBytes != unlimitedCacheBytes) {
+      await compute(
+        enforceCacheLimit,
+        CacheLimitRequest(root, _settings.cacheMaxBytes),
+      );
+      await compute(removeEmptyCacheDirs, root);
+    }
+    await _refreshCacheUsage();
+  }
+
+  Future<void> _refreshCacheUsage() async {
+    final root = _cacheRoot;
+    if (root == null) {
+      return;
+    }
+    final usage = await compute(measureCacheUsage, root);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _cacheUsage = usage);
   }
 
   /// Loads the bundled lens correction database (a few MB JSON asset) --
@@ -2502,6 +2583,7 @@ class _EditorScreenState extends State<EditorScreen>
       context: context,
       builder: (_) => SettingsDialog(
         settings: _settings,
+        cacheUsage: _cacheUsage,
         nativeWidth: selectedMeta?.width,
         nativeHeight: selectedMeta?.height,
         onChanged: (next) {
@@ -2522,6 +2604,8 @@ class _EditorScreenState extends State<EditorScreen>
           final previewResolutionChanged =
               next.previewResolution != _settings.previewResolution ||
               next.editEmbeddedJpeg != _settings.editEmbeddedJpeg;
+          final cacheLimitChanged =
+              next.cacheMaxBytes != _settings.cacheMaxBytes;
           setState(() {
             _settings = next;
             if (previewResolutionChanged) {
@@ -2529,6 +2613,12 @@ class _EditorScreenState extends State<EditorScreen>
             }
           });
           unawaited(saveSettings(next));
+          // A limit the user just lowered has to bite now, not on the
+          // next launch — the meter is right there and would otherwise
+          // sit above it, contradicting the setting beside it.
+          if (cacheLimitChanged) {
+            unawaited(_sweepCaches());
+          }
           if (previewResolutionChanged) {
             unawaited(_loadPreviewCache());
             final selected = _selectedIndex == null
@@ -2557,6 +2647,10 @@ class _EditorScreenState extends State<EditorScreen>
       return;
     }
     setState(() => _thumbnails.clear());
+    // The meter is very likely on screen right now — Settings is where
+    // this button lives — so leaving it reporting the space that was just
+    // reclaimed would read as the button having done nothing.
+    unawaited(_refreshCacheUsage());
     if (_files.isNotEmpty) {
       unawaited(_loadThumbnails(_files, _folderGeneration));
     }
@@ -2651,6 +2745,7 @@ class _EditorScreenState extends State<EditorScreen>
   void dispose() {
     _renderDebounceTimer?.cancel();
     _catalogSaveTimer?.cancel();
+    _cacheSweepTimer?.cancel();
     _slowRenderTimer?.cancel();
     _thumbnailFlushTimer?.cancel();
     _thumbnailUiFlushTimer?.cancel();
@@ -3775,6 +3870,7 @@ class _EditorScreenState extends State<EditorScreen>
     final jpegBytes = await compute(encodePreviewForCache, sources);
     await cache.store(path, jpegBytes);
     unawaited(cache.flush());
+    _scheduleCacheSweep();
   }
 
   /// Warms [_editSources] for a small window of files starting at

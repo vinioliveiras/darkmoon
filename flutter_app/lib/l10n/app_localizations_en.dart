@@ -585,6 +585,39 @@ class AppLocalizationsEn extends AppLocalizations {
       'Not used while the camera\'s JPEG is being edited — it is shown at full resolution, like any JPEG or PNG';
 
   @override
+  String get settingsCacheStorageLabel => 'Cache storage';
+
+  @override
+  String get settingsCacheMeasuring => 'Measuring...';
+
+  @override
+  String settingsCacheUsedOf(String used, String limit) {
+    return '$used of $limit';
+  }
+
+  @override
+  String get settingsCachePreviews => 'Previews';
+
+  @override
+  String get settingsCacheFullSources => 'Full-resolution sources';
+
+  @override
+  String get settingsCacheThumbnails => 'Thumbnails';
+
+  @override
+  String get settingsCacheAiResults => 'AI results';
+
+  @override
+  String get settingsCacheLimitLabel => 'Cache limit';
+
+  @override
+  String get settingsCacheLimitUnlimited => 'No limit';
+
+  @override
+  String get settingsCacheLimitHint =>
+      'Previews and full-resolution sources are deleted oldest-first to stay under this. AI results are never deleted automatically — they cost minutes of processing to rebuild, not seconds.';
+
+  @override
   String get settingsRawOnlyLabel => 'RAW files only';
 
   @override

@@ -43,6 +43,34 @@ const List<int> previewResolutionOptions = [
   512,
 ];
 
+/// The ceiling choices offered for the rebuildable disk caches, in bytes.
+///
+/// Previews and full-resolution sources only — see [CacheCategory]. Zero
+/// means no ceiling, which is what the app did until 2026-09-09, when the
+/// author's own install had reached 1.8 GB with nothing to stop it.
+const List<int> cacheMaxBytesOptions = [
+  1 * 1024 * 1024 * 1024,
+  2 * 1024 * 1024 * 1024,
+  5 * 1024 * 1024 * 1024,
+  10 * 1024 * 1024 * 1024,
+  20 * 1024 * 1024 * 1024,
+  unlimitedCacheBytes,
+];
+
+/// The [AppSettings.cacheMaxBytes] value meaning "never evict".
+///
+/// Zero rather than a very large number, for the same reason
+/// [nativePreviewResolution] is: every consumer has to branch on it, and a
+/// merely-enormous cap would silently become a real one on a big library.
+const int unlimitedCacheBytes = 0;
+
+/// What [AppSettings.cacheMaxBytes] starts at.
+///
+/// Five gigabytes holds a few thousand previews or a few hundred
+/// full-resolution sources — enough that ordinary browsing never evicts,
+/// small enough that a forgotten install does not quietly fill a disk.
+const int defaultCacheMaxBytes = 5 * 1024 * 1024 * 1024;
+
 /// What [AppSettings.previewResolution] starts at.
 ///
 /// Not [nativePreviewResolution]: a modern sensor's own resolution is a
@@ -68,6 +96,7 @@ class AppSettings {
     this.fastPreview = true,
     this.previewResolution = defaultPreviewResolution,
     this.editEmbeddedJpeg = false,
+    this.cacheMaxBytes = defaultCacheMaxBytes,
     this.useGpuRender = true,
     this.tabbedControlsPanel = true,
     this.tabbedControlsPanelIcons = false,
@@ -120,6 +149,16 @@ class AppSettings {
   /// Applies to the export and the neural pipelines too, not just the
   /// editing preview — see [decodeSourceImage].
   final bool editEmbeddedJpeg;
+
+  /// Ceiling on the rebuildable disk caches, in bytes;
+  /// [unlimitedCacheBytes] to never evict.
+  ///
+  /// Governs previews and full-resolution sources — everything that is a
+  /// decode away from being rebuilt. AI results are excluded on purpose:
+  /// they cost minutes of inference, not seconds of decoding, and
+  /// reclaiming disk by throwing those away is not a trade to make on the
+  /// user's behalf. See `enforceCacheLimit`.
+  final int cacheMaxBytes;
 
   /// GPU-accelerated rendering (`lib/render/gpu/`) for the settled
   /// (non-drag) preview render, instead of the CPU pipeline — on by
@@ -228,6 +267,7 @@ class AppSettings {
     bool? fastPreview,
     int? previewResolution,
     bool? editEmbeddedJpeg,
+    int? cacheMaxBytes,
     bool? useGpuRender,
     bool? tabbedControlsPanel,
     bool? tabbedControlsPanelIcons,
@@ -247,6 +287,7 @@ class AppSettings {
     fastPreview: fastPreview ?? this.fastPreview,
     previewResolution: previewResolution ?? this.previewResolution,
     editEmbeddedJpeg: editEmbeddedJpeg ?? this.editEmbeddedJpeg,
+    cacheMaxBytes: cacheMaxBytes ?? this.cacheMaxBytes,
     useGpuRender: useGpuRender ?? this.useGpuRender,
     tabbedControlsPanel: tabbedControlsPanel ?? this.tabbedControlsPanel,
     tabbedControlsPanelIcons:
@@ -286,6 +327,7 @@ class AppSettings {
     fastPreview: fastPreview,
     previewResolution: previewResolution,
     editEmbeddedJpeg: editEmbeddedJpeg,
+    cacheMaxBytes: cacheMaxBytes,
     useGpuRender: useGpuRender,
     tabbedControlsPanel: tabbedControlsPanel,
     tabbedControlsPanelIcons: tabbedControlsPanelIcons,
@@ -317,6 +359,7 @@ class AppSettings {
     fastPreview: fastPreview,
     previewResolution: previewResolution,
     editEmbeddedJpeg: editEmbeddedJpeg,
+    cacheMaxBytes: cacheMaxBytes,
     useGpuRender: useGpuRender,
     tabbedControlsPanel: tabbedControlsPanel,
     tabbedControlsPanelIcons: tabbedControlsPanelIcons,
@@ -365,6 +408,8 @@ Future<AppSettings> loadSettings() async {
           defaults.previewResolution,
       editEmbeddedJpeg:
           raw['editEmbeddedJpeg'] as bool? ?? defaults.editEmbeddedJpeg,
+      cacheMaxBytes:
+          (raw['cacheMaxBytes'] as num?)?.toInt() ?? defaults.cacheMaxBytes,
       useGpuRender: raw['useGpuRender'] as bool? ?? defaults.useGpuRender,
       tabbedControlsPanel:
           raw['tabbedControlsPanel'] as bool? ?? defaults.tabbedControlsPanel,
@@ -412,6 +457,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'fastPreview': settings.fastPreview,
       'previewResolution': settings.previewResolution,
       'editEmbeddedJpeg': settings.editEmbeddedJpeg,
+      'cacheMaxBytes': settings.cacheMaxBytes,
       'useGpuRender': settings.useGpuRender,
       'tabbedControlsPanel': settings.tabbedControlsPanel,
       'tabbedControlsPanelIcons': settings.tabbedControlsPanelIcons,

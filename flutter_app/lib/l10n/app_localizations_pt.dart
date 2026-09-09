@@ -590,6 +590,39 @@ class AppLocalizationsPt extends AppLocalizations {
       'Não usado enquanto o JPEG da câmera está sendo editado — ele é exibido em resolução total, como qualquer JPEG ou PNG';
 
   @override
+  String get settingsCacheStorageLabel => 'Armazenamento de cache';
+
+  @override
+  String get settingsCacheMeasuring => 'Medindo...';
+
+  @override
+  String settingsCacheUsedOf(String used, String limit) {
+    return '$used de $limit';
+  }
+
+  @override
+  String get settingsCachePreviews => 'Previews';
+
+  @override
+  String get settingsCacheFullSources => 'Fontes em resolução total';
+
+  @override
+  String get settingsCacheThumbnails => 'Miniaturas';
+
+  @override
+  String get settingsCacheAiResults => 'Resultados de IA';
+
+  @override
+  String get settingsCacheLimitLabel => 'Limite do cache';
+
+  @override
+  String get settingsCacheLimitUnlimited => 'Sem limite';
+
+  @override
+  String get settingsCacheLimitHint =>
+      'Previews e fontes em resolução total são apagados do mais antigo pro mais novo pra caber neste limite. Resultados de IA nunca são apagados automaticamente — refazê-los custa minutos de processamento, não segundos.';
+
+  @override
   String get settingsRawOnlyLabel => 'Somente arquivos RAW';
 
   @override

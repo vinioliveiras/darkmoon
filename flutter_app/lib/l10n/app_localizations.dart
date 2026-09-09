@@ -1156,6 +1156,66 @@ abstract class AppLocalizations {
   /// **'Not used while the camera\'s JPEG is being edited — it is shown at full resolution, like any JPEG or PNG'**
   String get settingsPreviewResolutionEmbeddedHint;
 
+  /// No description provided for @settingsCacheStorageLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache storage'**
+  String get settingsCacheStorageLabel;
+
+  /// No description provided for @settingsCacheMeasuring.
+  ///
+  /// In en, this message translates to:
+  /// **'Measuring...'**
+  String get settingsCacheMeasuring;
+
+  /// No description provided for @settingsCacheUsedOf.
+  ///
+  /// In en, this message translates to:
+  /// **'{used} of {limit}'**
+  String settingsCacheUsedOf(String used, String limit);
+
+  /// No description provided for @settingsCachePreviews.
+  ///
+  /// In en, this message translates to:
+  /// **'Previews'**
+  String get settingsCachePreviews;
+
+  /// No description provided for @settingsCacheFullSources.
+  ///
+  /// In en, this message translates to:
+  /// **'Full-resolution sources'**
+  String get settingsCacheFullSources;
+
+  /// No description provided for @settingsCacheThumbnails.
+  ///
+  /// In en, this message translates to:
+  /// **'Thumbnails'**
+  String get settingsCacheThumbnails;
+
+  /// No description provided for @settingsCacheAiResults.
+  ///
+  /// In en, this message translates to:
+  /// **'AI results'**
+  String get settingsCacheAiResults;
+
+  /// No description provided for @settingsCacheLimitLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Cache limit'**
+  String get settingsCacheLimitLabel;
+
+  /// No description provided for @settingsCacheLimitUnlimited.
+  ///
+  /// In en, this message translates to:
+  /// **'No limit'**
+  String get settingsCacheLimitUnlimited;
+
+  /// No description provided for @settingsCacheLimitHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Previews and full-resolution sources are deleted oldest-first to stay under this. AI results are never deleted automatically — they cost minutes of processing to rebuild, not seconds.'**
+  String get settingsCacheLimitHint;
+
   /// No description provided for @settingsRawOnlyLabel.
   ///
   /// In en, this message translates to:

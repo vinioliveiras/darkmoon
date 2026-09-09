@@ -7,6 +7,8 @@ import 'package:path/path.dart' as p;
 
 import '../diagnostics/dev_log.dart';
 import '../l10n/app_localizations.dart';
+import '../catalog/cache_usage.dart';
+import 'cache_storage_meter.dart';
 import '../settings/app_settings.dart';
 import '../theme.dart';
 import 'animated_dialog.dart';
@@ -23,6 +25,7 @@ class SettingsDialog extends StatefulWidget {
     required this.settings,
     required this.onChanged,
     required this.onClearThumbnails,
+    this.cacheUsage,
     required this.onClearCatalog,
     required this.onPruneMissing,
     this.nativeWidth,
@@ -43,6 +46,10 @@ class SettingsDialog extends StatefulWidget {
   /// callbacks rather than going through [onChanged] like everything else
   /// on this dialog.
   final VoidCallback onClearThumbnails;
+
+  /// What the disk caches occupy, for the storage meter — null while the
+  /// first measurement is still running.
+  final CacheUsage? cacheUsage;
   final VoidCallback onClearCatalog;
 
   /// Removes saved edits/curves/masks/presets/recent-file entries for
@@ -484,6 +491,44 @@ class _SettingsDialogState extends State<SettingsDialog>
       padding: const EdgeInsets.only(right: kScrollbarGutter),
       child: SettingsGroup(
         children: [
+          CacheStorageMeter(
+            usage: widget.cacheUsage,
+            maxBytes: _settings.cacheMaxBytes,
+          ),
+          const SizedBox(height: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: Text(
+                      l10n.settingsCacheLimitLabel,
+                      style: _labelStyle,
+                    ),
+                  ),
+                  StyledDropdown<int>(
+                    value: _settings.cacheMaxBytes,
+                    width: 170,
+                    items: [
+                      for (final bytes in cacheMaxBytesOptions)
+                        StyledDropdownItem(
+                          value: bytes,
+                          label: bytes == unlimitedCacheBytes
+                              ? l10n.settingsCacheLimitUnlimited
+                              : formatCacheBytes(bytes),
+                        ),
+                    ],
+                    onChanged: (value) =>
+                        _update(_settings.copyWith(cacheMaxBytes: value)),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(l10n.settingsCacheLimitHint, style: _hintStyle),
+            ],
+          ),
+          const SizedBox(height: 4),
           _ClearDataRow(
             label: l10n.settingsClearThumbnailsButton,
             onPressed: () => _confirmAndRun(

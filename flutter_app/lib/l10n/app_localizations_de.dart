@@ -594,6 +594,39 @@ class AppLocalizationsDe extends AppLocalizations {
       'Wird nicht verwendet, solange das Kamera-JPEG bearbeitet wird — es wird in voller Auflösung angezeigt, wie jedes JPEG oder PNG';
 
   @override
+  String get settingsCacheStorageLabel => 'Cache-Speicher';
+
+  @override
+  String get settingsCacheMeasuring => 'Wird gemessen ...';
+
+  @override
+  String settingsCacheUsedOf(String used, String limit) {
+    return '$used von $limit';
+  }
+
+  @override
+  String get settingsCachePreviews => 'Vorschauen';
+
+  @override
+  String get settingsCacheFullSources => 'Quellen in voller Auflösung';
+
+  @override
+  String get settingsCacheThumbnails => 'Miniaturansichten';
+
+  @override
+  String get settingsCacheAiResults => 'KI-Ergebnisse';
+
+  @override
+  String get settingsCacheLimitLabel => 'Cache-Grenze';
+
+  @override
+  String get settingsCacheLimitUnlimited => 'Keine Grenze';
+
+  @override
+  String get settingsCacheLimitHint =>
+      'Vorschauen und Quellen in voller Auflösung werden älteste zuerst gelöscht, um darunter zu bleiben. KI-Ergebnisse werden nie automatisch gelöscht — sie neu zu berechnen kostet Minuten, nicht Sekunden.';
+
+  @override
   String get settingsRawOnlyLabel => 'Nur RAW-Dateien';
 
   @override
