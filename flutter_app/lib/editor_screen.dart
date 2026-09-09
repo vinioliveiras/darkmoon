@@ -3988,7 +3988,7 @@ class _EditorScreenState extends State<EditorScreen>
         curves: _effectiveCurves,
         asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
         asShotTint: metadata?.asShotTint ?? wbDefaultTint,
-        baseExposure: _baseExposureFor(path),
+        baseExposureStops: _baseExposureFor(path),
         baseContrast: _effectiveBaseContrast,
         colorProfile: _effectiveColorProfile,
         colorProfileStrength: _effectiveColorProfileStrength,
@@ -5868,7 +5868,7 @@ class _EditorScreenState extends State<EditorScreen>
         asShotTint: path == null ? wbDefaultTint : _asShotFor(path).tint,
         // Or every thumbnail would be a stop away from the render it is
         // supposed to be previewing.
-        baseExposure: _baseExposureFor(path),
+        baseExposureStops: _baseExposureFor(path),
         baseContrast: _effectiveBaseContrast,
         colorProfile: profile,
       ),
@@ -7276,7 +7276,7 @@ class _EditorScreenState extends State<EditorScreen>
           curves: _effectiveCurves,
           asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
           asShotTint: metadata?.asShotTint ?? wbDefaultTint,
-          baseExposure: _baseExposureFor(selected.path),
+          baseExposureStops: _baseExposureFor(selected.path),
           baseContrast: _effectiveBaseContrast,
           colorProfile: _effectiveColorProfile,
           colorProfileStrength: _effectiveColorProfileStrength,

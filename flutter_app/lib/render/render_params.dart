@@ -54,7 +54,7 @@ class RenderParams {
     PhotoCurves? curves,
     double asShotKelvin = 5500,
     double asShotTint = 0,
-    double baseExposure = 0,
+    double baseExposureStops = 0,
     double baseContrast = calBaseContrast,
     ColorProfile? colorProfile,
     double colorProfileStrength = 1.0,
@@ -76,7 +76,14 @@ class RenderParams {
       // map so the global Amount slider cannot scale it: it is a baseline,
       // not an edit, and damping it would make a photo's starting
       // brightness depend on how strongly its edit is being applied.
-      exposure: (values['Exposure'] ?? defaults.exposure) + baseExposure,
+      // Converted here, not by the caller: the Exposure slider is in
+      // slider units and this arrives in stops, and adding the two
+      // directly divided the camera's exposure offset by
+      // calExposureUnitsPerStop — twelve times too weak, which read as
+      // the correction not working at all.
+      exposure:
+          (values['Exposure'] ?? defaults.exposure) +
+          baseExposureStops * calExposureUnitsPerStop,
       brightness: values['Brightness'] ?? defaults.brightness,
       contrast: values['Contrast'] ?? defaults.contrast,
       highlights: values['Highlights'] ?? defaults.highlights,

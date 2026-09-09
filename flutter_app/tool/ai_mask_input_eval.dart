@@ -70,7 +70,7 @@ void _evaluate(String path, Directory outDir) {
     source.rgbBytes,
     RenderParams.fromValues(
       const {},
-      baseExposure: sources.baseExposureStops ?? 0,
+      baseExposureStops: sources.baseExposureStops ?? 0,
     ),
   );
   final toned = _toWorking(rendered, source.width, source.height);
