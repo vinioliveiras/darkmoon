@@ -586,10 +586,6 @@ class AppLocalizationsPt extends AppLocalizations {
       'Edita um RAW usando a renderização JPEG da própria câmera em vez dos dados do sensor. Abre mais rápido e já parte do visual que a câmera quis, mas uma imagem renderizada em 8 bits tem bem menos margem pra recuperar um céu estourado ou uma sombra fechada.';
 
   @override
-  String get settingsPreviewResolutionEmbeddedHint =>
-      'Não usado enquanto o JPEG da câmera está sendo editado — ele é exibido em resolução total, como qualquer JPEG ou PNG';
-
-  @override
   String get settingsCacheStorageLabel => 'Armazenamento de cache';
 
   @override

@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -7,6 +8,7 @@ import 'package:image/image.dart' as img;
 
 import 'package:darkmoon/l10n/app_localizations.dart';
 import 'package:darkmoon/native/common_image.dart';
+import 'package:darkmoon/native/edit_source.dart';
 import 'package:darkmoon/settings/app_settings.dart';
 import 'package:darkmoon/widgets/settings_dialog.dart';
 
@@ -47,18 +49,17 @@ void main() {
     setUp(() => dir = Directory.systemTemp.createTempSync('darkmoon_src'));
     tearDown(() => dir.deleteSync(recursive: true));
 
-    String writePng(int r, int g, int b) {
-      final image = img.Image(width: 8, height: 6);
+    String writePng(int r, int g, int b, {int w = 8, int h = 6}) {
+      final image = img.Image(width: w, height: h);
       img.fill(image, color: img.ColorRgb8(r, g, b));
-      final path = '${dir.path}${Platform.pathSeparator}flat.png';
+      final path = '${dir.path}${Platform.pathSeparator}flat_${w}x$h.png';
       File(path).writeAsBytesSync(Uint8List.fromList(img.encodePng(image)));
       return path;
     }
 
     test('a common image ignores the setting entirely', () {
-      // It has no embedded anything, and it was never downscaled or
-      // demosaiced — there is no second interpretation of a PNG to choose
-      // between, so both answers have to be the same pixels.
+      // There is no second interpretation of a PNG to choose between, so
+      // both answers have to be the same pixels.
       final path = writePng(10, 200, 90);
       final off = decodeSourceImage(path, embeddedJpeg: false)!;
       final on = decodeSourceImage(path, embeddedJpeg: true)!;
@@ -66,6 +67,36 @@ void main() {
       expect(on.width, 8);
       expect(on.height, 6);
       expect(off.rgbBytes.sublist(0, 3), [10, 200, 90]);
+    });
+
+    test('the preview honours the resolution cap in either mode', () {
+      // The regression this guards: embedded-JPEG mode was briefly exempt
+      // from the cap, on the reasoning that the camera's JPEG is already
+      // smaller than the sensor so capping it throws detail away for
+      // nothing. What the cap buys is a cheaper *render*, and that runs on
+      // every slider move no matter where the pixels came from. The same
+      // exception silently uncapped common formats, which had always been
+      // capped here.
+      final path = writePng(90, 90, 90, w: 400, h: 300);
+      for (final embedded in const [false, true]) {
+        final pair = decodeEditSources(
+          path,
+          previewMaxDimension: 100,
+          editEmbeddedJpeg: embedded,
+        )!;
+        expect(
+          math.max(pair.preview.width, pair.preview.height),
+          100,
+          reason: 'editEmbeddedJpeg: $embedded',
+        );
+      }
+    });
+
+    test('zero still means the whole source', () {
+      final path = writePng(90, 90, 90, w: 400, h: 300);
+      final pair = decodeEditSources(path, previewMaxDimension: 0)!;
+      expect(pair.preview.width, 400);
+      expect(pair.preview.height, 300);
     });
 
     test('it carries no camera match — there is nothing to match', () {
@@ -112,27 +143,17 @@ void main() {
       expect(find.text(l10n.settingsEditEmbeddedJpegLabel), findsOneWidget);
     });
 
-    testWidgets('off, the resolution row speaks for itself', (tester) async {
-      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-      await pump(tester, const AppSettings());
-      expect(find.text(l10n.settingsPreviewResolutionHint), findsOneWidget);
-      expect(
-        find.text(l10n.settingsPreviewResolutionEmbeddedHint),
-        findsNothing,
-      );
-    });
-
-    testWidgets('on, it says the resolution is unused', (tester) async {
-      // The dropdown keeps its value — it is what the app returns to — so
-      // without this the row would read as still in force while every
-      // decode ignores it.
+    testWidgets('the resolution row reads the same either way', (
+      tester,
+    ) async {
+      // It briefly did not: embedded-JPEG mode was exempt from the cap,
+      // so the row had to say it no longer applied. Both modes honour it
+      // now — the cap buys a cheaper render on every slider move, which
+      // has nothing to do with where the pixels came from.
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
       await pump(tester, const AppSettings(editEmbeddedJpeg: true));
-      expect(
-        find.text(l10n.settingsPreviewResolutionEmbeddedHint),
-        findsOneWidget,
-      );
-      expect(find.text(l10n.settingsPreviewResolutionHint), findsNothing);
+      expect(find.text(l10n.settingsPreviewResolutionHint), findsOneWidget);
+      expect(find.text(l10n.settingsPreviewResolutionLabel), findsOneWidget);
     });
   });
 }

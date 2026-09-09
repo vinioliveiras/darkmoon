@@ -356,41 +356,25 @@ class _SettingsDialogState extends State<SettingsDialog>
                       style: _labelStyle,
                     ),
                   ),
-                  // Dimmed and inert, rather than removed, while the
-                  // setting above is on: the value is still what the app
-                  // returns to when it goes off, and hiding it would make
-                  // that look like something had been reset.
-                  Opacity(
-                    opacity: _settings.editEmbeddedJpeg ? 0.4 : 1.0,
-                    child: IgnorePointer(
-                      ignoring: _settings.editEmbeddedJpeg,
-                      child: StyledDropdown<int>(
-                        value: _settings.previewResolution,
-                        width: 170,
-                        items: [
-                          for (final size in previewResolutionOptions)
-                            StyledDropdownItem(
-                              value: size,
-                              label: size == nativePreviewResolution
-                                  ? l10n.settingsPreviewResolutionNative
-                                  : '$size px',
-                            ),
-                        ],
-                        onChanged: (value) => _update(
-                          _settings.copyWith(previewResolution: value),
+                  StyledDropdown<int>(
+                    value: _settings.previewResolution,
+                    width: 170,
+                    items: [
+                      for (final size in previewResolutionOptions)
+                        StyledDropdownItem(
+                          value: size,
+                          label: size == nativePreviewResolution
+                              ? l10n.settingsPreviewResolutionNative
+                              : '$size px',
                         ),
-                      ),
-                    ),
+                    ],
+                    onChanged: (value) =>
+                        _update(_settings.copyWith(previewResolution: value)),
                   ),
                 ],
               ),
               const SizedBox(height: 4),
-              Text(
-                _settings.editEmbeddedJpeg
-                    ? l10n.settingsPreviewResolutionEmbeddedHint
-                    : l10n.settingsPreviewResolutionHint,
-                style: _hintStyle,
-              ),
+              Text(l10n.settingsPreviewResolutionHint, style: _hintStyle),
             ],
           ),
           SwitchListTile(

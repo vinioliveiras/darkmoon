@@ -176,7 +176,6 @@
   "settingsPreviewResolutionHint": "Quanto menor, mais rápido para abrir e editar fotos; a exportação sempre usa a resolução total do sensor",
   "settingsEditEmbeddedJpegLabel": "Editar o JPEG da câmera",
   "settingsEditEmbeddedJpegHint": "Edita um RAW usando a renderização JPEG da própria câmera em vez dos dados do sensor. Abre mais rápido e já parte do visual que a câmera quis, mas uma imagem renderizada em 8 bits tem bem menos margem pra recuperar um céu estourado ou uma sombra fechada.",
-  "settingsPreviewResolutionEmbeddedHint": "Não usado enquanto o JPEG da câmera está sendo editado — ele é exibido em resolução total, como qualquer JPEG ou PNG",
   "settingsCacheStorageLabel": "Armazenamento de cache",
   "settingsCacheMeasuring": "Medindo...",
   "settingsCacheUsedOf": "{used} de {limit}",

@@ -27,10 +27,11 @@ Future<String> resolvePreviewCacheDir(
   // The two modes decode different pixels from the same file, so they
   // cannot share a directory: a cached entry carries no record of which
   // one wrote it, and serving the wrong one shows the wrong photograph
-  // with nothing to indicate why. Embedded-JPEG mode ignores the
-  // resolution cap entirely (see decodeEditSources), so it gets one
-  // directory rather than one per setting.
-  final bucket = editEmbeddedJpeg ? 'embedded' : '${previewMaxDimension}px';
+  // with nothing to indicate why. Both modes honour the resolution cap,
+  // so both are namespaced by it.
+  final bucket = editEmbeddedJpeg
+      ? '${previewMaxDimension}px-embedded'
+      : '${previewMaxDimension}px';
   final dir = Directory(
     p.join(
       documents.path,

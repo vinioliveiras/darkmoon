@@ -87,22 +87,46 @@ void main() {
     }
   });
 
-  test('an exact entry beats its family', () {
+  test('every exact entry is the factor its own key is scaled by', () {
+    // Deliberately over whatever the map happens to hold rather than over
+    // a named key. calibration.dart is the user's tuning surface and its
+    // entries get commented out during a round of tuning; this test used
+    // to name 'Exposure' and started throwing on a null the moment that
+    // happened, which says nothing about the code under test.
+    final exact = calGlobalAmountCompressionOverrides.keys
+        .where((key) => !families.contains(key))
+        .toList();
     expect(
-      calGlobalAmountCompressionOverrides['Mixer'],
-      isNotNull,
-      reason: 'this test is about the family being the fallback, not the '
-          'only source',
+      exact,
+      isNotEmpty,
+      reason: 'with no exact entries left there is nothing here to check '
+          '— the global factor alone is covered elsewhere',
     );
-    // Exposure has its own entry and no family, so it is the clean case
-    // for "exact wins".
-    final scaled = withGlobalEditAmountApplied({
-      amountKey: 100.0,
-      'Exposure': 1.0,
-    });
+    for (final key in exact) {
+      expect(
+        withGlobalEditAmountApplied({amountKey: 100.0, key: 1.0})[key],
+        closeTo(calGlobalAmountCompressionOverrides[key]!, 0.001),
+        reason: "'$key' must be scaled by its own entry, not the global "
+            'default',
+      );
+    }
+  });
+
+  test('a family entry applies to keys that have no exact one', () {
+    // The other half: 'Mixer' is a prefix, not a slider, and every
+    // MixerRedHue-shaped key falls back to it.
+    final family = calGlobalAmountCompressionOverrides['Mixer'];
     expect(
-      scaled['Exposure'],
-      closeTo(calGlobalAmountCompressionOverrides['Exposure']!, 0.001),
+      family,
+      isNotNull,
+      reason: 'this test is about the family being the fallback',
+    );
+    expect(
+      withGlobalEditAmountApplied({
+        amountKey: 100.0,
+        'MixerRedHue': 1.0,
+      })['MixerRedHue'],
+      closeTo(family!, 0.001),
     );
   });
 

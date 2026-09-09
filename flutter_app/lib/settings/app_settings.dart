@@ -140,11 +140,9 @@ class AppSettings {
   /// makes a RAW a RAW — an 8-bit rendered image has far less to recover
   /// in a blown sky or a crushed shadow.
   ///
-  /// The preview is not downscaled in this mode, whatever
-  /// [previewResolution] says: the embedded JPEG is already a fraction of
-  /// the sensor's resolution, and capping it again would throw away detail
-  /// for a decode that was cheap to begin with. Common formats (JPEG, PNG,
-  /// TIFF) are treated the same way and always have been.
+  /// [previewResolution] still applies: what that cap buys is a cheaper
+  /// render on every slider move, which has nothing to do with where the
+  /// pixels came from.
   ///
   /// Applies to the export and the neural pipelines too, not just the
   /// editing preview — see [decodeSourceImage].

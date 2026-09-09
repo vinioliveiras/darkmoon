@@ -4,7 +4,6 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
-import '../raw_files.dart' show isRawFile;
 import 'background_priority.dart';
 import 'camera_match.dart';
 import 'common_image.dart';
@@ -144,13 +143,14 @@ EditSourcePair? decodeEditSources(
   // sensor's own resolution. fitToMaxDimension would read a zero as
   // "shrink to nothing", so it never sees one.
   //
-  // An already-rendered source is never capped either. The camera's
-  // embedded JPEG is a fraction of the sensor's resolution to begin with,
-  // and it decoded in a fraction of the time, so there is nothing to buy
-  // by throwing detail away — the same reason a JPEG or PNG on disk has
-  // never been capped here.
-  final alreadyRendered = editEmbeddedJpeg || !isRawFile(path);
-  final previewImage = (previewMaxDimension <= 0 || alreadyRendered)
+  // One rule for every source. Embedded-JPEG mode briefly had an
+  // exception — the camera's JPEG is already a fraction of the sensor's
+  // resolution, so capping it again looked like throwing detail away for
+  // nothing. It is not: what the cap buys is a cheaper *render*, and the
+  // render runs on every slider move regardless of where the pixels came
+  // from. The exception also silently uncapped common formats, which had
+  // always been capped here.
+  final previewImage = previewMaxDimension <= 0
       ? full
       : fitToMaxDimension(full, previewMaxDimension);
   final liveImage = fitToMaxDimension(previewImage, livePreviewMaxDimension);
