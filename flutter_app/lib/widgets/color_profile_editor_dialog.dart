@@ -253,8 +253,10 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
         points: _tonePoints,
         // Wider than tall, unlike the panel's own curve editors. The two
         // sliders below are what the curve is judged against, and both
-        // have to be reachable without scrolling for that to work.
-        aspectRatio: 1.5,
+        // have to be on screen at the same time as it for that to work —
+        // at 1.5 the second one sat on the dialog's bottom edge even on a
+        // 1000-point-tall window (measured 2026-09-09).
+        aspectRatio: 2.1,
         onChanged: (points) {
           setState(() => _tonePoints = points);
           _changed();
@@ -738,6 +740,17 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
                   Expanded(
                     child: TabBarView(
                       controller: _tabController,
+                      // Tabs are switched by tapping them, never by
+                      // swiping. A TabBarView is a PageView and drags
+                      // horizontally itself, so every slider inside one is
+                      // a second horizontal drag recogniser in the same
+                      // gesture arena — and the page wins whenever it has
+                      // somewhere to go. That made a slider move only one
+                      // way: on the first tab a right-drag worked (the
+                      // page has nothing to its left) and a left-drag was
+                      // swallowed whole, which is how "the sliders do not
+                      // follow the mouse" was reported (2026-09-09). The
+                      // Colour tab's 24 sliders had it too.
                       children: [
                         _buildToneTab(l10n),
                         _buildColorTab(l10n),
