@@ -60,6 +60,30 @@ Uint8List _syntheticPhoto(int width, int height) {
   return bytes;
 }
 
+/// A low-key frame: everything sits in the bottom ~15% of the range with
+/// per-pixel noise on top, which is where Shadows/Blacks do their work and
+/// where the tonal blur's storage precision decides whether the GPU
+/// matches the CPU. Deterministic (LCG), no dart:math import needed.
+Uint8List _darkNoisyPhoto(int width, int height) {
+  final bytes = Uint8List(width * height * 3);
+  var seed = 12345;
+  int noise() {
+    seed = (seed * 1103515245 + 12345) & 0x7fffffff;
+    return (seed >> 16) % 13 - 6;
+  }
+
+  for (var y = 0; y < height; y++) {
+    for (var x = 0; x < width; x++) {
+      final i = (y * width + x) * 3;
+      final base = 4 + (x * 30) ~/ width + (y * 8) ~/ height;
+      bytes[i] = (base + noise()).clamp(0, 255);
+      bytes[i + 1] = (base + noise()).clamp(0, 255);
+      bytes[i + 2] = (base + 2 + noise()).clamp(0, 255);
+    }
+  }
+  return bytes;
+}
+
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
@@ -71,9 +95,10 @@ void main() {
     RenderParams params,
     String label, {
     int maxTolerance = 24,
+    Uint8List? source,
   }) async {
-    final cpu = renderRgb(width, height, photo, params);
-    final gpu = await renderRgbGpu(width, height, photo, params);
+    final cpu = renderRgb(width, height, source ?? photo, params);
+    final gpu = await renderRgbGpu(width, height, source ?? photo, params);
     expect(gpu.length, cpu.length, reason: '$label: byte length mismatch');
 
     var sumDiff = 0.0;
@@ -105,6 +130,26 @@ void main() {
   }
 
   group('renderRgbGpu (Phase 1: point ops) matches renderRgb', () {
+    testWidgets('deep shadows on a dark, noisy frame (tonal blur precision)', (
+      tester,
+    ) async {
+      // The tonal blur behind Shadows/Blacks is stored as 8-bit *linear*
+      // light on the GPU (srgb_to_linear.frag), where the darkest tones
+      // collapse to a few distinct levels, while the CPU keeps it in
+      // Float32. A 2026-09-09 review predicted ±30% detail-ratio swings
+      // from that; measured here it is mean 1.4 / max 6 levels, because
+      // the detail term's exponent (lift × noiseProtection) is small
+      // exactly where the quantisation is coarse. Kept as the regression
+      // guard for that storage decision — if this case ever exceeds the
+      // shared bounds, revisit storing the blur perceptually on both
+      // paths.
+      await expectMatchesCpu(
+        const RenderParams(shadows: 80, blacks: 40, sharpen: _sharpenOff),
+        'dark noisy shadows',
+        source: _darkNoisyPhoto(width, height),
+      );
+    });
+
     testWidgets('neutral params is near-identity', (tester) async {
       await expectMatchesCpu(
         const RenderParams(sharpen: _sharpenOff),

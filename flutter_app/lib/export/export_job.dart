@@ -15,6 +15,7 @@ import '../render/render.dart';
 import '../render/render_parallel.dart';
 import '../render/render_params.dart';
 import 'export_format.dart';
+import 'export_metadata.dart';
 
 class ExportRequest {
   const ExportRequest({
@@ -31,9 +32,15 @@ class ExportRequest {
     this.preDecodedHeight,
     this.aiMaskMaps = const {},
     this.editEmbeddedJpeg = false,
+    this.captureInfo,
   });
 
   final String sourcePath;
+
+  /// Camera, lens and exposure for the export's EXIF — see
+  /// [ExportCaptureInfo]. Null when the editor has no metadata for the
+  /// photo; a JPEG source's own EXIF is read inside the export regardless.
+  final ExportCaptureInfo? captureInfo;
 
   /// Read the camera's own JPEG rather than the sensor data — see
   /// [decodeSourceImage]. Only reached when the editor could not hand over
@@ -227,6 +234,16 @@ Future<ExportResult> _exportPhotoInternal(
       numChannels: 3,
       order: img.ChannelOrder.rgb,
     );
+    // Camera/lens/exposure EXIF: copied from a JPEG source, built from the
+    // RAW's metadata otherwise (see export_metadata.dart). JPEG and TIFF
+    // encoders write it; PNG has no EXIF in this package.
+    image.exif = buildExportExif(
+      width: geometry.width,
+      height: geometry.height,
+      sourceExif: readSourceExif(request.sourcePath),
+      capture: request.captureInfo,
+    );
+    mark('metadata');
     onStage?.call(ExportStage.encoding);
     final bytes = switch (request.format) {
       ExportFormat.png => img.encodePng(image),

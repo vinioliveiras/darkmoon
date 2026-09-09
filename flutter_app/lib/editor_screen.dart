@@ -34,6 +34,7 @@ import 'cloud_denoise/cloud_denoise_provider.dart';
 import 'cloud_denoise/cloud_denoise_token_store.dart';
 import 'diagnostics/dev_log.dart';
 import 'export/export_job.dart';
+import 'export/export_metadata.dart';
 import 'l10n/app_localizations.dart';
 import 'native/camera_match.dart';
 import 'native/common_image_thumbnail.dart';
@@ -7459,6 +7460,9 @@ class _EditorScreenState extends State<EditorScreen>
         preDecodedRgb: nativeForExport?.rgbBytes,
         preDecodedWidth: nativeForExport?.width,
         preDecodedHeight: nativeForExport?.height,
+        captureInfo: metadata == null
+            ? null
+            : ExportCaptureInfo.fromRawMetadata(metadata),
       ),
       (stage) {
         if (mounted) {
