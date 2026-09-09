@@ -2012,16 +2012,40 @@ class _EditorScreenState extends State<EditorScreen>
   /// Makes sure the current photo's edits are actually on disk before the
   /// window closes — the debounced/fire-and-forget save elsewhere in this
   /// file wouldn't necessarily finish in time for a save made in the last
-  /// moment before quitting. Also flushes any thumbnail cache writes that
-  /// haven't been persisted yet (best-effort — losing those just means
-  /// slower thumbnails next launch, not lost data, so this isn't awaited
-  /// as strictly).
+  /// moment before quitting.
+  ///
+  /// Every disk cache is flushed here too. Each one is written with an
+  /// unawaited `flush()` at the point it is filled, which is normally
+  /// enough — but "normally" means "unless the window closes in the next
+  /// few milliseconds", and closing right after opening a photo is exactly
+  /// when that happens. Losing one costs the next launch some work, not
+  /// data; the point is that reopening a photo should be fast *because it
+  /// was opened before*, and a lost flush quietly breaks that promise.
+  ///
+  /// Every cache with a `flush()` belongs in [_batchedCaches]. Missing one
+  /// does not fail — it just makes the app slower in a way nothing points
+  /// at, which is why they are enumerated in one place rather than listed
+  /// again here.
   Future<AppExitResponse> _handleExitRequested() async {
     await _flushCurrentEdits();
-    await _thumbnailCache?.flush();
-    await _previewCache?.flush();
+    for (final cache in _batchedCaches) {
+      await cache.flush();
+    }
     return AppExitResponse.exit;
   }
+
+  /// Every disk cache that holds writes in memory until flushed.
+  ///
+  /// The point of all three is that reopening a photo is fast *because it
+  /// was opened before*; a write still sitting in memory when the window
+  /// closes breaks that promise silently, and only for the photos opened
+  /// last.
+  Iterable<ThumbnailCacheManager> get _batchedCaches =>
+      [
+        _thumbnailCache,
+        _previewCache,
+        _cameraMatchCache,
+      ].whereType<ThumbnailCacheManager>();
 
   Future<void> _loadEdits() async {
     final edits = await loadCatalog();
