@@ -2,10 +2,19 @@
 // pipeline stage-group by stage-group at a realistic editing resolution,
 // so a decision about fusing passes or downsampling the wide blurs is
 // made on numbers rather than on the pass count.
+//
+// How to run on a machine where `flutter test integration_test/...` loses
+// the VM service (Flutter 3.47.2 on Windows, 2026-09-09):
+//
+//   timeout 300 flutter run -d windows --no-pub \
+//     -t integration_test/gpu_timing_probe_test.dart > timing.log 2>&1
+//   taskkill //IM darkmoon.exe //F
+//   grep "gpu_timing\] " timing.log
 import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:darkmoon/render/gpu/gpu_pass.dart';
+import 'package:darkmoon/render/gpu/gpu_stage_cache.dart';
 import 'package:darkmoon/render/gpu/render_gpu.dart';
 import 'package:darkmoon/render/render_params.dart';
 import 'package:darkmoon/render/sharpen.dart';
@@ -24,6 +33,10 @@ void main() {
   }
 
   Future<int> timeRender(String label, RenderParams params) async {
+    // The stage cost of the *cold* chain — the cache would turn the
+    // repeated runs below into two-pass renders.
+    GpuStageCache.enabled = false;
+    GpuStageCache.instance.clear();
     // One warm-up so shader compilation isn't charged to the measurement.
     await renderRgbaGpu(width, height, photo, params);
     GpuPass.resetPassCount();
@@ -91,5 +104,49 @@ void main() {
       ),
     );
     expect(baseline, greaterThan(0));
+
+    // The stage cache's case: the same photo, one slider moving. Each timed
+    // render changes Contrast so nothing is a pure repeat, and every one
+    // resumes from afterDehaze.
+    Future<void> timeCachedDrag(
+      String label,
+      RenderParams Function(double contrast) build,
+    ) async {
+      GpuStageCache.enabled = true;
+      GpuStageCache.instance.clear();
+      await renderRgbaGpu(width, height, photo, build(0));
+      GpuPass.resetPassCount();
+      final sw = Stopwatch()..start();
+      const runs = 3;
+      for (var i = 1; i <= runs; i++) {
+        await renderRgbaGpu(width, height, photo, build(i * 10.0));
+      }
+      final ms = sw.elapsedMilliseconds ~/ runs;
+      final passes = GpuPass.passCount ~/ runs;
+      // ignore: avoid_print
+      print(
+        '[gpu_timing] ${label.padRight(34)} ${ms}ms  '
+        '$passes passes  (stage cache, Contrast drag)',
+      );
+      GpuStageCache.instance.clear();
+    }
+
+    await timeCachedDrag(
+      'cached: default + contrast',
+      (c) => RenderParams(baseContrast: 0, contrast: c),
+    );
+    await timeCachedDrag(
+      'cached: everything + contrast',
+      (c) => RenderParams(
+        baseContrast: 80,
+        exposure: 6,
+        shadows: 40,
+        texture: 40,
+        clarity: 40,
+        dehaze: 40,
+        sharpen: const SharpenParams(amount: 50),
+        contrast: c,
+      ),
+    );
   });
 }

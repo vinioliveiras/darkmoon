@@ -5,6 +5,7 @@ import 'dart:ui' as ui;
 import '../mask.dart';
 import '../render_params.dart';
 import 'gpu_pass.dart';
+import 'gpu_stage_cache.dart';
 import 'render_gpu.dart';
 
 /// GPU counterpart to `render.dart`'s `renderRgbWithMasks` — see
@@ -32,9 +33,23 @@ Future<Uint8List> renderRgbaWithMasksGpu(
   List<MaskLayer> masks, {
   Map<String, AiMaskMap> aiMaskMaps = const {},
 }) async {
-  final source = await decodeRgbImage(sourceRgb, width, height);
-  var current = await renderImageGpu(source, width, height, globalParams);
-  source.dispose();
+  // The global layer goes through the stage cache exactly like a render
+  // without masks (see renderRgbaGpu); the layers below do not — each one
+  // starts from the previous layer's fresh output, so there is nothing to
+  // resume from.
+  final fingerprint = GpuStageCache.sourceFingerprint(sourceRgb, width, height);
+  final source =
+      GpuStageCache.instance.canResume(fingerprint, width, height, globalParams)
+      ? null
+      : await decodeRgbImage(sourceRgb, width, height);
+  var current = await renderImageGpu(
+    source,
+    width,
+    height,
+    globalParams,
+    sourceFingerprint: fingerprint,
+  );
+  source?.dispose();
 
   for (final mask in masks) {
     // Same no-op skip as renderRgbWithMasks — a disabled mask, or one with

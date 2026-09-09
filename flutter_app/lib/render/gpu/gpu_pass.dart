@@ -90,6 +90,20 @@ class GpuImagePool {
     return image;
   }
 
+  /// Hands [image] to someone else — `GpuStageCache`, in practice — so
+  /// [disposeAllExcept] leaves it alone, and so does every later [add]:
+  /// from here on the image counts as borrowed. That second half is not
+  /// optional. A stage with nothing to do returns its input unchanged, so
+  /// the very image just handed to the cache comes back through `add` one
+  /// stage later; without the borrowed mark it was re-registered, disposed
+  /// at the end of the render, and disposed a second time when the cache
+  /// replaced it (a `dart:ui` assertion, found 2026-09-09 by
+  /// `integration_test/gpu_point_ops_test.dart`).
+  void detach(ui.Image image) {
+    _images.remove(image);
+    _borrowed.add(image);
+  }
+
   /// Disposes everything registered except [keep] — the image whose
   /// ownership passes to the caller. Leaves the pool empty.
   void disposeAllExcept([ui.Image? keep]) {

@@ -11,6 +11,13 @@ import 'vignette.dart';
 /// The current value of every adjustment slider, passed into [renderRgb].
 ///
 /// Field names mirror the Python app's `params` dict keys.
+///
+/// **Adding a field?** If any GPU stage before Dehaze reads it (Exposure/WB,
+/// chroma smoothing, AI denoise, Sharpen, Texture, Clarity, the colour
+/// profile, Dehaze itself), add it to `GpuStageCache.keyFor` in
+/// `lib/render/gpu/gpu_stage_cache.dart` and to its key test — the cache
+/// resumes renders from stored stage outputs, and a field it does not know
+/// about is a stale image on screen.
 class RenderParams {
   const RenderParams({
     this.temperature = 5500,

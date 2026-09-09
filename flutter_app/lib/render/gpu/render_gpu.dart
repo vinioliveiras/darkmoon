@@ -13,6 +13,7 @@ import 'color_profile_gpu.dart';
 import 'dehaze_gpu.dart';
 import 'denoise_gpu.dart';
 import 'gpu_pass.dart';
+import 'gpu_stage_cache.dart';
 import 'local_contrast_gpu.dart';
 import 'sharpen_gpu.dart';
 
@@ -36,12 +37,25 @@ Future<Uint8List> renderRgbaGpu(
   Uint8List sourceRgb,
   RenderParams params,
 ) async {
-  final source = await decodeRgbImage(sourceRgb, width, height);
+  // The source upload is itself a full-frame copy plus a texture upload;
+  // when the stage cache can resume from a stored boundary it is never
+  // sampled, so it is skipped too. See GpuStageCache.
+  final fingerprint = GpuStageCache.sourceFingerprint(sourceRgb, width, height);
+  final source =
+      GpuStageCache.instance.canResume(fingerprint, width, height, params)
+      ? null
+      : await decodeRgbImage(sourceRgb, width, height);
   final ui.Image result;
   try {
-    result = await renderImageGpu(source, width, height, params);
+    result = await renderImageGpu(
+      source,
+      width,
+      height,
+      params,
+      sourceFingerprint: fingerprint,
+    );
   } finally {
-    source.dispose();
+    source?.dispose();
   }
   final ByteData? byteData;
   try {
@@ -84,12 +98,21 @@ Future<Uint8List> renderRgbGpu(
 /// — this chain alone is a dozen full-size RGBA textures, and the stages
 /// it calls allocate several times that between them). [source] belongs to
 /// the caller and is never disposed here.
+///
+/// With a [sourceFingerprint] (see [GpuStageCache.sourceFingerprint]) the
+/// chain consults [GpuStageCache] and resumes from the deepest boundary
+/// whose parameters match, storing the boundaries it does compute for the
+/// next render. [source] may then be `null` when the caller already knows
+/// a boundary will hit ([GpuStageCache.canResume]); it is only read when
+/// the chain has to start from the top. Without a fingerprint — the mask
+/// layers — nothing is cached and [source] is required.
 Future<ui.Image> renderImageGpu(
-  ui.Image source,
+  ui.Image? source,
   int width,
   int height,
-  RenderParams params,
-) async {
+  RenderParams params, {
+  int? sourceFingerprint,
+}) async {
   // Exposure -> White Balance -> baseline chroma smoothing -> AI denoise ->
   // Sharpen -> Texture -> Clarity -> Dehaze -> Tone. Exposure/White Balance
   // run first (Solstice's own order runs them much later, after Clarity)
@@ -103,95 +126,165 @@ Future<ui.Image> renderImageGpu(
   // midtones" weight, which reads each pixel's current luminance and
   // targets the wrong tonal range on a RAW that still needs a large
   // Exposure correction.
-  final chain = GpuImagePool([source]);
-  final afterExposureAndWb = chain.add(
-    await _runPreDenoise(source, width, height, params),
+  // Cross-render cache (2026-09-09, see GpuStageCache): the two boundaries
+  // are looked up first, deepest first, and everything before the hit is
+  // skipped. A Basic-panel slider change then runs only the tonal blur
+  // and the two point-op passes instead of the whole chain.
+  final cache = sourceFingerprint == null ? null : GpuStageCache.instance;
+  final keyAfterAiDenoise = cache == null
+      ? null
+      : GpuStageCache.keyFor(
+          GpuStageBoundary.afterAiDenoise,
+          sourceFingerprint!,
+          width,
+          height,
+          params,
+        );
+  final keyAfterDehaze = cache == null
+      ? null
+      : GpuStageCache.keyFor(
+          GpuStageBoundary.afterDehaze,
+          sourceFingerprint!,
+          width,
+          height,
+          params,
+        );
+  final cachedAfterDehaze = cache?.lookup(
+    GpuStageBoundary.afterDehaze,
+    keyAfterDehaze!,
   );
-  // detailScale, not renderScale, on all three of chroma smoothing,
-  // denoise and sharpen — mirrors render.dart's CPU ordering exactly. See
-  // calDetailRadiusMaxScale.
-  final afterChromaSmoothing = chain.add(
-    await runBaselineChromaSmoothingGpu(
-      afterExposureAndWb,
-      width,
-      height,
-      params.detailScale,
-    ),
-  );
-  final afterAiDenoise = chain.add(
-    await runAiDenoiseGpu(
-      afterChromaSmoothing,
-      width,
-      height,
-      params.aiDenoise,
-      params.detailScale,
-    ),
-  );
+  final cachedAfterAiDenoise = cachedAfterDehaze != null
+      ? null
+      : cache?.lookup(GpuStageBoundary.afterAiDenoise, keyAfterAiDenoise!);
+
+  // The source belongs to the caller and the cached images to the cache:
+  // none of them is this chain's to dispose.
+  final chain = GpuImagePool([
+    if (source != null) source,
+    if (cachedAfterDehaze != null) cachedAfterDehaze,
+    if (cachedAfterAiDenoise != null) cachedAfterAiDenoise,
+  ]);
+
+  final ui.Image afterDehaze;
+  if (cachedAfterDehaze != null) {
+    afterDehaze = cachedAfterDehaze;
+  } else {
+    final ui.Image afterAiDenoise;
+    if (cachedAfterAiDenoise != null) {
+      afterAiDenoise = cachedAfterAiDenoise;
+    } else {
+      if (source == null) {
+        throw StateError(
+          'renderImageGpu: no source image and no cached stage to resume '
+          'from (canResume said otherwise)',
+        );
+      }
+      final afterExposureAndWb = chain.add(
+        await _runPreDenoise(source, width, height, params),
+      );
+      // detailScale, not renderScale, on all three of chroma smoothing,
+      // denoise and sharpen — mirrors render.dart's CPU ordering exactly.
+      // See calDetailRadiusMaxScale.
+      final afterChromaSmoothing = chain.add(
+        await runBaselineChromaSmoothingGpu(
+          afterExposureAndWb,
+          width,
+          height,
+          params.detailScale,
+        ),
+      );
+      afterAiDenoise = chain.add(
+        await runAiDenoiseGpu(
+          afterChromaSmoothing,
+          width,
+          height,
+          params.aiDenoise,
+          params.detailScale,
+        ),
+      );
+      if (cache != null &&
+          cache.adopt(
+            GpuStageBoundary.afterAiDenoise,
+            keyAfterAiDenoise!,
+            afterAiDenoise,
+          )) {
+        chain.detach(afterAiDenoise);
+      }
+    }
+    final afterSharpen = chain.add(
+      await runSharpenGpu(
+        afterAiDenoise,
+        width,
+        height,
+        params.sharpen,
+        params.detailScale,
+      ),
+    );
+    final afterTexture = chain.add(
+      await runLocalContrastGpu(
+        afterSharpen,
+        width,
+        height,
+        params.texture * calTextureStrength,
+        calTextureSigma * params.renderScale,
+        noiseAware: true,
+        noiseRadius: scaledNoiseRadius(params.renderScale),
+      ),
+    );
+    final afterClarity = chain.add(
+      await runLocalContrastGpu(
+        afterTexture,
+        width,
+        height,
+        params.clarity * calClarityStrength,
+        calClaritySigma * params.renderScale,
+        protectMidtones: true,
+      ),
+    );
+
+    // "darkmoon Color" profile stage — the fixed base-contrast S-curve
+    // then the per-hue correction, same spot render.dart's
+    // applyColorProfileStage runs both in, before Dehaze (see that
+    // function's doc comment for why: Dehaze estimates its own haze color
+    // from whatever buffer it's given, so any contrast/hue shift needs to
+    // happen first). baseContrastGamma moved here 2026-09-02 — it used to
+    // be computed and applied inside _runPostDenoise, i.e. *after* Dehaze,
+    // a real GPU/CPU order divergence at odds with the comment above.
+    final baseContrastGamma = params.baseContrast == 0
+        ? 1.0
+        : math
+              .pow(2.0, params.baseContrast / 100.0 * calContrastStrength)
+              .toDouble();
+    final afterColorProfile = chain.add(
+      await runColorProfileGpu(
+        afterClarity,
+        width,
+        height,
+        params.colorProfile,
+        params.colorProfileStrength,
+        baseContrastGamma,
+      ),
+    );
+    afterDehaze = chain.add(
+      await runDehazeGpu(
+        afterColorProfile,
+        width,
+        height,
+        params.dehaze,
+        params.renderScale,
+      ),
+    );
+    if (cache != null &&
+        cache.adopt(
+          GpuStageBoundary.afterDehaze,
+          keyAfterDehaze!,
+          afterDehaze,
+        )) {
+      chain.detach(afterDehaze);
+    }
+  }
   final lut = chain.add(
     await _buildLutImage(params.curves, params.parametricCurve),
-  );
-  final afterSharpen = chain.add(
-    await runSharpenGpu(
-      afterAiDenoise,
-      width,
-      height,
-      params.sharpen,
-      params.detailScale,
-    ),
-  );
-  final afterTexture = chain.add(
-    await runLocalContrastGpu(
-      afterSharpen,
-      width,
-      height,
-      params.texture * calTextureStrength,
-      calTextureSigma * params.renderScale,
-      noiseAware: true,
-      noiseRadius: scaledNoiseRadius(params.renderScale),
-    ),
-  );
-  final afterClarity = chain.add(
-    await runLocalContrastGpu(
-      afterTexture,
-      width,
-      height,
-      params.clarity * calClarityStrength,
-      calClaritySigma * params.renderScale,
-      protectMidtones: true,
-    ),
-  );
-
-  // "darkmoon Color" profile stage — the fixed base-contrast S-curve
-  // then the per-hue correction, same spot render.dart's
-  // applyColorProfileStage runs both in, before Dehaze (see that
-  // function's doc comment for why: Dehaze estimates its own haze color
-  // from whatever buffer it's given, so any contrast/hue shift needs to
-  // happen first). baseContrastGamma moved here 2026-09-02 — it used to
-  // be computed and applied inside _runPostDenoise, i.e. *after* Dehaze,
-  // a real GPU/CPU order divergence at odds with the comment above.
-  final baseContrastGamma = params.baseContrast == 0
-      ? 1.0
-      : math
-            .pow(2.0, params.baseContrast / 100.0 * calContrastStrength)
-            .toDouble();
-  final afterColorProfile = chain.add(
-    await runColorProfileGpu(
-      afterClarity,
-      width,
-      height,
-      params.colorProfile,
-      params.colorProfileStrength,
-      baseContrastGamma,
-    ),
-  );
-  final afterDehaze = chain.add(
-    await runDehazeGpu(
-      afterColorProfile,
-      width,
-      height,
-      params.dehaze,
-      params.renderScale,
-    ),
   );
   // The sigma-3.5 tonal blur behind Shadows/Blacks' detail preservation,
   // taken from the post-Dehaze buffer because that is where the CPU takes
