@@ -98,28 +98,18 @@ Uint8List applyCameraMatch(
   return (sumR / pixelCount, sumG / pixelCount, sumB / pixelCount);
 }
 
-/// One 8-bit sRGB value, linearised. Built once: the offset below averages
-/// millions of pixels and the transfer function is not cheap.
-final Float64List _srgbToLinear = Float64List.fromList([
-  for (var i = 0; i < 256; i++)
-    if (i / 255.0 <= 0.04045)
-      (i / 255.0) / 12.92
-    else
-      math.pow((i / 255.0 + 0.055) / 1.055, 2.4).toDouble(),
-]);
-
-double _meanLinearLuma(Uint8List rgb) {
+/// Mean luma of an 8-bit RGB buffer, normalised to 0-1 and left in the
+/// encoding the bytes are already in — **not** linearised. See
+/// [cameraExposureOffsetStops] for why that is the whole point.
+double _meanEncodedLuma(Uint8List rgb) {
   if (rgb.length < 3) {
     return 0;
   }
   var sum = 0.0;
   for (var i = 0; i + 2 < rgb.length; i += 3) {
-    sum +=
-        0.2126 * _srgbToLinear[rgb[i]] +
-        0.7152 * _srgbToLinear[rgb[i + 1]] +
-        0.0722 * _srgbToLinear[rgb[i + 2]];
+    sum += 0.2126 * rgb[i] + 0.7152 * rgb[i + 1] + 0.0722 * rgb[i + 2];
   }
-  return sum / (rgb.length / 3);
+  return sum / (rgb.length / 3) / 255.0;
 }
 
 /// How many stops [rgbBytes] sits away from the brightness of
@@ -138,9 +128,29 @@ double _meanLinearLuma(Uint8List rgb) {
 /// scene should be is a judgement worth inheriting, and it says nothing
 /// about hue.
 ///
-/// The means are taken in **linear** light. Exposure is a multiplication
-/// there, and averaging gamma-encoded values would weight the shadows far
-/// too heavily for a ratio that is about to become a power of two.
+/// **The means are taken in the encoding the pixels arrive in, not in
+/// linear light** — and that is not the obvious choice, so: this number
+/// does not stay a physical quantity. It is handed to the Exposure slider
+/// (via [RenderParams.fromValues]), and `_applyExposure` multiplies the
+/// *gamma-encoded* buffer by `2^(units / calExposureUnitsPerStop)`. A
+/// gamma-space multiply is not a linear-light exposure change: measured
+/// on a flat patch, six slider units — half a stop by that constant's
+/// arithmetic, and half a stop of gamma-space gain — moves the linear
+/// luminance a full stop.
+///
+/// So a correction measured in linear light and spent through this knob
+/// lands about twice as strong as it should. On a Fujifilm X-T5 frame
+/// (2026-09-09) the linear measurement asked for +0.238 stops where the
+/// decode was already within 3% of the camera's own rendering; applied,
+/// it pushed the mean from 87.6 to 103.0 and clipped 2.9% of the frame.
+/// That is the highlights blowing out.
+///
+/// Measuring in the same space the correction is spent in makes the two
+/// cancel: multiplying our buffer by `preview / decoded` puts its mean
+/// exactly on the camera's, by construction. This was previously
+/// linearised, with a comment arguing that exposure is a multiplication
+/// in linear light — true of exposure in general, and not true of this
+/// pipeline's Exposure stage.
 double? cameraExposureOffsetStops(
   Uint8List rgbBytes,
   int width,
@@ -169,8 +179,8 @@ double? cameraExposureOffsetStops(
     return null;
   }
 
-  final decoded = _meanLinearLuma(rgbBytes);
-  final preview = _meanLinearLuma(jpeg.getBytes(order: img.ChannelOrder.rgb));
+  final decoded = _meanEncodedLuma(rgbBytes);
+  final preview = _meanEncodedLuma(jpeg.getBytes(order: img.ChannelOrder.rgb));
   if (decoded < lumaFloor || preview < lumaFloor) {
     return null;
   }

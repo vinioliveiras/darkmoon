@@ -887,13 +887,14 @@ const double calUprightHorizontalGain = -101.0;
 /// default: 1.5
 const double calCameraExposureLimitStops = 1.5;
 
-/// **Base exposure** — mean linear luminance below which the comparison
-/// is refused.
+/// **Base exposure** — mean luma (0-1, gamma-encoded, *not* linear) below
+/// which the comparison is refused.
 ///
 /// The offset is a ratio, and a ratio of two nearly-black frames is noise
 /// amplified without limit. A genuinely dark photo is exactly where a
 /// wrong answer would be most visible.
 ///   ↑ higher = refuses more photos, leaving them as decoded
 ///   ↓ lower  = answers for darker frames, less reliably
-/// default: 0.002
-const double calCameraExposureLumaFloor = 0.002;
+/// default: 0.026   (2026-09-09: was 0.002 when the means were linearised;
+/// same darkness, restated in the encoding the means are now taken in)
+const double calCameraExposureLumaFloor = 0.026;

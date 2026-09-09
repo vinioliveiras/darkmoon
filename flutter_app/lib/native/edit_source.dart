@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 
 import '../raw_files.dart' show isRawFile;
 import 'background_priority.dart';
+import 'camera_match.dart';
 import 'common_image.dart';
 import 'image_utils.dart';
 import 'libraw.dart';
@@ -75,7 +76,20 @@ class EditSourcePair {
   /// [RawImage.baseExposureStops] for the file these came from — null for
   /// anything that carries no camera preview to compare against, which is
   /// every non-RAW source.
+  ///
+  /// Also null for a pair that came back from a cache rather than a fresh
+  /// decode: the offset is measured inside [decodeRawImage], which a cache
+  /// hit skips by design. See [probeBaseExposureStops], which puts it
+  /// back.
   final double? baseExposureStops;
+
+  /// This pair with [stops] as its [baseExposureStops] — the one thing a
+  /// cache hit cannot reconstruct on its own.
+  EditSourcePair withBaseExposureStops(double? stops) => EditSourcePair(
+    preview: preview,
+    live: live,
+    baseExposureStops: stops,
+  );
 }
 
 Uint8List _rgbBytes(img.Image image) =>
@@ -254,6 +268,47 @@ EditSourcePair? decodeEditSourcePairFromCachedJpeg(Uint8List jpegBytes) {
       rgbBytes: _rgbBytes(liveImage),
     ),
   );
+}
+
+/// Re-measures [EditSourcePair.baseExposureStops] for a photo whose pixels
+/// came back from a cache instead of a fresh RAW decode.
+///
+/// The offset is measured inside [decodeRawImage], so a cache hit — the
+/// plain preview cache and the three pipeline caches alike — handed back a
+/// pair carrying none, and the photo rendered at LibRaw's auto-brightened
+/// exposure with nothing pulling it back down. That is the highlights
+/// blowing out on every open after the first, reported 2026-09-09 and the
+/// reason this exists.
+///
+/// Measuring again here, rather than storing the number alongside the
+/// cache entry, is deliberate: it is the same comparison against the same
+/// embedded JPEG, it needs no change to any of the four cache formats, and
+/// it repairs the entries already sitting on disk instead of only the ones
+/// written from now on.
+///
+/// [source] is the cached *preview*, not the full sensor frame the fresh
+/// path measures — a mean is scale-invariant, so the two agree to within
+/// the cache JPEG's own rounding.
+///
+/// Designed to run via `compute()` (record arg, since `compute` takes one
+/// value).
+double? probeBaseExposureStops(
+  ({EditSource source, Uint8List embeddedJpeg}) args,
+) => cameraExposureOffsetStops(
+  args.source.rgbBytes,
+  args.source.width,
+  args.source.height,
+  args.embeddedJpeg,
+);
+
+/// [probeBaseExposureStops] at below-normal OS-thread priority — the form
+/// the folder-open preview-cache preload uses, so re-measuring a photo
+/// nobody has selected yet yields to the UI isolate.
+double? probeBaseExposureStopsLowPriority(
+  ({EditSource source, Uint8List embeddedJpeg}) args,
+) {
+  lowerBackgroundThreadPriority();
+  return probeBaseExposureStops(args);
 }
 
 /// [decodeEditSourcePairFromCachedJpeg] wrapped to run at below-normal

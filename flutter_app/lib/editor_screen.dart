@@ -3593,6 +3593,17 @@ class _EditorScreenState extends State<EditorScreen>
         setState(() => _missingFiles.add(path));
         return;
       }
+      // A cache hit skipped decodeRawImage, and with it the one place
+      // baseExposureStops is ever measured — so put it back before the
+      // pair is handed to the renderer. Without this the photo renders at
+      // LibRaw's auto-brightened exposure with nothing correcting it, and
+      // blows its highlights out on every open after the first (reported
+      // 2026-09-09; it looked fixed under measurement because a fresh
+      // decode is exactly the case that already worked).
+      sources = await _withMeasuredBaseExposure(path, sources);
+      if (!mounted || generation != _folderGeneration) {
+        return;
+      }
       setState(() => _editSources[path] = sources!);
       if (!fromCache) {
         unawaited(_storePreviewCache(path, sources));
@@ -3683,6 +3694,18 @@ class _EditorScreenState extends State<EditorScreen>
         lowPriority: true,
       );
       if (sources == null || !mounted || generation != _folderGeneration) {
+        return;
+      }
+      // Same gap as the selection path's, and it reaches the user the same
+      // way: a prewarmed pair goes straight into _editSources, so
+      // selecting that photo later skips the decode block entirely and
+      // never gets a chance to measure the offset.
+      sources = await _withMeasuredBaseExposure(
+        file.path,
+        sources,
+        lowPriority: true,
+      );
+      if (!mounted || generation != _folderGeneration) {
         return;
       }
       if (_editSources.containsKey(file.path)) {
@@ -4752,8 +4775,15 @@ class _EditorScreenState extends State<EditorScreen>
       }
       return false;
     }
+      // The pipeline modules build their pair from their own processed
+      // pixels and carry no offset, so a run drops it the same way a cache
+      // hit does — see [_withMeasuredBaseExposure].
+    final measured = await _withMeasuredBaseExposure(path, sources);
+    if (!mounted) {
+      return false;
+    }
     setState(() {
-      _editSources[path] = sources;
+      _editSources[path] = measured;
       _isRunningColorize = false;
     });
     return true;
@@ -4920,8 +4950,15 @@ class _EditorScreenState extends State<EditorScreen>
       }
       return false;
     }
+      // The pipeline modules build their pair from their own processed
+      // pixels and carry no offset, so a run drops it the same way a cache
+      // hit does — see [_withMeasuredBaseExposure].
+    final measured = await _withMeasuredBaseExposure(path, sources);
+    if (!mounted) {
+      return false;
+    }
     setState(() {
-      _editSources[path] = sources;
+      _editSources[path] = measured;
       _isRunningNeuralEnhance = false;
       _aiEnhanceProgress = null;
     });
@@ -4971,8 +5008,15 @@ class _EditorScreenState extends State<EditorScreen>
 
     switch (result) {
       case CloudDenoiseSuccess(sources: final sources):
+        // The pipeline modules build their pair from their own processed
+        // pixels and carry no offset, so a run drops it the same way a cache
+        // hit does — see [_withMeasuredBaseExposure].
+        final measured = await _withMeasuredBaseExposure(path, sources);
+        if (!mounted) {
+          return false;
+        }
         setState(() {
-          _editSources[path] = sources;
+          _editSources[path] = measured;
           _isRunningCloudDenoise = false;
           _cloudDenoiseStage = null;
         });
@@ -5579,6 +5623,62 @@ class _EditorScreenState extends State<EditorScreen>
         baseContrast: _effectiveBaseContrast,
         colorProfile: profile,
       ),
+    );
+  }
+
+  /// [sources] with its [EditSourcePair.baseExposureStops] filled in when
+  /// it is missing — which is exactly when the pair came out of a cache
+  /// rather than a fresh RAW decode. Unchanged when it is already there
+  /// (a real decode measured it) or when there is nothing to measure
+  /// against.
+  ///
+  /// Every path that writes [_editSources] has to go through here. Missing
+  /// one is not a visible failure: the photo simply renders at LibRaw's
+  /// auto-brightened exposure, which reads as blown highlights rather than
+  /// as anything pointing back at the cache.
+  Future<EditSourcePair> _withMeasuredBaseExposure(
+    String path,
+    EditSourcePair sources, {
+    bool lowPriority = false,
+  }) async {
+    if (sources.baseExposureStops != null) {
+      return sources;
+    }
+    final stops = await _probeBaseExposure(
+      path,
+      sources.preview,
+      lowPriority: lowPriority,
+    );
+    return stops == null ? sources : sources.withBaseExposureStops(stops);
+  }
+
+  /// [probeBaseExposureStops] for [path], reading the camera's own JPEG
+  /// through the same cache the viewport stand-in uses — by the time a
+  /// cache hit gets here it is normally already loaded, since
+  /// [_selectIndex] starts that read first precisely because it is the
+  /// cheap one.
+  ///
+  /// Null when the file carries no embedded JPEG to compare against (and
+  /// for every non-RAW source), which is the same answer a fresh decode
+  /// gives for those — they keep opening exactly as they did.
+  Future<double?> _probeBaseExposure(
+    String path,
+    EditSource preview, {
+    bool lowPriority = false,
+  }) async {
+    if (!isRawFile(path)) {
+      return null;
+    }
+    await _loadEmbeddedPreview(path);
+    final embedded = _embeddedPreviews[path];
+    if (embedded == null) {
+      return null;
+    }
+    return compute(
+      lowPriority
+          ? probeBaseExposureStopsLowPriority
+          : probeBaseExposureStops,
+      (source: preview, embeddedJpeg: embedded),
     );
   }
 
