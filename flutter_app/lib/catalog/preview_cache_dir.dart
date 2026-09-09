@@ -88,3 +88,40 @@ Future<void> cleanupStalePreviewCacheVersions() async {
     // Ignore — this is opportunistic disk cleanup, not correctness-critical.
   }
 }
+
+
+/// Resolves (creating if needed) the directory the camera-match
+/// measurements live in — `Documents/darkmoon/camera_match/
+/// v{rawDecodeFormatVersion}`.
+///
+/// One number and a 33-point curve per photo, measured from the RAW's own
+/// embedded JPEG (see `measureCameraMatch`). Tiny, but not cheap to
+/// produce: it decodes that JPEG and walks two images, which on a 13 MP
+/// preview was most of the time a warm open took before this cache
+/// existed. It only ever has to happen once per file.
+///
+/// Its own directory rather than a slot in the preview cache: the match
+/// describes the *file*, not the resolution it was previewed at, so it
+/// survives a change to Settings > Preview Resolution — and it is equally
+/// valid for the export, which never goes through the preview cache at
+/// all. Versioned by [rawDecodeFormatVersion] because a change to the
+/// decode params changes the decode the match was measured against.
+///
+/// Reuses [ThumbnailCacheManager] like the caches above; its sha1 of
+/// path+mtime+size is exactly the invalidation this wants, since a
+/// replaced file needs a fresh measurement.
+Future<String> resolveCameraMatchCacheDir() async {
+  final documents = await getApplicationDocumentsDirectory();
+  final dir = Directory(
+    p.join(
+      documents.path,
+      'darkmoon',
+      'camera_match',
+      'v$rawDecodeFormatVersion',
+    ),
+  );
+  if (!await dir.exists()) {
+    await dir.create(recursive: true);
+  }
+  return dir.path;
+}

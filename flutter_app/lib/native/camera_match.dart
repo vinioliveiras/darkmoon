@@ -100,18 +100,60 @@ Uint8List applyCameraMatch(
   return (sumR / pixelCount, sumG / pixelCount, sumB / pixelCount);
 }
 
-/// Mean luma of an 8-bit RGB buffer, normalised to 0-1 and left in the
-/// encoding the bytes are already in — **not** linearised. See
-/// [cameraExposureOffsetStops] for why that is the whole point.
-double _meanEncodedLuma(Uint8List rgb) {
-  if (rgb.length < 3) {
-    return 0;
+/// Everything both measurements need from one image, gathered in a single
+/// strided pass.
+///
+/// One pass rather than three, and a stride rather than every pixel,
+/// because this runs on the path that opens a photo. Walking a 13 MP
+/// embedded JPEG and a 6 MP preview end to end, twice each, was 2.1s of a
+/// 2.5s warm open (measured 2026-09-09) — most of it not even here but in
+/// decoding the same JPEG twice, which [measureCameraMatch] now does once.
+class _ImageStats {
+  const _ImageStats(this.meanEncodedLuma, this.perceptualHistogram);
+
+  /// Mean luma, normalised to 0-1, left in the encoding the bytes are
+  /// already in — **not** linearised. See [cameraExposureOffsetStops] for
+  /// why that is the whole point.
+  final double meanEncodedLuma;
+
+  /// Perceptual-luma histogram, [_toneHistogramBins] wide over 0-1.
+  final Float64List perceptualHistogram;
+}
+
+/// Roughly how many pixels [_statsOf] samples.
+///
+/// A mean and a histogram are both shapes, and a few hundred thousand
+/// pixels fix them as well as forty million do.
+const int _statsSampleTarget = 400000;
+
+_ImageStats _statsOf(Uint8List rgb) {
+  final pixels = rgb.length ~/ 3;
+  if (pixels == 0) {
+    return _ImageStats(0, Float64List(_toneHistogramBins));
   }
+  final stride = pixels <= _statsSampleTarget
+      ? 1
+      : (pixels / _statsSampleTarget).ceil();
+  final hist = Float64List(_toneHistogramBins);
   var sum = 0.0;
-  for (var i = 0; i + 2 < rgb.length; i += 3) {
-    sum += 0.2126 * rgb[i] + 0.7152 * rgb[i + 1] + 0.0722 * rgb[i + 2];
+  var counted = 0;
+  for (var px = 0; px < pixels; px += stride) {
+    final i = px * 3;
+    final r = rgb[i];
+    final g = rgb[i + 1];
+    final b = rgb[i + 2];
+    sum += 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    final linear =
+        0.2126 * srgbToLinear(r / 255.0) +
+        0.7152 * srgbToLinear(g / 255.0) +
+        0.0722 * srgbToLinear(b / 255.0);
+    final bin = (perceptualEncode(linear) * (_toneHistogramBins - 1))
+        .round()
+        .clamp(0, _toneHistogramBins - 1);
+    hist[bin]++;
+    counted++;
   }
-  return sum / (rgb.length / 3) / 255.0;
+  return _ImageStats(sum / counted / 255.0, hist);
 }
 
 /// How many stops [rgbBytes] sits away from the brightness of
@@ -181,12 +223,27 @@ double? cameraExposureOffsetStops(
     return null;
   }
 
-  final decoded = _meanEncodedLuma(rgbBytes);
-  final preview = _meanEncodedLuma(jpeg.getBytes(order: img.ChannelOrder.rgb));
-  if (decoded < lumaFloor || preview < lumaFloor) {
+  return _offsetFrom(
+    _statsOf(rgbBytes),
+    _statsOf(jpeg.getBytes(order: img.ChannelOrder.rgb)),
+    limitStops: limitStops,
+    lumaFloor: lumaFloor,
+  );
+}
+
+/// The offset, from statistics already gathered.
+double? _offsetFrom(
+  _ImageStats ours,
+  _ImageStats camera, {
+  required double limitStops,
+  required double lumaFloor,
+}) {
+  if (ours.meanEncodedLuma < lumaFloor ||
+      camera.meanEncodedLuma < lumaFloor) {
     return null;
   }
-  final stops = math.log(preview / decoded) / math.ln2;
+  final stops =
+      math.log(camera.meanEncodedLuma / ours.meanEncodedLuma) / math.ln2;
   return stops.clamp(-limitStops, limitStops);
 }
 
@@ -199,37 +256,6 @@ double? cameraExposureOffsetStops(
 /// Finer than the 33 points the fit is sampled at, so the percentile
 /// lookup is not itself the limiting resolution.
 const int _toneHistogramBins = 1024;
-
-/// Roughly how many pixels each histogram samples.
-///
-/// A histogram is a shape, and a few hundred thousand pixels fix that
-/// shape as well as forty million do — a full-sensor frame is 40 MP and
-/// walking all of it here would cost more than the fit is worth. The
-/// stride is computed per image so both sides of the comparison are
-/// sampled about equally densely.
-const int _toneSampleTarget = 400000;
-
-/// Perceptual-luma histogram of a packed RGB buffer, sampled with a
-/// stride (see [_toneSampleTarget]).
-Float64List _perceptualHistogram(Uint8List rgb) {
-  final pixels = rgb.length ~/ 3;
-  final stride = pixels <= _toneSampleTarget
-      ? 1
-      : (pixels / _toneSampleTarget).ceil();
-  final hist = Float64List(_toneHistogramBins);
-  for (var px = 0; px < pixels; px += stride) {
-    final i = px * 3;
-    final linear =
-        0.2126 * srgbToLinear(rgb[i] / 255.0) +
-        0.7152 * srgbToLinear(rgb[i + 1] / 255.0) +
-        0.0722 * srgbToLinear(rgb[i + 2] / 255.0);
-    final bin = (perceptualEncode(linear) * (_toneHistogramBins - 1))
-        .round()
-        .clamp(0, _toneHistogramBins - 1);
-    hist[bin]++;
-  }
-  return hist;
-}
 
 /// [hist] as a normalised cumulative distribution.
 Float64List _cdf(Float64List hist) {
@@ -311,14 +337,25 @@ List<double>? cameraToneCurve(
   if (aspect < 0.8 || aspect > 1.25) {
     return null;
   }
-  final cameraRgb = jpeg.getBytes(order: img.ChannelOrder.rgb);
-  if (_meanEncodedLuma(rgbBytes) < lumaFloor ||
-      _meanEncodedLuma(cameraRgb) < lumaFloor) {
+  return _toneFrom(
+    _statsOf(rgbBytes),
+    _statsOf(jpeg.getBytes(order: img.ChannelOrder.rgb)),
+    lumaFloor: lumaFloor,
+  );
+}
+
+/// The curve, from statistics already gathered.
+List<double>? _toneFrom(
+  _ImageStats ours,
+  _ImageStats camera, {
+  required double lumaFloor,
+}) {
+  if (ours.meanEncodedLuma < lumaFloor ||
+      camera.meanEncodedLuma < lumaFloor) {
     return null;
   }
-
-  final ourCdf = _cdf(_perceptualHistogram(rgbBytes));
-  final cameraCdf = _cdf(_perceptualHistogram(cameraRgb));
+  final ourCdf = _cdf(ours.perceptualHistogram);
+  final cameraCdf = _cdf(camera.perceptualHistogram);
   final tone = <double>[];
   var cameraBin = 0;
   for (var k = 0; k < colorProfileTonePoints; k++) {
@@ -341,4 +378,89 @@ List<double>? cameraToneCurve(
   // An all-flat curve means one of the two frames had no tonal range to
   // speak of; identity is the honest answer, and the renderer skips it.
   return tone.last <= tone.first ? _identityTone() : tone;
+}
+
+
+/// Both measurements from one decode of [embeddedJpegBytes] and one pass
+/// over each buffer — the form everything in the app actually uses.
+///
+/// The two public functions above are the same measurements taken
+/// separately, kept because each is meaningful on its own and each is
+/// tested on its own. Production never calls them: taken separately they
+/// decode the camera's JPEG twice and walk both buffers twice, which on a
+/// 13 MP embedded preview was 2.1 seconds of a 2.5-second warm open
+/// (measured 2026-09-09, and the reason this exists).
+CameraMatch measureCameraMatch(
+  Uint8List rgbBytes,
+  int width,
+  int height,
+  Uint8List? embeddedJpegBytes, {
+  double limitStops = calCameraExposureLimitStops,
+  double lumaFloor = calCameraExposureLumaFloor,
+}) {
+  if (embeddedJpegBytes == null || width <= 0 || height <= 0) {
+    return CameraMatch.none;
+  }
+  img.Image? jpeg;
+  try {
+    jpeg = img.decodeJpg(embeddedJpegBytes);
+  } on Exception {
+    jpeg = null;
+  }
+  if (jpeg == null || jpeg.width == 0 || jpeg.height == 0) {
+    return CameraMatch.none;
+  }
+  final aspect = (width / height) / (jpeg.width / jpeg.height);
+  if (aspect < 0.8 || aspect > 1.25) {
+    return CameraMatch.none;
+  }
+  final ours = _statsOf(rgbBytes);
+  final camera = _statsOf(jpeg.getBytes(order: img.ChannelOrder.rgb));
+  return CameraMatch(
+    stops: _offsetFrom(
+      ours,
+      camera,
+      limitStops: limitStops,
+      lumaFloor: lumaFloor,
+    ),
+    tone: _toneFrom(ours, camera, lumaFloor: lumaFloor),
+  );
+}
+
+/// What a decode learns by comparing itself against the camera's own
+/// embedded rendering of the same shot: how far off it is overall, and how
+/// its tonality is distributed.
+///
+/// The two are measured from the same pair and are always present or
+/// absent together. They are alternatives, not layers — see
+/// [cameraToneCurve].
+class CameraMatch {
+  const CameraMatch({this.stops, this.tone});
+
+  static const none = CameraMatch();
+
+  final double? stops;
+  final List<double>? tone;
+
+  bool get isEmpty => stops == null && tone == null;
+
+  Map<String, dynamic> toJson() => {'stops': stops, 'tone': tone};
+
+  /// Null for anything that is not a match this app wrote — a corrupt or
+  /// truncated cache entry reads as "not measured yet" rather than as a
+  /// curve of the wrong length, which would be applied without complaint.
+  static CameraMatch? fromJson(Object? raw) {
+    if (raw is! Map) {
+      return null;
+    }
+    final tone = raw['tone'];
+    final stops = raw['stops'];
+    if (tone is! List || tone.length != colorProfileTonePoints) {
+      return null;
+    }
+    return CameraMatch(
+      stops: stops is num ? stops.toDouble() : null,
+      tone: [for (final v in tone) (v as num).toDouble()],
+    );
+  }
 }

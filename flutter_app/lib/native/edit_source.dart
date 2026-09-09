@@ -101,24 +101,6 @@ class EditSourcePair {
   );
 }
 
-/// What a decode learns by comparing itself against the camera's own
-/// embedded rendering of the same shot: how far off it is overall, and how
-/// its tonality is distributed.
-///
-/// The two are measured from the same pair and are always present or
-/// absent together. They are alternatives, not layers — see
-/// [cameraToneCurve].
-class CameraMatch {
-  const CameraMatch({this.stops, this.tone});
-
-  static const none = CameraMatch();
-
-  final double? stops;
-  final List<double>? tone;
-
-  bool get isEmpty => stops == null && tone == null;
-}
-
 Uint8List _rgbBytes(img.Image image) =>
     image.getBytes(order: img.ChannelOrder.rgb);
 
@@ -337,19 +319,11 @@ EditSourcePair? decodeEditSourcePairFromCachedJpeg(Uint8List jpegBytes) {
 /// value).
 CameraMatch probeCameraMatch(
   ({EditSource source, Uint8List embeddedJpeg}) args,
-) => CameraMatch(
-  stops: cameraExposureOffsetStops(
-    args.source.rgbBytes,
-    args.source.width,
-    args.source.height,
-    args.embeddedJpeg,
-  ),
-  tone: cameraToneCurve(
-    args.source.rgbBytes,
-    args.source.width,
-    args.source.height,
-    args.embeddedJpeg,
-  ),
+) => measureCameraMatch(
+  args.source.rgbBytes,
+  args.source.width,
+  args.source.height,
+  args.embeddedJpeg,
 );
 
 /// [probeCameraMatch] at below-normal OS-thread priority — the form the

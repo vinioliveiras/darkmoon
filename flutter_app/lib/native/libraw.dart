@@ -608,23 +608,18 @@ RawImage? decodeRawImage(
         // over the file: the preview is right there, and re-opening a RAW
         // to read it would cost more than the comparison does. Extracted
         // once — both measurements read the same preview.
-        final embeddedJpeg = _extractThumbJpeg(lib, lr);
+        final match = measureCameraMatch(
+          rgbBytes,
+          width,
+          height,
+          _extractThumbJpeg(lib, lr),
+        );
         return RawImage(
           width: width,
           height: height,
           rgbBytes: rgbBytes,
-          baseExposureStops: cameraExposureOffsetStops(
-            rgbBytes,
-            width,
-            height,
-            embeddedJpeg,
-          ),
-          baseToneCurve: cameraToneCurve(
-            rgbBytes,
-            width,
-            height,
-            embeddedJpeg,
-          ),
+          baseExposureStops: match.stops,
+          baseToneCurve: match.tone,
         );
       } finally {
         lib.libraw_dcraw_clear_mem(image);
@@ -805,23 +800,18 @@ RawImage? decodeRawImageWithPmridDenoise(
         // over the file: the preview is right there, and re-opening a RAW
         // to read it would cost more than the comparison does. Extracted
         // once — both measurements read the same preview.
-        final embeddedJpeg = _extractThumbJpeg(lib, lr);
+        final match = measureCameraMatch(
+          rgbBytes,
+          width,
+          height,
+          _extractThumbJpeg(lib, lr),
+        );
         return RawImage(
           width: width,
           height: height,
           rgbBytes: rgbBytes,
-          baseExposureStops: cameraExposureOffsetStops(
-            rgbBytes,
-            width,
-            height,
-            embeddedJpeg,
-          ),
-          baseToneCurve: cameraToneCurve(
-            rgbBytes,
-            width,
-            height,
-            embeddedJpeg,
-          ),
+          baseExposureStops: match.stops,
+          baseToneCurve: match.tone,
         );
       } finally {
         lib.libraw_dcraw_clear_mem(image);

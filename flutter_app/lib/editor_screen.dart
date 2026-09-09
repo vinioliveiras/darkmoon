@@ -1,7 +1,8 @@
 import 'dart:async';
+import 'dart:convert' show jsonDecode, jsonEncode, utf8;
 import 'dart:io' show Directory, File, Platform, Process;
 import 'dart:ui' as ui;
-import 'dart:ui' show AppExitResponse;
+import 'dart:ui' show AppExitResponse, ImageFilter;
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
@@ -32,12 +33,18 @@ import 'cloud_denoise/cloud_denoise_token_store.dart';
 import 'diagnostics/dev_log.dart';
 import 'export/export_job.dart';
 import 'l10n/app_localizations.dart';
+import 'native/camera_match.dart';
 import 'native/common_image_thumbnail.dart';
 import 'native/edit_source.dart';
 import 'native/edit_source_ai_enhance.dart';
 import 'native/edit_source_cloud_denoise.dart';
 import 'native/edit_source_colorize.dart';
-import 'native/libraw.dart'    show RawMetadata, extractRawMetadata, extractRawThumbnailJpeg;
+import 'native/libraw.dart'
+    show
+        RawDecodeStage,
+        RawMetadata,
+        extractRawMetadata,
+        extractRawThumbnailJpeg;
 import 'native/thumbnail_loader.dart';
 import 'presets/preset.dart';
 import 'presets/preset_thumbnails.dart';
@@ -867,10 +874,14 @@ SingleActivator _cmdShortcut(LogicalKeyboardKey key, {bool shift = false}) =>
 class PreviewFrame {
   const PreviewFrame.rendered(ui.Image this.image)
     : jpegBytes = null,
-      decodeWidth = null;
+      decodeWidth = null,
+      isSmallStandIn = false;
 
-  const PreviewFrame.placeholder(Uint8List this.jpegBytes, {this.decodeWidth})
-    : image = null;
+  const PreviewFrame.placeholder(
+    Uint8List this.jpegBytes, {
+    this.decodeWidth,
+    this.isSmallStandIn = false,
+  }) : image = null;
 
   final ui.Image? image;
   final Uint8List? jpegBytes;
@@ -886,8 +897,19 @@ class PreviewFrame {
   /// again on a machine with less to spare.
   final int? decodeWidth;
 
-  /// True while this is the thumbnail stand-in rather than a real render —
-  /// the canvas blurs it so it visibly reads as "not the real thing yet".
+  /// True when [jpegBytes] is the 200px filmstrip thumbnail rather than
+  /// the camera's own embedded preview.
+  ///
+  /// The two stand-ins want opposite treatment, which is the whole reason
+  /// this exists. The filmstrip thumbnail has to be magnified several
+  /// times to fill the viewport and is going to look wrong regardless, so
+  /// the canvas blurs it and shows a spinner: provisional, and honest
+  /// about it. The camera's embedded image is wider than the viewport and
+  /// scaled *down* — softening that would hide the one thing it is there
+  /// to show.
+  final bool isSmallStandIn;
+
+  /// True while this is a stand-in rather than a real render.
   bool get isPlaceholder => image == null;
 
   /// A copy holding its own handle on the same pixels.
@@ -1120,10 +1142,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// [_disposePreviewsFor] for every photo at once — used when the whole
   /// filmstrip is replaced (folder change, close, refresh).
   void _disposeAllPreviews() {
-    for (final map in [
-      _renderedPreviews,
-      _neutralPreviews,
-    ]) {
+    for (final map in [_renderedPreviews, _neutralPreviews]) {
       for (final image in map.values) {
         image.dispose();
       }
@@ -1418,6 +1437,16 @@ class _EditorScreenState extends State<EditorScreen>
   /// Clarity/Dehaze at full resolution) — gated by a delay so ordinary
   /// fast slider tweaks never flash it.
   bool _isDecodingPhoto = false;
+
+  /// Which [RawDecodeStage] the photo currently being opened is on, or
+  /// null before the first one arrives (and for a cache hit, which never
+  /// runs a decode at all).
+  ///
+  /// The stages were always emitted — `decodeEditSourcesWithProgress`
+  /// spawns a dedicated isolate precisely so they can cross back while the
+  /// decode runs — and were thrown away, because what showed was an
+  /// indeterminate spinner. See [_decodeProgress].
+  RawDecodeStage? _photoDecodeStage;
   bool _isRenderingSlow = false;
   Timer? _slowRenderTimer;
   static const _slowRenderThreshold = Duration(seconds: 3);
@@ -1807,6 +1836,12 @@ class _EditorScreenState extends State<EditorScreen>
   /// [_thumbnailCache] being nullable.
   ThumbnailCacheManager? _previewCache;
 
+  /// Where measured camera matches are kept between sessions — see
+  /// [resolveCameraMatchCacheDir]. Null until that resolves, at which
+  /// point [_withMeasuredCameraMatch] stops paying for the measurement on
+  /// every open and starts paying for it once per file.
+  ThumbnailCacheManager? _cameraMatchCache;
+
   @override
   void initState() {
     super.initState();
@@ -1826,6 +1861,7 @@ class _EditorScreenState extends State<EditorScreen>
     unawaited(_loadPresetsState());
     unawaited(_loadSettings());
     unawaited(_loadThumbnailCache());
+    unawaited(_loadCameraMatchCache());
     unawaited(_loadLensProfiles());
     unawaited(cleanupStalePreviewCacheVersions());
     if (_colorProfileEnabled) {
@@ -1856,6 +1892,14 @@ class _EditorScreenState extends State<EditorScreen>
       return;
     }
     setState(() => _thumbnailCache = ThumbnailCacheManager(dir));
+  }
+
+  Future<void> _loadCameraMatchCache() async {
+    final dir = await resolveCameraMatchCacheDir();
+    if (!mounted) {
+      return;
+    }
+    setState(() => _cameraMatchCache = ThumbnailCacheManager(dir));
   }
 
   Future<void> _loadPreviewCache() async {
@@ -3630,7 +3674,11 @@ class _EditorScreenState extends State<EditorScreen>
       if (sources == null) {
         sources = await decodeEditSourcesWithProgress(
           path,
-          (_) {},
+          (stage) {
+            if (mounted && generation == _folderGeneration) {
+              setState(() => _photoDecodeStage = stage);
+            }
+          },
           previewMaxDimension: _settings.previewResolution,
           editEmbeddedJpeg: _settings.editEmbeddedJpeg,
         );
@@ -3657,7 +3705,10 @@ class _EditorScreenState extends State<EditorScreen>
       if (!mounted || generation != _folderGeneration) {
         return;
       }
-      setState(() => _isDecodingPhoto = false);
+      setState(() {
+        _isDecodingPhoto = false;
+        _photoDecodeStage = null;
+      });
       if (sources == null) {
         // A cache miss followed by a real decode failure this deep almost
         // always means the file itself is gone (moved/renamed/deleted
@@ -3765,7 +3816,7 @@ class _EditorScreenState extends State<EditorScreen>
         file.path,
         (_) {},
         previewMaxDimension: _settings.previewResolution,
-          editEmbeddedJpeg: _settings.editEmbeddedJpeg,
+        editEmbeddedJpeg: _settings.editEmbeddedJpeg,
         lowPriority: true,
       );
       if (sources == null || !mounted || generation != _folderGeneration) {
@@ -4079,9 +4130,6 @@ class _EditorScreenState extends State<EditorScreen>
     return compute(renderJobToJpeg, job);
   }
 
-
-
-
   /// The photo's decoded native-resolution [EditSource] — from the
   /// in-memory full-quality source if it's this photo's, then the shared
   /// `previews/native` disk cache, then a fresh RAW decode that also warms
@@ -4273,7 +4321,6 @@ class _EditorScreenState extends State<EditorScreen>
     }
     return compute(decodeColorizeCacheEntry, cachedPng);
   }
-
 
   /// Renders [path] with neutral (default) params, for the Before/After
   /// comparison — independent of whatever edits are currently applied.
@@ -4860,9 +4907,9 @@ class _EditorScreenState extends State<EditorScreen>
       }
       return false;
     }
-      // The pipeline modules build their pair from their own processed
-      // pixels and carry no offset, so a run drops it the same way a cache
-      // hit does — see [_withMeasuredCameraMatch].
+    // The pipeline modules build their pair from their own processed
+    // pixels and carry no offset, so a run drops it the same way a cache
+    // hit does — see [_withMeasuredCameraMatch].
     final measured = await _withMeasuredCameraMatch(path, sources);
     if (!mounted) {
       return false;
@@ -5036,9 +5083,9 @@ class _EditorScreenState extends State<EditorScreen>
       }
       return false;
     }
-      // The pipeline modules build their pair from their own processed
-      // pixels and carry no offset, so a run drops it the same way a cache
-      // hit does — see [_withMeasuredCameraMatch].
+    // The pipeline modules build their pair from their own processed
+    // pixels and carry no offset, so a run drops it the same way a cache
+    // hit does — see [_withMeasuredCameraMatch].
     final measured = await _withMeasuredCameraMatch(path, sources);
     if (!mounted) {
       return false;
@@ -5749,12 +5796,56 @@ class _EditorScreenState extends State<EditorScreen>
     if (_settings.editEmbeddedJpeg) {
       return sources;
     }
+    final cached = await _readCameraMatch(path);
+    if (cached != null) {
+      return sources.withCameraMatch(cached);
+    }
     final match = await _probeCameraMatch(
       path,
       sources.preview,
       lowPriority: lowPriority,
     );
-    return match.isEmpty ? sources : sources.withCameraMatch(match);
+    if (match.isEmpty) {
+      return sources;
+    }
+    unawaited(_storeCameraMatch(path, match));
+    return sources.withCameraMatch(match);
+  }
+
+  /// [path]'s camera match from disk, or null if it has never been
+  /// measured (or the file has changed since — the cache key covers mtime
+  /// and size, so a replaced file misses rather than returning a match for
+  /// a photo that is no longer there).
+  Future<CameraMatch?> _readCameraMatch(String path) async {
+    final cache = _cameraMatchCache;
+    if (cache == null) {
+      return null;
+    }
+    final bytes = await cache.lookup(path);
+    if (bytes == null) {
+      return null;
+    }
+    try {
+      return CameraMatch.fromJson(jsonDecode(utf8.decode(bytes)));
+    } on FormatException {
+      // A truncated or half-written entry. Measuring again is cheap
+      // relative to getting this wrong, and the fresh write replaces it.
+      return null;
+    }
+  }
+
+  /// Best-effort, never awaited by callers: a failure here costs the next
+  /// open of this photo one measurement, not correctness.
+  Future<void> _storeCameraMatch(String path, CameraMatch match) async {
+    final cache = _cameraMatchCache;
+    if (cache == null) {
+      return;
+    }
+    await cache.store(
+      path,
+      Uint8List.fromList(utf8.encode(jsonEncode(match.toJson()))),
+    );
+    unawaited(cache.flush());
   }
 
   /// [probeCameraMatch] for [path], reading the camera's own JPEG
@@ -7318,10 +7409,30 @@ class _EditorScreenState extends State<EditorScreen>
     if (_isRunningColorize) {
       return _LoadingInfo(message: l10n.colorizeStartingMessage);
     }
-    // Deliberately NOT handled here: _isDecodingPhoto (opening a single
-    // photo) gets a small spinner centered over just the image area
-    // instead of this full-screen overlay — see _ImageArea's usage in
-    // _buildScaffold.
+    if (_isDecodingPhoto) {
+      final stage = _photoDecodeStage;
+      return _LoadingInfo(
+        message: switch (stage) {
+          null || RawDecodeStage.opening => l10n.photoStageOpening,
+          RawDecodeStage.unpacking => l10n.photoStageUnpacking,
+          RawDecodeStage.processing => l10n.photoStageProcessing,
+          RawDecodeStage.extracting => l10n.photoStageExtracting,
+        },
+        // Measured, not guessed (2026-09-09, two X-T5 frames at 3072px):
+        // opening is under 15ms, unpacking ~4%, the demosaic ~60%, and
+        // extracting the rest — which includes the camera-match
+        // measurement taken from the same open handle. Scaled to leave
+        // headroom, since the downscale, the cache encode and the first
+        // render all still come after the last stage reports.
+        progress: switch (stage) {
+          null => 0.01,
+          RawDecodeStage.opening => 0.02,
+          RawDecodeStage.unpacking => 0.05,
+          RawDecodeStage.processing => 0.10,
+          RawDecodeStage.extracting => 0.60,
+        },
+      );
+    }
     if (_isApplyingAiDenoise) {
       final stage = _aiDenoiseRenderStage;
       return _LoadingInfo(
@@ -7388,6 +7499,14 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   Widget _buildScaffoldContent(RawFile? selected) {
+    // Which stand-in the viewport is showing, decided once: the canvas
+    // needs it to know whether to blur, and the spinner beside it needs
+    // the same answer. Reading _embeddedPreviews twice in two places is
+    // how those two would drift apart.
+    final embedded = selected == null ? null : _embeddedPreviews[selected.path];
+    final small = selected == null ? null : _thumbnails[selected.path];
+    final standIn = embedded ?? small;
+    final standInIsSmall = embedded == null && small != null;
     return Scaffold(
       body: Column(
         children: [
@@ -7490,18 +7609,13 @@ class _EditorScreenState extends State<EditorScreen>
                                   fileMissing:
                                       selected != null &&
                                       _missingFiles.contains(selected.path),
-                                  // The embedded preview when it has been
-                                  // read, the 200px filmstrip thumbnail
-                                  // until then — the second is instant
-                                  // because the strip already had it.
-                                  // The embedded preview once it has been
-                                  // read, the 200px filmstrip thumbnail
-                                  // until then — the second is instant
-                                  // because the strip already had it.
-                                  thumbnail: selected == null
-                                      ? null
-                                      : _embeddedPreviews[selected.path] ??
-                                            _thumbnails[selected.path],
+                                  // The camera's embedded preview once it
+                                  // has been read, the 200px filmstrip
+                                  // thumbnail until then — the second is
+                                  // instant because the strip already had
+                                  // it.
+                                  thumbnail: standIn,
+                                  thumbnailIsSmall: standInIsSmall,
                                   // Uncapped: full quality, by request.
                                   thumbnailDecodeWidth: null,
                                   preview: selected == null
@@ -7556,13 +7670,17 @@ class _EditorScreenState extends State<EditorScreen>
                                   guidedModeActive: _guidedModeActive,
                                   onSecondaryTapUp: _showImageContextMenu,
                                 ),
-                                // Opening a photo (RAW decode, or a
-                                // preview-cache hit) gets a small spinner
-                                // over just this area instead of the
-                                // full-screen _LoadingOverlay other
-                                // operations use — see _overlayInfo's doc
-                                // comment.
-                                if (_isDecodingPhoto && selected != null)
+                                // Only over the small stand-in. Once the
+                                // camera's own image is up, the photo on
+                                // screen is a real photograph at a real
+                                // resolution, and a spinner on top of it
+                                // says "wait" about something the user can
+                                // already look at — the status line
+                                // (_overlayInfo) carries the decode's
+                                // progress instead.
+                                if (_isDecodingPhoto &&
+                                    selected != null &&
+                                    standInIsSmall)
                                   const Center(
                                     child: SizedBox(
                                       width: 32,
@@ -7687,10 +7805,8 @@ class _EditorScreenState extends State<EditorScreen>
                                 _onColorRangeFeatherChanged,
                             onColorRangeFeatherChangeEnd:
                                 _onColorRangeFeatherChangeEnd,
-                            onDepthGeometryChanged:
-                                _onDepthGeometryChanged,
-                            onDepthGeometryChangeEnd:
-                                _onDepthGeometryChangeEnd,
+                            onDepthGeometryChanged: _onDepthGeometryChanged,
+                            onDepthGeometryChangeEnd: _onDepthGeometryChangeEnd,
                             aiMasksResolving: _aiMasksResolving,
                             aiMaskFailures: _aiMaskFailures,
                             onLuminanceToleranceChanged:
@@ -7808,6 +7924,7 @@ class _ImageArea extends StatelessWidget {
     required this.selected,
     required this.fileMissing,
     required this.thumbnail,
+    required this.thumbnailIsSmall,
     required this.thumbnailDecodeWidth,
     required this.preview,
     required this.neutralPreview,
@@ -7853,6 +7970,11 @@ class _ImageArea extends StatelessWidget {
   final bool fileMissing;
 
   final Uint8List? thumbnail;
+
+  /// True when [thumbnail] is the 200px filmstrip entry rather than the
+  /// camera's own embedded preview — see [PreviewFrame.isSmallStandIn],
+  /// which is the only thing this feeds.
+  final bool thumbnailIsSmall;
 
   /// Caps how wide [thumbnail] is decoded — set only when it is the
   /// camera's embedded preview, which is several thousand pixels wide.
@@ -8085,6 +8207,7 @@ class _ImageArea extends StatelessWidget {
       frame = PreviewFrame.placeholder(
         placeholder,
         decodeWidth: thumbnailDecodeWidth,
+        isSmallStandIn: thumbnailIsSmall,
       );
     } else {
       return Text(
@@ -8272,8 +8395,8 @@ class _ImageArea extends StatelessWidget {
     // Whole Image has no geometry of its own (it's a full-coverage no-op
     // mask) — nothing to draw a handle/overlay for, so it takes the same
     // no-overlay path as the "Image" base layer.
-    final noOverlay = mask == null || source == null ||
-        mask.type == MaskType.wholeImage;
+    final noOverlay =
+        mask == null || source == null || mask.type == MaskType.wholeImage;
     return SizedBox.expand(
       child: noOverlay
           ? _fadingImage(frame)
@@ -8481,21 +8604,53 @@ class _FadingPreviewImageState extends State<FadingPreviewImage>
     super.dispose();
   }
 
-  /// Painted exactly as it arrived while the frame is a placeholder.
+  /// Blurred only while the frame is the *small* stand-in — see
+  /// [PreviewFrame.isSmallStandIn].
   ///
-  /// It used to be blurred, to read as "not the real thing yet" rather
-  /// than as a soft render. That made sense when the stand-in was the
-  /// 200px filmstrip thumbnail, magnified several times to fill the
-  /// viewport: it was going to look wrong anyway, and a deliberate blur
-  /// was honest about why.
-  ///
-  /// The stand-in is the camera's own image now, wider than the viewport,
-  /// and the whole point of showing it is to show it — its colour, its
-  /// contrast, untouched. Softening it would be softening the one thing
-  /// this is for. What signals "not the real thing yet" instead is the
-  /// swap itself, when the render lands and the rendering visibly changes.
+  /// Blurring the 200px filmstrip thumbnail is honest: it is magnified
+  /// several times to fill the viewport and is going to look wrong
+  /// anyway, so the blur says "not the real thing yet" rather than
+  /// letting it read as a soft render. Blurring the camera's own embedded
+  /// image is not: that one is wider than the viewport, and showing it
+  /// unaltered is the entire point.
   Widget _layer(PreviewFrame frame) {
-    return _previewFrameWidget(frame, fit: BoxFit.contain);
+    if (!frame.isPlaceholder || !frame.isSmallStandIn) {
+      return _previewFrameWidget(frame, fit: BoxFit.contain);
+    }
+    // Blur the image at its own intrinsic size (letting it lay out
+    // unconstrained inside FittedBox) instead of stretched to the full
+    // box, then let FittedBox scale the already-blurred result down to
+    // fit — this keeps the photo's true aspect ratio (BoxFit.cover here
+    // would distort/crop it when the box's aspect doesn't match, e.g. a
+    // portrait photo in a wide viewport) while still keeping the blur
+    // kernel confined to the photo's own pixels, with no transparent
+    // margin around it for the blur to bleed into.
+    return FittedBox(
+      fit: BoxFit.contain,
+      // ImageFiltered has no clip of its own — the blur paints past the
+      // image's own bounds (that's how a blur naturally grows past its
+      // source), so without this ClipRect the blurred rect visibly
+      // overshoots the real image size, not just its (now-crisp) edges.
+      child: ClipRect(
+        child: ImageFiltered(
+          // TileMode.clamp (not .decal) so the blur samples the edge
+          // pixels' own color past the boundary instead of transparent —
+          // .decal fades the whole border toward see-through, reading as
+          // a soft vignette instead of a crisp-edged rectangle.
+          //
+          // Applied at the stand-in's own native size and then scaled by
+          // the FittedBox above, so 4 reads like 40 on a 200px thumbnail
+          // filling the viewport. That is exactly the case this now runs
+          // in, and the only one.
+          imageFilter: ImageFilter.blur(
+            sigmaX: 4,
+            sigmaY: 4,
+            tileMode: TileMode.clamp,
+          ),
+          child: _previewFrameWidget(frame),
+        ),
+      ),
+    );
   }
 
   @override
@@ -10368,8 +10523,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
           onOpacityChanged: widget.onMaskOpacityChanged,
           onOpacityChangeEnd: widget.onMaskOpacityChangeEnd,
           overlayVisible: widget.maskOverlayVisible,
-          onToggleOverlayVisible:
-              widget.onToggleMaskOverlayVisible,
+          onToggleOverlayVisible: widget.onToggleMaskOverlayVisible,
           overlayOpacity: widget.maskOverlayOpacity,
         ),
         if (isBrushActive) ...[
@@ -10403,9 +10557,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
               Expanded(
                 child: Text(
                   l10n.maskBrushEraseLabel,
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyMedium,
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
               // Same 34x21 SizedBox+FittedBox a section
@@ -10420,10 +10572,8 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 child: FittedBox(
                   child: Switch(
                     value: widget.brushErase,
-                    onChanged: (_) =>
-                        widget.onToggleBrushErase(),
-                    materialTapTargetSize:
-                        MaterialTapTargetSize.shrinkWrap,
+                    onChanged: (_) => widget.onToggleBrushErase(),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                 ),
               ),
@@ -10434,10 +10584,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 child: IconButton(
                   tooltip: l10n.maskUndoStrokeTooltip,
                   onPressed: widget.onUndoStroke,
-                  icon: const Icon(
-                    CupertinoIcons.arrow_uturn_left,
-                    size: 15,
-                  ),
+                  icon: const Icon(CupertinoIcons.arrow_uturn_left, size: 15),
                 ),
               ),
             ],
@@ -10467,23 +10614,12 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 decoration: BoxDecoration(
                   color: Color.fromARGB(
                     255,
-                    activeMask!.colorRange.r.round().clamp(
-                      0,
-                      255,
-                    ),
-                    activeMask.colorRange.g.round().clamp(
-                      0,
-                      255,
-                    ),
-                    activeMask.colorRange.b.round().clamp(
-                      0,
-                      255,
-                    ),
+                    activeMask!.colorRange.r.round().clamp(0, 255),
+                    activeMask.colorRange.g.round().clamp(0, 255),
+                    activeMask.colorRange.b.round().clamp(0, 255),
                   ),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: DarkmoonColors.border,
-                  ),
+                  border: Border.all(color: DarkmoonColors.border),
                 ),
               ),
               const SizedBox(width: 10),
@@ -10508,8 +10644,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
               value: activeMask.colorRange.tolerance,
               decimals: 0,
               onChanged: widget.onColorRangeToleranceChanged,
-              onChangeEnd:
-                  widget.onColorRangeToleranceChangeEnd,
+              onChangeEnd: widget.onColorRangeToleranceChangeEnd,
             ),
           ),
           Padding(
@@ -10521,8 +10656,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
               value: activeMask.colorRange.feather,
               decimals: 0,
               onChanged: widget.onColorRangeFeatherChanged,
-              onChangeEnd:
-                  widget.onColorRangeFeatherChangeEnd,
+              onChangeEnd: widget.onColorRangeFeatherChangeEnd,
             ),
           ),
         ],
@@ -10536,20 +10670,12 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 decoration: BoxDecoration(
                   color: Color.fromARGB(
                     255,
-                    activeMask!.luminance.targetLuma
-                        .round()
-                        .clamp(0, 255),
-                    activeMask.luminance.targetLuma
-                        .round()
-                        .clamp(0, 255),
-                    activeMask.luminance.targetLuma
-                        .round()
-                        .clamp(0, 255),
+                    activeMask!.luminance.targetLuma.round().clamp(0, 255),
+                    activeMask.luminance.targetLuma.round().clamp(0, 255),
+                    activeMask.luminance.targetLuma.round().clamp(0, 255),
                   ),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(
-                    color: DarkmoonColors.border,
-                  ),
+                  border: Border.all(color: DarkmoonColors.border),
                 ),
               ),
               const SizedBox(width: 10),
@@ -10574,8 +10700,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
               value: activeMask.luminance.tolerance,
               decimals: 0,
               onChanged: widget.onLuminanceToleranceChanged,
-              onChangeEnd:
-                  widget.onLuminanceToleranceChangeEnd,
+              onChangeEnd: widget.onLuminanceToleranceChangeEnd,
             ),
           ),
           Padding(
@@ -10824,27 +10949,27 @@ class _ControlsPanelState extends State<_ControlsPanel>
                   // the free space, which is the ceiling the constant was
                   // trying to express.
                   if (widget.tabbedLayout)
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      // Half of whatever is left once the histogram and the tab
-                      // bar have had their share, so the sections always keep
-                      // the larger half. Collapses to nothing on a panel too
-                      // short to hold all three rather than overflowing.
-                      maxHeight: ((panelBox.maxHeight - 280) * 0.5).clamp(
-                        0.0,
-                        320.0,
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        // Half of whatever is left once the histogram and the tab
+                        // bar have had their share, so the sections always keep
+                        // the larger half. Collapses to nothing on a panel too
+                        // short to hold all three rather than overflowing.
+                        maxHeight: ((panelBox.maxHeight - 280) * 0.5).clamp(
+                          0.0,
+                          320.0,
+                        ),
+                      ),
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.fromLTRB(
+                          _controlsPanelInset,
+                          0,
+                          _controlsPanelInset,
+                          8,
+                        ),
+                        child: masksBlock,
                       ),
                     ),
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.fromLTRB(
-                        _controlsPanelInset,
-                        0,
-                        _controlsPanelInset,
-                        8,
-                      ),
-                      child: masksBlock,
-                    ),
-                  ),
                   if (widget.tabbedLayout) _buildControlsTabBar(l10n),
                   Expanded(
                     child: SingleChildScrollView(

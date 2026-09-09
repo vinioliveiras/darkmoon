@@ -469,6 +469,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String get exportStageWriting => 'Salvando arquivo...';
 
   @override
+  String get photoStageOpening => 'Abrindo arquivo...';
+
+  @override
+  String get photoStageUnpacking => 'Lendo dados do sensor...';
+
+  @override
+  String get photoStageProcessing => 'Revelando...';
+
+  @override
+  String get photoStageExtracting => 'Preparando imagem...';
+
+  @override
   String get exportPhotoDialogTitle => 'Exportar foto';
 
   @override

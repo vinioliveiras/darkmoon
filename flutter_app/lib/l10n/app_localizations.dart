@@ -934,6 +934,30 @@ abstract class AppLocalizations {
   /// **'Saving file...'**
   String get exportStageWriting;
 
+  /// No description provided for @photoStageOpening.
+  ///
+  /// In en, this message translates to:
+  /// **'Opening file...'**
+  String get photoStageOpening;
+
+  /// No description provided for @photoStageUnpacking.
+  ///
+  /// In en, this message translates to:
+  /// **'Reading sensor data...'**
+  String get photoStageUnpacking;
+
+  /// No description provided for @photoStageProcessing.
+  ///
+  /// In en, this message translates to:
+  /// **'Developing...'**
+  String get photoStageProcessing;
+
+  /// No description provided for @photoStageExtracting.
+  ///
+  /// In en, this message translates to:
+  /// **'Preparing image...'**
+  String get photoStageExtracting;
+
   /// No description provided for @exportPhotoDialogTitle.
   ///
   /// In en, this message translates to:

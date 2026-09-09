@@ -465,6 +465,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get exportStageWriting => 'Saving file...';
 
   @override
+  String get photoStageOpening => 'Opening file...';
+
+  @override
+  String get photoStageUnpacking => 'Reading sensor data...';
+
+  @override
+  String get photoStageProcessing => 'Developing...';
+
+  @override
+  String get photoStageExtracting => 'Preparing image...';
+
+  @override
   String get exportPhotoDialogTitle => 'Export Photo';
 
   @override

@@ -473,6 +473,18 @@ class AppLocalizationsDe extends AppLocalizations {
   String get exportStageWriting => 'Datei wird gespeichert...';
 
   @override
+  String get photoStageOpening => 'Datei wird geöffnet ...';
+
+  @override
+  String get photoStageUnpacking => 'Sensordaten werden gelesen ...';
+
+  @override
+  String get photoStageProcessing => 'Wird entwickelt ...';
+
+  @override
+  String get photoStageExtracting => 'Bild wird vorbereitet ...';
+
+  @override
   String get exportPhotoDialogTitle => 'Foto exportieren';
 
   @override
