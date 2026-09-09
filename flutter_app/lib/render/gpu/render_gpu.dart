@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import '../blur.dart' show scaledNoiseRadius;
 import '../calibration.dart';
 import '../color_grading.dart';
+import '../render.dart' show needsTonalBlur;
 import '../render_params.dart';
 import '../tone_curve.dart';
 import '../white_balance.dart';
@@ -299,7 +300,7 @@ Future<ui.Image> renderImageGpu(
   // rapidShadowsBlacks' detailRatio, noiseProtection and detailExponent.
   // Same class of bug as the base-contrast ordering fixed 2026-09-02.
   final ui.Image? tonalBlur;
-  if (params.shadows == 0 && params.blacks == 0 && params.whites == 0) {
+  if (!needsTonalBlur(params)) {
     tonalBlur = null;
   } else {
     final linear = chain.add(

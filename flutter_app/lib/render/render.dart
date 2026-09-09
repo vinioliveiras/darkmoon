@@ -179,11 +179,19 @@ int localAdjustmentHaloPx(RenderParams params) {
   if (params.clarity != 0) {
     halo += _localContrastHaloPx(calClaritySigma * scale);
   }
-  if (params.shadows != 0 || params.blacks != 0 || params.whites != 0) {
+  if (needsTonalBlur(params)) {
     halo += _tonalBlurHaloPx * scale;
   }
   return halo.ceil();
 }
+
+/// Whether the sigma-3.5 tonal blur has to be computed for [params]. Only
+/// `_applyRapidShadowsBlacks` reads it; Whites never did, but it was gated
+/// on Whites too (CPU and GPU alike) until 2026-09-09, so a Whites-only
+/// edit paid a full-frame luminance extract and a three-pass Gaussian — four
+/// GPU passes — for nothing.
+bool needsTonalBlur(RenderParams params) =>
+    params.shadows != 0 || params.blacks != 0;
 
 /// Halo (px) [applyDehazeStage] needs when run on a horizontal band — the
 /// reach of Dehaze's sigma-40 "structure" Gaussian (3-pass box, ~4.5·sigma),
@@ -192,11 +200,9 @@ int dehazeHaloPx(RenderParams params) =>
     params.dehaze != 0 ? (180 * params.renderScale).ceil() : 0;
 
 /// Halo (px) [applyGlobalPointOps] needs on a band — just the sigma-3.5
-/// tonal blur behind Shadows/Whites/Blacks.
+/// tonal blur behind Shadows/Blacks.
 int globalPointOpsHaloPx(RenderParams params) =>
-    (params.shadows != 0 || params.blacks != 0 || params.whites != 0)
-    ? (24 * params.renderScale).ceil()
-    : 0;
+    needsTonalBlur(params) ? (24 * params.renderScale).ceil() : 0;
 
 void _applyAdjustmentSteps(
   Float32List buffer,
@@ -329,8 +335,7 @@ void applyPostDenoisePointOps(
   }
 
   final pixelCount = width * height;
-  final tonalBlur =
-      (params.shadows == 0 && params.blacks == 0 && params.whites == 0)
+  final tonalBlur = !needsTonalBlur(params)
       ? null
       : gaussianBlurChannel(
           _luminanceChannel(buffer, pixelCount),
