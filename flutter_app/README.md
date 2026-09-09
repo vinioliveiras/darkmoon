@@ -19,6 +19,21 @@ reformats files, which is exactly what CI then rejects. If more than one Flutter
 is installed, make sure `flutter --version` on the PATH reports 3.47.2 before
 committing.
 
+On this Windows machine, 3.47.2's `flutter test` loses a `flutter_tester`
+process now and then when several run at once — a widget test "did not
+complete" with no exception, or a pure-Dart file fails to load with
+"Connection closed before test suite loaded", a different file each run.
+Every file passes on its own; it is the concurrent runner, not the code
+(measured 2026-09-09: the same three-file batch failed about half its runs
+at the default concurrency and none at `-j 1`). Run the suite as
+
+```powershell
+flutter test -j 1
+```
+
+locally, and treat the Linux CI run as the source of truth. If a test still
+fails at `-j 1`, that one is real.
+
 ### Visual Studio 18 (2026)
 
 This machine has **Visual Studio Build Tools 2026 (major version 18)**. Flutter
