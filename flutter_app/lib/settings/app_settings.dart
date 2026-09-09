@@ -98,7 +98,7 @@ class AppSettings {
     this.editEmbeddedJpeg = false,
     this.cacheMaxBytes = defaultCacheMaxBytes,
     this.useGpuRender = true,
-    this.tabbedControlsPanel = true,
+    this.tabbedControlsPanel = false,
     this.tabbedControlsPanelIcons = false,
     this.presetThumbnails = true,
     this.thumbnailConcurrency = 4,
@@ -174,10 +174,12 @@ class AppSettings {
   /// Effects tabs, with Masks pinned above them, instead of listing all
   /// eleven sections in one scroll.
   ///
-  /// Defaults on: it is the layout the panel was redesigned around, and
-  /// the single list put Lens Correction a dozen section-heights below the
-  /// Tone sliders. Off restores the flat list for anyone who would rather
-  /// scroll than switch.
+  /// Defaults **off** since 2026-09-09 (user's call): one long list is
+  /// what a photo editor's panel usually is, and scrolling past a section
+  /// costs less than remembering which tab it went to. Tabs stay on offer
+  /// — they were what this panel was redesigned around, and they keep Lens
+  /// Correction from sitting a dozen section-heights below the Tone
+  /// sliders.
   final bool tabbedControlsPanel;
 
   /// Whether those tabs are marked with a glyph instead of a word.

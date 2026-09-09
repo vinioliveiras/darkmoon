@@ -1,7 +1,10 @@
-import 'package:darkmoon/main.dart';
+import 'package:darkmoon/editor_screen.dart';
+import 'package:darkmoon/l10n/app_localizations.dart';
+import 'package:darkmoon/settings/app_settings.dart';
+import 'package:darkmoon/theme.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:darkmoon/widgets/mask_selector.dart';
-import 'package:flutter/material.dart' show TabBar;
+import 'package:flutter/material.dart' show MaterialApp, TabBar;
 import 'package:flutter_test/flutter_test.dart';
 
 /// Guards the coupling that made five sections disappear.
@@ -26,7 +29,21 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
-    await tester.pumpWidget(const DarkmoonApp());
+    // Tabs explicitly: the flat list has been the default since
+    // 2026-09-09, and with every section always built there is nothing
+    // here left to observe — the coupling this file exists for is only
+    // visible when the tabs filter which sections get built.
+    await tester.pumpWidget(
+      MaterialApp(
+        localizationsDelegates: AppLocalizations.localizationsDelegates,
+        supportedLocales: AppLocalizations.supportedLocales,
+        theme: buildDarkmoonTheme(),
+        home: EditorScreen(
+          onLanguageChanged: (_) {},
+          settingsOverride: const AppSettings(tabbedControlsPanel: true),
+        ),
+      ),
+    );
     // The splash holds a fixed-duration timer the harness will complain
     // about if it never fires.
     await tester.pump(const Duration(seconds: 5));

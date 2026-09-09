@@ -134,20 +134,20 @@ void main() {
       await tester.pumpAndSettle();
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
 
-      // Tabs are the default, so the dropdown must be showing that and the
-      // only thing it can be changed to is the flat list.
-      expect(find.text(l10n.settingsPanelLayoutTabbed), findsOneWidget);
+      // One long list is the default, so that is what the dropdown must
+      // be showing and tabs are what it can be changed to.
+      expect(find.text(l10n.settingsPanelLayoutFlat), findsOneWidget);
 
-      await tester.tap(find.text(l10n.settingsPanelLayoutTabbed));
+      await tester.tap(find.text(l10n.settingsPanelLayoutFlat));
       await tester.pumpAndSettle();
-      await tester.tap(find.text(l10n.settingsPanelLayoutFlat).last);
+      await tester.tap(find.text(l10n.settingsPanelLayoutTabbed).last);
       await tester.pumpAndSettle();
 
       expect(saved, isNotNull);
       expect(
         saved!.tabbedControlsPanel,
-        isFalse,
-        reason: 'turning the layout off has to reach the saved settings',
+        isTrue,
+        reason: 'switching the layout has to reach the saved settings',
       );
     });
 
@@ -158,7 +158,9 @@ void main() {
       await tester.pumpWidget(
         _wrap(
           SettingsDialog(
-            settings: const AppSettings(),
+            // Explicitly tabbed: the row only exists when there are tabs
+            // to label, and the default stopped being tabs on 2026-09-09.
+            settings: const AppSettings(tabbedControlsPanel: true),
             onChanged: (value) => saved = value,
             onClearThumbnails: () {},
             onClearCatalog: () {},

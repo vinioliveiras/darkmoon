@@ -986,11 +986,29 @@ class _EditSnapshot {
 /// its full RAW preview in the background (showing the fast embedded
 /// thumbnail in the meantime).
 class EditorScreen extends StatefulWidget {
-  const EditorScreen({super.key, required this.onLanguageChanged});
+  const EditorScreen({
+    super.key,
+    required this.onLanguageChanged,
+    this.settingsOverride,
+  });
 
   /// Applies a language change immediately app-wide — owned by DarkmoonApp
   /// since it controls MaterialApp's `locale`, not this screen.
   final ValueChanged<String> onLanguageChanged;
+
+  /// Settings to open with instead of whatever is on disk.
+  ///
+  /// A seam for tests that need a layout other than the default one. The
+  /// controls panel's tabbed mode is the case that forced it: the tabs
+  /// filter which sections are built, and six of them are written outside
+  /// `_sections` and were once emitted only on its DETAIL iteration — a
+  /// coupling that made all six vanish from every other tab and that
+  /// nothing else can observe once the flat list is the default (which it
+  /// became 2026-09-09). Driving the real Settings dialog instead is not
+  /// available: saving settings needs path_provider, which a widget test
+  /// does not have.
+  @visibleForTesting
+  final AppSettings? settingsOverride;
 
   @override
   State<EditorScreen> createState() => _EditorScreenState();
@@ -2553,7 +2571,7 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   Future<void> _loadSettings() async {
-    final settings = await loadSettings();
+    final settings = widget.settingsOverride ?? await loadSettings();
     if (!mounted) {
       return;
     }
