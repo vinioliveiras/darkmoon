@@ -2,6 +2,8 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../render/calibration.dart';
+import '../render/color_profile.dart' show colorProfileTonePoints;
+import '../render/color_space.dart';
 
 import 'package:image/image.dart' as img;
 
@@ -186,4 +188,157 @@ double? cameraExposureOffsetStops(
   }
   final stops = math.log(preview / decoded) / math.ln2;
   return stops.clamp(-limitStops, limitStops);
+}
+
+
+// ═══════════════════════════════════════════════════════════════════════
+//  Camera tone match
+// ═══════════════════════════════════════════════════════════════════════
+
+/// How many bins the perceptual-luma histograms below are built over.
+/// Finer than the 33 points the fit is sampled at, so the percentile
+/// lookup is not itself the limiting resolution.
+const int _toneHistogramBins = 1024;
+
+/// Roughly how many pixels each histogram samples.
+///
+/// A histogram is a shape, and a few hundred thousand pixels fix that
+/// shape as well as forty million do — a full-sensor frame is 40 MP and
+/// walking all of it here would cost more than the fit is worth. The
+/// stride is computed per image so both sides of the comparison are
+/// sampled about equally densely.
+const int _toneSampleTarget = 400000;
+
+/// Perceptual-luma histogram of a packed RGB buffer, sampled with a
+/// stride (see [_toneSampleTarget]).
+Float64List _perceptualHistogram(Uint8List rgb) {
+  final pixels = rgb.length ~/ 3;
+  final stride = pixels <= _toneSampleTarget
+      ? 1
+      : (pixels / _toneSampleTarget).ceil();
+  final hist = Float64List(_toneHistogramBins);
+  for (var px = 0; px < pixels; px += stride) {
+    final i = px * 3;
+    final linear =
+        0.2126 * srgbToLinear(rgb[i] / 255.0) +
+        0.7152 * srgbToLinear(rgb[i + 1] / 255.0) +
+        0.0722 * srgbToLinear(rgb[i + 2] / 255.0);
+    final bin = (perceptualEncode(linear) * (_toneHistogramBins - 1))
+        .round()
+        .clamp(0, _toneHistogramBins - 1);
+    hist[bin]++;
+  }
+  return hist;
+}
+
+/// [hist] as a normalised cumulative distribution.
+Float64List _cdf(Float64List hist) {
+  final cdf = Float64List(_toneHistogramBins);
+  var acc = 0.0;
+  for (var i = 0; i < _toneHistogramBins; i++) {
+    acc += hist[i];
+    cdf[i] = acc;
+  }
+  if (acc <= 0) {
+    return cdf;
+  }
+  for (var i = 0; i < _toneHistogramBins; i++) {
+    cdf[i] /= acc;
+  }
+  return cdf;
+}
+
+/// The identity tone curve — [colorProfileTonePoints] points, `tone[i]`
+/// the output for input `i / (N - 1)`.
+List<double> _identityTone() => [
+  for (var i = 0; i < colorProfileTonePoints; i++)
+    i / (colorProfileTonePoints - 1),
+];
+
+/// A [ColorProfile.tone] curve that maps [rgbBytes]'s tonality onto
+/// [embeddedJpegBytes]'s — the camera's own rendering of the same shot.
+///
+/// Where [cameraExposureOffsetStops] answers "how much brighter", this
+/// answers "brighter *where*", and it subsumes the other: a curve that
+/// carries the camera's whole tonality carries its mean along with it.
+/// Both are measured from the same pair, so a photo that has one has the
+/// other; the renderer must spend exactly one of them, never both.
+///
+/// **Histogram specification, not a fit.** For each of the 33 control
+/// points, the input perceptual luma is converted to a percentile of this
+/// decode, and the output is the luma at that same percentile of the
+/// camera's frame. That needs no geometric alignment between the two —
+/// which matters, because LibRaw's demosaic of the full sensor and the
+/// camera's JPEG are not the same crop and never will be. The result is
+/// forced monotone, so it can only ever redistribute tonality, never
+/// invert it.
+///
+/// **Luminance only**, and for the same reason [cameraExposureOffsetStops]
+/// is: the curve rides the profile's tone slot, which remaps luminance and
+/// leaves chroma alone. Matching the camera's *colour* per channel was
+/// tried and reverted — against a film-simulation JPEG it introduced a
+/// yellow/green cast (see [applyCameraMatch]). How the camera distributed
+/// its tones is a judgement worth inheriting; its colour science is not.
+///
+/// Null under exactly the conditions [cameraExposureOffsetStops] refuses,
+/// so the two are always present or absent together.
+///
+/// Measured 2026-09-09 across three X-T5 frames: mean absolute error over
+/// the 1st-99th percentiles falls from 12.5 levels (the hand-tuned
+/// [calBaseContrast] S-curve) to 0.6.
+List<double>? cameraToneCurve(
+  Uint8List rgbBytes,
+  int width,
+  int height,
+  Uint8List? embeddedJpegBytes, {
+  double lumaFloor = calCameraExposureLumaFloor,
+}) {
+  if (embeddedJpegBytes == null || width <= 0 || height <= 0) {
+    return null;
+  }
+  img.Image? jpeg;
+  try {
+    jpeg = img.decodeJpg(embeddedJpegBytes);
+  } on Exception {
+    jpeg = null;
+  }
+  if (jpeg == null || jpeg.width == 0 || jpeg.height == 0) {
+    return null;
+  }
+  // Same guard, same reason, as the offset's: the tonality of two
+  // differently-oriented crops of a scene are not each other's target.
+  final aspect = (width / height) / (jpeg.width / jpeg.height);
+  if (aspect < 0.8 || aspect > 1.25) {
+    return null;
+  }
+  final cameraRgb = jpeg.getBytes(order: img.ChannelOrder.rgb);
+  if (_meanEncodedLuma(rgbBytes) < lumaFloor ||
+      _meanEncodedLuma(cameraRgb) < lumaFloor) {
+    return null;
+  }
+
+  final ourCdf = _cdf(_perceptualHistogram(rgbBytes));
+  final cameraCdf = _cdf(_perceptualHistogram(cameraRgb));
+  final tone = <double>[];
+  var cameraBin = 0;
+  for (var k = 0; k < colorProfileTonePoints; k++) {
+    final input = k / (colorProfileTonePoints - 1);
+    final sourceBin = (input * (_toneHistogramBins - 1))
+        .round()
+        .clamp(0, _toneHistogramBins - 1);
+    final target = ourCdf[sourceBin];
+    // Monotone in k, so the scan never rewinds — this is one pass over
+    // the camera CDF across the whole loop, not 33.
+    while (cameraBin < _toneHistogramBins - 1 && cameraCdf[cameraBin] < target) {
+      cameraBin++;
+    }
+    var output = cameraBin / (_toneHistogramBins - 1);
+    if (tone.isNotEmpty && output < tone.last) {
+      output = tone.last;
+    }
+    tone.add(output.clamp(0.0, 1.0));
+  }
+  // An all-flat curve means one of the two frames had no tonal range to
+  // speak of; identity is the honest answer, and the renderer skips it.
+  return tone.last <= tone.first ? _identityTone() : tone;
 }

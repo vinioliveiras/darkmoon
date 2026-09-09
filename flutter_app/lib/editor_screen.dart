@@ -694,7 +694,7 @@ const _sections = <String, List<_SliderSpec>>{
   // `entry.key == 'COLOR PROFILE'` branch below, since it isn't a plain
   // _paramValues slider) and ColorProfileAmount (the per-photo/per-preset
   // override of the fixed "profile" contrast curve — see calBaseContrast
-  // and _effectiveBaseContrast's doc) live together here (2026-09-01,
+  // and _baseContrastFor's doc) live together here (2026-09-01,
   // moved out of a standalone toolbar control and out of TONE
   // respectively) since conceptually both describe "how much of the
   // darkmoon Color profile treatment applies," not a tone adjustment.
@@ -1241,11 +1241,77 @@ class _EditorScreenState extends State<EditorScreen>
   /// value in Settings, now saved with each photo/preset like every other
   /// slider, and subject to the same Amount-slider scaling
   /// ([_effectiveParamValues]).
-  double get _effectiveBaseContrast =>
-      (_effectiveColorProfile != null &&
-          !_effectiveColorProfile!.toneIsIdentity)
-      ? 0.0
-      : _effectiveParamValues()['ColorProfileAmount'] ?? calBaseContrast;
+  ///
+  /// Per photo, not global, because [_colorProfileFor] can carry that
+  /// photo's *own* fitted curve — the camera tone match — and that has to
+  /// step aside the same way a profile's does.
+  double _baseContrastFor(String? path) {
+    final profile = _colorProfileFor(path);
+    return (profile != null && !profile.toneIsIdentity)
+        ? 0.0
+        : _effectiveParamValues()['ColorProfileAmount'] ?? calBaseContrast;
+  }
+
+  /// The camera's own tonality for [path], as a [ColorProfile.tone] curve
+  /// — null when the file carried no embedded preview to fit against
+  /// (every non-RAW source), or when the match is calibrated off.
+  ///
+  /// See [cameraToneCurve] and [calCameraToneMatch].
+  List<double>? _baseToneCurveFor(String? path) {
+    if (path == null || calCameraToneMatch <= 0) {
+      return null;
+    }
+    final tone = _editSources[path]?.baseToneCurve;
+    if (tone == null || calCameraToneMatch >= 1.0) {
+      return tone;
+    }
+    // Part-way: blend toward identity, which is the same thing as
+    // blending toward "no match at all".
+    return [
+      for (var i = 0; i < tone.length; i++)
+        identityColorProfile.tone[i] +
+            (tone[i] - identityColorProfile.tone[i]) * calCameraToneMatch,
+    ];
+  }
+
+  /// [_effectiveColorProfile] with [path]'s camera tone curve fitted into
+  /// its tone slot.
+  ///
+  /// The profile's tone slot is exactly the right vehicle: it is a
+  /// luminance-only perceptual curve that both the CPU and the GPU path
+  /// already apply, so the camera match needs no render stage of its own
+  /// and cannot drift between the two.
+  ///
+  /// A profile that already carries a fitted tone curve of its own keeps
+  /// it — two fitted curves must never stack, and the one the user chose
+  /// outranks the one we measured.
+  ColorProfile? _colorProfileFor(String? path) {
+    final profile = _effectiveColorProfile;
+    final tone = _baseToneCurveFor(path);
+    if (tone == null) {
+      return profile;
+    }
+    if (profile == null) {
+      return ColorProfile(
+        tone: tone,
+        hueShift: identityColorProfile.hueShift,
+        satMul: identityColorProfile.satMul,
+        lumMul: identityColorProfile.lumMul,
+        name: 'camera',
+      );
+    }
+    if (!profile.toneIsIdentity) {
+      return profile;
+    }
+    return ColorProfile(
+      tone: tone,
+      hueShift: profile.hueShift,
+      satMul: profile.satMul,
+      lumMul: profile.lumMul,
+      name: profile.name,
+      id: profile.id,
+    );
+  }
 
   /// The per-hue correction's actual blend strength — the "Color Profile
   /// Strength" slider (0-200%, [_globalEditAmountKey], labeled "Strength"
@@ -3600,7 +3666,7 @@ class _EditorScreenState extends State<EditorScreen>
       // blows its highlights out on every open after the first (reported
       // 2026-09-09; it looked fixed under measurement because a fresh
       // decode is exactly the case that already worked).
-      sources = await _withMeasuredBaseExposure(path, sources);
+      sources = await _withMeasuredCameraMatch(path, sources);
       if (!mounted || generation != _folderGeneration) {
         return;
       }
@@ -3700,7 +3766,7 @@ class _EditorScreenState extends State<EditorScreen>
       // way: a prewarmed pair goes straight into _editSources, so
       // selecting that photo later skips the decode block entirely and
       // never gets a chance to measure the offset.
-      sources = await _withMeasuredBaseExposure(
+      sources = await _withMeasuredCameraMatch(
         file.path,
         sources,
         lowPriority: true,
@@ -3900,8 +3966,8 @@ class _EditorScreenState extends State<EditorScreen>
         asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
         asShotTint: metadata?.asShotTint ?? wbDefaultTint,
         baseExposureStops: _baseExposureFor(path),
-        baseContrast: _effectiveBaseContrast,
-        colorProfile: _effectiveColorProfile,
+        baseContrast: _baseContrastFor(path),
+        colorProfile: _colorProfileFor(path),
         colorProfileStrength: _effectiveColorProfileStrength,
       ),
       masks: _effectiveMasks,
@@ -4211,8 +4277,8 @@ class _EditorScreenState extends State<EditorScreen>
         // moved.
         params: RenderParams(
           exposure: _baseExposureFor(path),
-          baseContrast: _effectiveBaseContrast,
-          colorProfile: _effectiveColorProfile,
+          baseContrast: _baseContrastFor(path),
+          colorProfile: _colorProfileFor(path),
         ),
       ),
     );
@@ -4777,8 +4843,8 @@ class _EditorScreenState extends State<EditorScreen>
     }
       // The pipeline modules build their pair from their own processed
       // pixels and carry no offset, so a run drops it the same way a cache
-      // hit does — see [_withMeasuredBaseExposure].
-    final measured = await _withMeasuredBaseExposure(path, sources);
+      // hit does — see [_withMeasuredCameraMatch].
+    final measured = await _withMeasuredCameraMatch(path, sources);
     if (!mounted) {
       return false;
     }
@@ -4952,8 +5018,8 @@ class _EditorScreenState extends State<EditorScreen>
     }
       // The pipeline modules build their pair from their own processed
       // pixels and carry no offset, so a run drops it the same way a cache
-      // hit does — see [_withMeasuredBaseExposure].
-    final measured = await _withMeasuredBaseExposure(path, sources);
+      // hit does — see [_withMeasuredCameraMatch].
+    final measured = await _withMeasuredCameraMatch(path, sources);
     if (!mounted) {
       return false;
     }
@@ -5010,8 +5076,8 @@ class _EditorScreenState extends State<EditorScreen>
       case CloudDenoiseSuccess(sources: final sources):
         // The pipeline modules build their pair from their own processed
         // pixels and carry no offset, so a run drops it the same way a cache
-        // hit does — see [_withMeasuredBaseExposure].
-        final measured = await _withMeasuredBaseExposure(path, sources);
+        // hit does — see [_withMeasuredCameraMatch].
+        final measured = await _withMeasuredCameraMatch(path, sources);
         if (!mounted) {
           return false;
         }
@@ -5585,8 +5651,17 @@ class _EditorScreenState extends State<EditorScreen>
   /// starting point than a fixed constant. Zero when the file carries no
   /// preview to compare against, which is every non-RAW source, so those
   /// keep opening exactly as they did.
-  double _baseExposureFor(String? path) =>
-      path == null ? 0 : (_editSources[path]?.baseExposureStops ?? 0);
+  double _baseExposureFor(String? path) {
+    if (path == null) {
+      return 0;
+    }
+    // The tone curve already carries the camera's brightness — spending
+    // the offset as well would apply the same correction twice.
+    if (_baseToneCurveFor(path) != null) {
+      return 0;
+    }
+    return _editSources[path]?.baseExposureStops ?? 0;
+  }
 
   /// Points the preset thumbnails at whatever is selected now.
   ///
@@ -5600,7 +5675,7 @@ class _EditorScreenState extends State<EditorScreen>
   void _syncPresetThumbnails() {
     final path = _selectedIndex == null ? null : _files[_selectedIndex!].path;
     final source = path == null ? null : _editSources[path]?.live;
-    final profile = _effectiveColorProfile;
+    final profile = _colorProfileFor(path);
     _presetThumbnails.setSource(
       // Everything a thumbnail depends on except the preset itself. The
       // profile belongs here because a thumbnail is this photo seen
@@ -5608,7 +5683,11 @@ class _EditorScreenState extends State<EditorScreen>
       signature: [
         path ?? '',
         profile?.name ?? '',
-        _effectiveBaseContrast,
+        // The camera tone curve rides in the profile's tone slot and is
+        // per photo, so the profile's name no longer identifies it.
+        profile?.tone.first ?? 0,
+        profile?.tone.last ?? 0,
+        _baseContrastFor(path),
         source?.width ?? 0,
       ].join('|'),
       source: source,
@@ -5620,39 +5699,39 @@ class _EditorScreenState extends State<EditorScreen>
         // Or every thumbnail would be a stop away from the render it is
         // supposed to be previewing.
         baseExposureStops: _baseExposureFor(path),
-        baseContrast: _effectiveBaseContrast,
+        baseContrast: _baseContrastFor(path),
         colorProfile: profile,
       ),
     );
   }
 
-  /// [sources] with its [EditSourcePair.baseExposureStops] filled in when
-  /// it is missing — which is exactly when the pair came out of a cache
-  /// rather than a fresh RAW decode. Unchanged when it is already there
-  /// (a real decode measured it) or when there is nothing to measure
-  /// against.
+  /// [sources] with its camera match ([EditSourcePair.baseToneCurve] and
+  /// [EditSourcePair.baseExposureStops]) filled in when it is missing —
+  /// which is exactly when the pair came out of a cache rather than a
+  /// fresh RAW decode. Unchanged when it is already there (a real decode
+  /// measured it) or when there is nothing to measure against.
   ///
   /// Every path that writes [_editSources] has to go through here. Missing
   /// one is not a visible failure: the photo simply renders at LibRaw's
   /// auto-brightened exposure, which reads as blown highlights rather than
   /// as anything pointing back at the cache.
-  Future<EditSourcePair> _withMeasuredBaseExposure(
+  Future<EditSourcePair> _withMeasuredCameraMatch(
     String path,
     EditSourcePair sources, {
     bool lowPriority = false,
   }) async {
-    if (sources.baseExposureStops != null) {
+    if (sources.baseToneCurve != null || sources.baseExposureStops != null) {
       return sources;
     }
-    final stops = await _probeBaseExposure(
+    final match = await _probeCameraMatch(
       path,
       sources.preview,
       lowPriority: lowPriority,
     );
-    return stops == null ? sources : sources.withBaseExposureStops(stops);
+    return match.isEmpty ? sources : sources.withCameraMatch(match);
   }
 
-  /// [probeBaseExposureStops] for [path], reading the camera's own JPEG
+  /// [probeCameraMatch] for [path], reading the camera's own JPEG
   /// through the same cache the viewport stand-in uses — by the time a
   /// cache hit gets here it is normally already loaded, since
   /// [_selectIndex] starts that read first precisely because it is the
@@ -5661,23 +5740,21 @@ class _EditorScreenState extends State<EditorScreen>
   /// Null when the file carries no embedded JPEG to compare against (and
   /// for every non-RAW source), which is the same answer a fresh decode
   /// gives for those — they keep opening exactly as they did.
-  Future<double?> _probeBaseExposure(
+  Future<CameraMatch> _probeCameraMatch(
     String path,
     EditSource preview, {
     bool lowPriority = false,
   }) async {
     if (!isRawFile(path)) {
-      return null;
+      return CameraMatch.none;
     }
     await _loadEmbeddedPreview(path);
     final embedded = _embeddedPreviews[path];
     if (embedded == null) {
-      return null;
+      return CameraMatch.none;
     }
     return compute(
-      lowPriority
-          ? probeBaseExposureStopsLowPriority
-          : probeBaseExposureStops,
+      lowPriority ? probeCameraMatchLowPriority : probeCameraMatch,
       (source: preview, embeddedJpeg: embedded),
     );
   }
@@ -7070,8 +7147,8 @@ class _EditorScreenState extends State<EditorScreen>
           asShotKelvin: metadata?.asShotKelvin ?? wbDefaultKelvin,
           asShotTint: metadata?.asShotTint ?? wbDefaultTint,
           baseExposureStops: _baseExposureFor(selected.path),
-          baseContrast: _effectiveBaseContrast,
-          colorProfile: _effectiveColorProfile,
+          baseContrast: _baseContrastFor(selected.path),
+          colorProfile: _colorProfileFor(selected.path),
           colorProfileStrength: _effectiveColorProfileStrength,
         ),
         masks: _effectiveMasks,

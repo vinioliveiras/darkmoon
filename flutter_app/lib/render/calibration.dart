@@ -887,6 +887,29 @@ const double calUprightHorizontalGain = -101.0;
 /// default: 1.5
 const double calCameraExposureLimitStops = 1.5;
 
+/// **Camera tone match**: how much of the camera's own tonality a photo
+/// opens with.
+///
+/// A RAW carries the camera's own JPEG rendering of the same shot, and
+/// `cameraToneCurve` fits a 33-point curve mapping our decode's tonality
+/// onto it. At 1.0 the photo opens looking like the camera's own
+/// rendering; at 0.0 it opens on the hand-tuned [calBaseContrast] S-curve
+/// instead, the way it did before 2026-09-09. In between is a blend of
+/// the two curves.
+///
+/// Measured across three X-T5 frames: mean absolute error against the
+/// camera, over the 1st-99th percentiles, is 12.5 levels at 0.0 and 0.6
+/// at 1.0.
+///
+/// The curve replaces [calBaseContrast] rather than stacking with it, and
+/// subsumes the base-exposure offset — a curve carrying the camera's whole
+/// tonality carries its mean along with it, so the offset is not spent as
+/// well.
+///   ↑ higher = closer to the camera's own rendering
+///   ↓ lower  = closer to darkmoon's own base look
+/// default: 1.0
+const double calCameraToneMatch = 1.0;
+
 /// **Base exposure** — mean luma (0-1, gamma-encoded, *not* linear) below
 /// which the comparison is refused.
 ///

@@ -68,6 +68,7 @@ class EditSourcePair {
     required this.preview,
     required this.live,
     this.baseExposureStops,
+    this.baseToneCurve,
   });
 
   final EditSource preview;
@@ -79,17 +80,43 @@ class EditSourcePair {
   ///
   /// Also null for a pair that came back from a cache rather than a fresh
   /// decode: the offset is measured inside [decodeRawImage], which a cache
-  /// hit skips by design. See [probeBaseExposureStops], which puts it
+  /// hit skips by design. See [probeCameraMatch], which puts it
   /// back.
   final double? baseExposureStops;
 
-  /// This pair with [stops] as its [baseExposureStops] — the one thing a
-  /// cache hit cannot reconstruct on its own.
-  EditSourcePair withBaseExposureStops(double? stops) => EditSourcePair(
+  /// [RawImage.baseToneCurve] for the file these came from — the camera's
+  /// own tonality, as a [ColorProfile.tone] curve. Null on the same terms
+  /// as [baseExposureStops], and lost by a cache the same way.
+  ///
+  /// Subsumes [baseExposureStops]; the renderer spends one or the other.
+  final List<double>? baseToneCurve;
+
+  /// This pair with [match] measured onto it — the one thing a cache hit
+  /// cannot reconstruct on its own.
+  EditSourcePair withCameraMatch(CameraMatch match) => EditSourcePair(
     preview: preview,
     live: live,
-    baseExposureStops: stops,
+    baseExposureStops: match.stops,
+    baseToneCurve: match.tone,
   );
+}
+
+/// What a decode learns by comparing itself against the camera's own
+/// embedded rendering of the same shot: how far off it is overall, and how
+/// its tonality is distributed.
+///
+/// The two are measured from the same pair and are always present or
+/// absent together. They are alternatives, not layers — see
+/// [cameraToneCurve].
+class CameraMatch {
+  const CameraMatch({this.stops, this.tone});
+
+  static const none = CameraMatch();
+
+  final double? stops;
+  final List<double>? tone;
+
+  bool get isEmpty => stops == null && tone == null;
 }
 
 Uint8List _rgbBytes(img.Image image) =>
@@ -137,6 +164,7 @@ EditSourcePair? decodeEditSources(
   final liveImage = fitToMaxDimension(previewImage, livePreviewMaxDimension);
   return EditSourcePair(
     baseExposureStops: decoded.baseExposureStops,
+    baseToneCurve: decoded.baseToneCurve,
     preview: EditSource(
       width: previewImage.width,
       height: previewImage.height,
@@ -270,7 +298,7 @@ EditSourcePair? decodeEditSourcePairFromCachedJpeg(Uint8List jpegBytes) {
   );
 }
 
-/// Re-measures [EditSourcePair.baseExposureStops] for a photo whose pixels
+/// Re-measures the camera match for a photo whose pixels
 /// came back from a cache instead of a fresh RAW decode.
 ///
 /// The offset is measured inside [decodeRawImage], so a cache hit — the
@@ -292,23 +320,31 @@ EditSourcePair? decodeEditSourcePairFromCachedJpeg(Uint8List jpegBytes) {
 ///
 /// Designed to run via `compute()` (record arg, since `compute` takes one
 /// value).
-double? probeBaseExposureStops(
+CameraMatch probeCameraMatch(
   ({EditSource source, Uint8List embeddedJpeg}) args,
-) => cameraExposureOffsetStops(
-  args.source.rgbBytes,
-  args.source.width,
-  args.source.height,
-  args.embeddedJpeg,
+) => CameraMatch(
+  stops: cameraExposureOffsetStops(
+    args.source.rgbBytes,
+    args.source.width,
+    args.source.height,
+    args.embeddedJpeg,
+  ),
+  tone: cameraToneCurve(
+    args.source.rgbBytes,
+    args.source.width,
+    args.source.height,
+    args.embeddedJpeg,
+  ),
 );
 
-/// [probeBaseExposureStops] at below-normal OS-thread priority — the form
-/// the folder-open preview-cache preload uses, so re-measuring a photo
-/// nobody has selected yet yields to the UI isolate.
-double? probeBaseExposureStopsLowPriority(
+/// [probeCameraMatch] at below-normal OS-thread priority — the form the
+/// folder-open preview-cache preload uses, so re-measuring a photo nobody
+/// has selected yet yields to the UI isolate.
+CameraMatch probeCameraMatchLowPriority(
   ({EditSource source, Uint8List embeddedJpeg}) args,
 ) {
   lowerBackgroundThreadPriority();
-  return probeBaseExposureStops(args);
+  return probeCameraMatch(args);
 }
 
 /// [decodeEditSourcePairFromCachedJpeg] wrapped to run at below-normal

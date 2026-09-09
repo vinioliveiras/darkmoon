@@ -75,6 +75,7 @@ class RawImage {
     required this.height,
     required this.rgbBytes,
     this.baseExposureStops,
+    this.baseToneCurve,
   });
 
   final int width;
@@ -90,6 +91,15 @@ class RawImage {
   /// relative adjustment — the same shape as As Shot white balance. See
   /// [cameraExposureOffsetStops].
   final double? baseExposureStops;
+
+  /// The tone curve that maps this decode's tonality onto the camera's own
+  /// rendering of the same shot — [ColorProfile.tone]'s shape, null when
+  /// there was nothing trustworthy to compare against.
+  ///
+  /// Subsumes [baseExposureStops]: a curve that carries the camera's whole
+  /// tonality carries its mean along with it. The renderer spends one or
+  /// the other, never both. See [cameraToneCurve].
+  final List<double>? baseToneCurve;
 }
 
 class _Lib {
@@ -596,7 +606,9 @@ RawImage? decodeRawImage(
         // color science and needs no such nudge.
         // Measured from the same open handle rather than a second pass
         // over the file: the preview is right there, and re-opening a RAW
-        // to read it would cost more than the comparison does.
+        // to read it would cost more than the comparison does. Extracted
+        // once — both measurements read the same preview.
+        final embeddedJpeg = _extractThumbJpeg(lib, lr);
         return RawImage(
           width: width,
           height: height,
@@ -605,7 +617,13 @@ RawImage? decodeRawImage(
             rgbBytes,
             width,
             height,
-            _extractThumbJpeg(lib, lr),
+            embeddedJpeg,
+          ),
+          baseToneCurve: cameraToneCurve(
+            rgbBytes,
+            width,
+            height,
+            embeddedJpeg,
           ),
         );
       } finally {
@@ -785,7 +803,9 @@ RawImage? decodeRawImageWithPmridDenoise(
         final rgbBytes = _copyProcessedImageData(image);
         // Measured from the same open handle rather than a second pass
         // over the file: the preview is right there, and re-opening a RAW
-        // to read it would cost more than the comparison does.
+        // to read it would cost more than the comparison does. Extracted
+        // once — both measurements read the same preview.
+        final embeddedJpeg = _extractThumbJpeg(lib, lr);
         return RawImage(
           width: width,
           height: height,
@@ -794,7 +814,13 @@ RawImage? decodeRawImageWithPmridDenoise(
             rgbBytes,
             width,
             height,
-            _extractThumbJpeg(lib, lr),
+            embeddedJpeg,
+          ),
+          baseToneCurve: cameraToneCurve(
+            rgbBytes,
+            width,
+            height,
+            embeddedJpeg,
           ),
         );
       } finally {

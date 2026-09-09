@@ -165,43 +165,41 @@ void main() {
     );
 
     test('carries no offset of its own', () {
-      // Not a wish — the reason [probeBaseExposureStops] has to exist. A
-      // cache hit skips decodeRawImage, the only place the offset is ever
+      // Not a wish — the reason [probeCameraMatch] has to exist. A
+      // cache hit skips decodeRawImage, the only place the match is ever
       // measured, so the photo would render at LibRaw's auto-brightened
       // exposure with nothing pulling it back. Every open after the first
       // blew out (2026-09-09).
-      expect(
-        decodeEditSourcePairFromCachedJpeg(
-          jpegOf(flat(120)),
-        )?.baseExposureStops,
-        isNull,
-      );
+      final cachedPair = decodeEditSourcePairFromCachedJpeg(jpegOf(flat(120)));
+      expect(cachedPair?.baseExposureStops, isNull);
+      expect(cachedPair?.baseToneCurve, isNull);
     });
 
     test('the probe answers what a fresh decode would have', () {
       final source = flat(100);
       final embedded = jpegOf(flat(150));
+      final repaired = cached(source).withCameraMatch(
+        probeCameraMatch((
+          source: EditSource(width: width, height: height, rgbBytes: source),
+          embeddedJpeg: embedded,
+        )),
+      );
       expect(
-        cached(source).withBaseExposureStops(
-          probeBaseExposureStops((
-            source: EditSource(
-              width: width,
-              height: height,
-              rgbBytes: source,
-            ),
-            embeddedJpeg: embedded,
-          )),
-        ).baseExposureStops,
+        repaired.baseExposureStops,
         closeTo(
           cameraExposureOffsetStops(source, width, height, embedded)!,
           1e-9,
         ),
       );
+      expect(
+        repaired.baseToneCurve,
+        cameraToneCurve(source, width, height, embedded),
+      );
     });
 
-    test('withBaseExposureStops leaves the pixels alone', () {
+    test('withCameraMatch leaves the pixels alone', () {
       final pair = cached(flat(77));
-      final next = pair.withBaseExposureStops(0.5);
+      final next = pair.withCameraMatch(const CameraMatch(stops: 0.5));
       expect(next.preview.rgbBytes, pair.preview.rgbBytes);
       expect(next.live.rgbBytes, pair.live.rgbBytes);
       expect(next.baseExposureStops, 0.5);

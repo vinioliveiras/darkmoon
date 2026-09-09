@@ -79,10 +79,14 @@ Future<ui.Image> runColorProfileGpu(
 /// One-entry cache of the uploaded tone-curve texture, keyed by the curve
 /// it was built from.
 ///
-/// The profile changes when the user picks a different one — rarely — while
-/// this pass runs on every render, so rebuilding and re-uploading a texture
-/// each time would be pure churn of exactly the kind
-/// project_perf_memory_overhaul_sep3.md went and removed. The cached image
+/// This pass runs on every render, so rebuilding and re-uploading a
+/// texture each time would be pure churn of exactly the kind
+/// project_perf_memory_overhaul_sep3.md went and removed. One entry is
+/// enough because the curve is stable for as long as a photo is open: it
+/// changes when the user picks a different profile, and (since 2026-09-09)
+/// when the selected photo changes, since the camera tone match rides in
+/// this same slot and is fitted per photo. A photo switch costs one 132-
+/// byte upload. The cached image
 /// is owned here and disposed when it is replaced; it is passed to
 /// [GpuPass.run] as an input, never handed to a [GpuImagePool], so nothing
 /// else will dispose it underneath this cache.
