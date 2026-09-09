@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../diagnostics/dev_log.dart';
+import 'atomic_json_file.dart';
 import 'legacy_filename_migration.dart';
 
 /// Per-photo slider values, keyed by absolute RAW file path — persisted so
@@ -40,10 +41,10 @@ Future<File> _catalogFile() async {
 Future<Map<String, Map<String, double>>> loadCatalog() async {
   try {
     final file = await _catalogFile();
-    if (!await file.exists()) {
+    final raw = await readJsonObject(file, what: 'catalog');
+    if (raw == null) {
       return {};
     }
-    final raw = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     return {
       for (final entry in raw.entries)
         entry.key: {
@@ -60,13 +61,11 @@ Future<Map<String, Map<String, double>>> loadCatalog() async {
   }
 }
 
-/// Saves the full catalog, writing to a temp file and renaming over the
-/// real one so a crash mid-write can't leave a corrupt/truncated file.
+/// Saves the full catalog — see [writeJsonFileAtomically] for the crash
+/// and overlap guarantees.
 Future<void> saveCatalog(Map<String, Map<String, double>> edits) async {
   final file = await _catalogFile();
-  final tmp = File('${file.path}.tmp');
-  await tmp.writeAsString(jsonEncode(edits));
-  await tmp.rename(file.path);
+  await writeJsonFileAtomically(file, jsonEncode(edits));
 }
 
 /// Deletes every saved per-photo edit — used by the Settings "clear

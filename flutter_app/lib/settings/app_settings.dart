@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
+import '../catalog/atomic_json_file.dart';
 import '../catalog/legacy_filename_migration.dart';
 import '../diagnostics/dev_log.dart';
 
@@ -393,10 +394,10 @@ Future<AppSettings> loadSettings() async {
   final defaultConcurrency = _defaultThumbnailConcurrency();
   try {
     final file = await _settingsFile();
-    if (!await file.exists()) {
+    final raw = await readJsonObject(file, what: 'settings');
+    if (raw == null) {
       return AppSettings(thumbnailConcurrency: defaultConcurrency);
     }
-    final raw = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     const defaults = AppSettings();
     return AppSettings(
       language: raw['language'] as String? ?? defaults.language,
@@ -448,8 +449,8 @@ Future<AppSettings> loadSettings() async {
 
 Future<void> saveSettings(AppSettings settings) async {
   final file = await _settingsFile();
-  final tmp = File('${file.path}.tmp');
-  await tmp.writeAsString(
+  await writeJsonFileAtomically(
+    file,
     jsonEncode({
       'language': settings.language,
       'fastPreview': settings.fastPreview,
@@ -472,5 +473,4 @@ Future<void> saveSettings(AppSettings settings) async {
       'animationsEnabled': settings.animationsEnabled,
     }),
   );
-  await tmp.rename(file.path);
 }

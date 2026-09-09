@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../diagnostics/dev_log.dart';
 import '../render/tone_curve.dart';
+import 'atomic_json_file.dart';
 import 'legacy_filename_migration.dart';
 
 /// Per-photo curves (Tone Curve + Color Curve's R/G/B channels), keyed by
@@ -51,10 +52,10 @@ List<List<double>> _encodePoints(List<CurvePoint> points) => [
 Future<Map<String, PhotoCurves>> loadPhotoCurves() async {
   try {
     final file = await _curveFile();
-    if (!await file.exists()) {
+    final raw = await readJsonObject(file, what: 'curves');
+    if (raw == null) {
       return {};
     }
-    final raw = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     return {
       for (final entry in raw.entries)
         entry.key: PhotoCurves(
@@ -70,12 +71,12 @@ Future<Map<String, PhotoCurves>> loadPhotoCurves() async {
   }
 }
 
-/// Saves every photo's curves, writing to a temp file and renaming over
-/// the real one so a crash mid-write can't leave a corrupt/truncated file.
+/// Saves every photo's curves — see [writeJsonFileAtomically] for the
+/// crash and overlap guarantees.
 Future<void> savePhotoCurves(Map<String, PhotoCurves> curves) async {
   final file = await _curveFile();
-  final tmp = File('${file.path}.tmp');
-  await tmp.writeAsString(
+  await writeJsonFileAtomically(
+    file,
     jsonEncode({
       for (final entry in curves.entries)
         entry.key: {
@@ -86,7 +87,6 @@ Future<void> savePhotoCurves(Map<String, PhotoCurves> curves) async {
         },
     }),
   );
-  await tmp.rename(file.path);
 }
 
 /// Deletes every saved photo curve — used by the same Settings "clear

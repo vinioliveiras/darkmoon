@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import '../diagnostics/dev_log.dart';
+import 'atomic_json_file.dart';
 import 'legacy_filename_migration.dart';
 
 /// Which preset (by id) is currently applied to each photo, keyed by
@@ -29,10 +30,10 @@ Future<File> _photoPresetFile() async {
 Future<Map<String, String>> loadPhotoPresets() async {
   try {
     final file = await _photoPresetFile();
-    if (!await file.exists()) {
+    final raw = await readJsonObject(file, what: 'photo presets');
+    if (raw == null) {
       return {};
     }
-    final raw = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     return {for (final entry in raw.entries) entry.key: entry.value as String};
   } catch (e, st) {
     DevLog.logError(
@@ -46,7 +47,5 @@ Future<Map<String, String>> loadPhotoPresets() async {
 
 Future<void> savePhotoPresets(Map<String, String> photoPresets) async {
   final file = await _photoPresetFile();
-  final tmp = File('${file.path}.tmp');
-  await tmp.writeAsString(jsonEncode(photoPresets));
-  await tmp.rename(file.path);
+  await writeJsonFileAtomically(file, jsonEncode(photoPresets));
 }

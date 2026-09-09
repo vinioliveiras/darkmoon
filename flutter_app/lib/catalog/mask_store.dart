@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 import '../diagnostics/dev_log.dart';
 import '../render/mask.dart';
 import '../render/tone_curve.dart';
+import 'atomic_json_file.dart';
 import 'legacy_filename_migration.dart';
 
 /// Per-photo mask layers (Linear/Radial Gradient for now), keyed by
@@ -231,10 +232,10 @@ Map<String, dynamic> _encodeMask(MaskLayer mask) => {
 Future<Map<String, List<MaskLayer>>> loadPhotoMasks() async {
   try {
     final file = await _maskFile();
-    if (!await file.exists()) {
+    final raw = await readJsonObject(file, what: 'masks');
+    if (raw == null) {
       return {};
     }
-    final raw = jsonDecode(await file.readAsString()) as Map<String, dynamic>;
     return {
       for (final entry in raw.entries)
         entry.key: [
@@ -248,18 +249,17 @@ Future<Map<String, List<MaskLayer>>> loadPhotoMasks() async {
   }
 }
 
-/// Saves every photo's mask stack, writing to a temp file and renaming
-/// over the real one so a crash mid-write can't leave a corrupt file.
+/// Saves every photo's mask stack — see [writeJsonFileAtomically] for the
+/// crash and overlap guarantees.
 Future<void> savePhotoMasks(Map<String, List<MaskLayer>> masks) async {
   final file = await _maskFile();
-  final tmp = File('${file.path}.tmp');
-  await tmp.writeAsString(
+  await writeJsonFileAtomically(
+    file,
     jsonEncode({
       for (final entry in masks.entries)
         entry.key: [for (final mask in entry.value) _encodeMask(mask)],
     }),
   );
-  await tmp.rename(file.path);
 }
 
 /// Deletes every saved mask — used by the same Settings "clear catalog"
