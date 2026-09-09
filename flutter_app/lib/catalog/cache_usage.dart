@@ -238,3 +238,77 @@ String formatCacheBytes(int bytes) {
       ? '${value.toStringAsFixed(1)} ${units[unit]}'
       : '${value.round()} ${units[unit]}';
 }
+
+
+/// Arguments for [clearCacheCategories], which runs via `compute()`.
+class ClearCacheRequest {
+  const ClearCacheRequest(this.documentsDir, this.categories);
+
+  final String documentsDir;
+
+  /// Which categories to empty. Passed as names rather than as the enum
+  /// so the request survives the isolate boundary unambiguously.
+  final Set<String> categories;
+
+  factory ClearCacheRequest.of(
+    String documentsDir,
+    Set<CacheCategory> categories,
+  ) => ClearCacheRequest(
+    documentsDir,
+    {for (final c in categories) c.name},
+  );
+
+  bool wants(CacheCategory category) => categories.contains(category.name);
+}
+
+/// Deletes every file belonging to the requested categories, and returns
+/// how many bytes went.
+///
+/// Unlike [enforceCacheLimit] this will happily empty the AI results —
+/// automatic eviction must not throw away minutes of inference, but a
+/// person asking for the space back is a different thing entirely, and
+/// refusing them would just mean they delete the folder by hand.
+///
+/// Leaves the directories themselves behind: they are recreated on the
+/// next write anyway, and a caller that wants them gone can follow with
+/// [removeEmptyCacheDirs].
+///
+/// **The in-memory caches are not this function's problem.** Every
+/// `ThumbnailCacheManager` keeps parsed month files in memory, so deleting
+/// the files underneath one leaves it happily serving what it already
+/// read. The caller has to rebuild those — see `_clearCaches`.
+///
+/// Best-effort per file: one locked entry does not abandon the rest.
+int clearCacheCategories(ClearCacheRequest request) {
+  var freed = 0;
+  _rootsIn(request.documentsDir).forEach((root, category) {
+    final dir = Directory(root);
+    if (!dir.existsSync()) {
+      return;
+    }
+    try {
+      for (final entity in dir.listSync(recursive: true, followLinks: false)) {
+        if (entity is! File) {
+          continue;
+        }
+        final actual =
+            category == CacheCategory.previews && _isFullSource(entity.path)
+            ? CacheCategory.fullSources
+            : category;
+        if (!request.wants(actual)) {
+          continue;
+        }
+        try {
+          final size = entity.lengthSync();
+          entity.deleteSync();
+          freed += size;
+        } catch (_) {
+          // Locked or already gone.
+        }
+      }
+    } on FileSystemException {
+      // Unreadable directory; the rest still goes.
+    }
+  });
+  return freed;
+}

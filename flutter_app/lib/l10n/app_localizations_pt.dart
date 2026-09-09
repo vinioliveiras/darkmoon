@@ -619,6 +619,27 @@ class AppLocalizationsPt extends AppLocalizations {
       'Previews e fontes em resolução total são apagados do mais antigo pro mais novo pra caber neste limite. Resultados de IA nunca são apagados automaticamente — refazê-los custa minutos de processamento, não segundos.';
 
   @override
+  String settingsClearCacheTooltip(String category) {
+    return 'Limpar $category';
+  }
+
+  @override
+  String get settingsClearAllCachesButton => 'Limpar todos os caches';
+
+  @override
+  String confirmClearCacheMessage(String category) {
+    return 'Apagar tudo em $category? É refeito conforme você for abrindo as fotos de novo.';
+  }
+
+  @override
+  String get confirmClearAiCacheMessage =>
+      'Apagar todos os resultados de IA? Cada um levou minutos de processamento, e refazê-los custa esse tempo de novo, não um decode rápido.';
+
+  @override
+  String get confirmClearAllCachesMessage =>
+      'Apagar todos os caches, incluindo os de IA? Previews e miniaturas voltam sozinhos; os de IA precisam ser rodados de novo, o que leva minutos por foto.';
+
+  @override
   String get settingsRawOnlyLabel => 'Somente arquivos RAW';
 
   @override

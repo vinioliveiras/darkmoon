@@ -614,6 +614,27 @@ class AppLocalizationsEn extends AppLocalizations {
       'Previews and full-resolution sources are deleted oldest-first to stay under this. AI results are never deleted automatically — they cost minutes of processing to rebuild, not seconds.';
 
   @override
+  String settingsClearCacheTooltip(String category) {
+    return 'Clear $category';
+  }
+
+  @override
+  String get settingsClearAllCachesButton => 'Clear all caches';
+
+  @override
+  String confirmClearCacheMessage(String category) {
+    return 'Delete every cached $category? They are rebuilt as photos are opened again.';
+  }
+
+  @override
+  String get confirmClearAiCacheMessage =>
+      'Delete every cached AI result? These took minutes of processing each and running them again costs that time over, not a quick re-decode.';
+
+  @override
+  String get confirmClearAllCachesMessage =>
+      'Delete every cache, including AI results? Previews and thumbnails come back on their own; AI results have to be run again, which takes minutes per photo.';
+
+  @override
   String get settingsRawOnlyLabel => 'RAW files only';
 
   @override

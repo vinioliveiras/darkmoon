@@ -10,10 +10,15 @@ import 'package:darkmoon/widgets/cache_storage_meter.dart';
 /// the answer has to survive the two states that are easy to get wrong: no
 /// measurement yet, and no limit set.
 void main() {
+  final cleared = <CacheCategory>[];
+
+  setUp(cleared.clear);
+
   Future<AppLocalizations> pump(
     WidgetTester tester, {
     required CacheUsage? usage,
     required int maxBytes,
+    bool clearable = false,
   }) async {
     await tester.pumpWidget(
       MaterialApp(
@@ -22,7 +27,11 @@ void main() {
         home: Scaffold(
           body: SizedBox(
             width: 420,
-            child: CacheStorageMeter(usage: usage, maxBytes: maxBytes),
+            child: CacheStorageMeter(
+              usage: usage,
+              maxBytes: maxBytes,
+              onClear: clearable ? cleared.add : null,
+            ),
           ),
         ),
       ),
@@ -89,6 +98,63 @@ void main() {
     expect(find.text(l10n.settingsCacheFullSources), findsOneWidget);
     expect(find.text(l10n.settingsCacheThumbnails), findsOneWidget);
     expect(find.text(l10n.settingsCacheAiResults), findsOneWidget);
+  });
+
+  testWidgets('a category with nothing in it offers no clear button', (
+    tester,
+  ) async {
+    // The button would do nothing and say nothing about why.
+    await pump(
+      tester,
+      usage: const CacheUsage({CacheCategory.previews: 100}),
+      maxBytes: 5 * gb,
+      clearable: true,
+    );
+    expect(find.byType(IconButton), findsOneWidget);
+  });
+
+  testWidgets('clearing one category asks for exactly that one', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      usage: const CacheUsage({
+        CacheCategory.previews: 100,
+        CacheCategory.aiResults: 200,
+      }),
+      maxBytes: 5 * gb,
+      clearable: true,
+    );
+    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
+    // Reached through the row that names the category, not by position:
+    // the rows are built from a fixed order, so an index would keep
+    // passing if the button were wired to the wrong row.
+    final aiRow = find
+        .ancestor(
+          of: find.text(l10n.settingsCacheAiResults),
+          matching: find.byType(Row),
+        )
+        .first;
+    await tester.tap(
+      find.descendant(of: aiRow, matching: find.byType(IconButton)),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      cleared,
+      [CacheCategory.aiResults],
+      reason: 'the row acted on has to be the row that was clicked',
+    );
+  });
+
+  testWidgets('with no handler the rows are a read-only breakdown', (
+    tester,
+  ) async {
+    await pump(
+      tester,
+      usage: const CacheUsage({CacheCategory.previews: 100}),
+      maxBytes: 5 * gb,
+    );
+    expect(find.byType(IconButton), findsNothing);
   });
 
   testWidgets('over the limit it still draws, scaled to the total', (

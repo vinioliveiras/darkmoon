@@ -155,6 +155,75 @@ void main() {
     });
   });
 
+  group('clearing on request', () {
+    test('one category goes and the others stay', () {
+      write(['previews', 'v5', '2048px', 'a.cache'], 100);
+      write(['previews', 'v5', 'native', 'a.cache'], 200);
+      write(['thumbnails', 'a.cache'], 300);
+      write(['ai_enhance_cache', 'a.png'], 400);
+
+      final freed = clearCacheCategories(
+        ClearCacheRequest.of(root.path, {CacheCategory.previews}),
+      );
+      expect(freed, 100);
+      expect(sizeOf(['previews', 'v5', '2048px', 'a.cache']), 0);
+      expect(
+        sizeOf(['previews', 'v5', 'native', 'a.cache']),
+        200,
+        reason: 'full-resolution sources live under previews/ but are a '
+            'category of their own',
+      );
+      expect(sizeOf(['thumbnails', 'a.cache']), 300);
+      expect(sizeOf(['ai_enhance_cache', 'a.png']), 400);
+    });
+
+    test('the camera matches go with the previews they belong to', () {
+      write(['camera_match', 'v5', 'a.cache'], 50);
+      clearCacheCategories(
+        ClearCacheRequest.of(root.path, {CacheCategory.previews}),
+      );
+      expect(sizeOf(['camera_match', 'v5', 'a.cache']), 0);
+    });
+
+    test('asked directly, it does clear the AI results', () {
+      // The automatic sweep never touches these — see the sweep's tests.
+      // A person asking for the space back is a different thing, and
+      // refusing would only mean they delete the folder by hand.
+      write(['ai_enhance_cache', 'a.png'], 400);
+      write(['ai_mask_cache', 'b.png'], 500);
+      write(['colorize_cache', 'c.png'], 600);
+      final freed = clearCacheCategories(
+        ClearCacheRequest.of(root.path, {CacheCategory.aiResults}),
+      );
+      expect(freed, 1500);
+      expect(measureCacheUsage(root.path)[CacheCategory.aiResults], 0);
+    });
+
+    test('every category at once empties the lot', () {
+      write(['previews', 'v5', '2048px', 'a.cache'], 100);
+      write(['previews', 'v5', 'native', 'a.cache'], 200);
+      write(['thumbnails', 'a.cache'], 300);
+      write(['colorize_cache', 'a.png'], 400);
+      write(['presets', 'mine.xmp'], 999);
+
+      clearCacheCategories(
+        ClearCacheRequest.of(root.path, CacheCategory.values.toSet()),
+      );
+      expect(measureCacheUsage(root.path).total, 0);
+      expect(
+        sizeOf(['presets', 'mine.xmp']),
+        999,
+        reason: 'work the user made is not a cache and is never in scope',
+      );
+    });
+
+    test('clearing nothing deletes nothing', () {
+      write(['previews', 'v5', '2048px', 'a.cache'], 100);
+      expect(clearCacheCategories(ClearCacheRequest.of(root.path, {})), 0);
+      expect(sizeOf(['previews', 'v5', '2048px', 'a.cache']), 100);
+    });
+  });
+
   group('formatting', () {
     test('it reads the way a storage meter reads', () {
       expect(formatCacheBytes(0), '0 B');

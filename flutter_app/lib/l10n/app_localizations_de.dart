@@ -623,6 +623,27 @@ class AppLocalizationsDe extends AppLocalizations {
       'Vorschauen und Quellen in voller Auflösung werden älteste zuerst gelöscht, um darunter zu bleiben. KI-Ergebnisse werden nie automatisch gelöscht — sie neu zu berechnen kostet Minuten, nicht Sekunden.';
 
   @override
+  String settingsClearCacheTooltip(String category) {
+    return '$category leeren';
+  }
+
+  @override
+  String get settingsClearAllCachesButton => 'Alle Caches leeren';
+
+  @override
+  String confirmClearCacheMessage(String category) {
+    return 'Alles unter $category löschen? Es wird neu erstellt, sobald die Fotos wieder geöffnet werden.';
+  }
+
+  @override
+  String get confirmClearAiCacheMessage =>
+      'Alle KI-Ergebnisse löschen? Jedes hat Minuten an Rechenzeit gekostet, und sie erneut zu berechnen kostet diese Zeit wieder — nicht nur ein schnelles Neudekodieren.';
+
+  @override
+  String get confirmClearAllCachesMessage =>
+      'Alle Caches löschen, auch die KI-Ergebnisse? Vorschauen und Miniaturansichten entstehen von selbst neu; KI-Ergebnisse müssen neu berechnet werden, was Minuten pro Foto dauert.';
+
+  @override
   String get settingsRawOnlyLabel => 'Nur RAW-Dateien';
 
   @override

@@ -26,6 +26,7 @@ class SettingsDialog extends StatefulWidget {
     required this.onChanged,
     required this.onClearThumbnails,
     this.cacheUsage,
+    this.onClearCaches,
     required this.onClearCatalog,
     required this.onPruneMissing,
     this.nativeWidth,
@@ -50,6 +51,10 @@ class SettingsDialog extends StatefulWidget {
   /// What the disk caches occupy, for the storage meter — null while the
   /// first measurement is still running.
   final CacheUsage? cacheUsage;
+
+  /// Empties the given cache categories — see `_clearCaches`. Null leaves
+  /// the storage meter read-only.
+  final void Function(Set<CacheCategory> categories)? onClearCaches;
   final VoidCallback onClearCatalog;
 
   /// Removes saved edits/curves/masks/presets/recent-file entries for
@@ -478,7 +483,30 @@ class _SettingsDialogState extends State<SettingsDialog>
           CacheStorageMeter(
             usage: widget.cacheUsage,
             maxBytes: _settings.cacheMaxBytes,
+            onClear: widget.onClearCaches == null
+                ? null
+                : (category) => _confirmAndRun(
+                    // AI results get their own wording. Every other
+                    // category comes back on its own the next time a photo
+                    // is opened; these cost minutes of inference each, and
+                    // a message that treats the two the same would be
+                    // understating what is about to be thrown away.
+                    category == CacheCategory.aiResults
+                        ? l10n.confirmClearAiCacheMessage
+                        : l10n.confirmClearCacheMessage(
+                            CacheStorageMeter.labelOf(l10n, category),
+                          ),
+                    () => widget.onClearCaches!({category}),
+                  ),
           ),
+          if (widget.onClearCaches != null)
+            _ClearDataRow(
+              label: l10n.settingsClearAllCachesButton,
+              onPressed: () => _confirmAndRun(
+                l10n.confirmClearAllCachesMessage,
+                () => widget.onClearCaches!(CacheCategory.values.toSet()),
+              ),
+            ),
           const SizedBox(height: 6),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,

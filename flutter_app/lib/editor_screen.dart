@@ -2010,6 +2010,66 @@ class _EditorScreenState extends State<EditorScreen>
     await _refreshCacheUsage();
   }
 
+  /// Empties the given cache categories, on disk and in memory.
+  ///
+  /// The in-memory half is the part that is easy to miss. Every
+  /// [ThumbnailCacheManager] keeps the month files it has read parsed in
+  /// memory, so deleting the files underneath one leaves it serving what
+  /// it already has — the space comes back and the app carries on as if
+  /// nothing happened, which looks exactly like the button being broken.
+  /// Each affected manager is rebuilt against its now-empty directory.
+  ///
+  /// [_editSources] goes too when previews or full-resolution sources are
+  /// cleared: those are the decoded buffers those caches exist to avoid
+  /// re-deriving, and leaving them would mean the current photo keeps
+  /// showing while everything backing it is gone.
+  Future<void> _clearCaches(Set<CacheCategory> categories) async {
+    final root = _cacheRoot;
+    if (root == null || categories.isEmpty) {
+      return;
+    }
+    await compute(clearCacheCategories, ClearCacheRequest.of(root, categories));
+    await compute(removeEmptyCacheDirs, root);
+    if (!mounted) {
+      return;
+    }
+
+    if (categories.contains(CacheCategory.previews) ||
+        categories.contains(CacheCategory.fullSources)) {
+      await _loadPreviewCache();
+      await _loadCameraMatchCache();
+      await _loadNativeSourceCache();
+    }
+    if (categories.contains(CacheCategory.thumbnails)) {
+      await _loadThumbnailCache();
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      if (categories.contains(CacheCategory.previews) ||
+          categories.contains(CacheCategory.fullSources) ||
+          categories.contains(CacheCategory.aiResults)) {
+        _editSources.clear();
+        _embeddedPreviews.clear();
+      }
+      if (categories.contains(CacheCategory.thumbnails)) {
+        _thumbnails.clear();
+      }
+    });
+
+    // Put back what the user is actually looking at, rather than leaving
+    // the viewport and the filmstrip empty until the next click.
+    if (categories.contains(CacheCategory.thumbnails) && _files.isNotEmpty) {
+      unawaited(_loadThumbnails(_files, _folderGeneration));
+    }
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected != null && !_editSources.containsKey(selected.path)) {
+      unawaited(_loadEditSourceAndRender(selected.path, _folderGeneration));
+    }
+    await _refreshCacheUsage();
+  }
+
   Future<void> _refreshCacheUsage() async {
     final root = _cacheRoot;
     if (root == null) {
@@ -2584,6 +2644,7 @@ class _EditorScreenState extends State<EditorScreen>
       builder: (_) => SettingsDialog(
         settings: _settings,
         cacheUsage: _cacheUsage,
+        onClearCaches: (categories) => unawaited(_clearCaches(categories)),
         nativeWidth: selectedMeta?.width,
         nativeHeight: selectedMeta?.height,
         onChanged: (next) {

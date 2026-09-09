@@ -1210,6 +1210,36 @@ abstract class AppLocalizations {
   /// **'Previews and full-resolution sources are deleted oldest-first to stay under this. AI results are never deleted automatically — they cost minutes of processing to rebuild, not seconds.'**
   String get settingsCacheLimitHint;
 
+  /// No description provided for @settingsClearCacheTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear {category}'**
+  String settingsClearCacheTooltip(String category);
+
+  /// No description provided for @settingsClearAllCachesButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear all caches'**
+  String get settingsClearAllCachesButton;
+
+  /// No description provided for @confirmClearCacheMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete every cached {category}? They are rebuilt as photos are opened again.'**
+  String confirmClearCacheMessage(String category);
+
+  /// No description provided for @confirmClearAiCacheMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete every cached AI result? These took minutes of processing each and running them again costs that time over, not a quick re-decode.'**
+  String get confirmClearAiCacheMessage;
+
+  /// No description provided for @confirmClearAllCachesMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete every cache, including AI results? Previews and thumbnails come back on their own; AI results have to be run again, which takes minutes per photo.'**
+  String get confirmClearAllCachesMessage;
+
   /// No description provided for @settingsRawOnlyLabel.
   ///
   /// In en, this message translates to:

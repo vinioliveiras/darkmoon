@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../catalog/cache_usage.dart';
@@ -19,6 +20,7 @@ class CacheStorageMeter extends StatelessWidget {
     super.key,
     required this.usage,
     required this.maxBytes,
+    this.onClear,
   });
 
   /// Null while the first measurement is still running — the meter draws
@@ -27,6 +29,17 @@ class CacheStorageMeter extends StatelessWidget {
   final CacheUsage? usage;
 
   final int maxBytes;
+
+  /// Empties one category. Null leaves the rows as a read-only breakdown.
+  ///
+  /// The legend doubles as the controls on purpose: a separate list of
+  /// "Clear previews / Clear thumbnails / ..." buttons would name the same
+  /// four things twice and let the two lists disagree about what exists.
+  final void Function(CacheCategory category)? onClear;
+
+  /// A category label, for the legend and for the confirmation text.
+  static String labelOf(AppLocalizations l10n, CacheCategory category) =>
+      _label(l10n, category);
 
   /// Brightest first, in the order the bar stacks them: the two the limit
   /// actually governs lead, so the segments that can be evicted read as
@@ -134,65 +147,91 @@ class CacheStorageMeter extends StatelessWidget {
             ),
           ),
         ),
-        const SizedBox(height: 10),
-        Wrap(
-          spacing: 16,
-          runSpacing: 6,
-          children: [
-            for (final category in _order)
-              _LegendEntry(
-                color: _shades[category]!,
-                label: _label(l10n, category),
-                value: formatCacheBytes(measured[category]),
-              ),
-          ],
-        ),
+        const SizedBox(height: 6),
+        for (final category in _order)
+          _LegendRow(
+            color: _shades[category]!,
+            label: _label(l10n, category),
+            value: formatCacheBytes(measured[category]),
+            // Nothing to reclaim, so the button would do nothing and say
+            // nothing about why.
+            onClear: measured[category] > 0 && onClear != null
+                ? () => onClear!(category)
+                : null,
+            clearTooltip: l10n.settingsClearCacheTooltip(
+              _label(l10n, category),
+            ),
+          ),
       ],
     );
   }
 }
 
-class _LegendEntry extends StatelessWidget {
-  const _LegendEntry({
+class _LegendRow extends StatelessWidget {
+  const _LegendRow({
     required this.color,
     required this.label,
     required this.value,
+    required this.onClear,
+    required this.clearTooltip,
   });
 
   final Color color;
   final String label;
   final String value;
+  final VoidCallback? onClear;
+  final String clearTooltip;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(2),
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 1),
+      child: Row(
+        children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
           ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          label,
-          style: const TextStyle(
-            fontSize: 11,
-            color: DarkmoonColors.textMuted,
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 11,
+                color: DarkmoonColors.textMuted,
+              ),
+            ),
           ),
-        ),
-        const SizedBox(width: 6),
-        Text(
-          value,
-          style: const TextStyle(
-            fontSize: 11,
-            color: DarkmoonColors.textSecondary,
+          Text(
+            value,
+            style: const TextStyle(
+              fontSize: 11,
+              color: DarkmoonColors.textSecondary,
+            ),
           ),
-        ),
-      ],
+          SizedBox(
+            width: 32,
+            height: 28,
+            child: onClear == null
+                ? null
+                : Tooltip(
+                    message: clearTooltip,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      iconSize: 14,
+                      splashRadius: 14,
+                      color: DarkmoonColors.textMuted,
+                      icon: const Icon(CupertinoIcons.delete),
+                      onPressed: onClear,
+                    ),
+                  ),
+          ),
+        ],
+      ),
     );
   }
 }
