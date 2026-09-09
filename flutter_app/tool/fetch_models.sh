@@ -23,6 +23,17 @@ MANIFEST="$PWD/tool/models.sha256"
 
 cd native_models
 
+# A checkout on Windows (Git's autocrlf on the hosted runners, and on any
+# machine that has it on) hands this script a manifest with CRLF line
+# endings, and the carriage return then rides along on every file name:
+# `gh release download --pattern "name.onnx\r"` matches nothing, and
+# sha256sum -c cannot open "name.onnx\r". Found by the first release.yml
+# run, 2026-09-10. Work from a CR-free copy no matter how it arrived.
+CLEAN_MANIFEST="$(mktemp)"
+trap 'rm -f "$CLEAN_MANIFEST"' EXIT
+tr -d '\r' < "$MANIFEST" > "$CLEAN_MANIFEST"
+MANIFEST="$CLEAN_MANIFEST"
+
 # Verify first, download only what fails. sha256sum's own -c is the check
 # in both places, so there is one definition of "correct" rather than two.
 need=()

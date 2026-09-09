@@ -1,0 +1,6 @@
+# Files that are read by tools which take line endings literally. Git on
+# Windows converts to CRLF on checkout by default, which put a carriage
+# return on every model name in models.sha256 and broke the release
+# workflow's model download (2026-09-10).
+*.sha256 text eol=lf
+*.sh text eol=lf
