@@ -135,11 +135,16 @@ class SettingsGroup extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: DarkmoonColors.dialogBackground,
+    // A Material rather than a decorated Container: the rows inside are
+    // ListTiles, which paint their background and ink on the nearest
+    // Material ancestor. With a plain Container that ancestor was the
+    // dialog itself, so the card's colour sat on top of the ink — Flutter
+    // 3.47 turned that into a debug assertion.
+    return Material(
+      color: DarkmoonColors.dialogBackground,
+      shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: DarkmoonColors.border),
+        side: const BorderSide(color: DarkmoonColors.border),
       ),
       clipBehavior: Clip.antiAlias,
       child: Column(

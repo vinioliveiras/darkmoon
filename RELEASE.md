@@ -77,7 +77,7 @@ It must name an application release carrying all six assets.
 
 ## 5. Prerequisites
 
-- **Flutter 3.35.5** at `D:\flutter\bin\flutter.bat`
+- **Flutter 3.47.2** — `C:\flutter`, first on PATH, the same version `.github/workflows/ci.yml` pins. Do not run `pub get` or `dart format` from the old 3.35.5 copy at `D:\flutter`; it rewrites `pubspec.lock` and reformats files, and CI rejects both.
 - **Model weights** in `flutter_app/native_models/` — `tool/fetch_models.sh`
   pulls them from the `models-v1` release and verifies `tool/models.sha256`
 - **Inno Setup 6** for the Windows installer:

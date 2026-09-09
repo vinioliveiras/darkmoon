@@ -28,7 +28,7 @@ env:
   # on the maintainer's machine. Floating on `stable` would turn an
   # upstream release into a surprise CI failure unrelated to any change
   # here.
-  FLUTTER_VERSION: 3.35.5
+  FLUTTER_VERSION: 3.47.2
 
 defaults:
   run:
@@ -39,7 +39,7 @@ jobs:
     name: Analyze + test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
@@ -71,11 +71,12 @@ jobs:
             artifact: build/macos/Build/Products/Release/*.app
           - name: Windows
             # Pinned, not `windows-latest`: that image moved to Server 2025,
-            # where Flutter 3.35.5's Visual Studio detection picks the
-            # "Visual Studio 16 2019" CMake generator and then cannot find
-            # an instance of it. Same reasoning as pinning the Flutter
-            # version — CI should fail because of a change here, not
-            # because a hosted image rolled forward.
+            # where Flutter 3.35.5's Visual Studio detection picked the
+            # "Visual Studio 16 2019" CMake generator and then could not find
+            # an instance of it. 3.47 may well be fine there, but the same
+            # reasoning as pinning the Flutter version applies — CI should
+            # fail because of a change here, not because a hosted image
+            # rolled forward.
             os: windows-2022
             target: windows
             native_dir: windows/native
@@ -86,7 +87,7 @@ jobs:
             native_dir: linux/native
             artifact: build/linux/x64/release/bundle
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install Linux build dependencies
         if: matrix.target == 'linux'

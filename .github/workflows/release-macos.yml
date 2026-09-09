@@ -23,7 +23,7 @@ permissions:
   contents: write
 
 env:
-  FLUTTER_VERSION: 3.35.5
+  FLUTTER_VERSION: 3.47.2
 
 defaults:
   run:
@@ -39,7 +39,7 @@ jobs:
       # drifted to since. A branch name is accepted too, which is how this
       # gets exercised before a tag exists — note that the ref must be new
       # enough to contain tool/fetch_models.sh.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           ref: ${{ inputs.tag }}
 
