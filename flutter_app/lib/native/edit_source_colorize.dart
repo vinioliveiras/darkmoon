@@ -5,12 +5,14 @@ import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
 import '../catalog/colorize_cache.dart';
+import '../diagnostics/dev_log.dart';
 import '../native/onnx_runtime.dart';
 import '../raw_files.dart' show isRawFile;
 import '../render/colorize.dart';
 import 'common_image.dart';
 import 'edit_source.dart';
 import 'image_utils.dart';
+import 'isolate_job.dart';
 import 'libraw.dart';
 
 /// Reports which execution provider the DDColor session actually ended up
@@ -197,6 +199,7 @@ class _ColorizeIsolateArgs {
     this.intensityPercent,
     this.editEmbeddedJpeg,
     this.sendPort,
+    this.cancelFlagAddress,
   );
 
   final String path;
@@ -205,10 +208,14 @@ class _ColorizeIsolateArgs {
   final int intensityPercent;
   final bool editEmbeddedJpeg;
   final SendPort sendPort;
+
+  /// See [IsolateCancelFlag]; the worker reads it at every stage callback.
+  final int cancelFlagAddress;
 }
 
 void _colorizeIsolateEntry(_ColorizeIsolateArgs args) async {
-  final EditSourcePair? result;
+  final cancel = IsolateCancelFlag.fromAddress(args.cancelFlagAddress);
+  EditSourcePair? result;
   try {
     result = await _decodeAndColorize(
       args.path,
@@ -216,10 +223,21 @@ void _colorizeIsolateEntry(_ColorizeIsolateArgs args) async {
       args.previewMaxDimension,
       args.intensityPercent,
       args.editEmbeddedJpeg,
-      (stage) => args.sendPort.send(stage),
+      (stage) {
+        // Cancel checkpoint — every decode stage and the model-info event
+        // right before inference pass through here. DDColor itself is one
+        // inference call, so a cancel during it lands after it returns;
+        // the point is that the session is then released, not leaked.
+        if (cancel.isSet) {
+          throw const IsolateCancelled();
+        }
+        args.sendPort.send(stage);
+      },
     );
+  } on IsolateCancelled {
+    result = null;
   } finally {
-    // This isolate is spawned per colorize run and killed right after, but
+    // This isolate is spawned per colorize run and gone right after, but
     // the DDColor session it loaded is native memory that would outlive it
     // — a 934 MB graph leaked once per run. See [OnnxModel.releaseAll].
     OnnxModel.releaseAll();
@@ -234,7 +252,9 @@ void _colorizeIsolateEntry(_ColorizeIsolateArgs args) async {
 ///
 /// [cancellationToken], if given and cancelled, makes this return `null`
 /// right away instead of waiting for the isolate to finish — same
-/// `Future.any` race `edit_source_ai_enhance.dart`'s own function uses.
+/// `Future.any` race and the same [IsolateCancelFlag] hand-off as
+/// `edit_source_ai_enhance.dart`'s own function: the worker is asked to
+/// stop and left to release its session and exit, never killed.
 Future<EditSourcePair?> decodeEditSourcesWithColorize(
   String path,
   String cacheDir,
@@ -245,6 +265,8 @@ Future<EditSourcePair?> decodeEditSourcesWithColorize(
   ColorizeCancellationToken? cancellationToken,
 }) async {
   final receivePort = ReceivePort();
+  final exitPort = ReceivePort();
+  final cancelFlag = IsolateCancelFlag();
   final isolate = await Isolate.spawn(
     _colorizeIsolateEntry,
     _ColorizeIsolateArgs(
@@ -254,26 +276,42 @@ Future<EditSourcePair?> decodeEditSourcesWithColorize(
       intensityPercent,
       editEmbeddedJpeg,
       receivePort.sendPort,
+      cancelFlag.address,
     ),
+    onError: receivePort.sendPort,
+    onExit: exitPort.sendPort,
   );
+  unawaited(disposeOnIsolateExit(exitPort, cancelFlag));
   try {
     Future<EditSourcePair?> receiveResult() async {
       await for (final message in receivePort) {
         if (message is RawDecodeStage || message is ColorizeModelInfo) {
           onStage(message);
-        } else {
-          return message as EditSourcePair?;
+          continue;
         }
+        final error = IsolateError.of(message);
+        if (error != null) {
+          DevLog.logError('Colorize isolate', error.error, error.trace);
+          return null;
+        }
+        return message as EditSourcePair?;
       }
       return null;
     }
 
     final cancellation = cancellationToken == null
         ? Completer<EditSourcePair?>().future
-        : cancellationToken.cancelled.then((_) => null);
+        : cancellationToken.cancelled.then((_) {
+            cancelFlag.set();
+            return null;
+          });
     return await Future.any([receiveResult(), cancellation]);
   } finally {
     receivePort.close();
-    isolate.kill(priority: Isolate.immediate);
+    if (!cancelFlag.isSet) {
+      // See edit_source_ai_enhance.dart: only a worker that finished (or
+      // died) on its own is killed; a cancelled one releases and exits.
+      isolate.kill(priority: Isolate.immediate);
+    }
   }
 }

@@ -14,10 +14,12 @@ import '../render/ai_enhance_job.dart'
         AiEnhanceModelInfo,
         AiEnhanceProgress,
         CustomDenoiseModelFallback;
+import '../diagnostics/dev_log.dart';
 import '../native/onnx_runtime.dart';
 import 'common_image.dart';
 import 'edit_source.dart';
 import 'image_utils.dart';
+import 'isolate_job.dart';
 import 'libraw.dart';
 
 /// Reconstructs the *full* native-resolution [EditSource] from a PNG
@@ -492,6 +494,7 @@ class _AiEnhanceDecodeIsolateArgs {
     this.colorizeIntensityPercent,
     this.editEmbeddedJpeg,
     this.sendPort,
+    this.cancelFlagAddress,
   );
 
   final String path;
@@ -509,10 +512,14 @@ class _AiEnhanceDecodeIsolateArgs {
   final int colorizeIntensityPercent;
   final bool editEmbeddedJpeg;
   final SendPort sendPort;
+
+  /// See [IsolateCancelFlag]; the worker reads it at every stage callback.
+  final int cancelFlagAddress;
 }
 
 void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
-  final EditSourcePair? result;
+  final cancel = IsolateCancelFlag.fromAddress(args.cancelFlagAddress);
+  EditSourcePair? result;
   try {
     result = await _decodeAndEnhance(
       args.path,
@@ -529,10 +536,21 @@ void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
       args.enableColorize,
       args.colorizeIntensityPercent,
       args.editEmbeddedJpeg,
-      (stage) => args.sendPort.send(stage),
+      (stage) {
+        // Cancel checkpoint. Every tile of every model and every stage
+        // boundary reports through here, so a cancelled run unwinds at
+        // the next one — through the `finally` below — instead of being
+        // killed mid-flight with its sessions still allocated.
+        if (cancel.isSet) {
+          throw const IsolateCancelled();
+        }
+        args.sendPort.send(stage);
+      },
     );
+  } on IsolateCancelled {
+    result = null;
   } finally {
-    // Spawned per run and killed right after, but the sessions it loaded
+    // Spawned per run and gone right after, but the sessions it loaded
     // (denoise + upscale + whatever else the flags turned on) are native
     // memory that would outlive it. See [OnnxModel.releaseAll].
     OnnxModel.releaseAll();
@@ -547,10 +565,12 @@ void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
 ///
 /// [cancellationToken], if given and cancelled, makes this return `null`
 /// right away instead of waiting for the isolate to finish on its own —
-/// the `finally` block below still kills it immediately either way, same
-/// `Future.any` race `export_job.dart`'s `exportPhotoWithProgress` already
-/// uses for the same reason (a 30s-2min ONNX inference is exactly the kind
-/// of operation a user expects Cancel to actually stop).
+/// the same `Future.any` race `export_job.dart`'s `exportPhotoWithProgress`
+/// uses (a 30s-2min ONNX inference is exactly the kind of operation a user
+/// expects Cancel to actually stop). Unlike export, the worker is *not*
+/// killed on cancel: it owns ONNX sessions that only its own `finally`
+/// releases, so it is told to stop through an [IsolateCancelFlag] and left
+/// to finish its current tile, release, and exit by itself.
 Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
   String path,
   String cacheDir,
@@ -584,6 +604,8 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
   bool editEmbeddedJpeg = false,
 }) async {
   final receivePort = ReceivePort();
+  final exitPort = ReceivePort();
+  final cancelFlag = IsolateCancelFlag();
   final isolate = await Isolate.spawn(
     _aiEnhanceDecodeIsolateEntry,
     _AiEnhanceDecodeIsolateArgs(
@@ -602,8 +624,14 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
       colorizeIntensityPercent,
       editEmbeddedJpeg,
       receivePort.sendPort,
+      cancelFlag.address,
     ),
+    onError: receivePort.sendPort,
+    onExit: exitPort.sendPort,
   );
+  // On the cancel path the worker outlives this call, still reading the
+  // flag, so the flag is freed when the worker exits — not in `finally`.
+  unawaited(disposeOnIsolateExit(exitPort, cancelFlag));
   try {
     Future<EditSourcePair?> receiveResult() async {
       await for (final message in receivePort) {
@@ -612,19 +640,33 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
             message is AiEnhanceProgress ||
             message is CustomDenoiseModelFallback) {
           onStage(message);
-        } else {
-          return message as EditSourcePair?;
+          continue;
         }
+        final error = IsolateError.of(message);
+        if (error != null) {
+          DevLog.logError('AI Enhance isolate', error.error, error.trace);
+          return null;
+        }
+        return message as EditSourcePair?;
       }
       return null;
     }
 
     final cancellation = cancellationToken == null
         ? Completer<EditSourcePair?>().future
-        : cancellationToken.cancelled.then((_) => null);
+        : cancellationToken.cancelled.then((_) {
+            cancelFlag.set();
+            return null;
+          });
     return await Future.any([receiveResult(), cancellation]);
   } finally {
     receivePort.close();
-    isolate.kill(priority: Isolate.immediate);
+    if (!cancelFlag.isSet) {
+      // Finished, or died, on its own: its sessions are already released
+      // (the entry does that before sending), so killing what is left is
+      // safe. A cancelled worker is deliberately left alone — it is still
+      // inside its current tile and will release and exit by itself.
+      isolate.kill(priority: Isolate.immediate);
+    }
   }
 }

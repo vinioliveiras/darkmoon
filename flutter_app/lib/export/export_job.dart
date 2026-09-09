@@ -8,6 +8,7 @@ import 'package:image/image.dart' as img;
 
 import '../native/common_image.dart';
 import '../native/image_utils.dart';
+import '../native/isolate_job.dart';
 import '../render/crop_transform.dart';
 import '../render/mask.dart';
 import '../render/render.dart';
@@ -293,6 +294,8 @@ Future<ExportResult> exportPhotoWithProgress(
   final isolate = await Isolate.spawn(
     _exportIsolateEntry,
     _ExportIsolateArgs(request, receivePort.sendPort),
+    onError: receivePort.sendPort,
+    onExit: receivePort.sendPort,
   );
   try {
     Future<ExportResult> receiveResult() async {
@@ -301,6 +304,14 @@ Future<ExportResult> exportPhotoWithProgress(
           onProgress(message);
         } else if (message is ExportResult) {
           return message;
+        } else if (message == null) {
+          // onExit: the worker ended without a result.
+          break;
+        } else {
+          final error = IsolateError.of(message);
+          if (error != null) {
+            return ExportResult.failure(error.error);
+          }
         }
       }
       return const ExportResult.failure('Export isolate closed unexpectedly');

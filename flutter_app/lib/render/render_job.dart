@@ -6,6 +6,7 @@ import 'package:image/image.dart' as img;
 
 import '../native/edit_source.dart';
 import '../native/image_utils.dart';
+import '../native/isolate_job.dart';
 import 'crop_transform.dart';
 import 'histogram.dart';
 import 'lens_correction.dart';
@@ -457,13 +458,23 @@ Future<RenderResult> renderJobToJpegWithProgress(
   final isolate = await Isolate.spawn(
     _renderJobIsolateEntry,
     _RenderJobIsolateArgs(job, receivePort.sendPort),
+    onError: receivePort.sendPort,
+    onExit: receivePort.sendPort,
   );
   try {
     await for (final message in receivePort) {
       if (message is RenderStage) {
         onProgress(message);
+      } else if (message is RenderResult) {
+        return message;
+      } else if (message == null) {
+        // onExit: the worker ended without a result.
+        break;
       } else {
-        return message as RenderResult;
+        final error = IsolateError.of(message);
+        if (error != null) {
+          throw StateError('Render isolate failed: ${error.error}');
+        }
       }
     }
     throw StateError('Render isolate closed unexpectedly');

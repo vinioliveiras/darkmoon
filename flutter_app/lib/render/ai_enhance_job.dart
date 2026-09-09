@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:isolate';
 import 'dart:typed_data';
 
+import '../native/isolate_job.dart';
 import '../native/onnx_runtime.dart';
 import 'ai_enhance.dart';
 
@@ -183,6 +184,8 @@ Future<AiEnhanceIsolateResult> enhanceImageWithProgress(
   final isolate = await Isolate.spawn(
     _aiEnhanceIsolateEntry,
     _AiEnhanceIsolateArgs(request, receivePort.sendPort),
+    onError: receivePort.sendPort,
+    onExit: receivePort.sendPort,
   );
   try {
     await for (final message in receivePort) {
@@ -190,6 +193,14 @@ Future<AiEnhanceIsolateResult> enhanceImageWithProgress(
         onProgress(message);
       } else if (message is AiEnhanceIsolateResult) {
         return message;
+      } else if (message == null) {
+        // onExit: the worker ended without a result.
+        break;
+      } else {
+        final error = IsolateError.of(message);
+        if (error != null) {
+          return AiEnhanceIsolateResult.failure(error.error);
+        }
       }
     }
     return const AiEnhanceIsolateResult.failure(

@@ -4,10 +4,12 @@ import 'dart:typed_data';
 
 import 'package:image/image.dart' as img;
 
+import '../diagnostics/dev_log.dart';
 import 'background_priority.dart';
 import 'camera_match.dart';
 import 'common_image.dart';
 import 'image_utils.dart';
+import 'isolate_job.dart';
 import 'libraw.dart';
 
 /// Default long-edge cap the editing pipeline downscales to instead of the
@@ -225,14 +227,26 @@ Future<EditSourcePair?> decodeEditSourcesWithProgress(
       editEmbeddedJpeg: editEmbeddedJpeg,
       lowPriority: lowPriority,
     ),
+    // Both on the same port, so a worker that dies before replying still
+    // ends the loop below instead of leaving it waiting forever — see
+    // isolate_job.dart.
+    onError: receivePort.sendPort,
+    onExit: receivePort.sendPort,
   );
   try {
     await for (final message in receivePort) {
       if (message is RawDecodeStage) {
         onProgress(message);
-      } else {
-        return message as EditSourcePair?;
+        continue;
       }
+      final error = IsolateError.of(message);
+      if (error != null) {
+        DevLog.logError('decode isolate for $path', error.error, error.trace);
+        return null;
+      }
+      // The result — or `null` from onExit when the worker ended without
+      // sending one, which the caller already reads as a failed decode.
+      return message as EditSourcePair?;
     }
     return null;
   } finally {

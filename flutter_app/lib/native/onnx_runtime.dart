@@ -856,6 +856,13 @@ class OnnxModel {
       api.ref.ReleaseEnv.asFunction<void Function(Pointer<OrtEnv>)>()(
         model._env,
       );
+      // The env is gone, so its WebGPU registration is too. Leaving the
+      // address behind meant a later env allocated at the same address
+      // skipped RegisterExecutionProviderLibrary, GetEpDevices found no
+      // WebGPU device, and the model quietly ran on CPU — on Linux/macOS,
+      // where WebGPU is the first provider tried, that was every run
+      // after the first release in a long-lived isolate.
+      _OrtLib._webGpuRegisteredEnvs.remove(model._env.address);
     }
     _instances.clear();
   }
