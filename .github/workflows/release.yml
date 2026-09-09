@@ -146,7 +146,7 @@ jobs:
           export DEBIAN_FRONTEND=noninteractive
           apt-get update
           apt-get install -y --no-install-recommends \
-            ca-certificates curl git gnupg unzip xz-utils zip \
+            ca-certificates curl git gnupg jq unzip xz-utils zip \
             clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
             libstdc++-12-dev binutils dpkg-dev python3
           # gh, for tool/fetch_models.sh — not in Ubuntu's own archive.
