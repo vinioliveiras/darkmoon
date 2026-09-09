@@ -77,45 +77,102 @@ It must name an application release carrying all six assets.
 
 ## 5. Prerequisites
 
-- **Flutter 3.47.2** — `C:\flutter`, first on PATH, the same version `.github/workflows/ci.yml` pins. Do not run `pub get` or `dart format` from the old 3.35.5 copy at `D:\flutter`; it rewrites `pubspec.lock` and reformats files, and CI rejects both.
-- **Model weights** in `flutter_app/native_models/` — `tool/fetch_models.sh`
-  pulls them from the `models-v1` release and verifies `tool/models.sha256`
-- **Inno Setup 6** for the Windows installer:
-  `winget install --id JRSoftware.InnoSetup`
-- **WSL (Ubuntu)** for the Linux build — see the glibc note below
-- macOS needs nothing locally; it is built on GitHub's Apple runners
+- **`gh`** logged in, and **Flutter 3.47.2** — `C:\flutter`, first on
+  PATH, the same version `.github/workflows/ci.yml` pins. Do not run `pub
+  get` or `dart format` from the old 3.35.5 copy at `D:\flutter`; it
+  rewrites `pubspec.lock` and reformats files, and CI rejects both.
+- Nothing else, since 2026-09-09: all six artifacts are built by GitHub
+  Actions. The weights, Inno Setup and WSL are only needed for the
+  by-hand fallback in section 6.6.
 
 ## 6. Procedure
 
-### 6.1 Bump and commit
+Since 2026-09-09 the four Windows/Linux artifacts come from
+`release.yml`, the same way the macOS pair has always come from
+`release-macos.yml`. Each workflow takes a tag, builds from exactly that
+ref, verifies the bundle (every model present; on Linux, the glibc floor;
+on both, the native smoke test against the real DLLs and weights) and
+attaches its two files to the release named by the tag. Pointing either
+at a branch instead of a tag is a dry run: it builds everything and
+attaches nothing.
 
-Bump the two files above, commit, and make sure the tree is clean.
+### 6.1 Bump, commit, push, and wait for CI
 
-### 6.2 Linux, in WSL
+Bump the two files in section 3, commit, push, and wait for `CI` to go
+green on that commit — a release built from a red commit is a release
+built from something the tests reject.
 
-**Build Linux in WSL, never on `ubuntu-latest` in CI.** The runner is
-Ubuntu 24.04 (glibc 2.39); building there would raise the requirement
-above the 2.34 floor this project worked to reach and break Ubuntu 22.04
-users.
+### 6.2 Tag, and create the release as a prerelease
+
+```bash
+git tag -a vX.Y.Z -m "darkmoon vX.Y.Z" && git push origin vX.Y.Z
+gh release create vX.Y.Z --title "vX.Y.Z" --notes-file notes.md --prerelease
+```
+
+**Prerelease on purpose.** Section 4: `releases/latest` is what the
+website hands out, and for the next half hour this release has no
+assets. A prerelease is never elected latest, so visitors keep getting
+the previous version until the six files are there.
+
+### 6.3 Run the two workflows
+
+```bash
+gh workflow run release.yml --ref master -f tag=vX.Y.Z
+gh workflow run release-macos.yml --ref master -f tag=vX.Y.Z
+gh run watch   # or: gh run list --workflow release.yml
+```
+
+About 25–40 minutes, mostly downloading and packaging 1.2 GB per
+platform. A failed job leaves the release as it was; fix, push, re-run
+with the same tag (`--clobber` on upload makes a re-run harmless).
+
+### 6.4 Promote to latest
+
+Once all six assets are on the release:
+
+```bash
+gh release edit vX.Y.Z --prerelease=false --latest
+gh api repos/vinioliveiras/darkmoon/releases/latest --jq .tag_name
+```
+
+### 6.5 What the runners cannot check
+
+Hosted runners have no GPU. The workflows' smoke tests prove the shipped
+libraries load and run inference, but their provider line reads CPU. The
+"reports DirectML" check in section 8 is therefore still a local one:
+download the Windows zip, and run
+
+```bash
+BUNDLE=".../darkmoon"   # the extracted zip
+DARKMOON_NATIVE_DIR="$BUNDLE" PATH="$PATH:$BUNDLE" \
+  dart run tool/native_smoke_test.dart
+# expect: provider: DirectML (gpu=true)
+```
+
+or simply open the app and apply AI Denoise — the dialog says which
+provider it got.
+
+### 6.6 By hand, if Actions is not an option
+
+The workflows are the scripts below wrapped in a runner; the scripts
+still work locally.
+
+**Linux, in WSL — never on `ubuntu-latest`.** The runner's own Ubuntu is
+24.04 (glibc 2.39); the workflow builds inside an `ubuntu:22.04`
+container for the same reason WSL is Ubuntu 22.04 here: the bundle's
+highest required `GLIBC_x.y` must stay at **2.34**, or Ubuntu 22.04 users
+lose the app.
 
 ```bash
 cd flutter_app
 flutter pub get          # required after any Windows-side pub get
 flutter build linux --release
 bash tool/package_linux.sh   # writes both the tarball and the .deb
-```
-
-Confirm the glibc floor did not move — the highest `GLIBC_x.y` any binary
-in the bundle requires must stay at **2.34**:
-
-```bash
 objdump -T <binary> | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sort -uV | tail -1
 ```
 
-### 6.3 Windows
-
-`flutter pub get` again on the Windows side first: the package config
-carries absolute paths and WSL just rewrote them.
+**Windows.** `flutter pub get` again first: the package config carries
+absolute paths and WSL just rewrote them.
 
 ```bash
 cd flutter_app
@@ -124,35 +181,9 @@ flutter build windows --release
 bash tool/package_windows.sh   # writes both the zip and the setup.exe
 ```
 
-Then the native smoke test, which must report a GPU provider:
-
-```bash
-BUNDLE=".../flutter_app/build/windows/x64/runner/Release"
-DARKMOON_NATIVE_DIR="$BUNDLE" PATH="$PATH:$BUNDLE" \
-  dart run tool/native_smoke_test.dart
-# expect: provider: DirectML (gpu=true)
-```
-
-### 6.4 Tag, release, upload
-
-```bash
-git tag -a vX.Y.Z -m "darkmoon vX.Y.Z" && git push origin vX.Y.Z
-gh release create vX.Y.Z --title "vX.Y.Z" --notes-file notes.md --latest
-gh release upload vX.Y.Z <the four local artifacts>
-```
-
-### 6.5 macOS
-
-Built on GitHub's Apple runners, because the project has no Mac.
-
-```bash
-gh workflow run release-macos.yml --ref master -f tag=vX.Y.Z
-```
-
-It fetches the weights, builds, bundles the native dylibs, ad-hoc signs,
-checks the bundle carries all seven models, then attaches the `.dmg` and
-`.zip` to that release. It accepts a branch name instead of a tag for a
-dry run, in which case it keeps the artifacts and attaches nothing.
+Then `gh release upload vX.Y.Z <the four files>`. Needs the weights
+(`tool/fetch_models.sh`), Inno Setup 6
+(`winget install --id JRSoftware.InnoSetup`) and WSL Ubuntu 22.04.
 
 ## 7. macOS specifics — put these in the notes every time
 
@@ -171,6 +202,8 @@ dry run, in which case it keeps the artifacts and attaches nothing.
 
 Do this. Each item on the list has caught something real.
 
+- [ ] Both workflows green, and the release promoted from prerelease
+      (section 6.4)
 - [ ] `releases/latest` resolves to this release (section 4)
 - [ ] All six assets uploaded, each roughly 1.1–1.2 GB
 - [ ] Linux glibc floor still 2.34

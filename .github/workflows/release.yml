@@ -1,0 +1,250 @@
+# Builds the Windows and Linux release artifacts — portable and installer
+# for each — and attaches them to an existing release. The macOS pair has
+# its own workflow (release-macos.yml); run both for a release.
+#
+# Same shape as release-macos.yml: separate from ci.yml because this is
+# the slow, deliberate path that pulls the 1.2GB of model weights and
+# packages them, and it only runs when asked. Until 2026-09-09 these four
+# artifacts were built by hand (Windows locally, Linux in WSL); see
+# RELEASE.md for what this replaces and what it does not.
+#
+# Linux builds inside an ubuntu:22.04 container, never on the runner's
+# own Ubuntu: the runner is 24.04 (glibc 2.39), and building there would
+# raise the glibc floor this project keeps at 2.34 for Ubuntu 22.04 users.
+# The job checks that floor and fails if it moved.
+name: Release Windows and Linux
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Git ref to build from, and the release tag to attach to (e.g. v1.11.0). Any branch works for a dry run."
+        required: true
+
+# To upload the artifacts onto the release.
+permissions:
+  contents: write
+
+env:
+  FLUTTER_VERSION: 3.47.2
+
+defaults:
+  run:
+    working-directory: flutter_app
+
+jobs:
+  windows:
+    name: Windows portable + installer
+    # Pinned like ci.yml: CI should fail because of a change here, not
+    # because a hosted image rolled forward.
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Fetch model weights
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tool/fetch_models.sh
+
+      - run: flutter config --enable-windows-desktop
+      - run: flutter pub get
+      - run: flutter build windows --release
+
+      # The CMake glob copies whatever *.onnx is present; a failed fetch
+      # would ship an app whose AI features all report a missing model.
+      - name: Verify the bundle carries every model
+        shell: bash
+        run: |
+          expected=$(grep -c . tool/models.sha256)
+          actual=$(ls build/windows/x64/runner/Release/models/*.onnx 2>/dev/null | wc -l | tr -d ' ')
+          echo "models in bundle: $actual (expected $expected)"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::bundle has $actual models, expected $expected"
+            exit 1
+          fi
+
+      # The same check RELEASE.md asks for locally, against the real
+      # bundle and the real weights. The provider line will read CPU here
+      # — hosted runners have no GPU — so "reports DirectML" stays a local
+      # check before announcing; what this proves is that the shipped
+      # DLLs load and run inference at all.
+      - name: Native smoke test against the bundle
+        shell: bash
+        env:
+          DARKMOON_NATIVE_DIR: ${{ github.workspace }}/flutter_app/build/windows/x64/runner/Release
+        run: |
+          export PATH="$PATH:$DARKMOON_NATIVE_DIR"
+          dart run tool/native_smoke_test.dart
+
+      # Inno Setup ships on the hosted Windows image; the install is a
+      # fallback for the day it does not.
+      - name: Make sure Inno Setup is available
+        shell: bash
+        run: |
+          for c in "/c/Program Files (x86)/Inno Setup 6/ISCC.exe" "/c/Program Files/Inno Setup 6/ISCC.exe"; do
+            [ -f "$c" ] && { echo "found $c"; exit 0; }
+          done
+          choco install innosetup --no-progress -y
+
+      - name: Package (zip + setup.exe)
+        shell: bash
+        run: bash tool/package_windows.sh
+
+      - name: Record what was built
+        shell: bash
+        working-directory: .
+        run: |
+          ls -lh darkmoon-v*-windows-x64-portable.zip darkmoon-v*-windows-x64-setup.exe
+          echo "ZIP=$(ls darkmoon-v*-windows-x64-portable.zip)" >> "$GITHUB_ENV"
+          echo "SETUP=$(ls darkmoon-v*-windows-x64-setup.exe)" >> "$GITHUB_ENV"
+
+      # Tolerates a ref with no release behind it, which is what makes a
+      # dry run possible; the artifact below is kept either way.
+      - name: Attach to the release
+        shell: bash
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$ZIP" "$SETUP" --clobber
+            echo "Attached to release $TAG."
+          else
+            echo "::notice::No release exists for $TAG — nothing to attach to."
+          fi
+
+      - name: Upload as a workflow artifact too
+        uses: actions/upload-artifact@v4
+        with:
+          name: darkmoon-windows
+          path: |
+            ${{ env.ZIP }}
+            ${{ env.SETUP }}
+          retention-days: 7
+          if-no-files-found: error
+
+  linux:
+    name: Linux tarball + .deb
+    runs-on: ubuntu-latest
+    # glibc 2.35 — the same base the local WSL build and
+    # build-libraw-linux.yml use, so the bundle's floor does not move.
+    container: ubuntu:22.04
+    steps:
+      - name: Install the toolchain
+        working-directory: .
+        run: |
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            ca-certificates curl git gnupg unzip xz-utils zip \
+            clang cmake ninja-build pkg-config libgtk-3-dev liblzma-dev \
+            libstdc++-12-dev binutils dpkg-dev python3
+          # gh, for tool/fetch_models.sh — not in Ubuntu's own archive.
+          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+            -o /usr/share/keyrings/githubcli-archive-keyring.gpg
+          echo "deb [arch=amd64 signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
+            > /etc/apt/sources.list.d/github-cli.list
+          apt-get update
+          apt-get install -y --no-install-recommends gh
+          # The checkout is owned by a different uid than the container's
+          # root; git refuses to touch it otherwise.
+          git config --global --add safe.directory '*'
+          ldd --version | head -1
+
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: Fetch model weights
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: tool/fetch_models.sh
+
+      - run: flutter config --enable-linux-desktop
+      - run: flutter pub get
+      - run: flutter build linux --release
+
+      - name: Verify the bundle carries every model
+        run: |
+          expected=$(grep -c . tool/models.sha256)
+          actual=$(find build/linux/x64/release/bundle -name '*.onnx' | wc -l | tr -d ' ')
+          echo "models in bundle: $actual (expected $expected)"
+          if [ "$actual" != "$expected" ]; then
+            echo "::error::bundle has $actual models, expected $expected"
+            exit 1
+          fi
+
+      # RELEASE.md's own check, automated: the highest GLIBC_x.y any binary
+      # in the bundle asks for must stay at 2.34, or Ubuntu 22.04 users
+      # lose the app. Reported per file so a regression names its culprit.
+      - name: Check the glibc floor
+        run: |
+          floor="2.34"
+          worst="0.0"
+          for f in build/linux/x64/release/bundle/darkmoon build/linux/x64/release/bundle/lib/*.so*; do
+            [ -f "$f" ] || continue
+            v=$(objdump -T "$f" 2>/dev/null | grep -oE 'GLIBC_[0-9]+\.[0-9]+' | sed 's/GLIBC_//' | sort -uV | tail -1)
+            [ -n "$v" ] || continue
+            printf '  %-8s %s\n' "$v" "$(basename "$f")"
+            worst=$(printf '%s\n%s\n' "$worst" "$v" | sort -V | tail -1)
+          done
+          echo "highest GLIBC required by the bundle: $worst (floor $floor)"
+          if [ "$(printf '%s\n%s\n' "$floor" "$worst" | sort -V | tail -1)" != "$floor" ]; then
+            echo "::error::the bundle now needs GLIBC_$worst, above the $floor floor"
+            exit 1
+          fi
+
+      - name: Native smoke test against the bundle
+        env:
+          DARKMOON_NATIVE_DIR: ${{ github.workspace }}/flutter_app/build/linux/x64/release/bundle/lib
+          LD_LIBRARY_PATH: ${{ github.workspace }}/flutter_app/build/linux/x64/release/bundle/lib
+        run: dart run tool/native_smoke_test.dart
+
+      - name: Package (tar.gz + .deb)
+        run: bash tool/package_linux.sh
+
+      - name: Record what was built
+        working-directory: .
+        run: |
+          ls -lh darkmoon-v*-linux-x64.tar.gz darkmoon_*_amd64.deb
+          echo "TARBALL=$(ls darkmoon-v*-linux-x64.tar.gz)" >> "$GITHUB_ENV"
+          echo "DEB=$(ls darkmoon_*_amd64.deb)" >> "$GITHUB_ENV"
+
+      - name: Attach to the release
+        working-directory: .
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$TARBALL" "$DEB" --clobber
+            echo "Attached to release $TAG."
+          else
+            echo "::notice::No release exists for $TAG — nothing to attach to."
+          fi
+
+      - name: Upload as a workflow artifact too
+        uses: actions/upload-artifact@v4
+        with:
+          name: darkmoon-linux
+          path: |
+            ${{ env.TARBALL }}
+            ${{ env.DEB }}
+          retention-days: 7
+          if-no-files-found: error
