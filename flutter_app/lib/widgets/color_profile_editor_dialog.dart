@@ -72,9 +72,6 @@ class ColorProfileEditorDialog extends StatefulWidget {
     this.photoPreview,
     this.strength,
     this.contrast,
-    this.onStrengthChanged,
-    this.onContrastChanged,
-    this.onSlidersSettled,
   });
 
   /// The open photo, downscaled to packed RGB (0..255, three floats per
@@ -100,21 +97,16 @@ class ColorProfileEditorDialog extends StatefulWidget {
   /// "Color Profile Strength" (0-200%) and "Color Profile Contrast"
   /// (0-150) for the open photo, or null when no photo is open.
   ///
-  /// **These belong to the photo, not to the profile being edited.** They
-  /// live here because this is where a profile is judged — a tone curve
-  /// means nothing until you see how hard it is being applied — but
-  /// moving them changes the open photo and nothing about the saved
-  /// profile. Cancelling the dialog leaves the profile untouched and
-  /// leaves these where the user put them, which is the same as any other
-  /// slider in the panel behind.
+  /// Where the two sliders under the tone curve start.
+  ///
+  /// **They act on the previews in this window and on nothing else.** A
+  /// tone curve means nothing until you see how hard it is being applied,
+  /// so the controls belong here — but the photo behind the dialog is not
+  /// being edited, and closing the dialog leaves it exactly as it was.
+  /// They open on the photo's own values so that what the previews show
+  /// starts out as what the photo actually looks like.
   final double? strength;
   final double? contrast;
-  final ValueChanged<double>? onStrengthChanged;
-  final ValueChanged<double>? onContrastChanged;
-
-  /// One settled callback for both: they are ordinary photo edits, and a
-  /// settled edit is what triggers a full-quality render.
-  final VoidCallback? onSlidersSettled;
 
   final ValueChanged<ColorProfile> onDraftChanged;
   final ValueChanged<ColorProfile> onDraftSettled;
@@ -146,6 +138,13 @@ const _binsPerRange = colorProfileBins ~/ 8;
 
 class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
     with SingleTickerProviderStateMixin {
+  /// The two preview controls under the tone curve, seeded from the photo
+  /// and owned here — see [ColorProfileEditorDialog.strength]. Local state
+  /// rather than values pushed back to the editor: they must move as soon
+  /// as they are dragged, and a value living in the editor could not,
+  /// since this dialog's route does not rebuild when the editor does.
+  late double _strength = widget.strength ?? 100.0;
+  late double _contrast = widget.contrast ?? calBaseContrast;
   late final TabController _tabController = TabController(
     length: 3,
     vsync: this,
@@ -265,8 +264,8 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
           _settled();
         },
       ),
-      if (widget.strength != null || widget.contrast != null) ...[
-        const SizedBox(height: 16),
+      const SizedBox(height: 16),
+      ...[
         Text(
           l10n.colorProfileEditorPhotoSlidersHint,
           style: Theme.of(
@@ -274,32 +273,30 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
           ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
         ),
         const SizedBox(height: 10),
-        if (widget.strength != null)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: SliderRow(
-              name: l10n.presetAmountLabel,
-              min: 0,
-              max: 200,
-              value: widget.strength!,
-              decimals: 0,
-              valueSuffix: '%',
-              defaultValue: 100,
-              onChanged: widget.onStrengthChanged ?? (_) {},
-              onChangeEnd: (_) => widget.onSlidersSettled?.call(),
-            ),
-          ),
-        if (widget.contrast != null)
-          SliderRow(
-            name: l10n.sliderColorProfileAmount,
+        Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: SliderRow(
+            name: l10n.presetAmountLabel,
             min: 0,
-            max: 150,
-            value: widget.contrast!,
+            max: 200,
+            value: _strength,
             decimals: 0,
-            defaultValue: calBaseContrast,
-            onChanged: widget.onContrastChanged ?? (_) {},
-            onChangeEnd: (_) => widget.onSlidersSettled?.call(),
+            valueSuffix: '%',
+            defaultValue: 100,
+            onChanged: (v) => setState(() => _strength = v),
+            onChangeEnd: (v) => setState(() => _strength = v),
           ),
+        ),
+        SliderRow(
+          name: l10n.sliderColorProfileAmount,
+          min: 0,
+          max: 150,
+          value: _contrast,
+          decimals: 0,
+          defaultValue: calBaseContrast,
+          onChanged: (v) => setState(() => _contrast = v),
+          onChangeEnd: (v) => setState(() => _contrast = v),
+        ),
       ],
     ],
   );
@@ -647,6 +644,8 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
           sourceWidth: referenceChartWidth,
           sourceHeight: referenceChartHeight,
           profile: _draft,
+          strength: _strength / 100.0,
+          baseContrast: _contrast,
         ),
         if (photo != null) ...[
           const SizedBox(height: 10),
@@ -655,6 +654,8 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
             sourceWidth: photo.width,
             sourceHeight: photo.height,
             profile: _draft,
+            strength: _strength / 100.0,
+            baseContrast: _contrast,
           ),
         ],
       ],

@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
+import '../render/render.dart';
 import '../render/color_profile.dart';
 import '../theme.dart';
 
@@ -24,6 +25,8 @@ class ColorProfilePreview extends StatefulWidget {
     required this.sourceWidth,
     required this.sourceHeight,
     required this.profile,
+    this.strength = 1.0,
+    this.baseContrast = 0.0,
   });
 
   /// Packed RGB, 0..255 valued, three floats per pixel — the pipeline's
@@ -32,6 +35,13 @@ class ColorProfilePreview extends StatefulWidget {
   final int sourceWidth;
   final int sourceHeight;
   final ColorProfile profile;
+
+  /// How hard [profile] is applied, and the fixed S-curve underneath it —
+  /// the two controls the dialog carries under its tone curve. Both are
+  /// preview-only here: this widget shows what the profile *would* look
+  /// like at those settings and writes nothing anywhere.
+  final double strength;
+  final double baseContrast;
 
   @override
   State<ColorProfilePreview> createState() => _ColorProfilePreviewState();
@@ -54,7 +64,9 @@ class _ColorProfilePreviewState extends State<ColorProfilePreview> {
   void didUpdateWidget(ColorProfilePreview old) {
     super.didUpdateWidget(old);
     if (!identical(old.profile, widget.profile) ||
-        !identical(old.source, widget.source)) {
+        !identical(old.source, widget.source) ||
+        old.strength != widget.strength ||
+        old.baseContrast != widget.baseContrast) {
       unawaited(_rebuild());
     }
   }
@@ -95,7 +107,12 @@ class _ColorProfilePreviewState extends State<ColorProfilePreview> {
 
   Future<ui.Image> _render(Float32List source, ColorProfile profile) async {
     final working = Float32List.fromList(source);
-    applyColorProfile(working, profile, 1.0);
+    // Same order as the pipeline (render.dart's applyPostDenoisePointOps):
+    // the base S-curve first, the profile on top of it. Reversed, or with
+    // the curve missing, the profile would be judged against a flatter
+    // image than the photo will actually be.
+    applyBaseContrast(working, widget.baseContrast);
+    applyColorProfile(working, profile, widget.strength);
 
     final rgba = Uint8List(widget.sourceWidth * widget.sourceHeight * 4);
     for (var p = 0, i = 0; i < working.length; p += 4, i += 3) {

@@ -464,8 +464,12 @@ PhotoCurves _withCurveCategoriesApplied(
 /// [contrastBaseline] (2026-09-01, explicit user request — same
 /// "picking a mode resets its fields" convention [WbMode] already uses).
 enum ColorProfileMode {
+  /// No profile and no treatment: the photo arrives as decoded.
+  ///
+  /// [contrastBaseline] is 0 rather than [calBaseContrast] as of
+  /// 2026-09-09 — see [_baseContrastFor].
   darkmoonDefault(
-    contrastBaseline: calBaseContrast,
+    contrastBaseline: 0,
     dampened: true,
     usesHueProfile: false,
     profileAsset: null,
@@ -1237,13 +1241,6 @@ class _EditorScreenState extends State<EditorScreen>
     // without its profile, with no control anywhere able to say so or put
     // it back. Choosing Default in the dropdown is what "off" means now,
     // and that is a control the user can see.
-    // The draft outranks whatever this photo selected: that is what makes
-    // the editor dialog's preview the real render rather than a separate
-    // approximation of one.
-    final draft = _draftColorProfile;
-    if (draft != null) {
-      return draft;
-    }
     final mode = colorProfileModeOf(_paramValues);
     if (mode == ColorProfileMode.custom) {
       return _userColorProfiles[customProfileIdOf(_paramValues)];
@@ -1285,6 +1282,14 @@ class _EditorScreenState extends State<EditorScreen>
   /// photo's *own* fitted curve — the camera tone match — and that has to
   /// step aside the same way a profile's does.
   double _baseContrastFor(String? path) {
+    // Default means untouched (2026-09-09, user's request). The S-curve is
+    // a stand-in for a camera profile's baked-in contrast; under a mode
+    // that says "no profile" it was still shaping every photo, most
+    // visibly in embedded-JPEG mode, where the camera had already made
+    // those decisions and there is nothing left to stand in for.
+    if (colorProfileModeOf(_paramValues) == ColorProfileMode.darkmoonDefault) {
+      return 0.0;
+    }
     final profile = _colorProfileFor(path);
     return (profile != null && !profile.toneIsIdentity)
         ? 0.0
@@ -5549,23 +5554,6 @@ class _EditorScreenState extends State<EditorScreen>
   /// preset should stay highlighted in the list while its overall
   /// strength is being tuned, exactly like the old design already
   /// promised (see [_matchesAppliedPreset]'s doc).
-  void _onGlobalEditAmountChanged(double value) {
-    setState(() {
-      _paramValues = {..._paramValues, _globalEditAmountKey: value};
-    });
-    _scheduleRender(live: _settings.fastPreview);
-  }
-
-  /// The profile being authored right now, if the editor dialog is open.
-  ///
-  /// [_effectiveColorProfile] returns this ahead of anything the photo
-  /// actually selected, which is what makes the dialog's live preview the
-  /// real render rather than a separate approximation of one — the whole
-  /// GPU pipeline runs on the draft exactly as it will once saved. Cleared
-  /// on both save and cancel; nothing about the photo is written until the
-  /// user saves.
-  ColorProfile? _draftColorProfile;
-
   /// The user profile currently selected, if the selection is one at all.
   ColorProfile? get _selectedUserColorProfile =>
       colorProfileModeOf(_paramValues) == ColorProfileMode.custom
@@ -6180,51 +6168,29 @@ class _EditorScreenState extends State<EditorScreen>
         highlightHue: highlightHue,
         photoPreview: photoPreview,
         existingNames: existingNames,
-        // Photo values, not profile values — see the dialog's own doc.
-        // Null with no photo open, which is also the only case where the
-        // dialog has nothing but the reference chart to preview against.
-        strength: photoPreview == null
-            ? null
-            : _paramValues[_globalEditAmountKey] ?? 100.0,
-        contrast: photoPreview == null
-            ? null
-            : _paramValues['ColorProfileAmount'] ?? calBaseContrast,
-        onStrengthChanged: _onGlobalEditAmountChanged,
-        onContrastChanged: (value) {
-          setState(() {
-            _paramValues = {..._paramValues, 'ColorProfileAmount': value};
-          });
-          _scheduleRender(live: _settings.fastPreview);
-        },
-        // One settled handler for both sliders — each has already written
-        // its own value through its onChanged, so this only has to record
-        // and persist the result.
-        onSlidersSettled: () {
-          _pushHistory();
-          _scheduleRender(live: false);
-          _scheduleCatalogSave();
-        },
+        // Where the dialog's own preview controls start. It moves them
+        // from there and writes nothing back — see its doc.
+        strength: _paramValues[_globalEditAmountKey] ?? 100.0,
+        contrast: _paramValues['ColorProfileAmount'] ?? calBaseContrast,
         // No render on the live stream any more. The dialog's own
         // preview is what the user is watching, and the canvas behind a
-        // dimmed barrier is not worth a GPU pass per frame of a drag. The
-        // draft is still recorded so any render that does happen uses it.
-        onDraftChanged: (draft) {
-          setState(() => _draftColorProfile = draft);
-        },
-        onDraftSettled: (draft) {
-          setState(() => _draftColorProfile = draft);
-          _scheduleRender(live: false);
-        },
+        // dimmed barrier is not worth a GPU pass per frame of a drag.
+        //
+        // Nor is the draft recorded any more (2026-09-09, user's report):
+        // it used to outrank the photo's own profile in
+        // [_effectiveColorProfile], so authoring one edited the photo
+        // behind the dialog as a side effect. The dialog's previews are
+        // built from the draft directly and are the only thing it changes.
+        onDraftChanged: (_) {},
+        onDraftSettled: (_) {},
       ),
     );
 
     if (!mounted) {
       return;
     }
-    setState(() => _draftColorProfile = null);
     if (result == null) {
-      // Cancelled — put the photo back the way it was.
-      _scheduleRender(live: false);
+      // Cancelled. Nothing to undo — the photo was never touched.
       return;
     }
 

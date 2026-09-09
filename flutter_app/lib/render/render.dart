@@ -629,6 +629,14 @@ void _applyRapidContrast(Float32List img, double contrast) {
 /// darkmoon's straight-sRGB decode otherwise lacks (see [calBaseContrast]).
 /// Uses the exact same S as the Contrast slider, so [calBaseContrast] reads
 /// on the same scale ("20" ≈ a baked-in Contrast +20).
+///
+/// Public so the colour-profile editor's preview can run the same curve
+/// the pipeline does. Previewing a profile without it would show the
+/// profile against a flatter image than the photo will actually be, which
+/// is the one thing that preview exists to get right.
+void applyBaseContrast(Float32List img, double amount) =>
+    _applyBaseContrast(img, amount);
+
 void _applyBaseContrast(Float32List img, double amount) {
   if (amount == 0) {
     return;
