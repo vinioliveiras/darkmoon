@@ -83,11 +83,11 @@ class RenderParams {
       // map so the global Amount slider cannot scale it: it is a baseline,
       // not an edit, and damping it would make a photo's starting
       // brightness depend on how strongly its edit is being applied.
-      // Converted here, not by the caller: the Exposure slider is in
-      // slider units and this arrives in stops, and adding the two
-      // directly divided the camera's exposure offset by
-      // calExposureUnitsPerStop — twelve times too weak, which read as
-      // the correction not working at all.
+      // Converted here, not by the caller: the slider is in slider units
+      // (calExposureUnitsPerStop of them per stop — 1.0 since 2026-09-10,
+      // so the two coincide today) and this arrives in stops. Adding them
+      // without the conversion once divided the camera's offset by 12,
+      // which read as the correction not working at all.
       exposure:
           (values['Exposure'] ?? defaults.exposure) +
           baseExposureStops * calExposureUnitsPerStop,

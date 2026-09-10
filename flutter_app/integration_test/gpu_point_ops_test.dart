@@ -31,7 +31,7 @@ const _sharpenOff = SharpenParams(amount: 0);
 /// and gradients in both directions, not flat color, so a wrong shader
 /// pass shows up as a real diff. Capped at 200 (not a literal 0..255
 /// gradient) — a synthetic corner that hits true 255 combined with a
-/// +40 Exposure push (factor ~2.3x) drives a *wide* image region into
+/// +1 stop Exposure push (2x) drives a *wide* image region into
 /// deep, hard highlight clipping, which isn't representative of a typical
 /// edit and exercises a real but expected architectural quirk instead of a
 /// shader bug: GPU's intermediate 8-bit render targets clip that headroom
@@ -171,7 +171,7 @@ void main() {
     testWidgets('exposure + brightness + contrast', (tester) async {
       await expectMatchesCpu(
         const RenderParams(
-          exposure: 40,
+          exposure: 1.0,
           brightness: -20,
           contrast: 30,
           sharpen: _sharpenOff,
@@ -261,7 +261,7 @@ void main() {
           sharpen: _sharpenOff,
           temperature: 6200,
           tint: 10,
-          exposure: 15,
+          exposure: 0.5,
           brightness: 5,
           contrast: 12,
           highlights: -20,

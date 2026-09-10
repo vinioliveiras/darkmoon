@@ -142,8 +142,8 @@ void main() {
   test('same params, 4x resolution difference', () {
     final neutral = compare('neutral', const RenderParams(baseContrast: 0));
     final exposure = compare(
-      'exposure +20',
-      const RenderParams(baseContrast: 0, exposure: 20),
+      'exposure +0.3 stop',
+      const RenderParams(baseContrast: 0, exposure: 0.3),
     );
     // Exposure is a pure per-pixel multiply, so it must add nothing on top
     // of whatever the neutral pipeline already costs. If this ever drifts,

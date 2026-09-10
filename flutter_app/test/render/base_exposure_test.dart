@@ -9,7 +9,7 @@ import 'package:flutter_test/flutter_test.dart';
 ///
 /// It arrives in stops and the slider is in slider units, and this file
 /// used to assert that 0.6 stops came out as 0.6 — which is the bug it
-/// should have caught. calExposureUnitsPerStop is 12, so the camera's
+/// should have caught. calExposureUnitsPerStop converts, so the camera's
 /// correction was applied at a twelfth of its size: a photo needing -1.5
 /// stops got -0.125 and opened blown out. Every assertion here now names
 /// the conversion, so the units cannot quietly drift apart again.

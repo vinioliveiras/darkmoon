@@ -51,7 +51,7 @@ void main() {
           radius: 10,
           feather: 0,
         ),
-        values: const {'Exposure': 50},
+        values: const {'Exposure': 1.0},
       );
       final result = renderRgbWithMasks(8, 8, src, const RenderParams(), [
         maskWithEffect,
@@ -73,7 +73,7 @@ void main() {
         name: 'Disabled',
         type: MaskType.radialGradient,
         enabled: false,
-        values: const {'Exposure': 80},
+        values: const {'Exposure': 1.5},
       );
       final result = renderRgbWithMasks(4, 4, src, const RenderParams(), [
         disabledMask,

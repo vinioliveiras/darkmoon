@@ -59,7 +59,7 @@ void main() {
 
     runCase(
       'exposure + brightness + contrast',
-      const RenderParams(exposure: 25, brightness: -15, contrast: 20),
+      const RenderParams(exposure: 0.7, brightness: -15, contrast: 20),
     );
 
     runCase(
@@ -133,7 +133,7 @@ void main() {
       RenderParams(
         temperature: 6800,
         tint: 15,
-        exposure: 15,
+        exposure: 0.5,
         brightness: 10,
         contrast: 15,
         highlights: -20,

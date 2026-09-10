@@ -76,6 +76,7 @@ void main() {
     RenderParams params,
     String label, {
     int maxTolerance = 130,
+    double meanTolerance = 3.0,
   }) async {
     final cpu = renderRgb(width, height, photo, params);
     final gpu = await renderRgbGpu(width, height, photo, params);
@@ -111,7 +112,7 @@ void main() {
     // leaves ~1.5x rather than the old 3x.
     expect(
       meanDiff,
-      lessThan(3.0),
+      lessThan(meanTolerance),
       reason:
           '$label: mean diff $meanDiff — likely a real bug, not just '
           'accumulated GPU/CPU rounding noise',
@@ -133,7 +134,7 @@ void main() {
         RenderParams(
           temperature: 6800,
           tint: 12,
-          exposure: 20,
+          exposure: 0.7,
           brightness: 5,
           contrast: 15,
           highlights: -25,
@@ -192,6 +193,17 @@ void main() {
         // sharpen_gpu.dart); this case's texture=40/clarity=35/sharpen
         // amount=70 now legitimately push a few more clip-boundary pixels
         // in the same already-documented quirk, same root cause.
+        //
+        // Mean bound, 2026-09-10: until Exposure ran in linear light this
+        // case's "20 units" was a x3.2 gamma-space multiply that clipped
+        // most of the frame white on both paths, and the mean (1.4) was
+        // measuring a mostly flat image. At a real +0.7 stop the frame
+        // keeps its content, and every stage's own GPU/CPU gap now adds up
+        // — Texture's ~1.8 alone (its noise gate reads an 8-bit-quantised
+        // variance), plus Clarity, Dehaze, WB: measured 3.47 here (3.29 at
+        // +0.5, so not the headroom quirk). A wiring bug still reads 10+;
+        // gpu_mask_test's scaled-layer case carries the same reasoning.
+        meanTolerance: 4.5,
       );
     });
 
@@ -345,7 +357,7 @@ void main() {
     ) async {
       await expectMatchesCpu(
         RenderParams(
-          exposure: 10,
+          exposure: 0.5,
           contrast: 15,
           dehaze: 25,
           colorProfile: ColorProfile(
@@ -376,7 +388,7 @@ void main() {
     testWidgets('grain combined with tone edits and vignette', (tester) async {
       await expectMatchesCpu(
         const RenderParams(
-          exposure: 10,
+          exposure: 0.5,
           contrast: 10,
           shadows: 15,
           grain: GrainParams(amount: 50, size: 15, roughness: 20),

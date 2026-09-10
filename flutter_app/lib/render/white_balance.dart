@@ -17,14 +17,6 @@ const double wbDefaultTint = 0.0;
 /// `calibration.dart` → calWbTintStrength.
 const double _wbTintStrength = calWbTintStrength;
 
-/// Working-space gamma the render buffers are encoded with (LibRaw is set
-/// to ~sRGB, `gamm = [1/2.4, 12.92]`). White-balance gains are derived in
-/// linear light but multiplied into these gamma-encoded values, so each is
-/// raised to `1/gamma` first — then `gammaValue * gain` equals
-/// `(linearValue * linearGain)` re-encoded. `calibration.dart` →
-/// calWbWorkingGamma.
-const double _wbWorkingGamma = calWbWorkingGamma;
-
 enum WbMode {
   asShot,
   auto,
@@ -98,12 +90,15 @@ enum WbMode {
     b /= lum;
   }
 
-  // Linear gains -> gamma-space gains (see [_wbWorkingGamma]).
-  final e = 1.0 / _wbWorkingGamma;
+  // Linear-light gains, applied in linear light since 2026-09-10 (see
+  // render.dart's applyExposureAndWhiteBalance). Until then each was
+  // raised to 1/2.2 and multiplied into the gamma-encoded buffer — an
+  // approximation that is wrong exactly in the sRGB toe, where a colour
+  // cast is most visible.
   return (
-    r: math.pow(r.clamp(1e-4, 100.0), e).toDouble(),
-    g: math.pow(g.clamp(1e-4, 100.0), e).toDouble(),
-    b: math.pow(b.clamp(1e-4, 100.0), e).toDouble(),
+    r: r.clamp(1e-4, 100.0),
+    g: g.clamp(1e-4, 100.0),
+    b: b.clamp(1e-4, 100.0),
   );
 }
 

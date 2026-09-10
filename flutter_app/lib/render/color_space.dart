@@ -73,3 +73,16 @@ List<double> rgbBytesToLinear(List<int> bytes) => [
 List<int> linearToRgbBytes(List<double> values) => [
   for (final value in values) (linearToSrgb(value) * 255.0).round(),
 ];
+
+/// [srgbToLinear] without the clamp to 1.0: an encoded value above 1 (the
+/// render buffer keeps headroom past 255) is converted with the exact
+/// formula instead of pinned. Below 1 it is the same LUT.
+double srgbToLinearExtended(double value) =>
+    value <= 1.0 ? _lookup(_srgbToLinearLut, value) : _srgbToLinearExact(value);
+
+/// [linearToSrgb] without the clamp to 1.0: linear light above 1 encodes
+/// past 1.0 with the exact formula, so a stage working in linear light
+/// (Exposure, White Balance) hands the same headroom on that the
+/// gamma-space multiply used to. Below 1 it is the same LUT.
+double linearToSrgbExtended(double value) =>
+    value <= 1.0 ? _lookup(_linearToSrgbLut, value) : _linearToSrgbExact(value);

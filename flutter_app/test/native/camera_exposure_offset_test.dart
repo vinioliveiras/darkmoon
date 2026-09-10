@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:darkmoon/native/camera_match.dart';
 import 'package:darkmoon/native/edit_source.dart';
 import 'package:darkmoon/render/calibration.dart';
+import 'package:darkmoon/render/color_space.dart';
 import 'package:darkmoon/render/render.dart';
 import 'package:darkmoon/render/render_params.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -13,13 +14,13 @@ import 'package:image/image.dart' as img;
 /// same shot are, in the units the correction will be *spent* in.
 ///
 /// That last clause is the whole file. The answer goes to the Exposure
-/// slider, and `_applyExposure` multiplies the gamma-encoded buffer by
-/// `2^(units / calExposureUnitsPerStop)`. Until 2026-09-09 this measured
-/// in linear light instead, on the reasoning that exposure is a
-/// multiplication there — true of exposure in general, not true of this
-/// pipeline's Exposure stage. The two disagree by roughly a factor of two,
-/// always in the direction of over-correcting, and that is what blew the
-/// highlights out.
+/// slider, and since 2026-09-10 `applyExposureAndWhiteBalance` multiplies
+/// the *linear* light by `2^stops` — so the measurement is a ratio of
+/// linear means. (Between 2026-09-09 and 2026-09-10 the stage multiplied
+/// the gamma-encoded buffer and this measured in gamma space to match;
+/// before that it measured in linear light against the gamma stage and
+/// over-corrected by about two, which is what blew the highlights out.
+/// The rule survived both: measure in the space you spend in.)
 ///
 /// So the tests build a pair a *known* distance apart and check the
 /// answer, and then check that spending the answer actually lands.
@@ -72,21 +73,29 @@ void main() {
       closeTo(camera, 2),
       reason:
           'the correction exists to put the decode where the camera put '
-          'it; measured in linear light this overshoots to about 190',
+          'it; measured in the wrong space this lands 40 levels off',
     );
   });
 
-  test('a preview one stop brighter asks for one stop', () {
+  /// Stops between two flat encoded values, in linear light.
+  double linearStops(int from, int to) =>
+      math.log(srgbToLinear(to / 255.0) / srgbToLinear(from / 255.0)) /
+      math.ln2;
+
+  test('a brighter preview asks for the linear distance to it', () {
+    // 120 -> 160 is 0.42 stops as encoded values and about 0.9 in linear
+    // light; within the cap, so the answer is the distance itself.
     expect(
-      cameraExposureOffsetStops(flat(90), width, height, jpegOf(flat(180))),
-      closeTo(1.0, 0.05),
+      cameraExposureOffsetStops(flat(120), width, height, jpegOf(flat(160))),
+      closeTo(linearStops(120, 160), 0.05),
     );
+    expect(linearStops(120, 160), closeTo(0.9, 0.05));
   });
 
-  test('a preview one stop darker asks for minus one', () {
+  test('a darker preview asks for the negative of it', () {
     expect(
-      cameraExposureOffsetStops(flat(180), width, height, jpegOf(flat(90))),
-      closeTo(-1.0, 0.05),
+      cameraExposureOffsetStops(flat(160), width, height, jpegOf(flat(120))),
+      closeTo(-linearStops(120, 160), 0.05),
     );
   });
 
@@ -102,12 +111,11 @@ void main() {
     );
   });
 
-  test('it measures the encoded values, not linear light', () {
-    // The inverse of the assertion this file used to carry, and the
-    // reason the sRGB table it used to build is gone. 100 and 150 are a
-    // ratio of 1.5 as they stand — 0.585 stops. Linearised they are 0.127
-    // and 0.305, a ratio of 2.4, which would read as 1.26 stops and be
-    // spent as more than twice the correction the knob delivers.
+  test('it measures linear light, not the encoded values', () {
+    // 100 and 150 are a ratio of 1.5 as they stand — 0.585 stops.
+    // Linearised they are 0.127 and 0.305, a ratio of 2.4 — 1.26 stops,
+    // which is what a linear-light Exposure stage has to be handed to
+    // move 100 to 150.
     final stops = cameraExposureOffsetStops(
       flat(100),
       width,
@@ -116,9 +124,10 @@ void main() {
     )!;
     expect(
       stops,
-      closeTo(math.log(150 / 100) / math.ln2, 0.02),
-      reason: 'linearising the means would answer about 1.26',
+      closeTo(linearStops(100, 150), 0.02),
+      reason: 'the encoded ratio would answer 0.585',
     );
+    expect(stops, closeTo(1.26, 0.03));
   });
 
   test('the answer is capped', () {

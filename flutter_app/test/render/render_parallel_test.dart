@@ -124,7 +124,7 @@ void main() {
         const RenderParams(
           temperature: 7000,
           tint: 30,
-          exposure: 20,
+          exposure: 0.7,
           contrast: 15,
           highlights: -20,
           shadows: 30,

@@ -161,7 +161,7 @@ void main() {
         2,
         2,
         source,
-        const RenderParams(baseContrast: 0, exposure: 50),
+        const RenderParams(baseContrast: 0, exposure: 1.0),
       );
 
       expect(brighter[0], greaterThan(source[0]));

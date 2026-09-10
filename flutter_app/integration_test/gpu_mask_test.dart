@@ -95,7 +95,7 @@ void main() {
       tester,
     ) async {
       await expectMatchesCpu(
-        const RenderParams(exposure: 10, contrast: 15),
+        const RenderParams(exposure: 0.5, contrast: 15),
         const [],
         'no masks',
       );
@@ -113,7 +113,7 @@ void main() {
             endX: 0.5,
             endY: 0.5,
           ),
-          values: {'Exposure': 40, 'Contrast': 20},
+          values: {'Exposure': 1.0, 'Contrast': 20},
         ),
         // Same 8-bit-intermediate exposure-clipping quirk as
         // gpu_point_ops_test.dart's own wide-tolerance cases — this
@@ -179,7 +179,7 @@ void main() {
               ),
             ],
           ),
-          values: const {'Exposure': 30, 'Clarity': 20},
+          values: const {'Exposure': 0.8, 'Clarity': 20},
         ),
         // Same exposure-clipping quirk as the linear gradient case above.
         // Raised 45->55 on 2026-09-03 after wiring calClarityStrength into
@@ -190,13 +190,13 @@ void main() {
     });
 
     testWidgets('two stacked masks + opacity', (tester) async {
-      await expectMatchesCpu(const RenderParams(exposure: 5), [
+      await expectMatchesCpu(const RenderParams(exposure: 0.3), [
         const MaskLayer(
           id: 'm1',
           name: 'Top half',
           type: MaskType.linearGradient,
           opacity: 60,
-          values: {'Exposure': 25, 'Contrast': 10},
+          values: {'Exposure': 0.7, 'Contrast': 10},
         ),
         const MaskLayer(
           id: 'm2',
@@ -219,13 +219,13 @@ void main() {
     });
 
     testWidgets('disabled mask is skipped (matches CPU no-op)', (tester) async {
-      await expectMatchesCpu(const RenderParams(exposure: 10), [
+      await expectMatchesCpu(const RenderParams(exposure: 0.5), [
         const MaskLayer(
           id: 'm1',
           name: 'Disabled',
           type: MaskType.linearGradient,
           enabled: false,
-          values: {'Exposure': 90},
+          values: {'Exposure': 1.5},
         ),
       ], 'disabled mask');
     });
@@ -240,7 +240,7 @@ void main() {
       // all. Anything that gives the global params a scale catches it;
       // this one does.
       await expectMatchesCpu(
-        const RenderParams(exposure: 2).withRenderScaleFor(3000, 2000),
+        const RenderParams(exposure: 0.3).withRenderScaleFor(3000, 2000),
         [
           const MaskLayer(
             id: 'm1',

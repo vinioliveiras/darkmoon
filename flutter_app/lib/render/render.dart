@@ -218,7 +218,7 @@ void _applyAdjustmentSteps(
   applyGlobalAdjustmentSteps(buffer, width, height, params);
 }
 
-/// Exposure then White Balance — both a plain per-pixel multiply (no
+/// Exposure and White Balance — one per-pixel multiply in linear light (no
 /// neighbor dependency, so no halo/banding concern), run *before* every
 /// other step so Denoise/Sharpen/Texture/Clarity and Dehaze all see the
 /// pixel values the user's actual Temp/Tint/Exposure settings establish,
@@ -228,15 +228,49 @@ void _applyAdjustmentSteps(
 /// needing a large Exposure correction would otherwise have that weight
 /// computed against the wrong tonal range (what's about to become a
 /// midtone still reads as a shadow/highlight before Exposure runs).
+///
+/// In linear light since 2026-09-10. Until then both multiplied the
+/// gamma-encoded buffer (the WB gains pre-raised to 1/2.2 as an
+/// approximation), so a nominal stop of Exposure moved the linear
+/// luminance by about 2.2 stops, the camera-match offset had to be
+/// measured in gamma space to cancel that, and calExposureUnitsPerStop
+/// was tuned around a slider that meant nothing physical. Now a slider
+/// stop is a real stop, the WB gains are the Von Kries gains they were
+/// computed as, and the buffer keeps its headroom past 255 through
+/// [linearToSrgbExtended].
 void applyExposureAndWhiteBalance(Float32List buffer, RenderParams params) {
-  _applyExposure(buffer, params.exposure);
-  _applyWhiteBalance(
-    buffer,
-    params.temperature,
-    params.tint,
-    params.asShotKelvin,
-    params.asShotTint,
-  );
+  final exposureFactor = params.exposure == 0
+      ? 1.0
+      : math.pow(2.0, params.exposure / calExposureUnitsPerStop).toDouble();
+  final wbActive =
+      params.temperature != params.asShotKelvin ||
+      params.tint != params.asShotTint;
+  if (exposureFactor == 1.0 && !wbActive) {
+    return;
+  }
+  var gr = exposureFactor, gg = exposureFactor, gb = exposureFactor;
+  if (wbActive) {
+    final gains = whiteBalanceGains(
+      params.temperature,
+      params.tint,
+      params.asShotKelvin,
+      params.asShotTint,
+    );
+    gr *= gains.r;
+    gg *= gains.g;
+    gb *= gains.b;
+  }
+  for (var i = 0; i + 2 < buffer.length; i += 3) {
+    buffer[i] =
+        linearToSrgbExtended(srgbToLinearExtended(buffer[i] / 255.0) * gr) *
+        255.0;
+    buffer[i + 1] =
+        linearToSrgbExtended(srgbToLinearExtended(buffer[i + 1] / 255.0) * gg) *
+        255.0;
+    buffer[i + 2] =
+        linearToSrgbExtended(srgbToLinearExtended(buffer[i + 2] / 255.0) * gb) *
+        255.0;
+  }
 }
 
 /// Every step whose effect on a pixel only ever depends on pixels within a
@@ -529,39 +563,6 @@ Uint8List _toUint8(Float32List buffer) {
 /// `WhiteBalancePreserveTintBrightness` key it was read from. Removed
 /// rather than left as a parameter that documents a behaviour the code no
 /// longer has.
-void _applyWhiteBalance(
-  Float32List img,
-  double temperatureKelvin,
-  double tint,
-  double asShotKelvin,
-  double asShotTint,
-) {
-  if (temperatureKelvin == asShotKelvin && tint == asShotTint) {
-    return;
-  }
-  final gains = whiteBalanceGains(
-    temperatureKelvin,
-    tint,
-    asShotKelvin,
-    asShotTint,
-  );
-  for (var i = 0; i < img.length; i += 3) {
-    img[i] *= gains.r;
-    img[i + 1] *= gains.g;
-    img[i + 2] *= gains.b;
-  }
-}
-
-void _applyExposure(Float32List img, double exposure) {
-  if (exposure == 0) {
-    return;
-  }
-  final factor = math.pow(2.0, exposure / calExposureUnitsPerStop).toDouble();
-  for (var i = 0; i < img.length; i++) {
-    img[i] *= factor;
-  }
-}
-
 /// EXPERIMENTAL (not yet validated against a wide range of presets —
 /// flagged here deliberately): Contrast used to be a pure linear scale
 /// toward 127.5 (`(x-127.5)*factor+127.5`), which has no floor on how far

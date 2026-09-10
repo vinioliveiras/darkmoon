@@ -79,7 +79,10 @@ const double calGlobalAmountCompression = 1.0;
 /// reads through it for every key.
 const Map<String, double> calGlobalAmountCompressionOverrides = {
   'ColorProfileAmount': 1.0,
-  'Exposure': 2.0,
+  // 1.0 since 2026-09-10: the slider now delivers real stops in linear
+  // light (calExposureUnitsPerStop), so the 3.0 -> 2.0 boost that used to
+  // make up for a weak stage is no longer making up for anything.
+  'Exposure': 1.0,
   'Contrast': 0.5,
   'Shadows': 0.5,
   'Blacks': 0.5,
@@ -180,11 +183,9 @@ const Map<String, double> calGlobalAmountCompressionOverrides = {
 /// default: 0.35   (the old model used 0.25; raised toward Meridian)
 const double calWbTintStrength = 0.35;
 
-/// Working-space gamma the WB gains are applied in.
-/// This is technical — only change it if you know why. Changing it throws
-/// off Temperature relative to "As Shot" (the per-photo neutral point).
-/// default: 2.2
-const double calWbWorkingGamma = 2.2;
+// calWbWorkingGamma (2.2) retired 2026-09-10: white balance is applied in
+// linear light now (render.dart, applyExposureAndWhiteBalance), so there is
+// no working-space gamma left to approximate.
 
 // ╔══════════════════════════════════════════════════════════════════════════╗
 // ║  WHITE BALANCE — "As Shot" estimator (colorimetry)                        ║
@@ -335,12 +336,19 @@ const double calBaseContrast = 80.0;
 // ╚══════════════════════════════════════════════════════════════════════════╝
 
 /// **Exposure**: how many slider units equal 1 stop (doubling/halving the
-/// light). The effect is  2^(sliderValue / this number).
+/// light, in linear light). The effect is  2^(sliderValue / this number).
 ///   ↑ higher = weaker Exposure (needs a bigger drag for the same change)
 ///   ↓ lower  = stronger Exposure
-/// default: 12.0   (2026-09-02: still felt too weak at 16.67, explicit
-/// user request to push it further)
-const double calExposureUnitsPerStop = 12.0;
+/// default: 1.0   The slider reads -5..5 in stops, like Meridian's, and an
+/// imported preset's Exposure2012 lands on it 1:1 — so one unit is one
+/// real stop. History: 12.0 until 2026-09-10 (from 16.67 on 2026-09-02,
+/// "still felt too weak"), back when the stage multiplied the
+/// gamma-encoded buffer; that multiply moved linear light by about 2.2x
+/// the nominal stops, and the number was compensating for a slider that
+/// meant nothing physical. Since 2026-09-10 Exposure runs in linear light
+/// (render.dart's applyExposureAndWhiteBalance), the units are real, and
+/// the Amount-slider override for Exposure below went back to 1.0 with it.
+const double calExposureUnitsPerStop = 1.0;
 
 /// **Brightness**: same idea as Exposure, slider units per stop, but
 /// Brightness uses a curve that protects blacks and whites (no clipping).

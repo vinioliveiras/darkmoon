@@ -109,12 +109,20 @@ Uint8List applyCameraMatch(
 /// 2.5s warm open (measured 2026-09-09) — most of it not even here but in
 /// decoding the same JPEG twice, which [measureCameraMatch] now does once.
 class _ImageStats {
-  const _ImageStats(this.meanEncodedLuma, this.perceptualHistogram);
+  const _ImageStats(
+    this.meanEncodedLuma,
+    this.meanLinearLuma,
+    this.perceptualHistogram,
+  );
 
-  /// Mean luma, normalised to 0-1, left in the encoding the bytes are
-  /// already in — **not** linearised. See [cameraExposureOffsetStops] for
-  /// why that is the whole point.
+  /// Mean luma, normalised to 0-1, in the encoding the bytes are already
+  /// in. Only the "is this frame dark enough to be untrustworthy" floor
+  /// reads it, in the units the floor was set in.
   final double meanEncodedLuma;
+
+  /// Mean luma in linear light, 0-1 — what an exposure ratio is a ratio
+  /// of. See [cameraExposureOffsetStops].
+  final double meanLinearLuma;
 
   /// Perceptual-luma histogram, [_toneHistogramBins] wide over 0-1.
   final Float64List perceptualHistogram;
@@ -129,13 +137,14 @@ const int _statsSampleTarget = 400000;
 _ImageStats _statsOf(Uint8List rgb) {
   final pixels = rgb.length ~/ 3;
   if (pixels == 0) {
-    return _ImageStats(0, Float64List(_toneHistogramBins));
+    return _ImageStats(0, 0, Float64List(_toneHistogramBins));
   }
   final stride = pixels <= _statsSampleTarget
       ? 1
       : (pixels / _statsSampleTarget).ceil();
   final hist = Float64List(_toneHistogramBins);
   var sum = 0.0;
+  var linearSum = 0.0;
   var counted = 0;
   for (var px = 0; px < pixels; px += stride) {
     final i = px * 3;
@@ -147,13 +156,14 @@ _ImageStats _statsOf(Uint8List rgb) {
         0.2126 * srgbToLinear(r / 255.0) +
         0.7152 * srgbToLinear(g / 255.0) +
         0.0722 * srgbToLinear(b / 255.0);
+    linearSum += linear;
     final bin = (perceptualEncode(linear) * (_toneHistogramBins - 1))
         .round()
         .clamp(0, _toneHistogramBins - 1);
     hist[bin]++;
     counted++;
   }
-  return _ImageStats(sum / counted / 255.0, hist);
+  return _ImageStats(sum / counted / 255.0, linearSum / counted, hist);
 }
 
 /// How many stops [rgbBytes] sits away from the brightness of
@@ -172,29 +182,21 @@ _ImageStats _statsOf(Uint8List rgb) {
 /// scene should be is a judgement worth inheriting, and it says nothing
 /// about hue.
 ///
-/// **The means are taken in the encoding the pixels arrive in, not in
-/// linear light** — and that is not the obvious choice, so: this number
-/// does not stay a physical quantity. It is handed to the Exposure slider
-/// (via [RenderParams.fromValues]), and `_applyExposure` multiplies the
-/// *gamma-encoded* buffer by `2^(units / calExposureUnitsPerStop)`. A
-/// gamma-space multiply is not a linear-light exposure change: measured
-/// on a flat patch, six slider units — half a stop by that constant's
-/// arithmetic, and half a stop of gamma-space gain — moves the linear
-/// luminance a full stop.
+/// **Measured in linear light, in the space the correction is spent in.**
+/// The answer goes to the Exposure slider (via [RenderParams.fromValues]),
+/// and since 2026-09-10 `applyExposureAndWhiteBalance` multiplies the
+/// *linear* light by `2^stops` — so a ratio of linear means, spent as
+/// stops, puts our mean exactly on the camera's, by construction.
 ///
-/// So a correction measured in linear light and spent through this knob
-/// lands about twice as strong as it should. On a Fujifilm X-T5 frame
-/// (2026-09-09) the linear measurement asked for +0.238 stops where the
-/// decode was already within 3% of the camera's own rendering; applied,
-/// it pushed the mean from 87.6 to 103.0 and clipped 2.9% of the frame.
-/// That is the highlights blowing out.
-///
-/// Measuring in the same space the correction is spent in makes the two
-/// cancel: multiplying our buffer by `preview / decoded` puts its mean
-/// exactly on the camera's, by construction. This was previously
-/// linearised, with a comment arguing that exposure is a multiplication
-/// in linear light — true of exposure in general, and not true of this
-/// pipeline's Exposure stage.
+/// The space matters, and this file has been on both sides of it. Until
+/// 2026-09-10 the Exposure stage multiplied the gamma-encoded buffer, and
+/// a linear measurement spent through it landed about twice as strong: on
+/// a Fujifilm X-T5 frame (2026-09-09) it asked for +0.238 stops where the
+/// decode was within 3% of the camera's rendering, pushed the mean from
+/// 87.6 to 103.0 and clipped 2.9% of the frame. The fix then was to
+/// measure in gamma space too, so the two cancelled. Now that the stage
+/// is linear, the measurement is linear again — for the same reason
+/// (same space as the spend), not the opposite one.
 double? cameraExposureOffsetStops(
   Uint8List rgbBytes,
   int width,
@@ -242,7 +244,7 @@ double? _offsetFrom(
     return null;
   }
   final stops =
-      math.log(camera.meanEncodedLuma / ours.meanEncodedLuma) / math.ln2;
+      math.log(camera.meanLinearLuma / ours.meanLinearLuma) / math.ln2;
   return stops.clamp(-limitStops, limitStops);
 }
 

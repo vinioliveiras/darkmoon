@@ -69,7 +69,7 @@ void main() {
     );
     await timeRender(
       '+ tone (no extra passes)',
-      const RenderParams(baseContrast: 0, exposure: 6, contrast: 20),
+      const RenderParams(baseContrast: 0, exposure: 0.5, contrast: 20),
     );
     await timeRender(
       '+ shadows (adds tonal blur)',
@@ -95,7 +95,7 @@ void main() {
       'everything',
       const RenderParams(
         baseContrast: 80,
-        exposure: 6,
+        exposure: 0.5,
         shadows: 40,
         texture: 40,
         clarity: 40,
@@ -139,7 +139,7 @@ void main() {
       'cached: everything + contrast',
       (c) => RenderParams(
         baseContrast: 80,
-        exposure: 6,
+        exposure: 0.5,
         shadows: 40,
         texture: 40,
         clarity: 40,

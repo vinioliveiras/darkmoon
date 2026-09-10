@@ -63,7 +63,7 @@ void main() {
   }
 
   const base = RenderParams(
-    exposure: 5,
+    exposure: 0.5,
     sharpen: SharpenParams(amount: 40),
     texture: 20,
     clarity: 15,
@@ -74,7 +74,7 @@ void main() {
   testWidgets('a point-op change resumes from afterDehaze and matches a '
       'cold render byte for byte', (tester) async {
     const changed = RenderParams(
-      exposure: 5,
+      exposure: 0.5,
       sharpen: SharpenParams(amount: 40),
       texture: 20,
       clarity: 15,
@@ -96,7 +96,7 @@ void main() {
   testWidgets('a Detail-panel change resumes from afterAiDenoise and '
       'matches a cold render', (tester) async {
     const changed = RenderParams(
-      exposure: 5,
+      exposure: 0.5,
       sharpen: SharpenParams(amount: 80, radius: 1.8),
       texture: 20,
       clarity: 15,
@@ -115,7 +115,7 @@ void main() {
     tester,
   ) async {
     const changed = RenderParams(
-      exposure: 15,
+      exposure: 1.5,
       sharpen: SharpenParams(amount: 40),
       texture: 20,
       clarity: 15,
@@ -159,12 +159,12 @@ void main() {
     // old ones — a second dispose of a reclaimed image is a dart:ui
     // assertion. Found by gpu_point_ops_test on 2026-09-09.
     const noSharpen = RenderParams(
-      exposure: 5,
+      exposure: 0.5,
       sharpen: SharpenParams(amount: 0),
       dehaze: 20,
     );
     const otherExposure = RenderParams(
-      exposure: 9,
+      exposure: 0.9,
       sharpen: SharpenParams(amount: 0),
       dehaze: 20,
     );
@@ -187,12 +187,12 @@ void main() {
     // cache holds one ui.Image under both keys. Replacing one boundary
     // must not dispose the other's image.
     const identityMiddle = RenderParams(
-      exposure: 5,
+      exposure: 0.5,
       sharpen: SharpenParams(amount: 0),
       baseContrast: 0,
     );
     const thenSharpen = RenderParams(
-      exposure: 5,
+      exposure: 0.5,
       sharpen: SharpenParams(amount: 50),
       baseContrast: 0,
     );
