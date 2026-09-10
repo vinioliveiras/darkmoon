@@ -45,7 +45,9 @@ _stats(Uint8List rgb) {
 
 void main(List<String> args) {
   if (args.isEmpty) {
-    stderr.writeln('Usage: dart run tool/decode_brightness_probe.dart <raw>...');
+    stderr.writeln(
+      'Usage: dart run tool/decode_brightness_probe.dart <raw>...',
+    );
     exit(1);
   }
   const releaseDir = 'build/windows/x64/runner/Release';
