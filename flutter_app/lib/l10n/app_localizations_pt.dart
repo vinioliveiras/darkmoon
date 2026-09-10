@@ -667,6 +667,13 @@ class AppLocalizationsPt extends AppLocalizations {
       'Renderiza na placa de vídeo em vez da CPU; volta automaticamente para a CPU se não houver suporte';
 
   @override
+  String get settingsXmpSidecarLabel => 'Gravar arquivos XMP ao lado das fotos';
+
+  @override
+  String get settingsXmpSidecarHint =>
+      'Salva as edições de cada foto num arquivo .xmp ao lado dela, para acompanharem a foto quando ela é movida e poderem ser lidas por outros editores';
+
+  @override
   String get settingsThumbnailThreadsLabel =>
       'Threads de carregamento de miniaturas';
 

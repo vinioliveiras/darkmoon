@@ -662,6 +662,13 @@ class AppLocalizationsEn extends AppLocalizations {
       'Renders on the graphics card instead of the CPU; falls back automatically if unsupported';
 
   @override
+  String get settingsXmpSidecarLabel => 'Write XMP sidecar files';
+
+  @override
+  String get settingsXmpSidecarHint =>
+      'Saves each photo\'s edits in a .xmp file next to it, so they follow the photo when it moves and can be read by other editors';
+
+  @override
   String get settingsThumbnailThreadsLabel => 'Thumbnail loading threads';
 
   @override

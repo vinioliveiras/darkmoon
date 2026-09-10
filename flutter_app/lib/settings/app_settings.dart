@@ -99,6 +99,7 @@ class AppSettings {
     this.editEmbeddedJpeg = false,
     this.cacheMaxBytes = defaultCacheMaxBytes,
     this.useGpuRender = true,
+    this.writeXmpSidecars = true,
     this.tabbedControlsPanel = false,
     this.tabbedControlsPanelIcons = false,
     this.presetThumbnails = true,
@@ -170,6 +171,13 @@ class AppSettings {
   /// `_renderPreviewNow`'s doc comment for the "Not Responding" freeze
   /// this avoids).
   final bool useGpuRender;
+
+  /// Whether each photo's edits are also written to a `.xmp` sidecar next
+  /// to the photo (`catalog/sidecar_xmp.dart`), and a sidecar is adopted
+  /// when a photo the catalog has never seen is opened. On by default:
+  /// the catalog is keyed by absolute path, so without the sidecar a
+  /// moved folder is a folder with every edit gone.
+  final bool writeXmpSidecars;
 
   /// Whether the editing panel groups its sections into Adjust / Colour /
   /// Effects tabs, with Masks pinned above them, instead of listing all
@@ -268,6 +276,7 @@ class AppSettings {
     bool? editEmbeddedJpeg,
     int? cacheMaxBytes,
     bool? useGpuRender,
+    bool? writeXmpSidecars,
     bool? tabbedControlsPanel,
     bool? tabbedControlsPanelIcons,
     bool? presetThumbnails,
@@ -288,6 +297,7 @@ class AppSettings {
     editEmbeddedJpeg: editEmbeddedJpeg ?? this.editEmbeddedJpeg,
     cacheMaxBytes: cacheMaxBytes ?? this.cacheMaxBytes,
     useGpuRender: useGpuRender ?? this.useGpuRender,
+    writeXmpSidecars: writeXmpSidecars ?? this.writeXmpSidecars,
     tabbedControlsPanel: tabbedControlsPanel ?? this.tabbedControlsPanel,
     tabbedControlsPanelIcons:
         tabbedControlsPanelIcons ?? this.tabbedControlsPanelIcons,
@@ -328,6 +338,7 @@ class AppSettings {
     editEmbeddedJpeg: editEmbeddedJpeg,
     cacheMaxBytes: cacheMaxBytes,
     useGpuRender: useGpuRender,
+    writeXmpSidecars: writeXmpSidecars,
     tabbedControlsPanel: tabbedControlsPanel,
     tabbedControlsPanelIcons: tabbedControlsPanelIcons,
     presetThumbnails: presetThumbnails,
@@ -360,6 +371,7 @@ class AppSettings {
     editEmbeddedJpeg: editEmbeddedJpeg,
     cacheMaxBytes: cacheMaxBytes,
     useGpuRender: useGpuRender,
+    writeXmpSidecars: writeXmpSidecars,
     tabbedControlsPanel: tabbedControlsPanel,
     tabbedControlsPanelIcons: tabbedControlsPanelIcons,
     presetThumbnails: presetThumbnails,
@@ -410,6 +422,8 @@ Future<AppSettings> loadSettings() async {
       cacheMaxBytes:
           (raw['cacheMaxBytes'] as num?)?.toInt() ?? defaults.cacheMaxBytes,
       useGpuRender: raw['useGpuRender'] as bool? ?? defaults.useGpuRender,
+      writeXmpSidecars:
+          raw['writeXmpSidecars'] as bool? ?? defaults.writeXmpSidecars,
       tabbedControlsPanel:
           raw['tabbedControlsPanel'] as bool? ?? defaults.tabbedControlsPanel,
       tabbedControlsPanelIcons:
@@ -458,6 +472,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'editEmbeddedJpeg': settings.editEmbeddedJpeg,
       'cacheMaxBytes': settings.cacheMaxBytes,
       'useGpuRender': settings.useGpuRender,
+      'writeXmpSidecars': settings.writeXmpSidecars,
       'tabbedControlsPanel': settings.tabbedControlsPanel,
       'tabbedControlsPanelIcons': settings.tabbedControlsPanelIcons,
       'presetThumbnails': settings.presetThumbnails,

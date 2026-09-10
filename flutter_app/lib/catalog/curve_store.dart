@@ -47,6 +47,30 @@ List<List<double>> _encodePoints(List<CurvePoint> points) => [
   for (final point in points) [point.x, point.y],
 ];
 
+/// One photo's curves as the catalog JSON stores them — the inverse of
+/// [encodePhotoCurves]. Public for the `.xmp` sidecar (sidecar_xmp.dart),
+/// which embeds the same JSON.
+PhotoCurves decodePhotoCurves(Map<String, dynamic>? raw) {
+  if (raw == null) {
+    return identityPhotoCurves;
+  }
+  return PhotoCurves(
+    tone: _decodePoints(raw['tone']),
+    red: _decodePoints(raw['red']),
+    green: _decodePoints(raw['green']),
+    blue: _decodePoints(raw['blue']),
+  );
+}
+
+/// One photo's curves as the catalog JSON stores them — see
+/// [decodePhotoCurves].
+Map<String, dynamic> encodePhotoCurves(PhotoCurves curves) => {
+  'tone': _encodePoints(curves.tone),
+  'red': _encodePoints(curves.red),
+  'green': _encodePoints(curves.green),
+  'blue': _encodePoints(curves.blue),
+};
+
 /// Loads every saved photo's curves. Returns an empty map if the file
 /// doesn't exist yet or can't be parsed.
 Future<Map<String, PhotoCurves>> loadPhotoCurves() async {
@@ -58,12 +82,7 @@ Future<Map<String, PhotoCurves>> loadPhotoCurves() async {
     }
     return {
       for (final entry in raw.entries)
-        entry.key: PhotoCurves(
-          tone: _decodePoints((entry.value as Map<String, dynamic>)['tone']),
-          red: _decodePoints((entry.value as Map<String, dynamic>)['red']),
-          green: _decodePoints((entry.value as Map<String, dynamic>)['green']),
-          blue: _decodePoints((entry.value as Map<String, dynamic>)['blue']),
-        ),
+        entry.key: decodePhotoCurves(entry.value as Map<String, dynamic>),
     };
   } catch (e, st) {
     DevLog.logError('loadCurves failed, treating curves as empty', e, st);
@@ -79,12 +98,7 @@ Future<void> savePhotoCurves(Map<String, PhotoCurves> curves) async {
     file,
     jsonEncode({
       for (final entry in curves.entries)
-        entry.key: {
-          'tone': _encodePoints(entry.value.tone),
-          'red': _encodePoints(entry.value.red),
-          'green': _encodePoints(entry.value.green),
-          'blue': _encodePoints(entry.value.blue),
-        },
+        entry.key: encodePhotoCurves(entry.value),
     }),
   );
 }

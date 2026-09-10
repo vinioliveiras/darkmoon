@@ -198,6 +198,8 @@
   "settingsAnimationsHint": "Sanfte Übergänge für Panelabschnitte, Tab-Wechsel, Zoom und die Vorschau nach einer Bearbeitung",
   "settingsGpuRenderLabel": "GPU-Rendering verwenden",
   "settingsGpuRenderHint": "Rendert auf der Grafikkarte statt auf der CPU; fällt bei fehlender Unterstützung automatisch zurück",
+  "settingsXmpSidecarLabel": "XMP-Begleitdateien schreiben",
+  "settingsXmpSidecarHint": "Speichert die Bearbeitungen jedes Fotos in einer .xmp-Datei daneben, damit sie beim Verschieben mitkommen und von anderen Editoren gelesen werden können",
   "settingsThumbnailThreadsLabel": "Threads für das Laden von Miniaturansichten",
   "settingsCustomDenoiseModelLabel": "Benutzerdefiniertes Entrauschungsmodell",
   "settingsCustomDenoiseModelHint": "Ersetzt das On-Device-Denoise-Modell im Enhance-Tab des KI-Entrauschungsdialogs. Muss ein direkter Ersatz sein: 3-Kanal-RGB, gleiche Auflösung bei Ein-/Ausgabe, [0,1]-normalisiert (Tensor-Namen werden aus dem Modell gelesen, jede Benennung funktioniert) — ein Modell, das nicht passt, führt zu einem Fehler oder sichtbar falschem Ergebnis, nicht zu einem sauberen Fehlschlag.",

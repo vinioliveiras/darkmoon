@@ -1288,6 +1288,18 @@ abstract class AppLocalizations {
   /// **'Renders on the graphics card instead of the CPU; falls back automatically if unsupported'**
   String get settingsGpuRenderHint;
 
+  /// No description provided for @settingsXmpSidecarLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Write XMP sidecar files'**
+  String get settingsXmpSidecarLabel;
+
+  /// No description provided for @settingsXmpSidecarHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Saves each photo\'s edits in a .xmp file next to it, so they follow the photo when it moves and can be read by other editors'**
+  String get settingsXmpSidecarHint;
+
   /// No description provided for @settingsThumbnailThreadsLabel.
   ///
   /// In en, this message translates to:

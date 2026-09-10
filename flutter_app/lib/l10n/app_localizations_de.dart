@@ -671,6 +671,13 @@ class AppLocalizationsDe extends AppLocalizations {
       'Rendert auf der Grafikkarte statt auf der CPU; fällt bei fehlender Unterstützung automatisch zurück';
 
   @override
+  String get settingsXmpSidecarLabel => 'XMP-Begleitdateien schreiben';
+
+  @override
+  String get settingsXmpSidecarHint =>
+      'Speichert die Bearbeitungen jedes Fotos in einer .xmp-Datei daneben, damit sie beim Verschieben mitkommen und von anderen Editoren gelesen werden können';
+
+  @override
   String get settingsThumbnailThreadsLabel =>
       'Threads für das Laden von Miniaturansichten';
 

@@ -15,8 +15,8 @@ import 'preset.dart';
 /// built here and opened in real Meridian (or vice versa) will carry the
 /// same slider values, but won't necessarily look pixel-identical, since
 /// the two apps process those values through different code entirely.
-const _crsNamespace = 'http://ns.adobe.com/camera-raw-settings/1.0/';
-const _rdfNamespace = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
+const crsNamespace = 'http://ns.adobe.com/camera-raw-settings/1.0/';
+const rdfNamespace = 'http://www.w3.org/1999/02/22-rdf-syntax-ns#';
 
 /// (our slider key, crs: attribute name) — same numeric meaning and
 /// range on both sides, no conversion needed.
@@ -145,7 +145,53 @@ String _presetIdFromName(String name) =>
 /// a first-class develop preset; an implausibly old one (the "1.0" this
 /// used to write) can make newer versions flag it as possibly-incompatible
 /// on import. Bump this to track a real ACR release now and then.
-const _crsVersion = '16.5';
+const crsVersion = '16.5';
+
+/// The Camera Raw process version the `crs:` values are written against.
+const crsProcessVersion = '11.0';
+
+/// Whether any of [curves] departs from the identity — what decides if a
+/// document declares `crs:ToneCurveName2012="Custom"`.
+bool hasCustomCurves(PhotoCurves curves) =>
+    !isIdentityToneCurve(curves.tone) ||
+    !isIdentityToneCurve(curves.red) ||
+    !isIdentityToneCurve(curves.green) ||
+    !isIdentityToneCurve(curves.blue);
+
+/// The `crs:` attributes (qualified name → value) carrying [values] —
+/// only the sliders present, see [xmpFromPreset]'s note on partial
+/// presets. Shared with the per-photo sidecar (catalog/sidecar_xmp.dart).
+Map<String, String> crsAttributesForValues(Map<String, double> values) => {
+  for (final (ourKey, crsAttr) in _directMappings)
+    if (values[ourKey] case final v?) 'crs:$crsAttr': v.toString(),
+  if (values['Exposure'] case final v?)
+    'crs:Exposure2012': _exposureToStops(v).toStringAsFixed(2),
+  for (final channel in _mixerChannels) ...{
+    if (values['Mixer${channel}Hue'] case final v?)
+      'crs:HueAdjustment$channel': v.toString(),
+    if (values['Mixer${channel}Saturation'] case final v?)
+      'crs:SaturationAdjustment$channel': v.toString(),
+    if (values['Mixer${channel}Luminance'] case final v?)
+      'crs:LuminanceAdjustment$channel': v.toString(),
+  },
+  for (final (ourRange, crsRange) in _gradeRanges) ...{
+    if (values['Grade${ourRange}Hue'] case final v?)
+      'crs:ColorGrade${crsRange}Hue': v.toString(),
+    if (values['Grade${ourRange}Saturation'] case final v?)
+      'crs:ColorGrade${crsRange}Sat': v.toString(),
+    if (values['Grade${ourRange}Luminance'] case final v?)
+      'crs:ColorGrade${crsRange}Lum': v.toString(),
+  },
+};
+
+/// Writes the four `crs:ToneCurvePV2012*` curves of [curves] (identity
+/// curves are left out) into the `rdf:Description` [builder] is inside.
+void writeCrsCurves(XmlBuilder builder, PhotoCurves curves) {
+  _writeCurve(builder, 'crs:ToneCurvePV2012', curves.tone);
+  _writeCurve(builder, 'crs:ToneCurvePV2012Red', curves.red);
+  _writeCurve(builder, 'crs:ToneCurvePV2012Green', curves.green);
+  _writeCurve(builder, 'crs:ToneCurvePV2012Blue', curves.blue);
+}
 
 /// A `crs:UUID` derived deterministically from the preset's own id, so
 /// exporting the same preset twice yields the same UUID and Meridian
@@ -173,11 +219,7 @@ String _deterministicUuid(String seed) {
 /// Builds a Meridian-compatible `.xmp` Develop Preset document for
 /// [preset].
 String xmpFromPreset(Preset preset) {
-  final hasCurve =
-      !isIdentityToneCurve(preset.curves.tone) ||
-      !isIdentityToneCurve(preset.curves.red) ||
-      !isIdentityToneCurve(preset.curves.green) ||
-      !isIdentityToneCurve(preset.curves.blue);
+  final hasCurve = hasCustomCurves(preset.curves);
   final builder = XmlBuilder();
   builder.element(
     'x:xmpmeta',
@@ -186,7 +228,7 @@ String xmpFromPreset(Preset preset) {
     nest: () {
       builder.element(
         'rdf:RDF',
-        namespaces: {_rdfNamespace: 'rdf'},
+        namespaces: {rdfNamespace: 'rdf'},
         nest: () {
           builder.element(
             'rdf:Description',
@@ -218,51 +260,20 @@ String xmpFromPreset(Preset preset) {
               'crs:CameraModelRestriction': '',
               'crs:Copyright': '',
               'crs:ContactInfo': '',
-              'crs:Version': _crsVersion,
-              'crs:ProcessVersion': '11.0',
+              'crs:Version': crsVersion,
+              'crs:ProcessVersion': crsProcessVersion,
               if (hasCurve) 'crs:ToneCurveName2012': 'Custom',
               'crs:HasSettings': 'True',
-              for (final (ourKey, crsAttr) in _directMappings)
-                if (preset.values[ourKey] case final v?)
-                  'crs:$crsAttr': v.toString(),
-              if (preset.values['Exposure'] case final v?)
-                'crs:Exposure2012': _exposureToStops(v).toStringAsFixed(2),
-              for (final channel in _mixerChannels) ...{
-                if (preset.values['Mixer${channel}Hue'] case final v?)
-                  'crs:HueAdjustment$channel': v.toString(),
-                if (preset.values['Mixer${channel}Saturation'] case final v?)
-                  'crs:SaturationAdjustment$channel': v.toString(),
-                if (preset.values['Mixer${channel}Luminance'] case final v?)
-                  'crs:LuminanceAdjustment$channel': v.toString(),
-              },
-              for (final (ourRange, crsRange) in _gradeRanges) ...{
-                if (preset.values['Grade${ourRange}Hue'] case final v?)
-                  'crs:ColorGrade${crsRange}Hue': v.toString(),
-                if (preset.values['Grade${ourRange}Saturation'] case final v?)
-                  'crs:ColorGrade${crsRange}Sat': v.toString(),
-                if (preset.values['Grade${ourRange}Luminance'] case final v?)
-                  'crs:ColorGrade${crsRange}Lum': v.toString(),
-              },
+              ...crsAttributesForValues(preset.values),
             },
-            namespaces: {_crsNamespace: 'crs'},
+            namespaces: {crsNamespace: 'crs'},
             nest: () {
               _writeLangAlt(builder, 'crs:Name', preset.name);
               // Files every darkmoon preset under one named group in the
               // Meridian preset browser instead of scattering them loose
               // in "User Presets".
               _writeLangAlt(builder, 'crs:Group', 'darkmoon');
-              _writeCurve(builder, 'crs:ToneCurvePV2012', preset.curves.tone);
-              _writeCurve(builder, 'crs:ToneCurvePV2012Red', preset.curves.red);
-              _writeCurve(
-                builder,
-                'crs:ToneCurvePV2012Green',
-                preset.curves.green,
-              );
-              _writeCurve(
-                builder,
-                'crs:ToneCurvePV2012Blue',
-                preset.curves.blue,
-              );
+              writeCrsCurves(builder, preset.curves);
             },
           );
         },
@@ -333,12 +344,43 @@ Preset? presetFromXmp(String xmlSource, {required String fallbackName}) {
     return null;
   }
   final description = document
-      .findAllElements('Description', namespace: _rdfNamespace)
+      .findAllElements('Description', namespace: rdfNamespace)
       .firstOrNull;
   if (description == null) {
     return null;
   }
+  final values = valuesFromCrsDescription(description);
 
+  final name =
+      description
+          .findAllElements('li', namespace: rdfNamespace)
+          .where((e) => e.parentElement?.parentElement?.name.local == 'Name')
+          .map((e) => e.innerText.trim())
+          .firstOrNull ??
+      fallbackName;
+
+  return Preset(
+    id: _presetIdFromName(name),
+    name: name,
+    values: values,
+    curves: curvesFromCrsDescription(description),
+    unsupportedAttributes: _unsupportedAttributes(description),
+  );
+}
+
+/// The four `crs:ToneCurvePV2012*` curves on [description] (identity
+/// where absent).
+PhotoCurves curvesFromCrsDescription(XmlElement description) => PhotoCurves(
+  tone: _readCurve(description, 'ToneCurvePV2012'),
+  red: _readCurve(description, 'ToneCurvePV2012Red'),
+  green: _readCurve(description, 'ToneCurvePV2012Green'),
+  blue: _readCurve(description, 'ToneCurvePV2012Blue'),
+);
+
+/// Our slider values for the `crs:` attributes on [description] — the
+/// inverse of [crsAttributesForValues], shared with the per-photo
+/// sidecar reader.
+Map<String, double> valuesFromCrsDescription(XmlElement description) {
   // Only present attributes make it into [values] — a real preset only
   // ever carries the boxes that were checked when it was made (e.g. a
   // "Punchy" preset touching just Contrast/Clarity has no Temperature
@@ -394,26 +436,7 @@ Preset? presetFromXmp(String xmlSource, {required String fallbackName}) {
     }
   }
 
-  final name =
-      description
-          .findAllElements('li', namespace: _rdfNamespace)
-          .where((e) => e.parentElement?.parentElement?.name.local == 'Name')
-          .map((e) => e.innerText.trim())
-          .firstOrNull ??
-      fallbackName;
-
-  return Preset(
-    id: _presetIdFromName(name),
-    name: name,
-    values: values,
-    curves: PhotoCurves(
-      tone: _readCurve(description, 'ToneCurvePV2012'),
-      red: _readCurve(description, 'ToneCurvePV2012Red'),
-      green: _readCurve(description, 'ToneCurvePV2012Green'),
-      blue: _readCurve(description, 'ToneCurvePV2012Blue'),
-    ),
-    unsupportedAttributes: _unsupportedAttributes(description),
-  );
+  return values;
 }
 
 /// Every `crs:` attribute present on [description] that this app has no
@@ -442,7 +465,7 @@ List<String> _unsupportedAttributes(XmlElement description) {
   };
   final unsupported = <String>[];
   for (final attribute in description.attributes) {
-    if (attribute.name.namespaceUri != _crsNamespace) {
+    if (attribute.name.namespaceUri != crsNamespace) {
       continue;
     }
     final local = attribute.name.local;
@@ -456,7 +479,7 @@ List<String> _unsupportedAttributes(XmlElement description) {
 
 List<CurvePoint> _readCurve(XmlElement description, String tag) {
   final curveElement = description
-      .findElements(tag, namespace: _crsNamespace)
+      .findElements(tag, namespace: crsNamespace)
       .firstOrNull;
   if (curveElement == null) {
     return identityToneCurve;
@@ -464,7 +487,7 @@ List<CurvePoint> _readCurve(XmlElement description, String tag) {
   final points = <CurvePoint>[];
   for (final li in curveElement.findAllElements(
     'li',
-    namespace: _rdfNamespace,
+    namespace: rdfNamespace,
   )) {
     final parts = li.innerText.split(',');
     if (parts.length != 2) {

@@ -199,6 +199,8 @@
   "settingsAnimationsHint": "Transições suaves nas seções do painel, troca de abas, zoom e no preview após uma edição",
   "settingsGpuRenderLabel": "Usar renderização por GPU",
   "settingsGpuRenderHint": "Renderiza na placa de vídeo em vez da CPU; volta automaticamente para a CPU se não houver suporte",
+  "settingsXmpSidecarLabel": "Gravar arquivos XMP ao lado das fotos",
+  "settingsXmpSidecarHint": "Salva as edições de cada foto num arquivo .xmp ao lado dela, para acompanharem a foto quando ela é movida e poderem ser lidas por outros editores",
   "settingsThumbnailThreadsLabel": "Threads de carregamento de miniaturas",
   "settingsCustomDenoiseModelLabel": "Modelo de denoise customizado",
   "settingsCustomDenoiseModelHint": "Substitui o modelo de Denoise on-device na aba Enhance do diálogo AI Denoise. Precisa ser um substituto direto: RGB 3 canais, mesma resolução de entrada/saída, valores normalizados [0,1] (os nomes dos tensores são lidos do próprio modelo, então qualquer nomenclatura funciona) — um modelo que não seguir isso vai dar erro ou produzir um resultado visivelmente errado, não uma falha limpa.",

@@ -479,6 +479,15 @@ class _SettingsDialogState extends State<SettingsDialog>
       padding: const EdgeInsets.only(right: kScrollbarGutter),
       child: SettingsGroup(
         children: [
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: Text(l10n.settingsXmpSidecarLabel, style: _labelStyle),
+            subtitle: Text(l10n.settingsXmpSidecarHint, style: _hintStyle),
+            value: _settings.writeXmpSidecars,
+            onChanged: (v) => _update(_settings.copyWith(writeXmpSidecars: v)),
+          ),
+          const SizedBox(height: 6),
           CacheStorageMeter(
             usage: widget.cacheUsage,
             maxBytes: _settings.cacheMaxBytes,

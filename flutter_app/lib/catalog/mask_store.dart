@@ -100,7 +100,10 @@ List<Map<String, dynamic>> _encodeBrush(BrushGeometry brush) => [
     },
 ];
 
-MaskLayer _decodeMask(Map<String, dynamic> raw) {
+/// One mask layer as the catalog JSON stores it — the inverse of
+/// [encodeMaskLayer]. Public for the `.xmp` sidecar (sidecar_xmp.dart),
+/// which embeds the same JSON.
+MaskLayer decodeMaskLayer(Map<String, dynamic> raw) {
   final type = MaskType.values.byName(raw['type'] as String);
   final linearRaw = raw['linear'] as Map<String, dynamic>?;
   final radialRaw = raw['radial'] as Map<String, dynamic>?;
@@ -176,7 +179,8 @@ MaskLayer _decodeMask(Map<String, dynamic> raw) {
   );
 }
 
-Map<String, dynamic> _encodeMask(MaskLayer mask) => {
+/// One mask layer as the catalog JSON stores it — see [decodeMaskLayer].
+Map<String, dynamic> encodeMaskLayer(MaskLayer mask) => {
   'id': mask.id,
   'name': mask.name,
   'type': mask.type.name,
@@ -240,7 +244,7 @@ Future<Map<String, List<MaskLayer>>> loadPhotoMasks() async {
       for (final entry in raw.entries)
         entry.key: [
           for (final mask in entry.value as List)
-            _decodeMask(mask as Map<String, dynamic>),
+            decodeMaskLayer(mask as Map<String, dynamic>),
         ],
     };
   } catch (e, st) {
@@ -257,7 +261,7 @@ Future<void> savePhotoMasks(Map<String, List<MaskLayer>> masks) async {
     file,
     jsonEncode({
       for (final entry in masks.entries)
-        entry.key: [for (final mask in entry.value) _encodeMask(mask)],
+        entry.key: [for (final mask in entry.value) encodeMaskLayer(mask)],
     }),
   );
 }

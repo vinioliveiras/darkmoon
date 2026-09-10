@@ -22,6 +22,7 @@ import 'catalog/mask_store.dart';
 import 'catalog/native_source_cache.dart';
 import 'catalog/photo_preset_store.dart';
 import 'catalog/preview_cache_dir.dart';
+import 'catalog/sidecar_xmp.dart';
 import 'catalog/ai_enhance_cache.dart';
 import 'catalog/ai_enhance_cache_dir.dart';
 import 'catalog/cloud_denoise_cache.dart';
@@ -2892,6 +2893,7 @@ class _EditorScreenState extends State<EditorScreen>
     await savePhotoCurves(_photoCurves);
     await savePhotoMasks(_photoMasks);
     _persistPhotoPreset(selected.path, appliedPresetId);
+    _writeSidecarFor(selected.path);
   }
 
   /// [_paramValues] as persisted to the catalog: Temperature/Tint/mode are
@@ -2923,8 +2925,79 @@ class _EditorScreenState extends State<EditorScreen>
       unawaited(savePhotoCurves(_photoCurves));
       unawaited(savePhotoMasks(_photoMasks));
       _persistPhotoPreset(selected.path, _appliedPresetId);
+      _writeSidecarFor(selected.path);
     });
   }
+
+  /// Mirrors [path]'s edits to its `.xmp` sidecar — the copy that travels
+  /// with the file (Settings → Data; see sidecar_xmp.dart). Fire-and-
+  /// forget: the sidecar writer logs its own failures.
+  void _writeSidecarFor(String path) {
+    if (!_settings.writeXmpSidecars) {
+      return;
+    }
+    unawaited(
+      writeSidecar(
+        path,
+        PhotoSidecar(
+          values: _edits[path] ?? const {},
+          curves: _photoCurves[path] ?? identityPhotoCurves,
+          masks: _photoMasks[path] ?? const [],
+          presetId: _photoPresets[path],
+        ),
+      ),
+    );
+  }
+
+  /// Adopts [path]'s `.xmp` sidecar when the catalog knows nothing about
+  /// the photo — it was edited on another machine, in another editor, or
+  /// moved (the catalog is keyed by absolute path). A catalog entry wins
+  /// otherwise: it is what this app wrote last.
+  Future<void> _importSidecar(String path) async {
+    if (!_settings.writeXmpSidecars || _hasCatalogEntry(path)) {
+      return;
+    }
+    final sidecar = await readSidecar(path);
+    if (sidecar == null || !sidecar.hasEdits || !mounted) {
+      return;
+    }
+    // The user may have started editing while the file was being read.
+    if (_hasCatalogEntry(path) || (_catalogSaveTimer?.isActive ?? false)) {
+      return;
+    }
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    final isCurrentPhoto = selected?.path == path;
+    setState(() {
+      _edits[path] = {...sidecar.values};
+      _photoCurves[path] = sidecar.curves;
+      _photoMasks[path] = [...sidecar.masks];
+      if (sidecar.presetId case final id?) {
+        _photoPresets[path] = id;
+      }
+      if (isCurrentPhoto) {
+        _paramValues = _paramValuesFor(path);
+        _currentCurves = _curvesFor(path);
+        _currentMasks = _masksFor(path);
+        _activeMaskId = imageMaskId;
+        _appliedPresetId = _photoPresets[path];
+      }
+    });
+    if (isCurrentPhoto) {
+      _resetHistory();
+      // A no-op until the photo's own decode lands, which then renders
+      // with the adopted values anyway.
+      unawaited(_renderPreview(path));
+    }
+    unawaited(saveCatalog(_edits));
+    unawaited(savePhotoCurves(_photoCurves));
+    unawaited(savePhotoMasks(_photoMasks));
+    unawaited(savePhotoPresets(_photoPresets));
+  }
+
+  bool _hasCatalogEntry(String path) =>
+      _edits.containsKey(path) ||
+      _photoCurves.containsKey(path) ||
+      _photoMasks.containsKey(path);
 
   /// Syncs [_photoPresets] for [path] to [id] (set it, or drop it when
   /// null — no preset applied) and persists the file. [id] must be
@@ -3114,6 +3187,7 @@ class _EditorScreenState extends State<EditorScreen>
     await saveCatalog(_edits);
     await savePhotoCurves(_photoCurves);
     await savePhotoMasks(_photoMasks);
+    _writeSidecarFor(path);
   }
 
   /// Right-click on the image — "Copy Edits" / "Paste Edits", the same
@@ -3223,6 +3297,7 @@ class _EditorScreenState extends State<EditorScreen>
     unawaited(savePhotoCurves(_photoCurves));
     unawaited(savePhotoMasks(_photoMasks));
     unawaited(savePhotoPresets(_photoPresets));
+    _writeSidecarFor(file.path);
   }
 
   /// Opens [file]'s containing folder in Windows Explorer with the file
@@ -3540,6 +3615,7 @@ class _EditorScreenState extends State<EditorScreen>
     });
     _resetHistory();
     if (selectedIndex != null) {
+      unawaited(_importSidecar(files[selectedIndex].path));
       unawaited(_saveLastActiveFile(files[selectedIndex].path));
       unawaited(
         _loadEditSourceAndRender(files[selectedIndex].path, generation),
@@ -3692,6 +3768,7 @@ class _EditorScreenState extends State<EditorScreen>
       _appliedPresetId = _photoPresets[path];
     });
     _resetHistory();
+    unawaited(_importSidecar(path));
     // Before kicking off this photo's own decode/render, drop whatever the
     // ones we've navigated away from were still holding.
     _trimPhotoCaches();

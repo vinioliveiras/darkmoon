@@ -215,6 +215,8 @@
   "settingsAnimationsHint": "Smooth transitions for panel sections, tab switches, zoom, and the preview after an edit",
   "settingsGpuRenderLabel": "Use GPU rendering",
   "settingsGpuRenderHint": "Renders on the graphics card instead of the CPU; falls back automatically if unsupported",
+  "settingsXmpSidecarLabel": "Write XMP sidecar files",
+  "settingsXmpSidecarHint": "Saves each photo's edits in a .xmp file next to it, so they follow the photo when it moves and can be read by other editors",
   "settingsThumbnailThreadsLabel": "Thumbnail loading threads",
   "settingsCustomDenoiseModelLabel": "Custom denoise model",
   "settingsCustomDenoiseModelHint": "Replaces the on-device Denoise model in the AI Denoise dialog's Enhance tab. Must be a drop-in replacement: 3-channel RGB, same-resolution in/out, [0,1]-normalized (tensor names are read from the model, so any naming works) — a model that doesn't match will error or produce visibly wrong output, not a clean failure.",
