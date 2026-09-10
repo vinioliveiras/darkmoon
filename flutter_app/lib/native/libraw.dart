@@ -1,9 +1,12 @@
 import 'dart:ffi';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:ffi/ffi.dart';
 
+import '../render/calibration.dart'
+    show calDecodeAutoBrightClip, calDecodeBrightLimitStops;
 import '../render/pmrid_denoise.dart' show denoisePmridRggb;
 import '../render/white_balance.dart' show wbMultipliersToKelvinTint;
 import 'camera_match.dart';
@@ -441,6 +444,82 @@ bool _openRawFile(LibRawBindings lib, Pointer<libraw_data_t> lr, String path) {
 /// LibRaw fails to open/read the file.
 ///
 /// Blocking native call — run on a background isolate (e.g. via `compute`).
+/// Sets the decode's brightness to the camera's own (2026-09-10).
+///
+/// With `no_auto_bright` the decode comes out wherever the sensor's white
+/// level puts it — 2.5 to 4 stops under the camera's JPEG on the frames
+/// measured — and lifting that after the 8-bit quantisation would band.
+/// So the lift goes through LibRaw's own `bright`, which multiplies in its
+/// float pipeline before the curve and the quantisation: a cheap
+/// half-size pass with the final parameters measures the linear-light
+/// distance to the embedded preview (`cameraExposureOffsetStops`), capped
+/// where the highlights would clip more than the preview does
+/// (`decodeGainCapStops`), and the real pass runs with `bright = 2^stops`.
+/// The preview is returned, decoded, for the caller's camera match on the
+/// finished decode — whose tone curve, with the camera's own highlight
+/// shoulder, carries whatever brightness the cap held back.
+///
+/// No usable preview: LibRaw's auto-bright instead, at a tenth of its
+/// default clip ([calDecodeAutoBrightClip]). A preview too dark to
+/// compare (the luma floor, a night frame) leaves `bright` at 1 — the
+/// camera says the scene is dark.
+EmbeddedPreview? _matchDecodeBrightness(
+  LibRawBindings lib,
+  Pointer<libraw_data_t> lr,
+  void Function(RawDecodeStage stage)? onStage,
+) {
+  final params = lr.ref.params;
+  final preview = EmbeddedPreview.decode(_extractThumbJpeg(lib, lr));
+  if (preview == null) {
+    params.no_auto_bright = 0;
+    params.auto_bright_thr = calDecodeAutoBrightClip;
+    return null;
+  }
+  onStage?.call(RawDecodeStage.processing);
+  double? stops;
+  params.half_size = 1;
+  try {
+    if (lib.libraw_dcraw_process(lr) == 0) {
+      final errPtr = malloc<Int>();
+      try {
+        final image = lib.libraw_dcraw_make_mem_image(lr, errPtr);
+        if (image != nullptr) {
+          try {
+            if (image.ref.type == LibRaw_image_formats.LIBRAW_IMAGE_BITMAP &&
+                image.ref.colors == 3) {
+              final half = _copyProcessedImageData(image);
+              final wanted = cameraExposureOffsetStops(
+                half,
+                image.ref.width,
+                image.ref.height,
+                preview.bytes,
+                limitStops: calDecodeBrightLimitStops,
+                preview: preview,
+              );
+              if (wanted != null) {
+                // Never past where the highlights would clip more than
+                // the camera's own rendering does; the camera tone curve
+                // (measured on the finished decode) carries the rest.
+                stops = math.min(wanted, decodeGainCapStops(half, preview));
+              }
+            }
+          } finally {
+            lib.libraw_dcraw_clear_mem(image);
+          }
+        }
+      } finally {
+        malloc.free(errPtr);
+      }
+    }
+  } finally {
+    params.half_size = 0;
+  }
+  if (stops != null) {
+    params.bright = math.pow(2.0, stops).toDouble();
+  }
+  return preview;
+}
+
 Uint8List? extractRawThumbnailJpeg(String path) {
   final lib = _Lib.instance;
   final lr = _openRaw(lib, path);
@@ -577,14 +656,19 @@ RawImage? decodeRawImage(
     // clipped instead, closer to how Solstice/Vitrine and Meridian-style
     // tools handle overexposed regions by default.
     params.highlight = 2;
-    // PAUSED 2026-08-31 — see the "_colorProfileEnabled" doc comment in
-    // editor_screen.dart for the full story (not an unresolved bug this
-    // round, the user asked to pause the color topic for a while).
-    // no_auto_bright = 1 only makes sense paired with a working "darkmoon
-    // Color" tone curve (color_profile.dart) to bring the exposure back —
-    // without it every RAW renders dark. Keep this in lockstep with
-    // _colorProfileEnabled; both back on together, next time.
+    // No auto-brighten (2026-09-10). LibRaw's default scales every frame so
+    // that its brightest 1% clips to white (auto_bright_thr = 0.01) —
+    // measured on five X-T5 frames the decode clipped 1.1-1.4% of pixels
+    // where the camera's own JPEG clipped 0.05-0.6%, and the highlight
+    // reconstruction two lines up was recovering detail that this then
+    // threw away. The brightness the camera chose comes from the camera
+    // match instead (camera_match.dart: the exposure offset against the
+    // embedded JPEG, spent in linear light), which is exact by
+    // construction and clips nothing on its own. Paused from 2026-08-31
+    // until the match existed; see raw_decode_format_version.dart.
+    params.no_auto_bright = 1;
     params.user_flip = -1;
+    final preview = _matchDecodeBrightness(lib, lr, onStage);
 
     onStage?.call(RawDecodeStage.processing);
     if (lib.libraw_dcraw_process(lr) != 0) {
@@ -616,15 +700,15 @@ RawImage? decodeRawImage(
         // own use_camera_wb + use_camera_matrix calibration (set when
         // opening the file, above) is the actual camera-profile-based
         // color science and needs no such nudge.
-        // Measured from the same open handle rather than a second pass
-        // over the file: the preview is right there, and re-opening a RAW
-        // to read it would cost more than the comparison does. Extracted
-        // once — both measurements read the same preview.
+        // The preview was extracted and decoded once, up in
+        // _matchDecodeBrightness; the decode already sits on the camera's
+        // brightness, so `stops` here is the small residual.
         final match = measureCameraMatch(
           rgbBytes,
           width,
           height,
-          _extractThumbJpeg(lib, lr),
+          preview?.bytes,
+          preview: preview,
         );
         return RawImage(
           width: width,
@@ -786,7 +870,9 @@ RawImage? decodeRawImageWithPmridDenoise(
     params.gamm[0] = 1.0 / 2.4;
     params.gamm[1] = 12.92;
     params.highlight = 2;
+    params.no_auto_bright = 1; // same reasoning as decodeRawImage
     params.user_flip = -1;
+    final preview = _matchDecodeBrightness(lib, lr, onStage);
 
     onStage?.call(RawDecodeStage.processing);
     if (lib.libraw_dcraw_process(lr) != 0) {
@@ -808,15 +894,15 @@ RawImage? decodeRawImageWithPmridDenoise(
         final width = image.ref.width;
         final height = image.ref.height;
         final rgbBytes = _copyProcessedImageData(image);
-        // Measured from the same open handle rather than a second pass
-        // over the file: the preview is right there, and re-opening a RAW
-        // to read it would cost more than the comparison does. Extracted
-        // once — both measurements read the same preview.
+        // The preview was extracted and decoded once, up in
+        // _matchDecodeBrightness; the decode already sits on the camera's
+        // brightness, so `stops` here is the small residual.
         final match = measureCameraMatch(
           rgbBytes,
           width,
           height,
-          _extractThumbJpeg(lib, lr),
+          preview?.bytes,
+          preview: preview,
         );
         return RawImage(
           width: width,

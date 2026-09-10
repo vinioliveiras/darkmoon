@@ -204,17 +204,13 @@ double? cameraExposureOffsetStops(
   Uint8List? embeddedJpegBytes, {
   double limitStops = calCameraExposureLimitStops,
   double lumaFloor = calCameraExposureLumaFloor,
+  EmbeddedPreview? preview,
 }) {
-  if (embeddedJpegBytes == null || width <= 0 || height <= 0) {
+  if (width <= 0 || height <= 0) {
     return null;
   }
-  img.Image? jpeg;
-  try {
-    jpeg = img.decodeJpg(embeddedJpegBytes);
-  } on Exception {
-    jpeg = null;
-  }
-  if (jpeg == null || jpeg.width == 0 || jpeg.height == 0) {
+  final jpeg = (preview ?? EmbeddedPreview.decode(embeddedJpegBytes))?.image;
+  if (jpeg == null) {
     return null;
   }
 
@@ -397,17 +393,13 @@ CameraMatch measureCameraMatch(
   Uint8List? embeddedJpegBytes, {
   double limitStops = calCameraExposureLimitStops,
   double lumaFloor = calCameraExposureLumaFloor,
+  EmbeddedPreview? preview,
 }) {
-  if (embeddedJpegBytes == null || width <= 0 || height <= 0) {
+  if (width <= 0 || height <= 0) {
     return CameraMatch.none;
   }
-  img.Image? jpeg;
-  try {
-    jpeg = img.decodeJpg(embeddedJpegBytes);
-  } on Exception {
-    jpeg = null;
-  }
-  if (jpeg == null || jpeg.width == 0 || jpeg.height == 0) {
+  final jpeg = (preview ?? EmbeddedPreview.decode(embeddedJpegBytes))?.image;
+  if (jpeg == null) {
     return CameraMatch.none;
   }
   final aspect = (width / height) / (jpeg.width / jpeg.height);
@@ -425,6 +417,104 @@ CameraMatch measureCameraMatch(
     ),
     tone: _toneFrom(ours, camera, lumaFloor: lumaFloor),
   );
+}
+
+/// The largest brightening, in stops, that [rgbBytes] can take before it
+/// clips more of the frame than [preview] does (plus [marginFraction]).
+///
+/// Used by libraw.dart to cap the decode-time gain: matching the camera's
+/// *mean* with a pure linear gain over-brightens the highlights wherever
+/// the camera's own curve has a shoulder — measured 5.6% of a frame
+/// clipped against the camera's 0.6%. The gain stops where the clipping
+/// would pass the camera's, and the camera tone curve, which has that
+/// shoulder, carries the rest of the brightness.
+///
+/// Per pixel the channel that clips first is the brightest one, so the
+/// cap is the gain that puts the (1 - fraction) quantile of the brightest
+/// linear channel at white.
+double decodeGainCapStops(
+  Uint8List rgbBytes,
+  EmbeddedPreview preview, {
+  double marginFraction = 0.002,
+}) {
+  final cameraRgb = preview.image.getBytes(order: img.ChannelOrder.rgb);
+  final allowed = (_clippedFraction(cameraRgb) + marginFraction).clamp(
+    marginFraction,
+    0.5,
+  );
+  final pixels = rgbBytes.length ~/ 3;
+  if (pixels == 0) {
+    return 0;
+  }
+  final stride = pixels <= _statsSampleTarget
+      ? 1
+      : (pixels / _statsSampleTarget).ceil();
+  final peaks = <double>[];
+  for (var px = 0; px < pixels; px += stride) {
+    final i = px * 3;
+    final m = math.max(rgbBytes[i], math.max(rgbBytes[i + 1], rgbBytes[i + 2]));
+    peaks.add(srgbToLinear(m / 255.0));
+  }
+  peaks.sort();
+  final index = ((1.0 - allowed) * (peaks.length - 1)).floor().clamp(
+    0,
+    peaks.length - 1,
+  );
+  final q = peaks[index];
+  if (q <= 0) {
+    return double.infinity;
+  }
+  return math.log(1.0 / q) / math.ln2;
+}
+
+/// Fraction of pixels with at least one channel at (or a level under)
+/// white — what "clipped" means for an 8-bit frame from either source.
+double _clippedFraction(Uint8List rgb) {
+  final pixels = rgb.length ~/ 3;
+  if (pixels == 0) {
+    return 0;
+  }
+  final stride = pixels <= _statsSampleTarget
+      ? 1
+      : (pixels / _statsSampleTarget).ceil();
+  var clipped = 0;
+  var counted = 0;
+  for (var px = 0; px < pixels; px += stride) {
+    final i = px * 3;
+    if (rgb[i] >= 254 || rgb[i + 1] >= 254 || rgb[i + 2] >= 254) {
+      clipped++;
+    }
+    counted++;
+  }
+  return clipped / counted;
+}
+
+/// The camera's embedded JPEG, decoded once. A 13 MP preview costs about a
+/// second to decode in pure Dart, and a RAW open now reads it twice — for
+/// the decode-time brightness in libraw.dart and for the camera match on
+/// the finished decode — so both take this instead of the bytes.
+class EmbeddedPreview {
+  const EmbeddedPreview._(this.bytes, this.image);
+
+  final Uint8List bytes;
+  final img.Image image;
+
+  /// `null` for no bytes, bytes that are not a JPEG, or an empty image.
+  static EmbeddedPreview? decode(Uint8List? bytes) {
+    if (bytes == null) {
+      return null;
+    }
+    img.Image? jpeg;
+    try {
+      jpeg = img.decodeJpg(bytes);
+    } on Exception {
+      jpeg = null;
+    }
+    if (jpeg == null || jpeg.width == 0 || jpeg.height == 0) {
+      return null;
+    }
+    return EmbeddedPreview._(bytes, jpeg);
+  }
 }
 
 /// What a decode learns by comparing itself against the camera's own

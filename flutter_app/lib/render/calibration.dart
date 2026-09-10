@@ -945,6 +945,27 @@ const double calUprightHorizontalGain = -101.0;
 /// default: 1.5
 const double calCameraExposureLimitStops = 1.5;
 
+/// **Decode-time brightness** (2026-09-10): how far, in stops, the RAW
+/// decode may be brightened *inside LibRaw* (`params.bright`, applied in
+/// its float pipeline before the 8-bit quantisation) to land on the
+/// camera's own preview. Without LibRaw's auto-bright a decode sits some
+/// 2.5-4 stops under the camera's JPEG on the X-T5 frames measured, so
+/// this cap is far above [calCameraExposureLimitStops], which now only
+/// bounds the *residual* the render's Exposure stage spends afterwards.
+///   ↑ higher = trusts the preview further
+///   ↓ lower  = a decode with a strange preview stays darker
+/// default: 5.0
+const double calDecodeBrightLimitStops = 5.0;
+
+/// **Decode-time brightness, no preview**: for a RAW with no embedded
+/// JPEG to match, LibRaw's own auto-bright is used with this fraction of
+/// the frame allowed to clip. LibRaw's default is 0.01 (1%), which is
+/// what every decode used to pay; the camera's own JPEGs clip 0.05-0.6%.
+///   ↑ higher = brighter, more clipping
+///   ↓ lower  = darker, safer highlights
+/// default: 0.001
+const double calDecodeAutoBrightClip = 0.001;
+
 /// **Camera tone match**: how much of the camera's own tonality a photo
 /// opens with.
 ///
