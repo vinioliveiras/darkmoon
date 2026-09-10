@@ -35,6 +35,7 @@ class RenderJob {
     this.focalLengthMm = 0,
     this.apertureFNumber = 0,
     this.aiMaskMaps = const {},
+    this.cancelFlagAddress,
   });
 
   final EditSource source;
@@ -75,6 +76,14 @@ class RenderJob {
   /// this in on its own schedule; a mask whose map has not landed yet
   /// simply renders as empty.
   final Map<String, AiMaskMap> aiMaskMaps;
+
+  /// Address of an [IsolateCancelFlag] the editor sets when this render is
+  /// superseded before it finishes (2026-09-11). [renderJobToJpeg] reads
+  /// it between phases and throws [IsolateCancelled] once it is set, so a
+  /// stale render gives its cores to the one that replaced it instead of
+  /// finishing a frame nothing will paint. An int rather than the flag,
+  /// so the job crosses `compute()` unchanged; null = not cancellable.
+  final int? cancelFlagAddress;
 }
 
 class RenderResult {
@@ -266,7 +275,13 @@ Future<RenderResult> renderJobToJpeg(
   void Function(RenderStage stage)? onStage,
   List<String>? renderTimings,
 }) async {
+  final cancel = job.cancelFlagAddress == null
+      ? null
+      : IsolateCancelFlag.fromAddress(job.cancelFlagAddress!);
   final geometry = prepareRenderGeometry(job);
+  if (cancel?.isSet ?? false) {
+    throw const IsolateCancelled();
+  }
   final correctedRgb = geometry.rgbBytes;
   // Every neighbourhood-based radius scales with the frame this render is
   // actually running on, so the same slider value covers the same fraction
@@ -282,6 +297,7 @@ Future<RenderResult> renderJobToJpeg(
       correctedRgb,
       params,
       timings: renderTimings,
+      cancel: cancel,
     );
   } else {
     rendered = job.masks.isEmpty
@@ -300,6 +316,11 @@ Future<RenderResult> renderJobToJpeg(
             job.masks,
             aiMaskMaps: job.aiMaskMaps,
           );
+  }
+  if (cancel?.isSet ?? false) {
+    // The sidecar — a full-frame histogram and a pure-Dart JPEG encode —
+    // is the one phase the serial paths above can still skip.
+    throw const IsolateCancelled();
   }
   onStage?.call(RenderStage.encoding);
   // Already inside a `compute()` isolate (or the dedicated progress

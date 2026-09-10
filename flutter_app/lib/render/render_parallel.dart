@@ -4,6 +4,7 @@ import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import '../native/isolate_job.dart';
 import 'render.dart';
 import 'render_params.dart';
 
@@ -42,11 +43,20 @@ Future<Uint8List> renderAdjustmentsParallel(
   Uint8List sourceRgb,
   RenderParams params, {
   List<String>? timings,
+  IsolateCancelFlag? cancel,
 }) async {
   final sw = Stopwatch()..start();
   void mark(String stage) {
     timings?.add('$stage ${sw.elapsedMilliseconds}ms');
     sw.reset();
+    // Between phases is where a superseded render stops: each phase is a
+    // batch of band isolates that has to be awaited whole, so this is
+    // the granularity, and it is enough — the point is not to start the
+    // next batch (or the sidecar after the last one) for a frame nothing
+    // will paint. See RenderJob.cancelFlagAddress.
+    if (cancel?.isSet ?? false) {
+      throw const IsolateCancelled();
+    }
   }
 
   final buffer = Float32List(sourceRgb.length);

@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:darkmoon/native/isolate_job.dart';
 import 'package:darkmoon/render/ai_denoise.dart';
 import 'package:darkmoon/render/render.dart';
 import 'package:darkmoon/render/render_params.dart';
@@ -85,6 +86,30 @@ void main() {
   }
 
   group('renderAdjustmentsParallel matches renderRgb (the serial path)', () {
+    test(
+      'a superseded render stops between phases instead of finishing',
+      () async {
+        // Reference: how long the whole render takes, then how long it takes
+        // once its flag is set before it starts — it must throw out of the
+        // first phase boundary, well short of the full cost.
+        const params = RenderParams(clarity: 60, texture: 60, dehaze: 40);
+        final sw = Stopwatch()..start();
+        await renderAdjustmentsParallel(width, height, photo, params);
+        final fullMs = sw.elapsedMilliseconds;
+        final flag = IsolateCancelFlag()..set();
+        sw.reset();
+        await expectLater(
+          renderAdjustmentsParallel(width, height, photo, params, cancel: flag),
+          throwsA(isA<IsolateCancelled>()),
+        );
+        final cancelledMs = sw.elapsedMilliseconds;
+        flag.dispose();
+        // ignore: avoid_print
+        print('[render_parallel] full ${fullMs}ms, cancelled ${cancelledMs}ms');
+        expect(cancelledMs, lessThan(fullMs ~/ 2));
+      },
+    );
+
     test('neutral params (still exercises baseline chroma smoothing, '
         'which is always on)', () async {
       await expectMatchesSerial(const RenderParams(), 'neutral');

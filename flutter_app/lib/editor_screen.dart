@@ -38,6 +38,7 @@ import 'l10n/app_localizations.dart';
 import 'native/camera_match.dart';
 import 'native/common_image_thumbnail.dart';
 import 'native/edit_source.dart';
+import 'native/isolate_job.dart';
 import 'native/edit_source_ai_enhance.dart';
 import 'native/edit_source_cloud_denoise.dart';
 import 'native/edit_source_colorize.dart';
@@ -572,6 +573,16 @@ class _EditorScreenState extends State<EditorScreen>
   Map<String, double> _paramValues = _defaultParamValues();
   Timer? _renderDebounceTimer;
   int _renderRequestId = 0;
+
+  /// Cancel flag of the CPU render in flight, set when that render is
+  /// superseded (a newer request while it runs, a photo switch) so it
+  /// stops between phases instead of finishing a frame nothing will
+  /// paint — see [RenderJob.cancelFlagAddress]. Null while nothing is in
+  /// flight. A live drag frame is never cancelled: at a drag's tick rate
+  /// every frame would be superseded before it finished and none would
+  /// ever land, so those run to completion as before.
+  IsolateCancelFlag? _renderCancel;
+  bool _renderInFlightLive = false;
 
   /// True while `_renderPreview`'s render call (GPU or CPU) is actually
   /// running — as opposed to `_renderDebounceTimer`, which just delays
@@ -2098,6 +2109,7 @@ class _EditorScreenState extends State<EditorScreen>
   void _cancelLoading() {
     _folderGeneration++;
     _renderRequestId++;
+    _renderCancel?.set();
     _slowRenderTimer?.cancel();
     _thumbnailUiFlushTimer?.cancel();
     _thumbnailUiFlushTimer = null;
@@ -2753,11 +2765,15 @@ class _EditorScreenState extends State<EditorScreen>
     unawaited(_resolveAiMasks(path));
     if (_renderInFlight) {
       _pendingRenderRequest = (path: path, live: live, onStage: onStage);
+      if (!_renderInFlightLive) {
+        _renderCancel?.set();
+      }
       final completer = Completer<void>();
       _pendingRenderWaiters.add(completer);
       return completer.future;
     }
     _renderInFlight = true;
+    _renderInFlightLive = live;
     try {
       await _renderPreviewNow(path, live: live, onStage: onStage);
     } finally {
@@ -2812,11 +2828,22 @@ class _EditorScreenState extends State<EditorScreen>
         setState(() => _isRenderingSlow = true);
       }
     });
+    final cancel = IsolateCancelFlag();
+    _renderCancel = cancel;
     try {
       await _renderPreviewInner(path, sources, requestId, live, onStage);
+    } on IsolateCancelled {
+      // Superseded and stopped early — the request that replaced it is
+      // about to run.
     } catch (e, st) {
       debugPrint('render failed: $e\n$st');
     } finally {
+      // The worker has returned (or thrown) by here, so nothing reads the
+      // flag any more.
+      if (identical(_renderCancel, cancel)) {
+        _renderCancel = null;
+      }
+      cancel.dispose();
       // Always clear the slow-render flag — a throw anywhere above used to
       // leave "Applying adjustments" stuck on forever.
       _slowRenderTimer?.cancel();
@@ -2865,6 +2892,11 @@ class _EditorScreenState extends State<EditorScreen>
       lensProfile: _resolvedLensProfileFor(path),
       focalLengthMm: metadata?.focalLengthMm ?? 0,
       apertureFNumber: metadata?.apertureFNumber ?? 0,
+      // Live drag frames and the progress-tracked one-shot applies (AI
+      // Denoise) run to completion — see _renderCancel.
+      cancelFlagAddress: live || onStage != null
+          ? null
+          : _renderCancel?.address,
     );
 
     // Phase 1 — the quick render: the tiny `live` buffer while dragging,
