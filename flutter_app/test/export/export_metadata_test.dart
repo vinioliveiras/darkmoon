@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:darkmoon/export/export_format.dart';
 import 'package:darkmoon/export/export_job.dart';
 import 'package:darkmoon/export/export_metadata.dart';
+import 'package:darkmoon/export/srgb_icc.dart';
 import 'package:darkmoon/native/libraw.dart' show RawMetadata;
 import 'package:darkmoon/render/render_params.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -30,7 +31,7 @@ img.ExifData _roundTrip(img.ExifData exif, {int width = 8, int height = 6}) {
 
 void main() {
   test('fromRawMetadata carries every capture field across', () {
-    const metadata = RawMetadata(
+    final metadata = RawMetadata(
       cameraMake: 'Fujifilm',
       cameraModel: 'X-T3',
       lensModel: 'XF35mmF1.4 R',
@@ -40,8 +41,10 @@ void main() {
       focalLengthMm: 35,
       width: 6000,
       height: 4000,
+      captureTime: DateTime(2026, 9, 10, 7, 5, 9),
     );
     final info = ExportCaptureInfo.fromRawMetadata(metadata);
+    expect(info.captureTime, DateTime(2026, 9, 10, 7, 5, 9));
     expect(info.make, 'Fujifilm');
     expect(info.model, 'X-T3');
     expect(info.lens, 'XF35mmF1.4 R');
@@ -75,6 +78,45 @@ void main() {
       expect(focal.numerator / focal.denominator, closeTo(50, 1e-9));
       expect(exif.exifIfd['ExifImageWidth']!.toInt(), 8);
       expect(exif.exifIfd['ExifImageLength']!.toInt(), 6);
+    });
+
+    test('the capture time lands in all three EXIF date tags, in EXIF\'s '
+        'own layout, and survives the round trip', () {
+      final exif = _roundTrip(
+        buildExportExif(
+          width: 4,
+          height: 4,
+          capture: ExportCaptureInfo(
+            captureTime: DateTime(2026, 9, 10, 7, 5, 9),
+          ),
+        ),
+      );
+      expect(
+        exifDateTime(DateTime(2026, 9, 10, 7, 5, 9)),
+        '2026:09:10 07:05:09',
+      );
+      expect(
+        exif.exifIfd['DateTimeOriginal']!.toString(),
+        '2026:09:10 07:05:09',
+      );
+      expect(
+        exif.exifIfd['DateTimeDigitized']!.toString(),
+        '2026:09:10 07:05:09',
+      );
+      expect(exif.imageIfd['DateTime']!.toString(), '2026:09:10 07:05:09');
+      // A source's own date is never overwritten.
+      final source = img.ExifData();
+      source.exifIfd['DateTimeOriginal'] = '2020:01:02 03:04:05';
+      final kept = buildExportExif(
+        width: 4,
+        height: 4,
+        sourceExif: source,
+        capture: ExportCaptureInfo(captureTime: DateTime(2026, 9, 10)),
+      );
+      expect(
+        kept.exifIfd['DateTimeOriginal']!.toString(),
+        '2020:01:02 03:04:05',
+      );
     });
 
     test('a shutter of a second or longer is written in thousandths', () {
@@ -201,6 +243,9 @@ void main() {
         expect(decoded.exif.imageIfd['Make']!.toString(), 'Canon');
         expect(decoded.exif.exifIfd['ISOSpeed']!.toInt(), 400);
         expect(decoded.exif.imageIfd['Software']!.toString(), 'darkmoon');
+        // And the sRGB profile rides along in APP2.
+        expect(decoded.iccProfile, isNotNull);
+        expect(decoded.iccProfile!.data, srgbIccProfile);
       } finally {
         await dir.delete(recursive: true);
       }

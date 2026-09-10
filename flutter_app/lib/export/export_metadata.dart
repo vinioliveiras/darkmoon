@@ -24,6 +24,7 @@ class ExportCaptureInfo {
     this.shutterSeconds = 0,
     this.fNumber = 0,
     this.focalLengthMm = 0,
+    this.captureTime,
   });
 
   factory ExportCaptureInfo.fromRawMetadata(RawMetadata metadata) =>
@@ -35,6 +36,7 @@ class ExportCaptureInfo {
         shutterSeconds: metadata.shutterSeconds,
         fNumber: metadata.apertureFNumber,
         focalLengthMm: metadata.focalLengthMm,
+        captureTime: metadata.captureTime,
       );
 
   final String make;
@@ -47,6 +49,10 @@ class ExportCaptureInfo {
   final double fNumber;
   final double focalLengthMm;
 
+  /// When the shutter fired, in the camera's own wall-clock time (see
+  /// [RawMetadata.captureTime]); null when unknown.
+  final DateTime? captureTime;
+
   bool get isEmpty =>
       make.isEmpty &&
       model.isEmpty &&
@@ -54,7 +60,8 @@ class ExportCaptureInfo {
       iso <= 0 &&
       shutterSeconds <= 0 &&
       fNumber <= 0 &&
-      focalLengthMm <= 0;
+      focalLengthMm <= 0 &&
+      captureTime == null;
 }
 
 /// The source file's own EXIF block, for a JPEG source; `null` for
@@ -179,8 +186,26 @@ img.ExifData buildExportExif({
     fill(sub, 'ExposureTime', _exposureTimeRational(capture.shutterSeconds));
     fill(sub, 'FNumber', _tenthsRational(capture.fNumber));
     fill(sub, 'FocalLength', _tenthsRational(capture.focalLengthMm));
+    final when = capture.captureTime;
+    if (when != null) {
+      final stamp = img.IfdValueAscii(exifDateTime(when));
+      // DateTimeOriginal is the shutter moment, DateTimeDigitized the
+      // sensor readout (the same instant for a camera), and IFD0's
+      // DateTime the file's own — readers fall back through them in
+      // that order, so all three carry the capture time.
+      fill(sub, 'DateTimeOriginal', stamp);
+      fill(sub, 'DateTimeDigitized', stamp);
+      fill(image, 'DateTime', stamp);
+    }
   }
   return exif;
+}
+
+/// EXIF's fixed `YYYY:MM:DD HH:MM:SS` layout, no zone (EXIF has none).
+String exifDateTime(DateTime t) {
+  String two(int v) => v.toString().padLeft(2, '0');
+  return '${t.year.toString().padLeft(4, '0')}:${two(t.month)}:${two(t.day)} '
+      '${two(t.hour)}:${two(t.minute)}:${two(t.second)}';
 }
 
 img.IfdValueAscii? _ascii(String value) =>

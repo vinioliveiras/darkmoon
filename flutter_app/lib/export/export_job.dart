@@ -16,6 +16,7 @@ import '../render/render_parallel.dart';
 import '../render/render_params.dart';
 import 'export_format.dart';
 import 'export_metadata.dart';
+import 'srgb_icc.dart';
 
 class ExportRequest {
   const ExportRequest({
@@ -242,6 +243,13 @@ Future<ExportResult> _exportPhotoInternal(
       height: geometry.height,
       sourceExif: readSourceExif(request.sourcePath),
       capture: request.captureInfo,
+    );
+    // The pixels are sRGB; say so. JPEG (APP2) and PNG (iCCP) carry it;
+    // this package's TIFF encoder has no ICC support. See srgb_icc.dart.
+    image.iccProfile = img.IccProfile(
+      srgbIccProfileName,
+      img.IccProfileCompression.none,
+      srgbIccProfile,
     );
     mark('metadata');
     onStage?.call(ExportStage.encoding);

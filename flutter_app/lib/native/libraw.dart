@@ -159,6 +159,7 @@ class RawMetadata {
     this.asShotKelvin = 5500,
     this.asShotTint = 0,
     this.cfaFilters = 0,
+    this.captureTime,
   });
 
   /// Manufacturer-normalized names (e.g. "Fujifilm" rather than a
@@ -166,6 +167,14 @@ class RawMetadata {
   /// shows — empty string if LibRaw couldn't identify the camera.
   final String cameraMake;
   final String cameraModel;
+
+  /// When the shutter fired, as the camera wrote it — LibRaw's
+  /// `other.timestamp`, which it builds from the EXIF date string with
+  /// `mktime`, i.e. the camera's wall-clock time read as this machine's
+  /// local time. Formatting it back in local time therefore reproduces the
+  /// camera's string, which is what the export's DateTimeOriginal wants.
+  /// Null when the file carries no date (LibRaw reports 0).
+  final DateTime? captureTime;
 
   /// Empty string if the file carries no lens data (older/manual lenses,
   /// or a camera model LibRaw doesn't parse lens info for).
@@ -276,6 +285,9 @@ RawMetadata? extractRawMetadata(String path) {
       asShotKelvin: asShot.kelvin,
       asShotTint: asShot.tint,
       cfaFilters: idata.filters,
+      captureTime: other.timestamp <= 0
+          ? null
+          : DateTime.fromMillisecondsSinceEpoch(other.timestamp * 1000),
     );
   } finally {
     lib.libraw_close(lr);
