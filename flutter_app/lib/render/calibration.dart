@@ -464,6 +464,19 @@ const double calClaritySigma = 25.0;
 /// default: 0.65   (2026-09-01: raised from 0.5, explicit user request)
 const double calClarityStrength = 0.65;
 
+/// **Clarity** — edge threshold (2026-09-10). Clarity's base is an
+/// edge-preserving (guided) smoothing rather than a plain blur: local
+/// variation under this mean absolute deviation (0-255) is texture, which
+/// Clarity boosts as before; variation over it is an edge, which the base
+/// follows so the boost paints no halo across it. Measured on a synthetic
+/// 60|200 step at Clarity 100: halo 19 levels → 4; the gain on a ±20
+/// texture 1.55 → 1.53 (`tool/clarity_halo_probe.dart`).
+///   ↑ higher = more halo, more punch on medium-contrast edges
+///   ↓ lower  = less halo, but medium-contrast texture gets less Clarity
+///   0 = plain Gaussian base (the pre-2026-09-10 look)
+/// default: 20.0   [also on GPU: guided_ab.frag via uniform]
+const double calClarityEdgeThreshold = 20.0;
+
 /// **Dehaze +** — how hard the positive slider pulls transmission down (=
 /// removes haze). This is the main control over Dehaze strength.
 ///   ↑ higher (e.g. 0.85) = very aggressive Dehaze (original Solstice)

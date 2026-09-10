@@ -240,6 +240,7 @@ Future<ui.Image> renderImageGpu(
         params.clarity * calClarityStrength,
         calClaritySigma * params.renderScale,
         protectMidtones: true,
+        edgeThreshold: calClarityEdgeThreshold,
       ),
     );
 

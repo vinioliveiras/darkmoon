@@ -117,6 +117,153 @@ Float32List gaussianBlurChannel(
   return result;
 }
 
+/// Edge-preserving smoothing of [channel] — a self-guided filter (He, Sun
+/// & Tang's guided image filter with the image as its own guide), the
+/// "base" a local-contrast effect subtracts from the image to find the
+/// detail it boosts. A Gaussian base averages straight across a strong
+/// edge, so the detail signal there is a wide over/undershoot on both sides
+/// and boosting it paints a halo. This base instead fits `q = a·I + b` in
+/// every window of radius [radius]: where the window holds little
+/// variation, `a` tends to 0 and q is the local mean (fine texture is
+/// smoothed away and so counts as detail, as before); where the window
+/// straddles an edge, `a` tends to 1 and q follows the image across it, so
+/// the edge itself contributes no detail signal and gets no halo.
+///
+/// [edgeThreshold], in the channel's own units (0-255 here), is the local
+/// mean absolute deviation at which `a` is 0.5: variation well under it
+/// is texture, well over it is an edge. Mean absolute deviation stands in
+/// for the paper's variance because the GPU port keeps every intermediate
+/// in 8-bit textures — `mean(I²) - mean(I)²` cancels catastrophically at
+/// that precision, `mean(|I - mean(I)|)` does not — and the CPU side uses
+/// the same statistic so the two agree. The paper's `var / (var + eps)`
+/// is raised to the fourth power rather than the second: a ±20-level
+/// texture and a 140-level step edge sit a factor of ~5 apart in
+/// deviation, and the steeper curve keeps the first as detail (gain 1.53
+/// against the Gaussian's 1.55 at Clarity 100) while removing 79% of the
+/// halo on the second (19 → 4 levels); the square did 1.43 and 67%. Four
+/// box blurs, against the Gaussian base's three. Mirrored by
+/// `guided_ab.frag` / `guided_apply.frag`.
+///
+/// Past [guidedMaxFullResRadius] the coefficients are fitted on a copy
+/// downsampled by [guidedSubsampleFactor] and upsampled back before the
+/// final `a·I + b` (He & Sun's fast guided filter): `a` and `b` are as
+/// low-frequency as the window that produced them, so the small copy
+/// loses nothing the box blurs were not about to average away, and the
+/// GPU's box-blur cost — proportional to the radius — stops growing with
+/// the render scale. Measured on the GPU at 3200x2400 (renderScale 2.5,
+/// radius 108): 1024 ms at full resolution against the Gaussian's 623.
+Float32List guidedSmoothChannel(
+  Float32List channel,
+  int width,
+  int height,
+  int radius,
+  double edgeThreshold,
+) {
+  if (radius <= 0) {
+    return Float32List.fromList(channel);
+  }
+  final n = channel.length;
+  final factor = guidedSubsampleFactor(radius);
+  final Float32List meanA;
+  final Float32List meanB;
+  if (factor == 1) {
+    (meanA, meanB) = _guidedCoefficients(
+      channel,
+      width,
+      height,
+      radius,
+      edgeThreshold,
+    );
+  } else {
+    final small = downsampleChannel(channel, width, height, factor);
+    final (smallA, smallB) = _guidedCoefficients(
+      small.channel,
+      small.width,
+      small.height,
+      math.max(1, (radius / factor).round()),
+      edgeThreshold,
+    );
+    meanA = upsampleChannelBilinear(
+      smallA,
+      small.width,
+      small.height,
+      factor,
+      width,
+      height,
+    );
+    meanB = upsampleChannelBilinear(
+      smallB,
+      small.width,
+      small.height,
+      factor,
+      width,
+      height,
+    );
+  }
+  final out = Float32List(n);
+  for (var i = 0; i < n; i++) {
+    out[i] = meanA[i] * channel[i] + meanB[i];
+  }
+  return out;
+}
+
+/// The box-averaged `a` and `b` of the local linear model — everything
+/// in [guidedSmoothChannel] up to the final `a·I + b`.
+(Float32List, Float32List) _guidedCoefficients(
+  Float32List channel,
+  int width,
+  int height,
+  int radius,
+  double edgeThreshold,
+) {
+  final n = channel.length;
+  final mean = boxBlurMean(channel, width, height, radius);
+  final dev = Float32List(n);
+  for (var i = 0; i < n; i++) {
+    dev[i] = (channel[i] - mean[i]).abs();
+  }
+  final mad = boxBlurMean(dev, width, height, radius);
+  final eps = edgeThreshold * edgeThreshold;
+  final a = Float32List(n);
+  final b = Float32List(n);
+  for (var i = 0; i < n; i++) {
+    final m2 = mad[i] * mad[i];
+    final v = m2 * m2;
+    final ai = v / (v + eps * eps);
+    a[i] = ai;
+    b[i] = (1.0 - ai) * mean[i];
+  }
+  return (
+    boxBlurMean(a, width, height, radius),
+    boxBlurMean(b, width, height, radius),
+  );
+}
+
+/// Widest window [guidedSmoothChannel] fits at full resolution; past it
+/// the fit moves to a downsampled copy. Clarity's own radius at
+/// renderScale 1 (43) is already past it — the 1600x1200 preview measured
+/// 34 ms at full resolution on the GPU, the Gaussian base 28.
+const int guidedMaxFullResRadius = 32;
+
+/// Power-of-two factor (1, 2 or 4) by which [guidedSmoothChannel] and its
+/// GPU port downsample before fitting a window of [radius]. Capped at 4
+/// like `gpu_pass.dart`'s pyramid blur: the error of an 8x copy starts
+/// to show, and a radius past 4 × 32 is beyond any render scale in use.
+int guidedSubsampleFactor(int radius) {
+  var factor = 1;
+  while (radius / factor > guidedMaxFullResRadius && factor < 4) {
+    factor *= 2;
+  }
+  return factor;
+}
+
+/// The box radius [guidedSmoothChannel] uses for a local-contrast effect
+/// quoted, like Clarity's, as a Gaussian [sigma]: the box whose standard
+/// deviation (`radius / sqrt(3)`) matches, so the detail band the effect
+/// works on stays where it was. Shared with the GPU port so both sides
+/// blur the same window.
+int guidedRadiusForSigma(double sigma) => (sigma * math.sqrt(3)).round();
+
 Float32List _minFilterHorizontal(
   Float32List src,
   int width,

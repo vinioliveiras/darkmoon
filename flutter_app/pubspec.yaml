@@ -111,6 +111,8 @@ flutter:
     - shaders/abs_residual.frag
     - shaders/sharpen_combine.frag
     - shaders/local_contrast_combine.frag
+    - shaders/guided_ab.frag
+    - shaders/guided_apply.frag
     - shaders/dehaze_apply.frag
     - shaders/color_profile.frag
     - shaders/post_dehaze.frag

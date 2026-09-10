@@ -342,6 +342,7 @@ void applyLocalAdjustmentSteps(
     params.clarity * calClarityStrength,
     calClaritySigma * params.renderScale,
     protectMidtones: true,
+    edgeThreshold: calClarityEdgeThreshold,
   );
 }
 

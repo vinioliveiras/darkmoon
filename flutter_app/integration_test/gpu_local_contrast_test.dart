@@ -66,6 +66,7 @@ void main() {
     double sigma, {
     bool protectMidtones = false,
     bool noiseAware = false,
+    double edgeThreshold = 0,
   }) {
     testWidgets(label, (tester) async {
       final buffer = Float32List(photo.length);
@@ -80,6 +81,7 @@ void main() {
         sigma,
         protectMidtones: protectMidtones,
         noiseAware: noiseAware,
+        edgeThreshold: edgeThreshold,
       );
       final cpu = Uint8List(buffer.length);
       for (var i = 0; i < buffer.length; i++) {
@@ -95,6 +97,7 @@ void main() {
         sigma,
         protectMidtones: protectMidtones,
         noiseAware: noiseAware,
+        edgeThreshold: edgeThreshold,
       );
       final byteData = await gpuImage.toByteData(
         format: ui.ImageByteFormat.rawRgba,
@@ -107,12 +110,29 @@ void main() {
 
   // Texture's real call shape: small sigma, noise-aware.
   runCase('Texture (sigma=3, noiseAware)', 60, 3.0, noiseAware: true);
-  // Clarity's real call shape: large sigma, midtone-protected.
+  // Clarity's call shape before 2026-09-10: large sigma, midtone-protected,
+  // Gaussian base.
   runCase(
     'Clarity (sigma=25, protectMidtones)',
     60,
     25.0,
     protectMidtones: true,
+  );
+  // Clarity's real call shape: the edge-preserving (guided) base, whose
+  // a/b fit goes through 8-bit intermediates on this side.
+  runCase(
+    'Clarity guided (sigma=25, edgeThreshold=20)',
+    60,
+    25.0,
+    protectMidtones: true,
+    edgeThreshold: 20.0,
+  );
+  runCase(
+    'Clarity guided at full strength',
+    100,
+    25.0,
+    protectMidtones: true,
+    edgeThreshold: 20.0,
   );
   // Both flags together, to exercise the combine shader's full branch set.
   runCase(

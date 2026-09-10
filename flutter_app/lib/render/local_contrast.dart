@@ -13,6 +13,13 @@ import 'luminance.dart';
 /// independently sharpen R, G and B channels, because that boosts chroma noise
 /// right alongside real fine detail. This mirrors Meridian's behavior more
 /// closely while preserving color stability in noisy shadows.
+///
+/// [edgeThreshold] > 0 swaps the Gaussian base for the edge-preserving
+/// [guidedSmoothChannel] (Clarity, 2026-09-10): a wide Gaussian averages
+/// across every strong edge, and boosting the resulting over/undershoot is
+/// exactly the halo Clarity was known for. The threshold is the local mean
+/// absolute deviation (0-255) above which the base follows the image
+/// instead of smoothing it — see [calClarityEdgeThreshold].
 void applyLocalContrast(
   Float32List img,
   int width,
@@ -22,6 +29,7 @@ void applyLocalContrast(
   bool protectMidtones = false,
   bool noiseAware = false,
   int noiseRadius = 6,
+  double edgeThreshold = 0,
 }) {
   if (amount == 0) {
     return;
@@ -40,7 +48,15 @@ void applyLocalContrast(
   }
 
   final factor = amount / 100.0;
-  final blurred = gaussianBlurChannel(luminance, width, height, sigma);
+  final blurred = edgeThreshold > 0
+      ? guidedSmoothChannel(
+          luminance,
+          width,
+          height,
+          guidedRadiusForSigma(sigma),
+          edgeThreshold,
+        )
+      : gaussianBlurChannel(luminance, width, height, sigma);
   Float32List? localNoiseVar;
   if (noiseAware) {
     final residualSq = Float32List(pixelCount);

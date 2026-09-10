@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -57,6 +58,85 @@ void main() {
         expect(img[i] - img[i + 1], closeTo(0, 0.5));
         expect(img[i + 1] - img[i + 2], closeTo(0, 0.5));
       }
+    });
+
+    test('the guided base halos a step edge far less than the Gaussian', () {
+      // 60 | 200 step; Clarity at 100 (amount 65 after calClarityStrength)
+      // with the Gaussian base overshoots by ~19 levels either side, the
+      // guided base by ~4 (2026-09-10).
+      const w = 320, h = 8;
+      Float32List step() {
+        final img = Float32List(w * h * 3);
+        for (var p = 0; p < w * h; p++) {
+          final v = p % w < 160 ? 60.0 : 200.0;
+          img[p * 3] = v;
+          img[p * 3 + 1] = v;
+          img[p * 3 + 2] = v;
+        }
+        return img;
+      }
+
+      double overshoot(Float32List img) {
+        var over = 0.0;
+        for (var x = 0; x < w; x++) {
+          final v = img[(4 * w + x) * 3];
+          over = math.max(over, math.max(v - 200, 60 - v));
+        }
+        return over;
+      }
+
+      final gaussian = step();
+      applyLocalContrast(gaussian, w, h, 65, 25, protectMidtones: true);
+      final guided = step();
+      applyLocalContrast(
+        guided,
+        w,
+        h,
+        65,
+        25,
+        protectMidtones: true,
+        edgeThreshold: 20,
+      );
+      expect(overshoot(gaussian), greaterThan(15));
+      expect(overshoot(guided), lessThan(6));
+    });
+
+    test('the guided base still boosts texture under the threshold', () {
+      // A ±20 sinusoid (period 20 px) gains ~1.5x at Clarity 100 (amount
+      // 65) with either base: 1.55 Gaussian, 1.51 guided.
+      const w = 320, h = 8;
+      Float32List texture() {
+        final img = Float32List(w * h * 3);
+        for (var p = 0; p < w * h; p++) {
+          final v = 128 + 20 * math.sin(2 * math.pi * (p % w) / 20);
+          img[p * 3] = v;
+          img[p * 3 + 1] = v;
+          img[p * 3 + 2] = v;
+        }
+        return img;
+      }
+
+      double swing(Float32List img) {
+        var lo = 255.0, hi = 0.0;
+        for (var x = 40; x < w - 40; x++) {
+          final v = img[(4 * w + x) * 3];
+          lo = math.min(lo, v);
+          hi = math.max(hi, v);
+        }
+        return (hi - lo) / 40;
+      }
+
+      final guided = texture();
+      applyLocalContrast(
+        guided,
+        w,
+        h,
+        65,
+        25,
+        protectMidtones: true,
+        edgeThreshold: 20,
+      );
+      expect(swing(guided), closeTo(1.5, 0.1));
     });
 
     test('amount 0 is a no-op', () {
