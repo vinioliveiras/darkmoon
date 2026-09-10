@@ -119,4 +119,6 @@ Please help me keep this project going – it’s a one-man project
 ## License
 
 The app (everything outside `docs/`) is licensed under
-[AGPL-3.0](LICENSE).
+[AGPL-3.0](LICENSE). The libraries and AI models that ship inside the
+bundles are other people's work under their own licences, listed with
+their sources in [THIRD_PARTY_LICENSES.md](THIRD_PARTY_LICENSES.md).

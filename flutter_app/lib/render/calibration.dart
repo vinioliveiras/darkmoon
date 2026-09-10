@@ -20,11 +20,12 @@
 ///   • Changing a value here affects EVERY photo and EVERY preset.
 ///
 /// CPU vs GPU
-///   These values apply to the CPU render (the app's default, and what you
-///   test against). The GPU render (Settings → advanced option, off by
-///   default) still uses fixed numbers baked into the `.frag` shaders; when a
-///   value also exists in a shader, the comment marks it with  [also on GPU:
-///   file.frag]  so you can match the two by hand if you use GPU.
+///   Both renders read these. The GPU render is on by default for the
+///   preview (export is always CPU), and since 2026-09-03 every constant
+///   that has a shader counterpart reaches it as a uniform — nothing here
+///   is duplicated inside a `.frag`. A comment marked  [also on GPU:
+///   file.frag]  names the shader that consumes the value, so a change can
+///   be checked with `integration_test/gpu_*` (see tool/gpu_test.sh).
 ///
 /// Deliberately no Flutter imports: the render functions run in isolates and
 /// read these constants directly, without needing anything passed in.
@@ -640,8 +641,8 @@ const List<double> calMixerBandWidths = [
 ///
 /// If a band feels sensitive because it reaches colours you did not mean
 /// it to — Orange spanning 45° from a centre of 25° covers a lot of skin
-/// — that is its *width*, not its strength, and the widths still live as
-/// literals in `color_mixer.dart` and `point_ops_post_denoise.frag`.
+/// — that is its *width*, not its strength: see [calMixerBandCentres] and
+/// [calMixerBandWidths] below, which reach the shader as `uMixerBands`.
 ///   ↑ higher = that band's sliders bite harder
 ///   ↓ lower  = gentler, finer control over that colour
 /// default: 1.0 for all eight
