@@ -218,7 +218,10 @@ void main() {
           const PhotoSidecar(rating: 2, label: 'Yellow', tags: ['keep']),
         ),
       );
-      await writeSidecar(photo, const PhotoSidecar(values: {'Exposure': 1.0}));
+      await writeSidecarFile(
+        photo,
+        const PhotoSidecar(values: {'Exposure': 1.0}),
+      );
       final read = await readSidecar(photo);
       expect(read, isNotNull);
       expect(read!.values, {'Exposure': 1.0});
@@ -228,9 +231,12 @@ void main() {
     });
 
     test('a sidecar with nothing left to say is removed', () async {
-      await writeSidecar(photo, const PhotoSidecar(values: {'Contrast': 5}));
+      await writeSidecarFile(
+        photo,
+        const PhotoSidecar(values: {'Contrast': 5}),
+      );
       expect(await sidecarFileFor(photo).exists(), isTrue);
-      await writeSidecar(photo, const PhotoSidecar());
+      await writeSidecarFile(photo, const PhotoSidecar());
       expect(await sidecarFileFor(photo).exists(), isFalse);
       expect(await readSidecar(photo), isNull);
     });

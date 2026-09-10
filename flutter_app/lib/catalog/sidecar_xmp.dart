@@ -299,7 +299,7 @@ Future<PhotoSidecar?> readSidecar(String photoPath) async {
 /// removed rather than left as an empty document. Errors are logged, not
 /// thrown — every caller fires this from a save that must not fail
 /// because the photo sits on a read-only volume.
-Future<void> writeSidecar(String photoPath, PhotoSidecar sidecar) async {
+Future<void> writeSidecarFile(String photoPath, PhotoSidecar sidecar) async {
   final file = sidecarFileFor(photoPath);
   try {
     var merged = sidecar;
