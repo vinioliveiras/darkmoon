@@ -30,6 +30,7 @@ import 'catalog/thumbnail_cache_dir.dart';
 import 'cloud_denoise/cloud_denoise_provider.dart';
 import 'cloud_denoise/cloud_denoise_token_store.dart';
 import 'diagnostics/dev_log.dart';
+import 'editor/edit_history.dart';
 import 'editor/photo_edit_store.dart';
 import 'export/export_job.dart';
 import 'export/export_metadata.dart';
@@ -856,18 +857,10 @@ class _EditorScreenState extends State<EditorScreen>
   /// unavailable inside the isolate that does the actual work.
   String? _aiMaskCacheDir;
 
-  /// Edit-history stack for the currently selected photo — [_historyIndex]
-  /// points at the snapshot matching the live [_paramValues]/
-  /// [_currentCurves]/[_currentMasks] right now. Reset to a single
-  /// baseline snapshot whenever the selected photo changes (undo/redo is
-  /// scoped per photo, not across the whole session), and truncated past
-  /// [_historyIndex] whenever a new edit is committed after having undone
-  /// — the usual "undoing then editing discards the old redo branch" rule.
-  final List<_EditSnapshot> _history = [];
-  int _historyIndex = -1;
-
-  bool get _canUndo => _historyIndex > 0;
-  bool get _canRedo => _historyIndex < _history.length - 1;
+  /// Undo/redo for the currently selected photo, over snapshots of
+  /// [_paramValues]/[_currentCurves]/[_currentMasks] — see [EditHistory]
+  /// for the rules (per-photo scope, redo branch discarded on edit).
+  final _history = EditHistory();
 
   /// Current brush tool settings — transient, not per-mask, matching how
   /// most paint tools keep one "current brush" you dab with (each stroke
@@ -6337,51 +6330,27 @@ class _EditorScreenState extends State<EditorScreen>
     _scheduleCatalogSave();
   }
 
-  _EditSnapshot get _currentSnapshot => _EditSnapshot(
+  EditSnapshot get _currentSnapshot => EditSnapshot(
     paramValues: _paramValues,
     curves: _currentCurves,
     masks: _currentMasks,
   );
 
   /// Starts a fresh history for the photo now showing, with its
-  /// just-loaded state as the single undo-proof baseline — called
-  /// whenever [_paramValues]/[_currentCurves]/[_currentMasks] are replaced
-  /// wholesale by loading a photo's saved state (selection change, folder
-  /// open), rather than by an edit the user made, so there's nothing to
-  /// undo back to before it.
-  void _resetHistory() {
-    _history
-      ..clear()
-      ..add(_currentSnapshot);
-    _historyIndex = 0;
-  }
+  /// just-loaded state as the baseline — called whenever [_paramValues]/
+  /// [_currentCurves]/[_currentMasks] are replaced wholesale by loading a
+  /// photo's saved state (selection change, folder open), rather than by
+  /// an edit the user made, so there's nothing to undo back to before it.
+  void _resetHistory() => _history.reset(_currentSnapshot);
 
   /// Records the current state as a new history entry — call after
   /// committing an edit (every `...ChangeEnd`/one-shot-action callsite),
   /// never from a live/dragging callback, so a slider drag collapses into
-  /// one undo step instead of one per pixel of mouse movement. Redoing
-  /// back to this exact state and editing again would otherwise duplicate
-  /// it, so a no-op push (state identical to the top of the stack) is
-  /// skipped — comparing by reference is enough since every mutation site
-  /// always builds a new Map/List/object rather than mutating in place.
-  void _pushHistory() {
-    final snapshot = _currentSnapshot;
-    if (_history.isNotEmpty &&
-        _historyIndex == _history.length - 1 &&
-        identical(_history.last.paramValues, snapshot.paramValues) &&
-        identical(_history.last.curves, snapshot.curves) &&
-        identical(_history.last.masks, snapshot.masks)) {
-      return;
-    }
-    // Truncate any redo branch past the current point before appending —
-    // editing after an undo abandons the undone-away future, matching
-    // every other editor's undo/redo convention.
-    _history.removeRange(_historyIndex + 1, _history.length);
-    _history.add(snapshot);
-    _historyIndex = _history.length - 1;
-  }
+  /// one undo step instead of one per pixel of mouse movement. See
+  /// [EditHistory.push] for the no-op rule.
+  void _pushHistory() => _history.push(_currentSnapshot);
 
-  void _applySnapshot(_EditSnapshot snapshot) {
+  void _applySnapshot(EditSnapshot snapshot) {
     setState(() {
       _paramValues = snapshot.paramValues;
       _currentCurves = snapshot.curves;
@@ -6400,19 +6369,15 @@ class _EditorScreenState extends State<EditorScreen>
   }
 
   void _undo() {
-    if (!_canUndo) {
-      return;
+    if (_history.undo() case final snapshot?) {
+      _applySnapshot(snapshot);
     }
-    _historyIndex--;
-    _applySnapshot(_history[_historyIndex]);
   }
 
   void _redo() {
-    if (!_canRedo) {
-      return;
+    if (_history.redo() case final snapshot?) {
+      _applySnapshot(snapshot);
     }
-    _historyIndex++;
-    _applySnapshot(_history[_historyIndex]);
   }
 
   void _scheduleRender({required bool live}) {
@@ -7145,8 +7110,8 @@ class _EditorScreenState extends State<EditorScreen>
                       onToggleBeforeAfter: selected == null
                           ? null
                           : _toggleBeforeAfter,
-                      canUndo: _canUndo,
-                      canRedo: _canRedo,
+                      canUndo: _history.canUndo,
+                      canRedo: _history.canRedo,
                       onUndo: _undo,
                       onRedo: _redo,
                       aiDenoiseActive:

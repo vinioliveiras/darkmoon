@@ -869,15 +869,3 @@ Widget _previewFrameWidget(PreviewFrame frame, {BoxFit? fit}) {
     cacheWidth: frame.decodeWidth,
   );
 }
-
-class _EditSnapshot {
-  const _EditSnapshot({
-    required this.paramValues,
-    required this.curves,
-    required this.masks,
-  });
-
-  final Map<String, double> paramValues;
-  final PhotoCurves curves;
-  final List<MaskLayer> masks;
-}
