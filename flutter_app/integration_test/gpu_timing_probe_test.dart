@@ -6,10 +6,10 @@
 // How to run on a machine where `flutter test integration_test/...` loses
 // the VM service (Flutter 3.47.2 on Windows, 2026-09-09):
 //
-//   timeout 300 flutter run -d windows --no-pub \
-//     -t integration_test/gpu_timing_probe_test.dart > timing.log 2>&1
-//   taskkill //IM darkmoon.exe //F
-//   grep "gpu_timing\] " timing.log
+//   bash tool/gpu_test.sh integration_test/gpu_timing_probe_test.dart
+//
+// which drives the file through `flutter run`, prints the measurement
+// lines, and closes the app the moment the summary appears.
 import 'dart:math' as math;
 import 'dart:typed_data';
 

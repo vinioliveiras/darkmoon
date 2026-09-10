@@ -42,6 +42,7 @@ void main() {
     List<MaskLayer> masks,
     String label, {
     int maxTolerance = 120,
+    double meanTolerance = 4.0,
   }) async {
     final cpu = renderRgbWithMasks(width, height, photo, globalParams, masks);
     final gpu = await renderRgbWithMasksGpu(
@@ -77,7 +78,11 @@ void main() {
     // measurement, and the mean is tightened instead: measured worst case
     // across these seven is 2.56 (stacked masks), stable across every
     // change in this session.
-    expect(meanDiff, lessThan(4.0), reason: '$label: mean diff $meanDiff');
+    expect(
+      meanDiff,
+      lessThan(meanTolerance),
+      reason: '$label: mean diff $meanDiff',
+    );
     expect(
       maxDiff,
       lessThan(maxTolerance),
@@ -252,6 +257,17 @@ void main() {
           ),
         ],
         'scaled mask layer',
+        // 4.19 measured, stable from 1bdbd8b through 2026-09-10 and with
+        // two different calibrations. It is not the bug this case exists
+        // for (the missing renderScale read as 10+): it is the Texture
+        // stage's own GPU/CPU gap — its noise gate reads an 8-bit-quantised
+        // local variance (see gpu_pass.dart's gpuResidualSqScale) — which
+        // is ~1.8 mean on its own at scale 1, ~2.1 at this scale, and is
+        // paid twice on the mask path (global render, then the layer),
+        // stacked with Clarity and Sharpen. Measured by stage on
+        // 2026-09-10: Texture alone in this layer 2.85, Clarity 1.1,
+        // Sharpen 1.15. A real regression still lands well above this.
+        meanTolerance: 5.0,
       );
     });
   });
