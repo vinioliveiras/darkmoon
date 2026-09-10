@@ -869,3 +869,65 @@ Widget _previewFrameWidget(PreviewFrame frame, {BoxFit? fit}) {
     cacheWidth: frame.decodeWidth,
   );
 }
+
+// The `_paramValues` keys of the AI tools, Colorize and the White Balance
+// mode. Top-level rather than `static const` on the State (2026-09-10) so
+// the concern extensions in state_*.dart read them unqualified.
+/// Per-photo markers for item 13's neural Enhance pipeline's two
+/// independent passes (denoise, 2x super-resolution) — parallel to how
+/// `'AiDenoiseLevel'` already persists the classical level, just not
+/// slider values so they get their own keys. `> 0` means active. Live in
+/// `_paramValues` for the same free per-photo persistence (catalog
+/// save/restore, undo/redo history) every other param value already
+/// gets — see `_onParamChanged`'s doc comment on why `_paramValues` is
+/// replaced wholesale, not mutated, for history to track it correctly.
+const _neuralDenoiseKey = 'AiNeuralDenoise';
+
+const _neuralUpscaleKey = 'AiNeuralUpscale';
+
+/// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.upscaleSharpnessAmount` —
+/// persisted the same way as [_neuralDenoiseAmountKey] below. Only
+/// meaningful when [_neuralUpscaleKey] is on; defaults to `0` (DIS
+/// alone, no Real-ESRGAN blend) for any photo that predates this slider.
+const _upscaleSharpnessAmountKey = 'AiUpscaleSharpnessAmount';
+
+/// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.rawDenoise` — the PMRID
+/// raw-domain pass, persisted the same way as the two flags above.
+const _neuralRawDenoiseKey = 'AiNeuralRawDenoise';
+
+/// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.restoreDetail` — the
+/// GaterV3 restore+sharpen pass, persisted the same way as the flags
+/// above. `> 0` means active.
+const _restoreDetailKey = 'AiRestoreDetail';
+
+/// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.restoreDetailAmount` —
+/// 0-100, persisted the same way as [_upscaleSharpnessAmountKey].
+/// Defaults to [defaultRestoreDetailAmount] when absent.
+const _restoreDetailAmountKey = 'AiRestoreDetailAmount';
+
+/// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.denoiseAmount` — 0-100,
+/// persisted the same way as the two flags above. Defaults to
+/// [defaultNeuralDenoiseAmount] when absent (a photo that predates this
+/// slider, or one that's never had Denoise turned on before), matching
+/// `NeuralEnhanceChoice`'s own default.
+const _neuralDenoiseAmountKey = 'AiNeuralDenoiseAmount';
+
+/// See `AiDenoiseDialog`'s `CloudDenoiseChoice.provider` — 0=off,
+/// otherwise `CloudDenoiseProviderKind.values.indexOf(provider) + 1`.
+/// Only the provider is persisted here; the API key itself is never
+/// stored in `_paramValues`/the catalog (see `CloudDenoiseTokenStore`).
+const _cloudDenoiseProviderKey = 'AiCloudDenoiseProvider';
+
+/// Item 37's colorize (DDColor) toggle — persisted the same way as the
+/// AI Enhance flags above, independent of them (mutually exclusive with
+/// nothing; colorize can run on a photo regardless of Denoise/Upscale/
+/// Restore detail state, since it replaces the base image the same way
+/// those do, just for a different purpose). `> 0` means active.
+const _colorizeKey = 'Colorize';
+
+/// See `ColorizeDialog`'s `ColorizeChoice.intensityPercent` — 0-100,
+/// persisted the same way as `_restoreDetailAmountKey`. Defaults to
+/// [defaultColorizeIntensity] when absent.
+const _colorizeIntensityKey = 'ColorizeIntensity';
+
+const _wbModeKey = 'WhiteBalanceMode';
