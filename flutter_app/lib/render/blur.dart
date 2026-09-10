@@ -142,7 +142,7 @@ Float32List gaussianBlurChannel(
 /// against the Gaussian's 1.55 at Clarity 100) while removing 79% of the
 /// halo on the second (19 → 4 levels); the square did 1.43 and 67%. Four
 /// box blurs, against the Gaussian base's three. Mirrored by
-/// `guided_ab.frag` / `guided_apply.frag`.
+/// `guided_coeff.frag` / `guided_apply.frag`.
 ///
 /// Past [guidedMaxFullResRadius] the coefficients are fitted on a copy
 /// downsampled by [guidedSubsampleFactor] and upsampled back before the
@@ -152,13 +152,18 @@ Float32List gaussianBlurChannel(
 /// GPU's box-blur cost — proportional to the radius — stops growing with
 /// the render scale. Measured on the GPU at 3200x2400 (renderScale 2.5,
 /// radius 108): 1024 ms at full resolution against the Gaussian's 623.
+///
+/// [rowOffset] — see [downsampleChannel] — keeps the small copy's block
+/// grid where the whole image's would be when [channel] is one band of
+/// a larger frame, so the bands stitch back without a seam.
 Float32List guidedSmoothChannel(
   Float32List channel,
   int width,
   int height,
   int radius,
-  double edgeThreshold,
-) {
+  double edgeThreshold, {
+  int rowOffset = 0,
+}) {
   if (radius <= 0) {
     return Float32List.fromList(channel);
   }
@@ -175,7 +180,13 @@ Float32List guidedSmoothChannel(
       edgeThreshold,
     );
   } else {
-    final small = downsampleChannel(channel, width, height, factor);
+    final small = downsampleChannel(
+      channel,
+      width,
+      height,
+      factor,
+      rowOffset: rowOffset,
+    );
     final (smallA, smallB) = _guidedCoefficients(
       small.channel,
       small.width,
@@ -190,6 +201,7 @@ Float32List guidedSmoothChannel(
       factor,
       width,
       height,
+      rowOffset: rowOffset,
     );
     meanB = upsampleChannelBilinear(
       smallB,
@@ -198,6 +210,7 @@ Float32List guidedSmoothChannel(
       factor,
       width,
       height,
+      rowOffset: rowOffset,
     );
   }
   final out = Float32List(n);

@@ -161,7 +161,8 @@ Future<Uint8List> renderAdjustmentsParallel(
       buffer,
       dehazeBandCount,
       dehazeHalo,
-      (slice, w, h, top) => applyDehazeStage(slice, w, h, params),
+      (slice, w, h, top) =>
+          applyDehazeStage(slice, w, h, params, rowOffset: top),
     );
   }
   mark('dehaze ($dehazeBandCount bands)');

@@ -15,8 +15,10 @@ out vec4 fragColor;
 
 void main() {
   vec2 uv = FlutterFragCoord().xy / uSize;
-  float ch = texture(uChannel, uv).r;
-  float bl = texture(uBlurred, uv).r;
-  float a = abs(ch - bl);
-  fragColor = vec4(a, a, a, 1.0);
+  // Per channel: a replicated single channel comes out replicated (the
+  // Sharpen and Clarity callers), RGB comes out per channel (Dehaze's
+  // regional estimate, through gpu_pass.dart's runGuidedSmoothGpu).
+  vec3 ch = texture(uChannel, uv).rgb;
+  vec3 bl = texture(uBlurred, uv).rgb;
+  fragColor = vec4(abs(ch - bl), 1.0);
 }

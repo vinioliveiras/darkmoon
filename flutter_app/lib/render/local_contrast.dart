@@ -19,7 +19,9 @@ import 'luminance.dart';
 /// across every strong edge, and boosting the resulting over/undershoot is
 /// exactly the halo Clarity was known for. The threshold is the local mean
 /// absolute deviation (0-255) above which the base follows the image
-/// instead of smoothing it — see [calClarityEdgeThreshold].
+/// instead of smoothing it — see [calClarityEdgeThreshold]. [rowOffset]
+/// is for that base's downsampled fit when [img] is one band of a larger
+/// frame — see [guidedSmoothChannel].
 void applyLocalContrast(
   Float32List img,
   int width,
@@ -30,6 +32,7 @@ void applyLocalContrast(
   bool noiseAware = false,
   int noiseRadius = 6,
   double edgeThreshold = 0,
+  int rowOffset = 0,
 }) {
   if (amount == 0) {
     return;
@@ -55,6 +58,7 @@ void applyLocalContrast(
           height,
           guidedRadiusForSigma(sigma),
           edgeThreshold,
+          rowOffset: rowOffset,
         )
       : gaussianBlurChannel(luminance, width, height, sigma);
   Float32List? localNoiseVar;

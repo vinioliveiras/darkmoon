@@ -149,6 +149,8 @@ const int _tonalBlurHaloPx = 18; // sigma 3.5 tonal blur, three box passes
 /// parallel-render band padding correct (no seams). Rounds up generously:
 /// at the shipping sigmas (3 / 25) this yields 29 / 128, safely above the
 /// hand-measured 30 / 110 the fixed sigmas used before.
+/// Clarity's guided base (2026-09-10) reaches 2 × its box radius
+/// (2 × 1.73·sigma) plus a few pixels of upsampling — inside this too.
 int _localContrastHaloPx(double sigma) => (sigma * 4.5).ceil() + 15;
 
 /// How many extra rows a horizontal band needs on each side (above and
@@ -195,7 +197,9 @@ bool needsTonalBlur(RenderParams params) =>
 
 /// Halo (px) [applyDehazeStage] needs when run on a horizontal band — the
 /// reach of Dehaze's sigma-40 "structure" Gaussian (3-pass box, ~4.5·sigma),
-/// 0 when Dehaze is off.
+/// 0 when Dehaze is off. The guided regional estimate that replaced the
+/// Gaussian (2026-09-10) reaches 2 × its box radius (2 × 69·scale) plus
+/// a few pixels of upsampling — inside this.
 int dehazeHaloPx(RenderParams params) =>
     params.dehaze != 0 ? (180 * params.renderScale).ceil() : 0;
 
@@ -290,9 +294,10 @@ void applyExposureAndWhiteBalance(Float32List buffer, RenderParams params) {
 /// [rowOffset] must be [buffer]'s row 0's absolute row index in the full
 /// image when [buffer] is one band of a larger image being rendered by
 /// `render_parallel.dart` (0, the default, for the whole image) — plumbed
-/// straight through to [applyBaselineChromaSmoothing], the one step here
-/// whose own internal downsampling needs it (see that function and
-/// [downsampleChannel] for why).
+/// straight through to [applyBaselineChromaSmoothing] and Clarity's
+/// [applyLocalContrast], the two steps here whose own internal
+/// downsampling needs it (see those functions and [downsampleChannel] for
+/// why).
 void applyLocalAdjustmentSteps(
   Float32List buffer,
   int width,
@@ -343,6 +348,7 @@ void applyLocalAdjustmentSteps(
     calClaritySigma * params.renderScale,
     protectMidtones: true,
     edgeThreshold: calClarityEdgeThreshold,
+    rowOffset: rowOffset,
   );
 }
 
@@ -467,13 +473,26 @@ void applyColorProfileStage(Float32List buffer, RenderParams params) {
   }
 }
 
+///
+/// [rowOffset]: [buffer]'s row 0's absolute row index when it is one band
+/// of a larger frame — Dehaze's regional estimate has a downsampled fit
+/// inside (see [guidedSmoothChannel]).
 void applyDehazeStage(
   Float32List buffer,
   int width,
   int height,
-  RenderParams params,
-) {
-  applyDehaze(buffer, width, height, params.dehaze, params.renderScale);
+  RenderParams params, {
+  int rowOffset = 0,
+}) {
+  applyDehaze(
+    buffer,
+    width,
+    height,
+    params.dehaze,
+    params.renderScale,
+    calDehazeEdgeThreshold,
+    rowOffset,
+  );
 }
 
 /// [rowOffset]/[fullHeight]: when [buffer] is one horizontal band of a

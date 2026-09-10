@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 
+import '../blur.dart' show guidedRadiusForSigma;
 import '../calibration.dart';
 import 'gpu_pass.dart';
 
@@ -14,19 +15,31 @@ import 'gpu_pass.dart';
 /// **Must run on the main isolate** — see `render_gpu.dart`'s doc comment.
 /// [scale] is [RenderParams.renderScale] — the sigma-40 "regional" blur is
 /// a fixed pixel radius, so it has to grow with the frame. See
-/// `calibration.dart`'s `calRadiusReferenceLongEdge`.
+/// `calibration.dart`'s `calRadiusReferenceLongEdge`. [edgeThreshold] > 0
+/// makes that blur edge-preserving ([runGuidedSmoothGpu]), as on the CPU
+/// side — see `applyDehaze`'s doc comment.
 Future<ui.Image> runDehazeGpu(
   ui.Image source,
   int width,
   int height,
   double amount, [
   double scale = 1.0,
+  double edgeThreshold = calDehazeEdgeThreshold,
 ]) async {
   if (amount == 0) {
     return source;
   }
   final strength = amount / 100.0;
-  final blurred = await runGaussianBlurGpu(source, width, height, 40.0 * scale);
+  final sigma = 40.0 * scale;
+  final blurred = edgeThreshold > 0
+      ? await runGuidedSmoothGpu(
+          source,
+          width,
+          height,
+          guidedRadiusForSigma(sigma),
+          edgeThreshold / 255.0,
+        )
+      : await runGaussianBlurGpu(source, width, height, sigma);
 
   final result = await GpuPass.run(
     'shaders/dehaze_apply.frag',

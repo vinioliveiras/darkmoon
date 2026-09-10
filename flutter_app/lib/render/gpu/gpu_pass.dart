@@ -3,7 +3,7 @@ import 'dart:async';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
-import '../blur.dart' show boxRadiiForGauss;
+import '../blur.dart' show boxRadiiForGauss, guidedSubsampleFactor;
 
 /// Generic single-shader-pass runner shared by every multi-pass GPU
 /// effect from Phase 2 onward (`box_blur_h/v.frag`, `min_filter_h/v.frag`,
@@ -366,6 +366,101 @@ Future<ui.Image> _pyramidBoxBlurGpu(
   } finally {
     blurred.dispose();
   }
+}
+
+/// GPU port of `blur.dart`'s `guidedSmoothChannel`, per channel of
+/// [source] at once (a replicated single channel comes out replicated):
+/// box mean and box mean absolute deviation over [radius], the `a` and
+/// `b` of the local linear fit (guided_coeff.frag, one pass each), a box
+/// blur of both, and `q = mean(a)·I + mean(b)` (guided_apply.frag). Past
+/// `guidedMaxFullResRadius` the fit runs on a copy downsampled by
+/// [guidedSubsampleFactor] — the same shaders and factor rule
+/// [_pyramidBoxBlurGpu] uses, and the same copy the CPU side fits on —
+/// and the averaged pair is upsampled back for the final pass. Shared by
+/// Clarity (on luminance) and Dehaze (on RGB). [threshold] is the CPU
+/// side's edge threshold on this side's 0..1 scale.
+Future<ui.Image> runGuidedSmoothGpu(
+  ui.Image source,
+  int width,
+  int height,
+  int radius,
+  double threshold,
+) async {
+  final scratch = GpuImagePool([source]);
+  final factor = guidedSubsampleFactor(radius);
+  var work = source;
+  var w = width;
+  var h = height;
+  var r = radius;
+  if (factor > 1) {
+    w = math.max(1, (width / factor).ceil());
+    h = math.max(1, (height / factor).ceil());
+    r = math.max(1, (radius / factor).round());
+    work = scratch.add(
+      await GpuPass.run(
+        'shaders/downsample_box.frag',
+        floats: [
+          w.toDouble(),
+          h.toDouble(),
+          width.toDouble(),
+          height.toDouble(),
+          factor.toDouble(),
+        ],
+        samplers: [source],
+        outputWidth: w,
+        outputHeight: h,
+      ),
+    );
+  }
+  final size = [w.toDouble(), h.toDouble()];
+  final mean = scratch.add(await runBoxBlurGpu(work, w, h, r));
+  final dev = scratch.add(
+    await GpuPass.run(
+      'shaders/abs_residual.frag',
+      floats: size,
+      samplers: [work, mean],
+      outputWidth: w,
+      outputHeight: h,
+    ),
+  );
+  final mad = scratch.add(await runBoxBlurGpu(dev, w, h, r));
+  Future<ui.Image> coefficient(double which) => GpuPass.run(
+    'shaders/guided_coeff.frag',
+    floats: [...size, threshold, which],
+    samplers: [mean, mad],
+    outputWidth: w,
+    outputHeight: h,
+  );
+  final a = scratch.add(await coefficient(0));
+  final b = scratch.add(await coefficient(1));
+  var meanA = scratch.add(await runBoxBlurGpu(a, w, h, r));
+  var meanB = scratch.add(await runBoxBlurGpu(b, w, h, r));
+  if (factor > 1) {
+    Future<ui.Image> up(ui.Image small) => GpuPass.run(
+      'shaders/upsample.frag',
+      floats: [
+        width.toDouble(),
+        height.toDouble(),
+        w.toDouble(),
+        h.toDouble(),
+        factor.toDouble(),
+      ],
+      samplers: [small],
+      outputWidth: width,
+      outputHeight: height,
+    );
+    meanA = scratch.add(await up(meanA));
+    meanB = scratch.add(await up(meanB));
+  }
+  final result = await GpuPass.run(
+    'shaders/guided_apply.frag',
+    floats: [width.toDouble(), height.toDouble()],
+    samplers: [source, meanA, meanB],
+    outputWidth: width,
+    outputHeight: height,
+  );
+  scratch.disposeAllExcept();
+  return result;
 }
 
 /// Separable min filter (H then V pass) over a `size x size` window — the

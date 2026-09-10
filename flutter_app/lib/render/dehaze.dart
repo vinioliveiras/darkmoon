@@ -56,12 +56,23 @@ double _min3(double a, double b, double c) => math.min(a, math.min(b, c));
 /// pixel radius, so the "regional" dark channel it estimates would cover a
 /// different fraction of the scene at each render resolution without it.
 /// See [calRadiusReferenceLongEdge].
+///
+/// [edgeThreshold] > 0 (the default, [calDehazeEdgeThreshold]) makes the
+/// regional blur edge-preserving ([guidedSmoothChannel], 2026-09-10): a
+/// Gaussian regional dark channel is a blend of both sides wherever sky
+/// meets a dark subject, so the sky beside the edge reads as hazier than
+/// the open sky and gets pulled darker — a band along every skyline that
+/// the halo-protection blend below only narrows. 0 keeps the Gaussian.
+/// [rowOffset] is for that smoothing's downsampled fit when [img] is one
+/// band of a larger frame — see [guidedSmoothChannel].
 void applyDehaze(
   Float32List img,
   int width,
   int height,
   double amount, [
   double scale = 1.0,
+  double edgeThreshold = calDehazeEdgeThreshold,
+  int rowOffset = 0,
 ]) {
   if (amount == 0) {
     return;
@@ -84,24 +95,20 @@ void applyDehaze(
     gChannel[p] = img[i + 1];
     bChannel[p] = img[i + 2];
   }
-  final blurredR = gaussianBlurChannel(
-    rChannel,
-    width,
-    height,
-    _structureBlurSigma * scale,
-  );
-  final blurredG = gaussianBlurChannel(
-    gChannel,
-    width,
-    height,
-    _structureBlurSigma * scale,
-  );
-  final blurredB = gaussianBlurChannel(
-    bChannel,
-    width,
-    height,
-    _structureBlurSigma * scale,
-  );
+  final sigma = _structureBlurSigma * scale;
+  Float32List regional(Float32List channel) => edgeThreshold > 0
+      ? guidedSmoothChannel(
+          channel,
+          width,
+          height,
+          guidedRadiusForSigma(sigma),
+          edgeThreshold,
+          rowOffset: rowOffset,
+        )
+      : gaussianBlurChannel(channel, width, height, sigma);
+  final blurredR = regional(rChannel);
+  final blurredG = regional(gChannel);
+  final blurredB = regional(bChannel);
 
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;

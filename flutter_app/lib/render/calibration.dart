@@ -474,8 +474,28 @@ const double calClarityStrength = 0.65;
 ///   ↑ higher = more halo, more punch on medium-contrast edges
 ///   ↓ lower  = less halo, but medium-contrast texture gets less Clarity
 ///   0 = plain Gaussian base (the pre-2026-09-10 look)
-/// default: 20.0   [also on GPU: guided_ab.frag via uniform]
+/// default: 20.0   [also on GPU: guided_coeff.frag via uniform]
 const double calClarityEdgeThreshold = 20.0;
+
+/// **Dehaze** — edge threshold (2026-09-10). The regional dark channel
+/// comes from an edge-preserving smoothing of the frame instead of a plain
+/// sigma-40 blur: variation under this mean absolute deviation (0-255, on
+/// the gamma-encoded buffer) is averaged as before, variation over it is
+/// an edge the regional estimate follows, so the sky beside a skyline is
+/// not read as hazier than the open sky. Same statistic and fit as
+/// [calClarityEdgeThreshold], but lower: the transmission formula is very
+/// sensitive at the dark end, so a regional estimate only slightly too
+/// bright still pulls a dark subject beside the sky visibly darker.
+/// Measured on a synthetic skyline (sky 196/204/216 beside 48/46/50,
+/// Dehaze 100, `tool/dehaze_halo_probe.dart`): the Gaussian darkens the
+/// subject by up to 20 levels over a 65 px band; at 20 still 13.5 over
+/// 98 px, at 12 2.0 over 13 px, at 10 0.9 with no pixel off by more
+/// than 1, at 6 nothing.
+///   ↑ higher = closer to the old blur (wider band along strong edges)
+///   ↓ lower  = regional estimate follows finer structure
+///   0 = plain Gaussian (the pre-2026-09-10 look)
+/// default: 10.0   [also on GPU: guided_coeff.frag via uniform]
+const double calDehazeEdgeThreshold = 10.0;
 
 /// **Dehaze +** — how hard the positive slider pulls transmission down (=
 /// removes haze). This is the main control over Dehaze strength.
