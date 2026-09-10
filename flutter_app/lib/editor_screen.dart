@@ -2887,7 +2887,10 @@ class _EditorScreenState extends State<EditorScreen>
     if (!mounted || requestId != _renderRequestId) {
       return;
     }
-    final firstImage = await _decodePreviewImage(firstResult);
+    // The GPU hands back the frame it painted; the CPU's pixels are
+    // uploaded here.
+    final firstImage =
+        firstResult.image ?? await _decodePreviewImage(firstResult.pixels!);
     if (!mounted || requestId != _renderRequestId) {
       // Superseded while the upload was in flight — nothing will ever
       // paint this frame, and nothing else owns it yet.
@@ -2918,13 +2921,13 @@ class _EditorScreenState extends State<EditorScreen>
   /// GPU / CPU-parallel / progress-tracked dispatch for one render job —
   /// the [onStage] path (AI Denoise) wants real stage progress; otherwise
   /// GPU when [allowGpu] and available, else CPU-parallel via `compute()`.
-  Future<RenderResult> _runRenderJob(
+  Future<PreviewRender> _runRenderJob(
     RenderJob job, {
     void Function(RenderStage stage)? onStage,
     bool allowGpu = false,
   }) async {
     if (onStage != null) {
-      return renderJobToJpegWithProgress(job, onStage);
+      return PreviewRender.cpu(await renderJobToJpegWithProgress(job, onStage));
     }
     // The "darkmoon Color" profile is fully on the GPU as of 2026-09-04 —
     // both the per-hue correction and the tone curve (color_profile_gpu.dart,
@@ -2952,10 +2955,10 @@ class _EditorScreenState extends State<EditorScreen>
       // for nothing.
       final probed = gpuRenderAvailableIfProbed ?? await isGpuRenderAvailable();
       if (probed) {
-        return renderJobToJpegGpu(job);
+        return PreviewRender.gpu(await renderJobToImageGpu(job));
       }
     }
-    return compute(renderJobToJpeg, job);
+    return PreviewRender.cpu(await compute(renderJobToJpeg, job));
   }
 
   /// The photo's decoded native-resolution [EditSource] — from the

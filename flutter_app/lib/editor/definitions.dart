@@ -776,6 +776,29 @@ SingleActivator _cmdShortcut(LogicalKeyboardKey key, {bool shift = false}) =>
 /// where the RAW carries one, the small filmstrip thumbnail otherwise. It
 /// stays a JPEG because that is the form both of those arrive in.
 @immutable
+/// A finished preview render as the editor consumes it: the frame as the
+/// GPU's own image (painted as is) or as the CPU's pixels (uploaded first
+/// — see `_decodePreviewImage`), plus the histogram and filmstrip
+/// thumbnail both derive. Exactly one of [image] and [pixels] is set.
+class PreviewRender {
+  PreviewRender.gpu(GpuRenderResult result)
+    : image = result.image,
+      pixels = null,
+      histogram = result.histogram,
+      thumbnailBytes = result.thumbnailBytes;
+
+  PreviewRender.cpu(RenderResult result)
+    : image = null,
+      pixels = result,
+      histogram = result.histogram,
+      thumbnailBytes = result.thumbnailBytes;
+
+  final ui.Image? image;
+  final RenderResult? pixels;
+  final Histogram histogram;
+  final Uint8List thumbnailBytes;
+}
+
 class PreviewFrame {
   const PreviewFrame.rendered(ui.Image this.image)
     : jpegBytes = null,

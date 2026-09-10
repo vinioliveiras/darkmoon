@@ -38,26 +38,7 @@ Future<Uint8List> renderRgbaGpu(
   Uint8List sourceRgb,
   RenderParams params,
 ) async {
-  // The source upload is itself a full-frame copy plus a texture upload;
-  // when the stage cache can resume from a stored boundary it is never
-  // sampled, so it is skipped too. See GpuStageCache.
-  final fingerprint = GpuStageCache.sourceFingerprint(sourceRgb, width, height);
-  final source =
-      GpuStageCache.instance.canResume(fingerprint, width, height, params)
-      ? null
-      : await decodeRgbImage(sourceRgb, width, height);
-  final ui.Image result;
-  try {
-    result = await renderImageGpu(
-      source,
-      width,
-      height,
-      params,
-      sourceFingerprint: fingerprint,
-    );
-  } finally {
-    source?.dispose();
-  }
+  final result = await renderImageGpuFromRgb(width, height, sourceRgb, params);
   final ByteData? byteData;
   try {
     byteData = await result.toByteData(format: ui.ImageByteFormat.rawRgba);
@@ -70,6 +51,71 @@ Future<Uint8List> renderRgbaGpu(
     throw StateError('renderRgbaGpu: toByteData returned null');
   }
   return byteData.buffer.asUint8List();
+}
+
+/// [renderRgbaGpu] without the readback: the finished frame as the
+/// `ui.Image` the chain produced, for a caller that will paint it (the
+/// editor's canvas, since 2026-09-11) rather than read its pixels. The
+/// caller owns the image.
+Future<ui.Image> renderImageGpuFromRgb(
+  int width,
+  int height,
+  Uint8List sourceRgb,
+  RenderParams params,
+) async {
+  // The source upload is itself a full-frame copy plus a texture upload;
+  // when the stage cache can resume from a stored boundary it is never
+  // sampled, so it is skipped too. See GpuStageCache.
+  final fingerprint = GpuStageCache.sourceFingerprint(sourceRgb, width, height);
+  final source =
+      GpuStageCache.instance.canResume(fingerprint, width, height, params)
+      ? null
+      : await decodeRgbImage(sourceRgb, width, height);
+  try {
+    return await renderImageGpu(
+      source,
+      width,
+      height,
+      params,
+      sourceFingerprint: fingerprint,
+    );
+  } finally {
+    source?.dispose();
+  }
+}
+
+/// [image] ([width] x [height]) drawn down so its long edge is at most
+/// [maxDimension] — bilinear, one draw call — for the small readbacks
+/// that feed the histogram and the filmstrip thumbnail. Returns [image]
+/// itself when it already fits; otherwise a new image the caller owns.
+Future<ui.Image> scaleGpuImage(
+  ui.Image image,
+  int width,
+  int height,
+  int maxDimension,
+) async {
+  final longEdge = math.max(width, height);
+  if (longEdge <= maxDimension) {
+    return image;
+  }
+  final scale = maxDimension / longEdge;
+  final w = math.max(1, (width * scale).round());
+  final h = math.max(1, (height * scale).round());
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  canvas.drawImageRect(
+    image,
+    ui.Rect.fromLTWH(0, 0, width.toDouble(), height.toDouble()),
+    ui.Rect.fromLTWH(0, 0, w.toDouble(), h.toDouble()),
+    ui.Paint()..filterQuality = ui.FilterQuality.low,
+  );
+  final picture = recorder.endRecording();
+  GpuPass.countPass('scale');
+  try {
+    return await picture.toImage(w, h);
+  } finally {
+    picture.dispose();
+  }
 }
 
 /// [renderRgbaGpu] narrowed to the CPU pipeline's own packed-RGB shape, so

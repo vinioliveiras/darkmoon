@@ -33,6 +33,36 @@ Future<Uint8List> renderRgbaWithMasksGpu(
   List<MaskLayer> masks, {
   Map<String, AiMaskMap> aiMaskMaps = const {},
 }) async {
+  final current = await renderImageWithMasksGpu(
+    width,
+    height,
+    sourceRgb,
+    globalParams,
+    masks,
+    aiMaskMaps: aiMaskMaps,
+  );
+  final ByteData? byteData;
+  try {
+    byteData = await current.toByteData(format: ui.ImageByteFormat.rawRgba);
+  } finally {
+    current.dispose();
+  }
+  if (byteData == null) {
+    throw StateError('renderRgbaWithMasksGpu: toByteData returned null');
+  }
+  return byteData.buffer.asUint8List();
+}
+
+/// [renderRgbaWithMasksGpu] without the readback — the finished frame as a
+/// `ui.Image` the caller owns, for the canvas to paint directly.
+Future<ui.Image> renderImageWithMasksGpu(
+  int width,
+  int height,
+  Uint8List sourceRgb,
+  RenderParams globalParams,
+  List<MaskLayer> masks, {
+  Map<String, AiMaskMap> aiMaskMaps = const {},
+}) async {
   // The global layer goes through the stage cache exactly like a render
   // without masks (see renderRgbaGpu); the layers below do not — each one
   // starts from the previous layer's fresh output, so there is nothing to
@@ -105,17 +135,7 @@ Future<Uint8List> renderRgbaWithMasksGpu(
     alphaImage.dispose();
     current = blended;
   }
-
-  final ByteData? byteData;
-  try {
-    byteData = await current.toByteData(format: ui.ImageByteFormat.rawRgba);
-  } finally {
-    current.dispose();
-  }
-  if (byteData == null) {
-    throw StateError('renderRgbaWithMasksGpu: toByteData returned null');
-  }
-  return byteData.buffer.asUint8List();
+  return current;
 }
 
 /// [renderRgbaWithMasksGpu] narrowed to packed RGB — see [renderRgbGpu]'s
