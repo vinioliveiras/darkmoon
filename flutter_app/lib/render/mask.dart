@@ -542,6 +542,22 @@ Float32List computeMaskAlpha(
   return alpha;
 }
 
+/// Alpha for a pixel [fraction] (0 at the shape's full-weight core, 1 at
+/// the outer end of the feather) of the way through a feather band.
+///
+/// Smoothstep rather than the linear ramp every feather used until
+/// 2026-09-10: a linear ramp has a slope discontinuity at both ends of the
+/// band, and on a smooth subject (sky, skin) the eye picks that crease up
+/// as a visible ring around a radial mask and as a hard rim on a colour
+/// or luminance range. The S-curve leaves and arrives tangentially; it is
+/// symmetric, so the midpoint stays at 0.5 and a feather still spans the
+/// same distance. The linear gradient is not a feather and keeps its
+/// straight ramp — that ramp *is* what the user drew.
+double _featherAlpha(double fraction) {
+  final t = fraction.clamp(0.0, 1.0);
+  return 1.0 - t * t * (3.0 - 2.0 * t);
+}
+
 void _computeLinearAlpha(
   Float32List alpha,
   int width,
@@ -601,7 +617,7 @@ void _computeRadialAlpha(
       } else if (t >= 1.0) {
         alpha[p] = 0.0;
       } else {
-        alpha[p] = span <= 0 ? 0.0 : 1.0 - (t - innerFrac) / span;
+        alpha[p] = span <= 0 ? 0.0 : _featherAlpha((t - innerFrac) / span);
       }
     }
   }
@@ -696,7 +712,7 @@ void _computeColorRangeAlpha(
     } else if (featherSpan <= 0 || dist >= core + featherSpan) {
       alpha[i] = 0.0;
     } else {
-      alpha[i] = 1.0 - (dist - core) / featherSpan;
+      alpha[i] = _featherAlpha((dist - core) / featherSpan);
     }
   }
 }
@@ -796,7 +812,7 @@ void _computeDepthAlpha(
       continue;
     }
     final beyond = d < lo ? lo - d : d - hi;
-    alpha[i] = beyond >= fade ? 0.0 : 1.0 - beyond / fade;
+    alpha[i] = beyond >= fade ? 0.0 : _featherAlpha(beyond / fade);
   }
 }
 
@@ -828,7 +844,7 @@ void _computeLuminanceAlpha(
     } else if (featherSpan <= 0 || dist >= core + featherSpan) {
       alpha[i] = 0.0;
     } else {
-      alpha[i] = 1.0 - (dist - core) / featherSpan;
+      alpha[i] = _featherAlpha((dist - core) / featherSpan);
     }
   }
 }
