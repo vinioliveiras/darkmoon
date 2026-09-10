@@ -561,61 +561,39 @@ Future<ui.Image> _rasterize(
   return image;
 }
 
-/// Identity mapping (lut[i] == i) — used in place of [buildToneCurveLut]'s
-/// own output for the default 2-point curve, purely as a cheap shortcut
-/// (skips the per-entry Hermite evaluation for the overwhelmingly common
-/// no-curve case). `tone_curve.dart`'s own `applyToneCurve`/
-/// `applyColorCurves` take the equivalent shortcut via `isIdentityToneCurve`
-/// before ever calling `buildToneCurveLut`, but the GPU path has no such
-/// early-return (the shader always samples the LUT texture), so it
-/// substitutes this identity LUT directly instead.
-///
-/// Historical note: back when [buildToneCurveLut] used a plain Catmull-Rom
-/// spline, this substitution wasn't just a shortcut but a correctness fix —
-/// that spline didn't reduce to a true straight line even for
-/// `identityToneCurve`'s two collinear points (it evaluated to a visible
-/// S-curve, e.g. ~0.203 at t=0.25 instead of 0.25), which is what
-/// integration_test/gpu_point_ops_test.dart's "neutral params" case (a
-/// ~15/255 mean diff unrelated to the params under test) first caught.
-/// [buildToneCurveLut] now uses the same monotone cubic Hermite spline as
-/// Solstice's `apply_curve`, which doesn't have that flaw for *any* input
-/// (collinear or not) — this substitution stays only for performance.
-final Uint8List _identityLut = Uint8List.fromList(
-  List<int>.generate(256, (i) => i),
-);
-
-Uint8List _lutFor(List<CurvePoint> points) =>
-    isIdentityToneCurve(points) ? _identityLut : buildToneCurveLut(points);
+/// The identity LUT texture's bytes (every channel `i` at texel `i`),
+/// built once: the shader always samples `uLut`, so the no-curve case —
+/// most renders — needs a texture too, just not a computed one.
+final Uint8List _identityLutBytes = Uint8List.fromList([
+  for (var i = 0; i < 256; i++) ...[i, i, i, 255],
+]);
 
 /// Builds the 256x1 RGBA LUT texture consumed by
-/// `point_ops_post_denoise.frag`'s `uLut` — r = tone curve, g/b/a =
-/// red/green/blue color curves, each from [_lutFor] (which defers to
-/// `tone_curve.dart`'s own `buildToneCurveLut` for a real curve).
+/// `point_ops_post_denoise.frag`'s `uLut`: r/g/b = the whole curve stack
+/// (parametric → point Tone Curve → that channel's colour curve) for the
+/// red/green/blue channel, from `tone_curve.dart`'s
+/// [buildCurveStackLuts] — the same numbers the CPU pass applies, composed
+/// in double precision and rounded to a byte once here, where the texture
+/// has to be 8-bit anyway. Until 2026-09-10 the texture held the curves
+/// separately and composed them as chained byte lookups (`tone[param[i]]`
+/// on the Dart side, then the tone and colour lookups in the shader), one
+/// rounding per curve.
 Future<ui.Image> _buildLutImage(
   PhotoCurves curves,
   ParametricCurve parametric,
 ) async {
-  var tone = _lutFor(curves.tone);
-  if (!parametric.isIdentity) {
-    // Compose parametric-then-point into the single `uLut.r` channel the
-    // shader reads, so no shader change is needed: combined[i] =
-    // pointCurve(parametricCurve(i)).
-    final paramLut = buildToneCurveLut(parametricCurvePoints(parametric));
-    final composed = Uint8List(256);
-    for (var i = 0; i < 256; i++) {
-      composed[i] = tone[paramLut[i]];
+  final luts = buildCurveStackLuts(parametric: parametric, curves: curves);
+  final Uint8List bytes;
+  if (luts == null) {
+    bytes = _identityLutBytes;
+  } else {
+    bytes = Uint8List(256 * 4);
+    for (var x = 0; x < 256; x++) {
+      bytes[x * 4] = luts[0][x].round();
+      bytes[x * 4 + 1] = luts[1][x].round();
+      bytes[x * 4 + 2] = luts[2][x].round();
+      bytes[x * 4 + 3] = 255;
     }
-    tone = composed;
-  }
-  final red = _lutFor(curves.red);
-  final green = _lutFor(curves.green);
-  final blue = _lutFor(curves.blue);
-  final bytes = Uint8List(256 * 4);
-  for (var x = 0; x < 256; x++) {
-    bytes[x * 4] = tone[x];
-    bytes[x * 4 + 1] = red[x];
-    bytes[x * 4 + 2] = green[x];
-    bytes[x * 4 + 3] = blue[x];
   }
   final completer = Completer<ui.Image>();
   ui.decodeImageFromPixels(bytes, 256, 1, ui.PixelFormat.rgba8888, (image) {

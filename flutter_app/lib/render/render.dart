@@ -361,19 +361,15 @@ void applyPostDenoisePointOps(
   _applyRapidContrast(buffer, params.contrast);
   mark('contrast');
   // Meridian's parametric Tone Curve runs into the same result as the
-  // point curve; apply it first, then the point curve on top.
-  if (!params.parametricCurve.isIdentity) {
-    applyToneCurve(buffer, parametricCurvePoints(params.parametricCurve));
-  }
-  applyToneCurve(buffer, params.curves.tone);
-  mark('toneCurves');
-  applyColorCurves(
+  // point curve: parametric first, then the point curve, then the colour
+  // curves — composed into one float LUT per channel and applied in one
+  // pass, so the buffer is not requantised between them (2026-09-10).
+  applyCurveStack(
     buffer,
-    params.curves.red,
-    params.curves.green,
-    params.curves.blue,
+    parametric: params.parametricCurve,
+    curves: params.curves,
   );
-  mark('colorCurves');
+  mark('curves');
   applyColorMixer(buffer, params.colorMixer);
   mark('colorMixer');
   applyColorGrading(buffer, params.colorGrading);

@@ -110,8 +110,10 @@ uniform float uGradeGlobalLum;
 
 uniform sampler2D uTexture;
 // 256x1 RGBA LUT: r = tone curve, g/b/a = red/green/blue color curves —
-// each channel built by tone_curve.dart's buildToneCurveLut, 0..1 in and
-// out (matches this shader's working space directly).
+// r/g/b = the full curve stack (parametric, point Tone Curve, that
+// channel's colour curve) for the red/green/blue channel, built by
+// tone_curve.dart's buildCurveStackLuts, 0..1 in and out (matches this
+// shader's working space directly).
 uniform sampler2D uLut;
 // Tonal blur (sigma 3.5) used by Solstice to preserve local detail while
 // lifting shadows/blacks. It is bound to the source when the controls are
@@ -347,13 +349,28 @@ void main() {
 
   // Tone curve (all 3 channels through the same LUT), then per-channel
   // color curves — matches applyToneCurve then applyColorCurves' order.
+  // One lookup per channel: uLut.r/g/b already hold the whole stack for
+  // that channel (render_gpu.dart's _buildLutImage). Sampled at the two
+  // texel centres around the value and interpolated by hand — the sampler
+  // is nearest-neighbour, and `texture(uLut, vec2(c, 0.5))` used to read
+  // texel floor(c * 256), a systematic half-level-low bias against the
+  // CPU's interpolated float LUT (tone_curve.dart's _lerpLut).
   c = clamp(c, 0.0, 1.0);
-  c.r = texture(uLut, vec2(c.r, 0.5)).r;
-  c.g = texture(uLut, vec2(c.g, 0.5)).r;
-  c.b = texture(uLut, vec2(c.b, 0.5)).r;
-  c.r = texture(uLut, vec2(c.r, 0.5)).g;
-  c.g = texture(uLut, vec2(c.g, 0.5)).b;
-  c.b = texture(uLut, vec2(c.b, 0.5)).a;
+  vec3 lutPos = c * 255.0;
+  vec3 lutLo = floor(lutPos);
+  vec3 lutHi = min(lutLo + 1.0, 255.0);
+  vec3 lutFrac = lutPos - lutLo;
+  vec3 lutA = vec3(
+    texture(uLut, vec2((lutLo.r + 0.5) / 256.0, 0.5)).r,
+    texture(uLut, vec2((lutLo.g + 0.5) / 256.0, 0.5)).g,
+    texture(uLut, vec2((lutLo.b + 0.5) / 256.0, 0.5)).b
+  );
+  vec3 lutB = vec3(
+    texture(uLut, vec2((lutHi.r + 0.5) / 256.0, 0.5)).r,
+    texture(uLut, vec2((lutHi.g + 0.5) / 256.0, 0.5)).g,
+    texture(uLut, vec2((lutHi.b + 0.5) / 256.0, 0.5)).b
+  );
+  c = mix(lutA, lutB, lutFrac);
 
   // Color Mixer — color_mixer.dart's applyColorMixer, a faithful port of
   // Solstice's apply_hsl_panel: HSV (not HSL) in scene-linear light,

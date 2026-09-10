@@ -166,6 +166,12 @@ void applyColorCurves(
 /// Applies [points] to [img] — every channel when [channelOffset] is null
 /// (the master Tone Curve), or just one interleaved channel (0=R, 1=G,
 /// 2=B) otherwise.
+///
+/// Through a 256-sample *float* LUT with linear interpolation, not the
+/// byte LUT of [buildToneCurveLut]: until 2026-09-10 this rounded every
+/// value to a whole level on the way in and wrote a whole level out, so a
+/// render with a parametric curve, a point curve and three colour curves
+/// requantised its Float32 buffer up to five times in a row.
 void _applyCurveToChannel(
   Float32List img,
   int? channelOffset,
@@ -174,13 +180,90 @@ void _applyCurveToChannel(
   if (isIdentityToneCurve(points)) {
     return;
   }
-  final sorted = [...points]..sort((a, b) => a.x.compareTo(b.x));
-  final lut = buildToneCurveLut(sorted);
+  final lut = _floatLut([_sorted(points)]);
   final step = channelOffset == null ? 1 : 3;
   for (var i = channelOffset ?? 0; i < img.length; i += step) {
-    final v = img[i].clamp(0.0, 255.0).round();
-    img[i] = lut[v].toDouble();
+    img[i] = _lerpLut(lut, img[i]);
   }
+}
+
+/// Every curve the render applies — Meridian's parametric curve, the point
+/// Tone Curve, then the per-channel colour curves — as one 256-sample
+/// Float32 LUT per channel (0..255 in, 0..255 out), each entry the exact
+/// spline chain evaluated in double precision. `null` when every curve is
+/// the identity, so callers can skip the pass entirely.
+///
+/// Shared by the CPU pass ([applyCurveStack]) and the GPU's LUT texture
+/// (`render_gpu.dart`), so the two agree to the precision of the texture.
+/// Composing here rather than chaining byte LUTs (which the GPU used to
+/// do as `tone[param[i]]`) keeps one quantisation step in the chain
+/// instead of one per curve.
+List<Float32List>? buildCurveStackLuts({
+  required ParametricCurve parametric,
+  required PhotoCurves curves,
+}) {
+  final shared = <List<CurvePoint>>[
+    if (!parametric.isIdentity) parametricCurvePoints(parametric),
+    if (!isIdentityToneCurve(curves.tone)) _sorted(curves.tone),
+  ];
+  final perChannel = [curves.red, curves.green, curves.blue];
+  if (shared.isEmpty && perChannel.every(isIdentityToneCurve)) {
+    return null;
+  }
+  return [
+    for (final channel in perChannel)
+      _floatLut([
+        ...shared,
+        if (!isIdentityToneCurve(channel)) _sorted(channel),
+      ]),
+  ];
+}
+
+/// Applies [buildCurveStackLuts]'s result to packed RGB [img] in one pass —
+/// what `render.dart` calls instead of [applyToneCurve] and
+/// [applyColorCurves] back to back.
+void applyCurveStack(
+  Float32List img, {
+  required ParametricCurve parametric,
+  required PhotoCurves curves,
+}) {
+  final luts = buildCurveStackLuts(parametric: parametric, curves: curves);
+  if (luts == null) {
+    return;
+  }
+  final r = luts[0], g = luts[1], b = luts[2];
+  for (var i = 0; i + 2 < img.length; i += 3) {
+    img[i] = _lerpLut(r, img[i]);
+    img[i + 1] = _lerpLut(g, img[i + 1]);
+    img[i + 2] = _lerpLut(b, img[i + 2]);
+  }
+}
+
+List<CurvePoint> _sorted(List<CurvePoint> points) =>
+    [...points]..sort((a, b) => a.x.compareTo(b.x));
+
+/// The curves in [chain] applied one after another, sampled at 256 inputs.
+Float32List _floatLut(List<List<CurvePoint>> chain) {
+  final lut = Float32List(256);
+  for (var i = 0; i < 256; i++) {
+    var y = i / 255.0;
+    for (final points in chain) {
+      y = evaluateToneCurveAt(points, y);
+    }
+    lut[i] = (y * 255.0).clamp(0.0, 255.0);
+  }
+  return lut;
+}
+
+/// [lut] at a fractional position — input clamped to the curve's 0..255
+/// domain, linearly interpolated between the two nearest samples.
+double _lerpLut(Float32List lut, double value) {
+  final c = value <= 0.0 ? 0.0 : (value >= 255.0 ? 255.0 : value);
+  final lo = c.toInt();
+  if (lo >= 255) {
+    return lut[255];
+  }
+  return lut[lo] + (lut[lo + 1] - lut[lo]) * (c - lo);
 }
 
 double _tanh(double v) {
