@@ -1684,6 +1684,30 @@ abstract class AppLocalizations {
   /// **'Histogram'**
   String get histogramTitle;
 
+  /// No description provided for @histogramShadowClipping.
+  ///
+  /// In en, this message translates to:
+  /// **'Shadows clipped: {percent}% of the frame'**
+  String histogramShadowClipping(String percent);
+
+  /// No description provided for @histogramHighlightClipping.
+  ///
+  /// In en, this message translates to:
+  /// **'Highlights clipped: {percent}% of the frame'**
+  String histogramHighlightClipping(String percent);
+
+  /// No description provided for @histogramNoShadowClipping.
+  ///
+  /// In en, this message translates to:
+  /// **'No shadow clipping'**
+  String get histogramNoShadowClipping;
+
+  /// No description provided for @histogramNoHighlightClipping.
+  ///
+  /// In en, this message translates to:
+  /// **'No highlight clipping'**
+  String get histogramNoHighlightClipping;
+
   /// No description provided for @filmstripEditedTooltip.
   ///
   /// In en, this message translates to:

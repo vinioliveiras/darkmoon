@@ -890,6 +890,22 @@ class AppLocalizationsPt extends AppLocalizations {
   String get histogramTitle => 'Histograma';
 
   @override
+  String histogramShadowClipping(String percent) {
+    return 'Sombras cortadas: $percent% do quadro';
+  }
+
+  @override
+  String histogramHighlightClipping(String percent) {
+    return 'Altas luzes cortadas: $percent% do quadro';
+  }
+
+  @override
+  String get histogramNoShadowClipping => 'Sem corte nas sombras';
+
+  @override
+  String get histogramNoHighlightClipping => 'Sem corte nas altas luzes';
+
+  @override
   String get filmstripEditedTooltip => 'Editada';
 
   @override

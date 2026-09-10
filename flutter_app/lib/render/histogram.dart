@@ -1,12 +1,46 @@
 /// Per-channel pixel counts across [bins] evenly-spaced buckets over 0-255,
 /// matching the Python app's `HistogramWidget` (64 bins, `np.histogram`).
 class Histogram {
-  const Histogram({required this.red, required this.green, required this.blue});
+  const Histogram({
+    required this.red,
+    required this.green,
+    required this.blue,
+    this.pixelCount = 0,
+    this.clippedHigh = const [0, 0, 0],
+    this.clippedLow = const [0, 0, 0],
+  });
 
   final List<int> red;
   final List<int> green;
   final List<int> blue;
+
+  /// Pixels counted, for the clipping fractions below (0 = unknown).
+  final int pixelCount;
+
+  /// Pixels at or above [clipHighLevel] per channel (R, G, B) — the
+  /// highlight clipping indicators (2026-09-11).
+  final List<int> clippedHigh;
+
+  /// Pixels at or below [clipLowLevel] per channel (R, G, B) — the shadow
+  /// clipping indicators.
+  final List<int> clippedLow;
+
+  /// Fraction of pixels clipped in channel [channel] (0 R, 1 G, 2 B) at
+  /// the highlight end, 0 when [pixelCount] is unknown.
+  double clippedHighFraction(int channel) =>
+      pixelCount == 0 ? 0 : clippedHigh[channel] / pixelCount;
+
+  double clippedLowFraction(int channel) =>
+      pixelCount == 0 ? 0 : clippedLow[channel] / pixelCount;
 }
+
+/// A channel at or above this (of 255) counts as clipped at the highlight
+/// end — 254 rather than 255 so an 8-bit rounding on the way out does not
+/// hide a blown pixel, the same level the decode gain cap reads.
+const int clipHighLevel = 254;
+
+/// A channel at or below this counts as clipped at the shadow end.
+const int clipLowLevel = 1;
 
 const int histogramBins = 64;
 
@@ -34,10 +68,30 @@ Histogram computeHistogram(List<int> rgb, {int channels = 3}) {
     1 << binShift == 256 ~/ histogramBins,
     'binShift must be updated to match histogramBins',
   );
+  final high = [0, 0, 0];
+  final low = [0, 0, 0];
+  var pixels = 0;
   for (var i = 0; i + 2 < rgb.length; i += channels) {
-    red[rgb[i] >> binShift]++;
-    green[rgb[i + 1] >> binShift]++;
-    blue[rgb[i + 2] >> binShift]++;
+    final r = rgb[i];
+    final g = rgb[i + 1];
+    final b = rgb[i + 2];
+    red[r >> binShift]++;
+    green[g >> binShift]++;
+    blue[b >> binShift]++;
+    if (r >= clipHighLevel) high[0]++;
+    if (g >= clipHighLevel) high[1]++;
+    if (b >= clipHighLevel) high[2]++;
+    if (r <= clipLowLevel) low[0]++;
+    if (g <= clipLowLevel) low[1]++;
+    if (b <= clipLowLevel) low[2]++;
+    pixels++;
   }
-  return Histogram(red: red, green: green, blue: blue);
+  return Histogram(
+    red: red,
+    green: green,
+    blue: blue,
+    pixelCount: pixels,
+    clippedHigh: high,
+    clippedLow: low,
+  );
 }

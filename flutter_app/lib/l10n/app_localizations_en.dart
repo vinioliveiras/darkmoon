@@ -883,6 +883,22 @@ class AppLocalizationsEn extends AppLocalizations {
   String get histogramTitle => 'Histogram';
 
   @override
+  String histogramShadowClipping(String percent) {
+    return 'Shadows clipped: $percent% of the frame';
+  }
+
+  @override
+  String histogramHighlightClipping(String percent) {
+    return 'Highlights clipped: $percent% of the frame';
+  }
+
+  @override
+  String get histogramNoShadowClipping => 'No shadow clipping';
+
+  @override
+  String get histogramNoHighlightClipping => 'No highlight clipping';
+
+  @override
   String get filmstripEditedTooltip => 'Edited';
 
   @override
