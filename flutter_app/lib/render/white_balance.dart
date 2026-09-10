@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import 'calibration.dart';
+import 'color_space.dart';
 
 /// White-balance model helpers shared by the render pipeline (`render.dart`
 /// and `render_gpu.dart` both call [whiteBalanceGains]), the mode selector
@@ -187,9 +188,13 @@ List<List<double>> _matMul(List<List<double>> a, List<List<double>> b) => [
 ];
 
 /// The Temperature (Kelvin) and Tint that make the average colour
-/// [r],[g],[b] (gamma-encoded — the render buffer's space) neutral under
-/// [whiteBalanceGains]. Bisects Kelvin against the R:B balance, then Tint
-/// against the G balance — the model is monotone in both.
+/// [r],[g],[b] (0-255, gamma-encoded — the render buffer's space) neutral
+/// under [whiteBalanceGains]. Bisects Kelvin against the R:B balance,
+/// then Tint against the G balance — the model is monotone in both.
+///
+/// The comparison happens in linear light, where the gains are applied
+/// (since 2026-09-10): a gamma-space ratio against linear gains solved
+/// for the wrong neutral, 17 levels off on a known shift.
 ({double kelvin, double tint}) solveNeutralizingTempTint(
   double r,
   double g,
@@ -197,9 +202,14 @@ List<List<double>> _matMul(List<List<double>> a, List<List<double>> b) => [
   required double asShotKelvin,
   required double asShotTint,
 }) {
-  final rr = r <= 1e-4 ? 1e-4 : r;
-  final gg = g <= 1e-4 ? 1e-4 : g;
-  final bb = b <= 1e-4 ? 1e-4 : b;
+  double linear(double v) {
+    final l = srgbToLinear((v / 255.0).clamp(0.0, 1.0));
+    return l <= 1e-4 ? 1e-4 : l;
+  }
+
+  final rr = linear(r);
+  final gg = linear(g);
+  final bb = linear(b);
 
   var lo = 2000.0;
   var hi = 50000.0;

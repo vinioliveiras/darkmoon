@@ -224,7 +224,15 @@ void main() {
 
     expectResponds('texture', const RenderParams(baseContrast: 0, texture: 70));
     expectResponds('clarity', const RenderParams(baseContrast: 0, clarity: 70));
-    expectResponds('dehaze', const RenderParams(baseContrast: 0, dehaze: 70));
+    expectResponds(
+      'dehaze',
+      const RenderParams(baseContrast: 0, dehaze: 70),
+      // The regional estimate is edge-preserving since 2026-09-10 (see
+      // applyDehaze): where it follows structure, its radius no longer
+      // matters, so renderScale only moves the smooth-region average.
+      // Measured 0.61 against the Gaussian blur's 1.9.
+      minResponse: 0.3,
+    );
     expectResponds(
       'shadows (tonal blur)',
       const RenderParams(baseContrast: 0, shadows: 60),
