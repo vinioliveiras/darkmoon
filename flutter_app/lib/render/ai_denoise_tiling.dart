@@ -129,7 +129,11 @@ Float32List denoiseTiled(
     }
   }
 
-  final stitched = Float32List(outPaddedWidth * outPaddedHeight * channels);
+  // Normalise in place: `accum` becomes the stitched output. Until
+  // 2026-09-10 this wrote into a fresh full-frame buffer and then cropped
+  // into another — with the x2 upscaler on a 24 MP frame that was two
+  // extra 1.15 GB allocations at the peak, on top of accum and the
+  // weights, in an isolate that still holds the input as well.
   for (var p = 0; p < outPaddedWidth * outPaddedHeight; p++) {
     final w = weightSum[p];
     if (w <= 0) {
@@ -139,20 +143,28 @@ Float32List denoiseTiled(
     }
     final i = p * channels;
     for (var c = 0; c < channels; c++) {
-      stitched[i + c] = accum[i + c] / w;
+      accum[i + c] /= w;
     }
   }
 
-  if (paddedWidth == width && paddedHeight == height) {
-    return stitched;
+  final outWidth = width * scaleFactor;
+  final outHeight = height * scaleFactor;
+  if (outPaddedWidth == outWidth && outPaddedHeight == outHeight) {
+    return accum;
   }
-  return _crop(
-    stitched,
-    outPaddedWidth,
-    width * scaleFactor,
-    height * scaleFactor,
-    channels,
-  );
+  // Crop in place, too. Output row y starts at y * outWidth * channels,
+  // never past its padded position y * outPaddedWidth * channels, so
+  // copying rows top-down never overwrites a row still to be read (and
+  // setRange copies correctly where source and target overlap). The view
+  // returned keeps the padded buffer alive for as long as it lives — which
+  // is what the crop's own copy did anyway; its `length` is the cropped
+  // size, and nothing reads its `buffer` directly.
+  final rowFloats = outWidth * channels;
+  for (var y = 0; y < outHeight; y++) {
+    final dst = y * rowFloats;
+    accum.setRange(dst, dst + rowFloats, accum, y * outPaddedWidth * channels);
+  }
+  return Float32List.sublistView(accum, 0, outHeight * rowFloats);
 }
 
 Float32List _edgeClampPad(
@@ -285,25 +297,4 @@ void _accumulateTile(
       weightSum[dstP] += w;
     }
   }
-}
-
-Float32List _crop(
-  Float32List src,
-  int srcWidth,
-  int outWidth,
-  int outHeight,
-  int channels,
-) {
-  final out = Float32List(outWidth * outHeight * channels);
-  for (var y = 0; y < outHeight; y++) {
-    final srcRowStart = (y * srcWidth) * channels;
-    final dstRowStart = (y * outWidth) * channels;
-    out.setRange(
-      dstRowStart,
-      dstRowStart + outWidth * channels,
-      src,
-      srcRowStart,
-    );
-  }
-  return out;
 }

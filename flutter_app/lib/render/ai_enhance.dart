@@ -156,11 +156,13 @@ AiEnhanceResult enhanceImage(
       onProgress: (i, total) => onProgress?.call('detail-sharpen', i, total),
     );
     final amount = detailAmount.clamp(0.0, 1.0);
-    final blended = Float32List(denoised.length);
+    // Blended into `detailed` itself, which is fresh from the tiler and
+    // read nowhere else — a third full-frame buffer here was pure peak
+    // memory (2026-09-10).
     for (var i = 0; i < denoised.length; i++) {
-      blended[i] = denoised[i] + (detailed[i] - denoised[i]) * amount;
+      detailed[i] = denoised[i] + (detailed[i] - denoised[i]) * amount;
     }
-    denoised = blended;
+    denoised = detailed;
   }
 
   var upscaled = enableUpscale
@@ -191,11 +193,12 @@ AiEnhanceResult enhanceImage(
       processTile: sharpenUpscale,
       onProgress: (i, total) => onProgress?.call('sharpen', i, total),
     );
-    final blended = Float32List(upscaled.length);
+    // Same in-place blend as the detail pass above: `sharpened` is fresh
+    // and unread elsewhere, and at 2x it is the largest buffer in the run.
     for (var i = 0; i < upscaled.length; i++) {
-      blended[i] = upscaled[i] + (sharpened[i] - upscaled[i]) * amount;
+      sharpened[i] = upscaled[i] + (sharpened[i] - upscaled[i]) * amount;
     }
-    upscaled = blended;
+    upscaled = sharpened;
   }
 
   final scaleFactor = enableUpscale ? upscaleSpec.scaleFactor : 1;
