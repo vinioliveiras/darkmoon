@@ -30,6 +30,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get splashLicense => 'GNU Affero General Public License v3.0';
 
   @override
+  String get aboutThirdPartyLicenses => 'Licenças de terceiros';
+
+  @override
   String get splashCopyright => '© 2026 Vini. Licenciado sob GNU AGPL v3.0.';
 
   @override

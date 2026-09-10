@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../l10n/app_localizations.dart';
@@ -16,6 +18,23 @@ const String darkmoonAppVersion = 'v1.11.0';
 /// classic "developer options" tap count (Android's own "tap build number
 /// 7 times" is the same idea, just a different number).
 const _easterEggTapCount = 5;
+
+/// Where the packaging put `THIRD_PARTY_LICENSES.md`: beside the
+/// executable on Windows and Linux (see each platform's CMakeLists.txt),
+/// in `Contents/Resources` on macOS (tool/bundle_macos_natives.sh).
+String thirdPartyLicensesPath() {
+  final exeDir = p.dirname(Platform.resolvedExecutable);
+  final dir = Platform.isMacOS
+      ? p.join(p.dirname(exeDir), 'Resources')
+      : exeDir;
+  return p.join(dir, 'THIRD_PARTY_LICENSES.md');
+}
+
+/// The same file in the repository, for a build that does not carry it
+/// (a `flutter run` from source, the test runner).
+final Uri thirdPartyLicensesUrl = Uri.parse(
+  'https://github.com/vinioliveiras/darkmoon/blob/master/THIRD_PARTY_LICENSES.md',
+);
 
 /// The "About" entry in the top menu bar — app name/version plus credits.
 /// Named [DarkmoonAboutDialog] to avoid colliding with Flutter's own
@@ -42,6 +61,28 @@ class _DarkmoonAboutDialogState extends State<DarkmoonAboutDialog> {
     _iconTapCount = 0;
     await launchUrl(
       Uri.parse('https://www.youtube.com/watch?v=SGj-ORoxD8U'),
+      mode: LaunchMode.externalApplication,
+    );
+  }
+
+  /// Opens the bundled notices file with whatever the system uses for
+  /// Markdown, and falls back to the repository copy when the file is not
+  /// there or nothing will open it.
+  Future<void> _openThirdPartyLicenses() async {
+    final local = File(thirdPartyLicensesPath());
+    // Sync on purpose: one stat, and an awaited dart:io call never
+    // completes under a widget test's fake async zone.
+    if (local.existsSync()) {
+      final opened = await launchUrl(
+        Uri.file(local.path),
+        mode: LaunchMode.externalApplication,
+      );
+      if (opened) {
+        return;
+      }
+    }
+    await launchUrl(
+      thirdPartyLicensesUrl,
       mode: LaunchMode.externalApplication,
     );
   }
@@ -117,6 +158,23 @@ class _DarkmoonAboutDialogState extends State<DarkmoonAboutDialog> {
                 l10n.splashLicense,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: DarkmoonColors.textMuted,
+                ),
+              ),
+              // The bundled notices for LibRaw, ONNX Runtime, DirectML and
+              // the models — several of the models are CC-BY, and the
+              // attribution has to be reachable from the application.
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton(
+                  key: const Key('about-third-party-licenses'),
+                  onPressed: _openThirdPartyLicenses,
+                  style: TextButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: DarkmoonColors.textSecondary,
+                  ),
+                  child: Text(l10n.aboutThirdPartyLicenses),
                 ),
               ),
             ],

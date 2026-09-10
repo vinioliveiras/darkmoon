@@ -142,6 +142,12 @@ abstract class AppLocalizations {
   /// **'GNU Affero General Public License v3.0'**
   String get splashLicense;
 
+  /// No description provided for @aboutThirdPartyLicenses.
+  ///
+  /// In en, this message translates to:
+  /// **'Third-party licences'**
+  String get aboutThirdPartyLicenses;
+
   /// No description provided for @splashCopyright.
   ///
   /// In en, this message translates to:

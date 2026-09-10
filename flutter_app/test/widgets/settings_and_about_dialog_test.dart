@@ -256,6 +256,28 @@ void main() {
         );
       },
     );
+
+    testWidgets(
+      'the third-party licences button opens the bundled notices, or the '
+      'repository copy when no bundle carries them',
+      (tester) async {
+        final originalPlatform = UrlLauncherPlatform.instance;
+        final fakePlatform = _FakeUrlLauncherPlatform();
+        UrlLauncherPlatform.instance = fakePlatform;
+        addTearDown(() => UrlLauncherPlatform.instance = originalPlatform);
+
+        await tester.pumpWidget(_wrap(const DarkmoonAboutDialog()));
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.byKey(const Key('about-third-party-licenses')));
+        await tester.pumpAndSettle();
+        // The test runner is not a packaged build, so the file beside the
+        // executable does not exist and the link goes to the repository.
+        expect(fakePlatform.launchedUrl, thirdPartyLicensesUrl.toString());
+        expect(fakePlatform.launchedUrl, endsWith('THIRD_PARTY_LICENSES.md'));
+      },
+    );
   });
 
   /// A scroll view has to hold [kScrollbarGutter] clear on its right so

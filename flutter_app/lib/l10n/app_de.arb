@@ -7,6 +7,7 @@
   "aboutDialogTitle": "Über darkmoon",
   "aboutCredits": "Entwickelt von Vini",
   "splashLicense": "GNU Affero General Public License v3.0",
+  "aboutThirdPartyLicenses": "Lizenzen Dritter",
   "splashCopyright": "© 2026 Vini. Lizenziert unter GNU AGPL v3.0.",
   "splashLoading": "Bibliothek wird geladen…",
   "dialogOpenFolderTitle": "Ordner hinzufügen",

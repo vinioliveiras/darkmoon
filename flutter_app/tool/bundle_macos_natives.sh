@@ -22,6 +22,12 @@ mkdir -p "$FRAMEWORKS" "$RESOURCES"
 echo "==> Copying dylibs into $FRAMEWORKS"
 cp -f macos/native/*.dylib "$FRAMEWORKS/"
 
+# The licence texts, same as the Windows and Linux bundles carry at their
+# root: darkmoon's own and the notices for everything bundled. The About
+# dialog opens the second from Contents/Resources.
+echo "==> Copying licence texts into $RESOURCES"
+cp -f ../LICENSE ../THIRD_PARTY_LICENSES.md "$RESOURCES/"
+
 # The weights are gitignored (~1.2GB), so CI has none — the app runs
 # without them and the AI features report a missing model.
 if compgen -G "native_models/*.onnx" >/dev/null; then

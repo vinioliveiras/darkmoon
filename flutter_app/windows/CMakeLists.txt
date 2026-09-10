@@ -78,6 +78,16 @@ install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
 
+# The licence texts ship at the bundle root: darkmoon's own, and the
+# notices for everything bundled with it (LibRaw, ONNX Runtime, DirectML,
+# and the models — several are CC-BY and require attribution). The About
+# dialog opens the second one. Added 2026-09-10.
+install(FILES
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../LICENSE"
+  "${CMAKE_CURRENT_SOURCE_DIR}/../../THIRD_PARTY_LICENSES.md"
+  DESTINATION "${CMAKE_INSTALL_PREFIX}"
+  COMPONENT Runtime)
+
 install(FILES "${FLUTTER_LIBRARY}" DESTINATION "${INSTALL_BUNDLE_LIB_DIR}"
   COMPONENT Runtime)
 
