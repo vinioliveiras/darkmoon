@@ -2079,6 +2079,13 @@ class _EditorScreenState extends State<EditorScreen>
   /// than live in-editor state, so
   /// every thumbnail in the strip can be checked, not just the selected
   /// photo (whose RAW source may not even be decoded yet).
+  /// [_defaultParamValues] built once for [_isPhotoEdited]: the table is
+  /// static, and the check runs for every filmstrip tile on every rebuild
+  /// — a 120-entry map per tile per frame was the audit's finding.
+  late final Map<String, double> _defaultsForEditedBadge = Map.unmodifiable(
+    _defaultParamValues(),
+  );
+
   bool _isPhotoEdited(String path) {
     final masks = _store.masks[path];
     if (masks != null && masks.isNotEmpty) {
@@ -2092,7 +2099,7 @@ class _EditorScreenState extends State<EditorScreen>
     if (values == null) {
       return false;
     }
-    final defaults = _defaultParamValues();
+    final defaults = _defaultsForEditedBadge;
     final meta = _metadata[path];
     final asShotKelvin = meta?.asShotKelvin ?? wbDefaultKelvin;
     final asShotTint = meta?.asShotTint ?? wbDefaultTint;
