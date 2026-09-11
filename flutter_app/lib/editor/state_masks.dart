@@ -62,8 +62,7 @@ extension _EditorMasks on _EditorScreenState {
     return _activeMask?.curves ?? identityPhotoCurves;
   }
 
-  MaskLayer? get _activeMask =>
-      _currentMasks.where((m) => m.id == _activeMaskId).firstOrNull;
+  MaskLayer? get _activeMask => _maskStack.active;
 
   void _onActiveToneCurveChanged(List<CurvePoint> points) {
     if (_activeMaskId == imageMaskId) {
@@ -201,16 +200,11 @@ extension _EditorMasks on _EditorScreenState {
   }
 
   void _updateActiveMask(MaskLayer Function(MaskLayer mask) update) {
-    _rebuild(() {
-      _currentMasks = [
-        for (final mask in _currentMasks)
-          if (mask.id == _activeMaskId) update(mask) else mask,
-      ];
-    });
+    _rebuild(() => _maskStack.updateActive(update));
   }
 
   void _selectMask(String id) {
-    _rebuild(() => _activeMaskId = id);
+    _rebuild(() => _maskStack.select(id));
   }
 
   void _toggleMaskOverlayVisible() {
@@ -219,7 +213,6 @@ extension _EditorMasks on _EditorScreenState {
 
   void _addMask(MaskType type) {
     final l10n = AppLocalizations.of(context)!;
-    final countOfType = _currentMasks.where((m) => m.type == type).length + 1;
     final baseName = switch (type) {
       MaskType.linearGradient => l10n.maskLinearGradient,
       MaskType.radialGradient => l10n.maskRadialGradient,
@@ -233,15 +226,7 @@ extension _EditorMasks on _EditorScreenState {
       MaskType.foreground => l10n.maskForeground,
       MaskType.depth => l10n.maskDepth,
     };
-    final mask = MaskLayer(
-      id: 'mask_${DateTime.now().microsecondsSinceEpoch}',
-      name: '$baseName $countOfType',
-      type: type,
-    );
-    _rebuild(() {
-      _currentMasks = [..._currentMasks, mask];
-      _activeMaskId = mask.id;
-    });
+    _rebuild(() => _maskStack.add(type, baseName));
     _pushHistory();
     _scheduleRender(live: false);
     _scheduleCatalogSave();
@@ -280,76 +265,34 @@ extension _EditorMasks on _EditorScreenState {
   /// Duplicates the active mask into a new sibling layer — same geometry,
   /// slider values and curves, a fresh id, and a "copy" suffix on the
   /// name so it's distinguishable in the switch menu. The clone becomes
-  /// the active
-  /// layer, matching [_addMask]'s "select what you just created" feel.
+  /// the active layer, matching [_addMask]'s "select what you just
+  /// created" feel. Which fields a clone carries is [MaskStack.clone]'s
+  /// business, and tested there.
   void _cloneActiveMask() {
     final l10n = AppLocalizations.of(context)!;
-    final source = _currentMasks
-        .where((m) => m.id == _activeMaskId)
-        .firstOrNull;
-    if (source == null) {
+    if (_maskStack.active == null) {
       return;
     }
-    final clone = MaskLayer(
-      id: 'mask_${DateTime.now().microsecondsSinceEpoch}',
-      name: '${source.name} ${l10n.maskCloneSuffix}',
-      type: source.type,
-      linear: source.linear,
-      radial: source.radial,
-      brush: source.brush,
-      colorRange: source.colorRange,
-      // Every geometry field, not just the ones that existed when this was
-      // written: `luminance` was already being silently dropped, so
-      // cloning a Luminance mask handed back one aimed at the default
-      // mid-gray. The list has to grow with MaskLayer's.
-      luminance: source.luminance,
-      subject: source.subject,
-      depth: source.depth,
-      enabled: source.enabled,
-      inverted: source.inverted,
-      opacity: source.opacity,
-      values: Map<String, double>.from(source.values),
-      curves: source.curves,
-    );
-    _rebuild(() {
-      _currentMasks = [..._currentMasks, clone];
-      _activeMaskId = clone.id;
-    });
+    _rebuild(() => _maskStack.clone(l10n.maskCloneSuffix));
     _pushHistory();
     _scheduleRender(live: false);
     _scheduleCatalogSave();
   }
 
   void _deleteActiveMask() {
-    _rebuild(() {
-      _currentMasks = [
-        for (final mask in _currentMasks)
-          if (mask.id != _activeMaskId) mask,
-      ];
-      _activeMaskId = imageMaskId;
-    });
+    _rebuild(_maskStack.deleteActive);
     _pushHistory();
     _scheduleRender(live: false);
     _scheduleCatalogSave();
   }
 
   void _onMaskGeometryChanged(MaskLayer updated) {
-    _rebuild(() {
-      _currentMasks = [
-        for (final mask in _currentMasks)
-          if (mask.id == updated.id) updated else mask,
-      ];
-    });
+    _rebuild(() => _maskStack.replace(updated));
     _scheduleRender(live: _settings.fastPreview);
   }
 
   void _onMaskGeometryChangeEnd(MaskLayer updated) {
-    _rebuild(() {
-      _currentMasks = [
-        for (final mask in _currentMasks)
-          if (mask.id == updated.id) updated else mask,
-      ];
-    });
+    _rebuild(() => _maskStack.replace(updated));
     _pushHistory();
     _scheduleRender(live: false);
     _scheduleCatalogSave();
@@ -379,13 +322,7 @@ extension _EditorMasks on _EditorScreenState {
     if (mask == null || mask.brush.strokes.isEmpty) {
       return;
     }
-    _updateActiveMask(
-      (m) => m.copyWith(
-        brush: m.brush.copyWith(
-          strokes: m.brush.strokes.sublist(0, m.brush.strokes.length - 1),
-        ),
-      ),
-    );
+    _rebuild(_maskStack.undoLastStroke);
     _pushHistory();
     _scheduleRender(live: false);
     _scheduleCatalogSave();

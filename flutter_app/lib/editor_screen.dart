@@ -32,6 +32,7 @@ import 'cloud_denoise/cloud_denoise_provider.dart';
 import 'cloud_denoise/cloud_denoise_token_store.dart';
 import 'diagnostics/dev_log.dart';
 import 'editor/edit_history.dart';
+import 'editor/mask_stack.dart';
 import 'editor/photo_edit_store.dart';
 import 'export/export_job.dart';
 import 'export/export_metadata.dart';
@@ -742,10 +743,15 @@ class _EditorScreenState extends State<EditorScreen>
   /// Mirrors how [_paramValues] tracks the selected photo's slider values.
   PhotoCurves _currentCurves = identityPhotoCurves;
 
-  /// The mask stack for whichever photo is selected. Mirrors
+  /// The mask stack for whichever photo is selected, and which layer the
+  /// panel edits — the editor's third controller (2026-09-12). Mirrors
   /// [_paramValues]/[_currentCurves]'s "live copy of the saved value"
-  /// pattern.
-  List<MaskLayer> _currentMasks = [];
+  /// pattern; [_currentMasks] and [_activeMaskId] are views on it so the
+  /// rest of the State reads as before.
+  final _maskStack = MaskStack();
+
+  List<MaskLayer> get _currentMasks => _maskStack.layers;
+  set _currentMasks(List<MaskLayer> value) => _maskStack.load(value);
 
   /// The last photo's edits copied via the image's right-click menu — a
   /// session-only clipboard (not persisted). Null = nothing copied yet, so
@@ -764,7 +770,8 @@ class _EditorScreenState extends State<EditorScreen>
   /// Which layer the controls panel is currently editing —
   /// [imageMaskId] (the whole photo, i.e. the existing global
   /// adjustments) or one of [_currentMasks]'s ids.
-  String _activeMaskId = imageMaskId;
+  String get _activeMaskId => _maskStack.activeId;
+  set _activeMaskId(String value) => _maskStack.activeId = value;
 
   /// Whether the active mask's on-canvas overlay (shaded coverage area,
   /// handles, brush cursor) is drawn — a session-wide UI preference, not
@@ -4722,15 +4729,9 @@ class _EditorScreenState extends State<EditorScreen>
     setState(() {
       _paramValues = snapshot.paramValues;
       _currentCurves = snapshot.curves;
-      _currentMasks = snapshot.masks;
-      if (_activeMaskId != imageMaskId &&
-          !_currentMasks.any((m) => m.id == _activeMaskId)) {
-        // The active mask no longer exists in the state being restored to
-        // (e.g. undoing past its creation, or redoing past its deletion)
-        // — fall back to the Image layer rather than pointing the panel
-        // at a mask that isn't there.
-        _activeMaskId = imageMaskId;
-      }
+      // Undoing past a mask's creation (or redoing past its deletion)
+      // returns the panel to the Image layer — see [MaskStack.load].
+      _maskStack.load(snapshot.masks);
     });
     _scheduleRender(live: false);
     _scheduleCatalogSave();

@@ -921,3 +921,7 @@ void _paintFlowStroke(
     }
   }
 }
+
+/// Sentinel id for the always-present base layer — the whole photo, i.e.
+/// the editor's existing global adjustments. Not a real [MaskLayer].
+const imageMaskId = 'image';

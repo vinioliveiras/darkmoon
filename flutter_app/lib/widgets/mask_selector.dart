@@ -7,9 +7,7 @@ import '../theme.dart';
 import 'slider_row.dart';
 import 'styled_dropdown.dart';
 
-/// Sentinel id for the always-present base layer — the whole photo, i.e.
-/// the editor's existing global adjustments. Not a real [MaskLayer].
-const imageMaskId = 'image';
+export '../render/mask.dart' show imageMaskId;
 
 /// Photomator-style mask picker: a pill showing the mask currently being
 /// edited (tap to switch between "Image" and any added masks) plus a "+"
