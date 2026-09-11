@@ -775,6 +775,30 @@ class AppLocalizationsDe extends AppLocalizations {
   String get filmstripDeleteAction => 'Löschen';
 
   @override
+  String get filmstripRatingLabel => 'Bewertung';
+
+  @override
+  String get filmstripColorLabel => 'Farbmarkierung';
+
+  @override
+  String get labelNone => 'Keine';
+
+  @override
+  String get labelRed => 'Rot';
+
+  @override
+  String get labelYellow => 'Gelb';
+
+  @override
+  String get labelGreen => 'Grün';
+
+  @override
+  String get labelBlue => 'Blau';
+
+  @override
+  String get labelPurple => 'Lila';
+
+  @override
   String get imageContextCopyEditsAction => 'Bearbeitungen kopieren';
 
   @override

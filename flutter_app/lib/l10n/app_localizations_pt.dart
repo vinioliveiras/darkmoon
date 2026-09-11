@@ -767,6 +767,30 @@ class AppLocalizationsPt extends AppLocalizations {
   String get filmstripDeleteAction => 'Excluir';
 
   @override
+  String get filmstripRatingLabel => 'Classificação';
+
+  @override
+  String get filmstripColorLabel => 'Etiqueta de cor';
+
+  @override
+  String get labelNone => 'Nenhuma';
+
+  @override
+  String get labelRed => 'Vermelha';
+
+  @override
+  String get labelYellow => 'Amarela';
+
+  @override
+  String get labelGreen => 'Verde';
+
+  @override
+  String get labelBlue => 'Azul';
+
+  @override
+  String get labelPurple => 'Roxa';
+
+  @override
   String get imageContextCopyEditsAction => 'Copiar Edições';
 
   @override

@@ -1450,6 +1450,54 @@ abstract class AppLocalizations {
   /// **'Delete'**
   String get filmstripDeleteAction;
 
+  /// No description provided for @filmstripRatingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Rating'**
+  String get filmstripRatingLabel;
+
+  /// No description provided for @filmstripColorLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Color label'**
+  String get filmstripColorLabel;
+
+  /// No description provided for @labelNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get labelNone;
+
+  /// No description provided for @labelRed.
+  ///
+  /// In en, this message translates to:
+  /// **'Red'**
+  String get labelRed;
+
+  /// No description provided for @labelYellow.
+  ///
+  /// In en, this message translates to:
+  /// **'Yellow'**
+  String get labelYellow;
+
+  /// No description provided for @labelGreen.
+  ///
+  /// In en, this message translates to:
+  /// **'Green'**
+  String get labelGreen;
+
+  /// No description provided for @labelBlue.
+  ///
+  /// In en, this message translates to:
+  /// **'Blue'**
+  String get labelBlue;
+
+  /// No description provided for @labelPurple.
+  ///
+  /// In en, this message translates to:
+  /// **'Purple'**
+  String get labelPurple;
+
   /// No description provided for @imageContextCopyEditsAction.
   ///
   /// In en, this message translates to:

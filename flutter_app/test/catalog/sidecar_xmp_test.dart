@@ -211,23 +211,31 @@ void main() {
       await dir.delete(recursive: true);
     });
 
-    test('writes, reads back, and keeps foreign metadata on rewrite', () async {
-      // Another editor rated the photo before this app ever saw it.
-      await sidecarFileFor(photo).writeAsString(
-        xmpFromSidecar(
-          const PhotoSidecar(rating: 2, label: 'Yellow', tags: ['keep']),
-        ),
-      );
+    test('writes exactly what it is given, metadata included', () async {
       await writeSidecarFile(
         photo,
-        const PhotoSidecar(values: {'Exposure': 1.0}),
+        const PhotoSidecar(
+          values: {'Exposure': 1.0},
+          rating: 2,
+          label: 'Yellow',
+          tags: ['keep'],
+        ),
       );
-      final read = await readSidecar(photo);
-      expect(read, isNotNull);
+      var read = await readSidecar(photo);
       expect(read!.values, {'Exposure': 1.0});
       expect(read.rating, 2);
       expect(read.label, 'Yellow');
       expect(read.tags, ['keep']);
+      // A cleared rating is cleared in the file — the store is the
+      // authority, having adopted any foreign metadata first.
+      await writeSidecarFile(
+        photo,
+        const PhotoSidecar(values: {'Exposure': 1.0}),
+      );
+      read = await readSidecar(photo);
+      expect(read!.rating, 0);
+      expect(read.label, '');
+      expect(read.tags, isEmpty);
     });
 
     test('a sidecar with nothing left to say is removed', () async {

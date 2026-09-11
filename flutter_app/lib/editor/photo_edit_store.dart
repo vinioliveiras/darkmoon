@@ -1,6 +1,7 @@
 import '../catalog/catalog_store.dart';
 import '../catalog/curve_store.dart';
 import '../catalog/mask_store.dart';
+import '../catalog/photo_meta_store.dart';
 import '../catalog/photo_preset_store.dart';
 import '../catalog/sidecar_xmp.dart';
 import '../render/mask.dart';
@@ -36,12 +37,17 @@ class PhotoEditStore {
   /// the actual edit lives in [values]/[curves]/[masks].
   Map<String, String> presets = {};
 
-  /// Every path any of the four maps knows.
+  /// Rating, colour label and keywords per photo — not an edit, but it
+  /// rides in the same sidecar, so it lives here too.
+  Map<String, PhotoMeta> meta = {};
+
+  /// Every path any of the maps knows.
   Set<String> get paths => {
     ...values.keys,
     ...curves.keys,
     ...masks.keys,
     ...presets.keys,
+    ...meta.keys,
   };
 
   /// Whether [path] has a saved edit of any kind (a preset marker alone
@@ -59,11 +65,13 @@ class PhotoEditStore {
       loadPhotoCurves(),
       loadPhotoMasks(),
       loadPhotoPresets(),
+      loadPhotoMeta(),
     ).wait;
     values = loaded.$1;
     curves = loaded.$2;
     masks = loaded.$3;
     presets = loaded.$4;
+    meta = loaded.$5;
   }
 
   /// Persists the three edit maps — see `writeJsonFileAtomically` for
@@ -76,10 +84,23 @@ class PhotoEditStore {
 
   Future<void> savePresets() => savePhotoPresets(presets);
 
-  /// All four.
+  Future<void> saveMeta() => savePhotoMeta(meta);
+
+  /// All five.
   Future<void> save() async {
     await saveEdits();
     await savePresets();
+    await saveMeta();
+  }
+
+  /// Sets [path]'s rating/label/tags (in memory — follow with [saveMeta]);
+  /// an empty [PhotoMeta] removes the entry.
+  void setMeta(String path, PhotoMeta value) {
+    if (value.isEmpty) {
+      meta.remove(path);
+    } else {
+      meta[path] = value;
+    }
   }
 
   /// Drops [path] from every map (in memory only — follow with [save]).
@@ -88,6 +109,7 @@ class PhotoEditStore {
     curves.removeWhere((path, _) => test(path));
     masks.removeWhere((path, _) => test(path));
     presets.removeWhere((path, _) => test(path));
+    meta.removeWhere((path, _) => test(path));
   }
 
   /// Deletes the three edit stores on disk and empties their maps — the
@@ -104,12 +126,18 @@ class PhotoEditStore {
   }
 
   /// [path]'s edits as one sidecar document.
-  PhotoSidecar sidecarFor(String path) => PhotoSidecar(
-    values: values[path] ?? const {},
-    curves: curves[path] ?? identityPhotoCurves,
-    masks: masks[path] ?? const [],
-    presetId: presets[path],
-  );
+  PhotoSidecar sidecarFor(String path) {
+    final m = meta[path] ?? const PhotoMeta();
+    return PhotoSidecar(
+      values: values[path] ?? const {},
+      curves: curves[path] ?? identityPhotoCurves,
+      masks: masks[path] ?? const [],
+      presetId: presets[path],
+      rating: m.rating,
+      label: m.label,
+      tags: m.tags,
+    );
+  }
 
   /// Mirrors [path]'s edits to the `.xmp` beside it — see
   /// `sidecar_xmp.dart`, which logs its own failures.
@@ -118,7 +146,8 @@ class PhotoEditStore {
 
   /// Takes [sidecar]'s edits as [path]'s (in memory — follow with
   /// [save]). The preset marker is only set, never cleared: a sidecar
-  /// from another editor says nothing about presets.
+  /// from another editor says nothing about presets. Rating, label and
+  /// tags come along when the sidecar has any — see [adoptMeta].
   void adopt(String path, PhotoSidecar sidecar) {
     values[path] = {...sidecar.values};
     curves[path] = sidecar.curves;
@@ -126,5 +155,21 @@ class PhotoEditStore {
     if (sidecar.presetId case final id?) {
       presets[path] = id;
     }
+    adoptMeta(path, sidecar);
+  }
+
+  /// Takes [sidecar]'s rating/label/tags as [path]'s when it has any —
+  /// a rating given in another application, seen here for the first
+  /// time. Returns whether anything was taken.
+  bool adoptMeta(String path, PhotoSidecar sidecar) {
+    if (!sidecar.hasMetadata) {
+      return false;
+    }
+    meta[path] = PhotoMeta(
+      rating: sidecar.rating,
+      label: sidecar.label,
+      tags: sidecar.tags,
+    );
+    return true;
   }
 }

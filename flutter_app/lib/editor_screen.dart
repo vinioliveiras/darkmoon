@@ -17,6 +17,7 @@ import 'animations_config.dart';
 import 'catalog/cache_usage.dart';
 import 'catalog/ai_mask_cache_dir.dart';
 import 'catalog/native_source_cache.dart';
+import 'catalog/photo_meta_store.dart';
 import 'catalog/preview_cache_dir.dart';
 import 'catalog/sidecar_xmp.dart' show readSidecar;
 import 'catalog/ai_enhance_cache.dart';
@@ -1579,16 +1580,86 @@ class _EditorScreenState extends State<EditorScreen>
     unawaited(_store.writeSidecar(path));
   }
 
+  /// Sets [file]'s rating (0-5) — the store, its file and the sidecar.
+  void _setRating(RawFile file, int rating) {
+    final current = _store.meta[file.path] ?? const PhotoMeta();
+    _setPhotoMeta(file.path, current.copyWith(rating: rating.clamp(0, 5)));
+  }
+
+  /// Sets [file]'s colour label (one of [photoLabelNames], or empty).
+  void _setLabel(RawFile file, String label) {
+    final current = _store.meta[file.path] ?? const PhotoMeta();
+    _setPhotoMeta(file.path, current.copyWith(label: label));
+  }
+
+  void _setPhotoMeta(String path, PhotoMeta value) {
+    setState(() => _store.setMeta(path, value));
+    unawaited(_store.saveMeta());
+    _writeSidecarFor(path);
+  }
+
+  /// The keyboard's 0-5 (rating) and 6-9 (label) on the selected photo,
+  /// the way Meridian binds them; the current label pressed again clears.
+  void _rateSelected(int rating) {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected != null) {
+      _setRating(selected, rating);
+    }
+  }
+
+  void _labelSelected(String label) {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null) {
+      return;
+    }
+    final current = _store.meta[selected.path]?.label ?? '';
+    _setLabel(selected, current == label ? '' : label);
+  }
+
+  static const _digitKeys = [
+    LogicalKeyboardKey.digit0,
+    LogicalKeyboardKey.digit1,
+    LogicalKeyboardKey.digit2,
+    LogicalKeyboardKey.digit3,
+    LogicalKeyboardKey.digit4,
+    LogicalKeyboardKey.digit5,
+    LogicalKeyboardKey.digit6,
+    LogicalKeyboardKey.digit7,
+    LogicalKeyboardKey.digit8,
+    LogicalKeyboardKey.digit9,
+  ];
+
   /// Adopts [path]'s `.xmp` sidecar when the catalog knows nothing about
   /// the photo — it was edited on another machine, in another editor, or
   /// moved (the catalog is keyed by absolute path). A catalog entry wins
   /// otherwise: it is what this app wrote last.
   Future<void> _importSidecar(String path) async {
-    if (!_settings.writeXmpSidecars || _store.contains(path)) {
+    if (!_settings.writeXmpSidecars) {
+      return;
+    }
+    if (_store.contains(path)) {
+      // Known photo: only a rating/label/tags it has none of yet can still
+      // come from the file (given in another application).
+      if (!_store.meta.containsKey(path)) {
+        final sidecar = await readSidecar(path);
+        if (sidecar != null && mounted && !_store.meta.containsKey(path)) {
+          if (_store.adoptMeta(path, sidecar)) {
+            setState(() {});
+            unawaited(_store.saveMeta());
+          }
+        }
+      }
       return;
     }
     final sidecar = await readSidecar(path);
-    if (sidecar == null || !sidecar.hasEdits || !mounted) {
+    if (sidecar == null || !mounted) {
+      return;
+    }
+    if (!sidecar.hasEdits) {
+      if (!_store.meta.containsKey(path) && _store.adoptMeta(path, sidecar)) {
+        setState(() {});
+        unawaited(_store.saveMeta());
+      }
       return;
     }
     // The user may have started editing while the file was being read.
@@ -4162,6 +4233,15 @@ class _EditorScreenState extends State<EditorScreen>
         // (Cmd+Shift+Z above is the one), but binding it costs nothing and
         // keeps muscle memory working for anyone moving between the two.
         _cmdShortcut(LogicalKeyboardKey.keyY): _redo,
+        // Rating and colour label on the selected photo (2026-09-11), on
+        // the keys every RAW editor uses: 0-5 stars, 6-9 red/yellow/
+        // green/blue. A focused text field takes digits first, as with
+        // every other binding here.
+        for (var stars = 0; stars <= 5; stars++)
+          SingleActivator(_digitKeys[stars]): () => _rateSelected(stars),
+        for (var i = 0; i < 4; i++)
+          SingleActivator(_digitKeys[6 + i]): () =>
+              _labelSelected(photoLabelNames[i]),
         // Filmstrip navigation (2026-09-01, explicit user request) — a
         // focused text field (e.g. the Cloud AI token field) consumes
         // arrow keys itself for cursor movement before they ever reach
@@ -4652,6 +4732,9 @@ class _EditorScreenState extends State<EditorScreen>
                       onCopyEdits: _copyEditsFor,
                       onPasteEdits: _pasteEditsFor,
                       hasCopiedEdits: _hasCopiedEdits,
+                      metaOf: (path) => _store.meta[path],
+                      onSetRating: _setRating,
+                      onSetLabel: _setLabel,
                     ),
                   ],
                 ),

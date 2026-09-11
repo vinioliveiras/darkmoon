@@ -760,6 +760,30 @@ class AppLocalizationsEn extends AppLocalizations {
   String get filmstripDeleteAction => 'Delete';
 
   @override
+  String get filmstripRatingLabel => 'Rating';
+
+  @override
+  String get filmstripColorLabel => 'Color label';
+
+  @override
+  String get labelNone => 'None';
+
+  @override
+  String get labelRed => 'Red';
+
+  @override
+  String get labelYellow => 'Yellow';
+
+  @override
+  String get labelGreen => 'Green';
+
+  @override
+  String get labelBlue => 'Blue';
+
+  @override
+  String get labelPurple => 'Purple';
+
+  @override
   String get imageContextCopyEditsAction => 'Copy Edits';
 
   @override

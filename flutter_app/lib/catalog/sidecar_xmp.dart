@@ -33,9 +33,9 @@ import 'mask_store.dart';
 ///
 /// Plus the standard metadata a library needs and other tools already
 /// write: `xmp:Rating` (0-5), `xmp:Label` (a colour name) and
-/// `dc:subject` (keywords). Nothing in the editor sets them yet; a
-/// rewrite preserves whatever the file already had, so a rating given in
-/// another application survives an edit here.
+/// `dc:subject` (keywords) — the editor's `PhotoMeta`, which adopts them
+/// from a sidecar it sees for the first time, so a rating given in
+/// another application comes through and survives an edit here.
 const darkmoonNamespace = 'http://darkmoon.app/ns/1.0/';
 const xmpNamespace = 'http://ns.adobe.com/xap/1.0/';
 const dcNamespace = 'http://purl.org/dc/elements/1.1/';
@@ -292,34 +292,24 @@ Future<PhotoSidecar?> readSidecar(String photoPath) async {
   }
 }
 
-/// Writes [sidecar] next to [photoPath]. Rating, label and tags the file
-/// already carries are kept when [sidecar] has none of its own, so
-/// metadata written by another application survives an edit here. A
-/// sidecar with nothing left to say (edits reset, no metadata) is
-/// removed rather than left as an empty document. Errors are logged, not
-/// thrown — every caller fires this from a save that must not fail
-/// because the photo sits on a read-only volume.
+/// Writes [sidecar] next to [photoPath], exactly as given: the editor's
+/// store is the authority on rating, label and tags too (it adopts a
+/// foreign sidecar's before the first write — `PhotoEditStore.adoptMeta`),
+/// so a rating cleared here is cleared in the file. A sidecar with
+/// nothing left to say (edits reset, no metadata) is removed rather than
+/// left as an empty document. Errors are logged, not thrown — every
+/// caller fires this from a save that must not fail because the photo
+/// sits on a read-only volume.
 Future<void> writeSidecarFile(String photoPath, PhotoSidecar sidecar) async {
   final file = sidecarFileFor(photoPath);
   try {
-    var merged = sidecar;
-    if (!sidecar.hasMetadata) {
-      final existing = await readSidecar(photoPath);
-      if (existing != null && existing.hasMetadata) {
-        merged = sidecar.copyWith(
-          rating: existing.rating,
-          label: existing.label,
-          tags: existing.tags,
-        );
-      }
-    }
-    if (!merged.hasEdits && !merged.hasMetadata && merged.presetId == null) {
+    if (!sidecar.hasEdits && !sidecar.hasMetadata && sidecar.presetId == null) {
       if (await file.exists()) {
         await file.delete();
       }
       return;
     }
-    await writeJsonFileAtomically(file, xmpFromSidecar(merged));
+    await writeJsonFileAtomically(file, xmpFromSidecar(sidecar));
   } catch (e, st) {
     DevLog.logError('sidecar write failed for $photoPath', e, st);
   }
