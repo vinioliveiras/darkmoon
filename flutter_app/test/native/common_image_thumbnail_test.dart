@@ -58,11 +58,11 @@ void main() {
       expect(result, isNotNull);
       final decoded = img.decodeJpg(result!);
       expect(decoded, isNotNull);
-      expect(decoded!.width, lessThanOrEqualTo(200));
-      expect(decoded.height, lessThanOrEqualTo(200));
-      // 2000x1000 at cap 200 -> 200x100.
-      expect(decoded.width, 200);
-      expect(decoded.height, 100);
+      expect(decoded!.width, lessThanOrEqualTo(320));
+      expect(decoded.height, lessThanOrEqualTo(320));
+      // 2000x1000 at cap 320 -> 320x160.
+      expect(decoded.width, 320);
+      expect(decoded.height, 160);
     });
 
     test('leaves an already-small JPEG at its native size', () async {
@@ -79,8 +79,8 @@ void main() {
       final bytes = _makeJpeg(width: 2000, height: 1000, orientation: 6);
       final result = await decodeJpegThumbnailFast(bytes);
       final decoded = img.decodeJpg(result!);
-      expect(decoded!.width, 100);
-      expect(decoded.height, 200);
+      expect(decoded!.width, 160);
+      expect(decoded.height, 320);
     });
 
     test(
