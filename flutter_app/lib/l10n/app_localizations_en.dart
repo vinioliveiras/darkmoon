@@ -21,6 +21,51 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuAbout => 'About';
 
   @override
+  String get menuLibrary => 'Library';
+
+  @override
+  String get libraryBackTooltip => 'Back to the editor';
+
+  @override
+  String get librarySearchHint => 'Search file names';
+
+  @override
+  String libraryMinRatingTooltip(int stars) {
+    return 'Show photos rated $stars stars or more';
+  }
+
+  @override
+  String get libraryAllLabelsTooltip => 'All labels';
+
+  @override
+  String libraryPhotoCount(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count photos',
+      one: '1 photo',
+      zero: 'No photos',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get libraryEmptyFolders =>
+      'Add a folder to the library to browse it here';
+
+  @override
+  String get libraryAddFolder => 'Add folder';
+
+  @override
+  String get libraryEmpty => 'No photos in this folder';
+
+  @override
+  String get libraryNoMatches => 'No photos match the filters';
+
+  @override
+  String get libraryOpenInEditor => 'Edit';
+
+  @override
   String get aboutDialogTitle => 'About darkmoon';
 
   @override

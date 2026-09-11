@@ -124,6 +124,72 @@ abstract class AppLocalizations {
   /// **'About'**
   String get menuAbout;
 
+  /// No description provided for @menuLibrary.
+  ///
+  /// In en, this message translates to:
+  /// **'Library'**
+  String get menuLibrary;
+
+  /// No description provided for @libraryBackTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to the editor'**
+  String get libraryBackTooltip;
+
+  /// No description provided for @librarySearchHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Search file names'**
+  String get librarySearchHint;
+
+  /// No description provided for @libraryMinRatingTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Show photos rated {stars} stars or more'**
+  String libraryMinRatingTooltip(int stars);
+
+  /// No description provided for @libraryAllLabelsTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'All labels'**
+  String get libraryAllLabelsTooltip;
+
+  /// No description provided for @libraryPhotoCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No photos} =1{1 photo} other{{count} photos}}'**
+  String libraryPhotoCount(int count);
+
+  /// No description provided for @libraryEmptyFolders.
+  ///
+  /// In en, this message translates to:
+  /// **'Add a folder to the library to browse it here'**
+  String get libraryEmptyFolders;
+
+  /// No description provided for @libraryAddFolder.
+  ///
+  /// In en, this message translates to:
+  /// **'Add folder'**
+  String get libraryAddFolder;
+
+  /// No description provided for @libraryEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'No photos in this folder'**
+  String get libraryEmpty;
+
+  /// No description provided for @libraryNoMatches.
+  ///
+  /// In en, this message translates to:
+  /// **'No photos match the filters'**
+  String get libraryNoMatches;
+
+  /// No description provided for @libraryOpenInEditor.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit'**
+  String get libraryOpenInEditor;
+
   /// No description provided for @aboutDialogTitle.
   ///
   /// In en, this message translates to:

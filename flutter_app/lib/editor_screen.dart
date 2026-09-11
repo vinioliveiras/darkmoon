@@ -36,6 +36,7 @@ import 'editor/photo_edit_store.dart';
 import 'export/export_job.dart';
 import 'export/export_metadata.dart';
 import 'l10n/app_localizations.dart';
+import 'library/library_screen.dart';
 import 'native/camera_match.dart';
 import 'native/common_image_thumbnail.dart';
 import 'native/edit_source.dart';
@@ -108,6 +109,7 @@ import 'widgets/preset_panel.dart';
 import 'widgets/settings_dialog.dart';
 import 'widgets/slider_row.dart';
 import 'widgets/styled_dropdown.dart';
+import 'widgets/photo_meta_widgets.dart';
 import 'widgets/text_prompt_dialog.dart';
 import 'widgets/tone_curve_editor.dart';
 import 'widgets/white_balance_eyedropper_overlay.dart';
@@ -1628,6 +1630,71 @@ class _EditorScreenState extends State<EditorScreen>
     LogicalKeyboardKey.digit8,
     LogicalKeyboardKey.digit9,
   ];
+
+  /// The Home button: the library screen over the editor. Comes back with
+  /// the photo to open, if the user chose one.
+  Future<void> _openLibrary() async {
+    if (_openingToolbarDialog) {
+      return;
+    }
+    final request = await Navigator.of(context).push<LibraryOpenRequest>(
+      MaterialPageRoute(
+        builder: (_) => LibraryScreen(
+          libraryFolders: () => _settings.libraryFolders,
+          recentFiles: () => _settings.recentFiles,
+          rawOnly: () => _settings.rawOnly,
+          includeSubfolders: () => _settings.includeSubfolders,
+          initialFolder: _currentFolder,
+          thumbnailFor: _libraryThumbnail,
+          metaOf: (path) => _store.meta[path],
+          isEdited: _isPhotoEdited,
+          onSetRating: _setRating,
+          onSetLabel: _setLabel,
+          onRawOnlyChanged: _setRawOnly,
+          onIncludeSubfoldersChanged: _setIncludeSubfolders,
+          onAddFolder: _openFolder,
+          onRemoveFolder: _removeLibraryFolder,
+          onOpenFile: _openFile,
+          onRemoveRecentFile: _removeRecentFile,
+          onShowOnDisk: (file) => unawaited(_revealInExplorer(file)),
+          onResetEdits: (file) => unawaited(_resetAllEditsFor(file)),
+        ),
+      ),
+    );
+    if (!mounted || request == null) {
+      return;
+    }
+    if (request.folder case final folder?) {
+      if (folder == _currentFolder) {
+        final index = _files.indexWhere((f) => f.path == request.path);
+        if (index >= 0) {
+          _selectIndex(index);
+          return;
+        }
+      }
+      await _loadFolder(folder, selectPath: request.path);
+    } else {
+      await _selectRecentFile(request.path);
+    }
+  }
+
+  /// A thumbnail for the library grid: what the filmstrip already has,
+  /// else the on-disk cache, else a decode (stored for next time).
+  Future<Uint8List?> _libraryThumbnail(RawFile file) async {
+    final inMemory = _thumbnails[file.path];
+    if (inMemory != null) {
+      return inMemory;
+    }
+    final cached = await _thumbnailCache?.lookup(file.path);
+    if (cached != null) {
+      return cached;
+    }
+    final bytes = await _decodeThumbnail(file);
+    if (bytes != null) {
+      unawaited(_thumbnailCache?.store(file.path, bytes));
+    }
+    return bytes;
+  }
 
   /// Adopts [path]'s `.xmp` sidecar when the catalog knows nothing about
   /// the photo — it was edited on another machine, in another editor, or
@@ -4678,6 +4745,7 @@ class _EditorScreenState extends State<EditorScreen>
                       ),
                     ),
                     _ViewerToolbar(
+                      onOpenLibrary: _openLibrary,
                       onOpenSettings: _openSettings,
                       onOpenAbout: _openAbout,
                       zoomLabel: _zoomScale == 1.0

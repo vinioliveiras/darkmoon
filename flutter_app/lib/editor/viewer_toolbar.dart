@@ -27,6 +27,7 @@ class _ViewerToolbar extends StatelessWidget {
     required this.onExport,
     required this.exporting,
     required this.onReset,
+    required this.onOpenLibrary,
     required this.onOpenSettings,
     required this.onOpenAbout,
   });
@@ -65,6 +66,8 @@ class _ViewerToolbar extends StatelessWidget {
   /// The app's own two windows. They sit in the slot the toolbar already
   /// reserved to line up with the sidebar, which is the only part of this
   /// bar that was not already carrying something.
+  /// The Home button, left of the gear: the library screen.
+  final VoidCallback onOpenLibrary;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenAbout;
 
@@ -102,6 +105,13 @@ class _ViewerToolbar extends StatelessWidget {
                   height: _squareButtonSize,
                   showChrome: false,
                   children: [
+                    _ToolbarSegment(
+                      icon: CupertinoIcons.house_fill,
+                      iconSize: _squareButtonIconSize,
+                      width: _squareButtonSize,
+                      onTap: locked ? null : onOpenLibrary,
+                      tooltip: l10n.menuLibrary,
+                    ),
                     _ToolbarSegment(
                       icon: CupertinoIcons.gear_alt,
                       iconSize: _squareButtonIconSize,

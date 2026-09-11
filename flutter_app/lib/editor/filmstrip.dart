@@ -206,7 +206,7 @@ class _FilmstripState extends State<_Filmstrip> {
         PopupMenuItem(
           // The row's own stars pop the menu with the pick; a tap beside
           // them falls through to this item and closes it with nothing.
-          child: _RatingPicker(
+          child: RatingPicker(
             rating: widget.metaOf(file.path)?.rating ?? 0,
             onPick: (rating) => Navigator.of(
               context,
@@ -214,7 +214,7 @@ class _FilmstripState extends State<_Filmstrip> {
           ),
         ),
         PopupMenuItem(
-          child: _LabelPicker(
+          child: LabelPicker(
             label: widget.metaOf(file.path)?.label ?? '',
             onPick: (label) => Navigator.of(
               context,
@@ -342,7 +342,7 @@ class _FilmstripState extends State<_Filmstrip> {
                                   Positioned(
                                     left: 3,
                                     bottom: 4,
-                                    child: _RatingStars(meta.rating),
+                                    child: RatingStars(meta.rating),
                                   ),
                                 if (meta != null && meta.label.isNotEmpty)
                                   Positioned(
@@ -440,125 +440,6 @@ class _EditedBadge extends StatelessWidget {
           color: DarkmoonColors.background,
         ),
       ),
-    );
-  }
-}
-
-/// The colour a label name paints — the swatch every RAW editor uses.
-Color photoLabelColor(String label) => switch (label) {
-  'Red' => const Color(0xFFE05A5A),
-  'Yellow' => const Color(0xFFE8C547),
-  'Green' => const Color(0xFF5FBF6A),
-  'Blue' => const Color(0xFF5A8FE0),
-  'Purple' => const Color(0xFFA56AD8),
-  _ => DarkmoonColors.textMuted,
-};
-
-/// The small star row on a filmstrip tile.
-class _RatingStars extends StatelessWidget {
-  const _RatingStars(this.rating);
-
-  final int rating;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < rating; i++)
-          const Icon(
-            CupertinoIcons.star_fill,
-            size: 9,
-            color: Colors.white,
-            shadows: [Shadow(color: Colors.black87, blurRadius: 2)],
-          ),
-      ],
-    );
-  }
-}
-
-/// The context menu's rating row: five stars, the current ones lit;
-/// tapping the current rating clears it, as Meridian does.
-class _RatingPicker extends StatelessWidget {
-  const _RatingPicker({required this.rating, required this.onPick});
-
-  final int rating;
-  final ValueChanged<int> onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Row(
-      children: [
-        Text(l10n.filmstripRatingLabel),
-        const SizedBox(width: 12),
-        for (var i = 1; i <= 5; i++)
-          InkWell(
-            onTap: () => onPick(i == rating ? 0 : i),
-            borderRadius: BorderRadius.circular(4),
-            child: Padding(
-              padding: const EdgeInsets.all(2),
-              child: Icon(
-                i <= rating ? CupertinoIcons.star_fill : CupertinoIcons.star,
-                size: 16,
-                color: i <= rating
-                    ? DarkmoonColors.accent
-                    : DarkmoonColors.textMuted,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-}
-
-/// The context menu's label row: the five colour dots and "none".
-class _LabelPicker extends StatelessWidget {
-  const _LabelPicker({required this.label, required this.onPick});
-
-  final String label;
-  final ValueChanged<String> onPick;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    return Row(
-      children: [
-        Text(l10n.filmstripColorLabel),
-        const SizedBox(width: 12),
-        for (final name in ['', ...photoLabelNames])
-          Tooltip(
-            message: switch (name) {
-              '' => l10n.labelNone,
-              'Red' => l10n.labelRed,
-              'Yellow' => l10n.labelYellow,
-              'Green' => l10n.labelGreen,
-              'Blue' => l10n.labelBlue,
-              _ => l10n.labelPurple,
-            },
-            child: InkWell(
-              onTap: () => onPick(name),
-              borderRadius: BorderRadius.circular(10),
-              child: Padding(
-                padding: const EdgeInsets.all(3),
-                child: Container(
-                  width: 14,
-                  height: 14,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: name.isEmpty ? null : photoLabelColor(name),
-                    border: Border.all(
-                      color: name == label
-                          ? Colors.white
-                          : DarkmoonColors.textMuted,
-                      width: name == label ? 2 : 1,
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
     );
   }
 }
