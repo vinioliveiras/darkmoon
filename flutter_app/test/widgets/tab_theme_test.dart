@@ -118,10 +118,12 @@ void main() {
     final tabWidth = bar.width / 3;
     final centreX = (bar.left + tabWidth * 0.5).round();
 
+    // The top edge carries the accent line since 2026-09-11 — the one
+    // mark that says which tab is selected.
     expect(
       pixelAt(pixels, width, centreX, bar.top.round()),
-      DarkmoonColors.divider,
-      reason: 'the top edge is drawn',
+      DarkmoonColors.accent,
+      reason: 'the top edge carries the selection line',
     );
     // Just inside the top edge, away from the label, nothing is painted.
     expect(

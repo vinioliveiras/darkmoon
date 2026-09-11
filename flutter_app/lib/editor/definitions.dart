@@ -1135,90 +1135,229 @@ class _ControlsPanelActions {
 
 /// The two tabs at the top of the left column (2026-09-11, user's
 /// design): Albums — the library grid on the right — and Editor. The
-/// column itself (album tree, recent files, presets) is the same under
-/// both; only the right-hand side changes.
-class _ModeTabs extends StatelessWidget {
+/// column itself (album tree, recent files, presets or details) is the
+/// same under both; only the right-hand side changes. The app's one tab
+/// pattern (the theme's `tabBarTheme`), words only.
+class _ModeTabs extends StatefulWidget {
   const _ModeTabs({required this.libraryMode, required this.onChanged});
 
   final bool libraryMode;
   final ValueChanged<bool> onChanged;
 
   @override
+  State<_ModeTabs> createState() => _ModeTabsState();
+}
+
+class _ModeTabsState extends State<_ModeTabs>
+    with SingleTickerProviderStateMixin {
+  late final TabController _controller = TabController(
+    length: 2,
+    vsync: this,
+    initialIndex: widget.libraryMode ? 0 : 1,
+  );
+
+  @override
+  void didUpdateWidget(covariant _ModeTabs oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final index = widget.libraryMode ? 0 : 1;
+    if (_controller.index != index) {
+      _controller.animateTo(index);
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     return Container(
-      height: 40,
-      padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
       color: DarkmoonColors.panel,
-      child: Row(
-        children: [
-          Expanded(
-            child: _ModeTab(
-              label: l10n.tabAlbums,
-              icon: CupertinoIcons.rectangle_grid_2x2,
-              selected: libraryMode,
-              onTap: () => onChanged(true),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Expanded(
-            child: _ModeTab(
-              label: l10n.tabEditor,
-              icon: CupertinoIcons.slider_horizontal_3,
-              selected: !libraryMode,
-              onTap: () => onChanged(false),
-            ),
-          ),
+      padding: const EdgeInsets.fromLTRB(10, 8, 10, 0),
+      child: TabBar(
+        controller: _controller,
+        onTap: (index) => widget.onChanged(index == 0),
+        tabs: [
+          Tab(height: kTabHeight, text: l10n.tabAlbums),
+          Tab(height: kTabHeight, text: l10n.tabEditor),
         ],
       ),
     );
   }
 }
 
-class _ModeTab extends StatelessWidget {
-  const _ModeTab({
-    required this.label,
-    required this.icon,
-    required this.selected,
-    required this.onTap,
+/// The bottom half of the left column in the Albums tab, where the
+/// Editor tab shows presets: the selected photo's rating, colour label
+/// and keywords (all editable here too) and its camera metadata.
+class _LibraryDetailsPanel extends StatelessWidget {
+  const _LibraryDetailsPanel({
+    required this.file,
+    required this.meta,
+    required this.metadata,
+    required this.onSetRating,
+    required this.onSetLabel,
+    required this.onEditTags,
   });
 
-  final String label;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback onTap;
+  final RawFile? file;
+  final PhotoMeta? meta;
+  final RawMetadata? metadata;
+  final ValueChanged<int> onSetRating;
+  final ValueChanged<String> onSetLabel;
+  final VoidCallback onEditTags;
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: selected ? DarkmoonColors.surfaceRaised : Colors.transparent,
-      borderRadius: BorderRadius.circular(6),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(6),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: 13,
-              color: selected
-                  ? DarkmoonColors.textPrimary
-                  : DarkmoonColors.textMuted,
-            ),
-            const SizedBox(width: 6),
-            Text(
-              label,
-              style: TextStyle(
-                color: selected
-                    ? DarkmoonColors.textPrimary
-                    : DarkmoonColors.textSecondary,
-                fontSize: 12,
-                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+    final l10n = AppLocalizations.of(context)!;
+    final file = this.file;
+    final header = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      child: Text(
+        l10n.libraryDetailsSection,
+        style: Theme.of(context).textTheme.labelSmall,
+      ),
+    );
+    if (file == null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 12),
+            child: Text(
+              l10n.libraryDetailsEmpty,
+              style: const TextStyle(
+                color: DarkmoonColors.textMuted,
+                fontSize: 11,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
+      );
+    }
+    final tags = meta?.tags ?? const <String>[];
+    return SingleChildScrollView(
+      padding: const EdgeInsets.only(right: kScrollbarGutter, bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text(
+              file.name,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: DarkmoonColors.textPrimary,
+                fontSize: 12.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: RatingPicker(
+              // Keyed on the photo and its rating so the row restarts
+              // from the stored value when either changes underneath it.
+              key: ValueKey('rating-${file.path}-${meta?.rating ?? 0}'),
+              rating: meta?.rating ?? 0,
+              onPick: onSetRating,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: LabelPicker(
+              key: ValueKey('label-${file.path}-${meta?.label ?? ''}'),
+              label: meta?.label ?? '',
+              onPick: onSetLabel,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, right: 12),
+                  child: Text(
+                    l10n.libraryTagsLabel,
+                    style: const TextStyle(
+                      color: DarkmoonColors.textSecondary,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: [
+                      if (tags.isEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            l10n.libraryNoTags,
+                            style: const TextStyle(
+                              color: DarkmoonColors.textMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                      for (final tag in tags)
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: DarkmoonColors.surfaceRaised,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            tag,
+                            style: const TextStyle(
+                              color: DarkmoonColors.textPrimary,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+                Tooltip(
+                  message: l10n.libraryEditTagsAction,
+                  child: InkWell(
+                    onTap: onEditTags,
+                    borderRadius: BorderRadius.circular(4),
+                    child: const Padding(
+                      padding: EdgeInsets.all(4),
+                      child: Icon(
+                        CupertinoIcons.pencil,
+                        size: 14,
+                        color: DarkmoonColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 10, 16, 4),
+            child: Divider(color: DarkmoonColors.divider, height: 1),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: PhotoMetadataView(metadata: metadata),
+          ),
+        ],
       ),
     );
   }

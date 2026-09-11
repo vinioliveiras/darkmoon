@@ -88,7 +88,13 @@ class BrowserTabIndicator extends Decoration {
     this.background = DarkmoonColors.panel,
     this.outline = DarkmoonColors.divider,
     this.radius = 4.0,
+    this.topLine = DarkmoonColors.accent,
   });
+
+  /// The line along the selected tab's top edge (2026-09-11, the user's
+  /// design): the one mark that says "this one", in the accent, on every
+  /// tab bar in the app.
+  final Color topLine;
 
   /// The surface behind the tab bar — see the note above on why the
   /// indicator needs to know it.
@@ -109,10 +115,11 @@ class BrowserTabIndicator extends Decoration {
       other is BrowserTabIndicator &&
       other.background == background &&
       other.outline == outline &&
-      other.radius == radius;
+      other.radius == radius &&
+      other.topLine == topLine;
 
   @override
-  int get hashCode => Object.hash(background, outline, radius);
+  int get hashCode => Object.hash(background, outline, radius, topLine);
 }
 
 class _BrowserTabPainter extends BoxPainter {
@@ -168,6 +175,13 @@ class _BrowserTabPainter extends BoxPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1
         ..color = decoration.outline,
+    );
+
+    // The accent line along the top, between the corners, 2px so it
+    // reads as a mark rather than a stray edge.
+    canvas.drawRect(
+      Rect.fromLTRB(left + r, rect.top, right - r, rect.top + 2),
+      Paint()..color = decoration.topLine,
     );
   }
 }

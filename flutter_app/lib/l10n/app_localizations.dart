@@ -136,6 +136,30 @@ abstract class AppLocalizations {
   /// **'Editor'**
   String get tabEditor;
 
+  /// No description provided for @libraryDetailsSection.
+  ///
+  /// In en, this message translates to:
+  /// **'DETAILS'**
+  String get libraryDetailsSection;
+
+  /// No description provided for @libraryDetailsEmpty.
+  ///
+  /// In en, this message translates to:
+  /// **'Select a photo to see its details'**
+  String get libraryDetailsEmpty;
+
+  /// No description provided for @libraryTagsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Tags'**
+  String get libraryTagsLabel;
+
+  /// No description provided for @libraryNoTags.
+  ///
+  /// In en, this message translates to:
+  /// **'No tags'**
+  String get libraryNoTags;
+
   /// No description provided for @sidebarNewAlbumAction.
   ///
   /// In en, this message translates to:

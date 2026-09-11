@@ -50,6 +50,7 @@ void main() {
           isEdited: (_) => false,
           libraryFolders: () => [folder],
           onOpen: (file) => opened = file,
+          onSelectionChanged: (_) {},
           onAddFolder: () async {},
           onSetRating: (file, rating) => ratings[file.path] = rating,
           onSetLabel: (_, _) {},

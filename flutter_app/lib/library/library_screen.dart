@@ -40,6 +40,7 @@ class LibraryBody extends StatefulWidget {
     required this.isEdited,
     required this.libraryFolders,
     required this.onOpen,
+    required this.onSelectionChanged,
     required this.onAddFolder,
     required this.onSetRating,
     required this.onSetLabel,
@@ -78,6 +79,10 @@ class LibraryBody extends StatefulWidget {
 
   /// Opens the photo in the Editor tab.
   final ValueChanged<RawFile> onOpen;
+
+  /// The primary selected photo whenever the selection changes (null for
+  /// none) — the left column's details panel follows it.
+  final ValueChanged<RawFile?> onSelectionChanged;
   final Future<void> Function() onAddFolder;
   final void Function(RawFile file, int rating) onSetRating;
   final void Function(RawFile file, String label) onSetLabel;
@@ -141,6 +146,21 @@ class _LibraryBodyState extends State<LibraryBody> {
         _selection.clear();
         _anchorPath = null;
       }
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) {
+          _notifySelection();
+        }
+      });
+    }
+  }
+
+  RawFile? _reportedFocus;
+
+  void _notifySelection() {
+    final primary = _primarySelected;
+    if (primary?.path != _reportedFocus?.path) {
+      _reportedFocus = primary;
+      widget.onSelectionChanged(primary);
     }
   }
 
@@ -281,6 +301,7 @@ class _LibraryBodyState extends State<LibraryBody> {
         _anchorPath = file.path;
       }
     });
+    _notifySelection();
   }
 
   void _selectAllVisible() {
@@ -289,6 +310,7 @@ class _LibraryBodyState extends State<LibraryBody> {
         ..clear()
         ..addAll(_visibleFiles.map((f) => f.path));
     });
+    _notifySelection();
   }
 
   // ---- moving (albums are folders)
@@ -309,6 +331,7 @@ class _LibraryBodyState extends State<LibraryBody> {
       _toast(l10n.libraryMoveSkipped(outcome.skipped.length));
     }
     setState(() => _selection.removeAll(outcome.moved.keys));
+    _notifySelection();
   }
 
   /// "New album": an empty folder inside the open one.
@@ -367,6 +390,7 @@ class _LibraryBodyState extends State<LibraryBody> {
           ..add(file.path);
         _anchorPath = file.path;
       });
+      _notifySelection();
     }
     final targets = _targets(file);
     final action = await showMenu<VoidCallback>(
@@ -434,6 +458,7 @@ class _LibraryBodyState extends State<LibraryBody> {
     final deleted = await widget.onDelete(targets);
     if (mounted && deleted > 0) {
       setState(_selection.clear);
+      _notifySelection();
     }
   }
 

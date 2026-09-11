@@ -27,6 +27,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get tabEditor => 'Editor';
 
   @override
+  String get libraryDetailsSection => 'DETAILS';
+
+  @override
+  String get libraryDetailsEmpty => 'Select a photo to see its details';
+
+  @override
+  String get libraryTagsLabel => 'Tags';
+
+  @override
+  String get libraryNoTags => 'No tags';
+
+  @override
   String get sidebarNewAlbumAction => 'New album here…';
 
   @override

@@ -1644,6 +1644,77 @@ class _EditorScreenState extends State<EditorScreen>
   final List<String> _folderHistory = [];
   bool _restoringFolder = false;
 
+  /// The Albums/Editor switch: a fade with a slight lift, both ways.
+  static Widget _modeTransition(Widget child, Animation<double> animation) {
+    return FadeTransition(
+      opacity: animation,
+      child: SlideTransition(
+        position: Tween<Offset>(
+          begin: const Offset(0, 0.012),
+          end: Offset.zero,
+        ).animate(animation),
+        child: child,
+      ),
+    );
+  }
+
+  /// The photo the library's details panel describes: the grid's primary
+  /// selection, reported by [LibraryBody].
+  RawFile? _libraryFocus;
+
+  void _onLibrarySelectionChanged(RawFile? file) {
+    if (file?.path == _libraryFocus?.path) {
+      return;
+    }
+    setState(() => _libraryFocus = file);
+    if (file != null && _metadata[file.path] == null) {
+      unawaited(_loadMetadata(file.path, _folderGeneration));
+    }
+  }
+
+  Widget _buildLibraryDetails() {
+    final file = _libraryFocus;
+    return _LibraryDetailsPanel(
+      file: file,
+      meta: file == null ? null : _store.meta[file.path],
+      metadata: file == null ? null : _metadata[file.path],
+      onSetRating: (rating) {
+        if (file != null) {
+          _setRating(file, rating);
+        }
+      },
+      onSetLabel: (label) {
+        if (file != null) {
+          _setLabel(file, label);
+        }
+      },
+      onEditTags: () {
+        if (file != null) {
+          unawaited(_editTagsFor(file));
+        }
+      },
+    );
+  }
+
+  /// The details panel's tag editor: one comma-separated line.
+  Future<void> _editTagsFor(RawFile file) async {
+    final l10n = AppLocalizations.of(context)!;
+    final current = _store.meta[file.path]?.tags ?? const <String>[];
+    final text = await showTextPromptDialog(
+      context,
+      title: l10n.libraryEditTagsTitle,
+      initialValue: current.join(', '),
+    );
+    if (text == null || !mounted) {
+      return;
+    }
+    final seen = <String>{};
+    _setTags(file, [
+      for (final part in text.split(','))
+        if (part.trim().isNotEmpty && seen.add(part.trim())) part.trim(),
+    ]);
+  }
+
   void _setLibraryMode(bool value) {
     if (_libraryMode == value) {
       return;
@@ -1688,6 +1759,7 @@ class _EditorScreenState extends State<EditorScreen>
       metaOf: (path) => _store.meta[path],
       isEdited: _isPhotoEdited,
       libraryFolders: () => _settings.libraryFolders,
+      onSelectionChanged: _onLibrarySelectionChanged,
       onOpen: (file) {
         final index = _files.indexWhere((f) => f.path == file.path);
         if (index >= 0 && index != _selectedIndex) {
@@ -4867,209 +4939,298 @@ class _EditorScreenState extends State<EditorScreen>
                                 Expanded(
                                   child: Container(
                                     color: DarkmoonColors.panel,
-                                    child: PresetPanel(
-                                      presets: _presets,
-                                      thumbnails: _settings.presetThumbnails
-                                          ? _presetThumbnails
-                                          : null,
-                                      enabled: selected != null,
-                                      isApplied: _matchesAppliedPreset,
-                                      onApply: _applyPreset,
-                                      onSaveNew: () =>
-                                          unawaited(_saveCurrentAsPreset()),
-                                      onImport: () =>
-                                          unawaited(_importPresets()),
-                                      onRename: (preset) =>
-                                          unawaited(_renamePreset(preset)),
-                                      onExport: (preset) =>
-                                          unawaited(_exportPreset(preset)),
-                                      onDelete: (preset) =>
-                                          unawaited(_deletePreset(preset)),
-                                      onDeleteMany: (presets) =>
-                                          unawaited(_deletePresets(presets)),
-                                      onExportMany: (presets) =>
-                                          unawaited(_exportPresets(presets)),
+                                    child: AnimatedSwitcher(
+                                      duration: AnimationsConfig.duration(
+                                        context,
+                                        const Duration(milliseconds: 240),
+                                      ),
+                                      switchInCurve: Curves.easeOutCubic,
+                                      switchOutCurve: Curves.easeInCubic,
+                                      transitionBuilder: _modeTransition,
+                                      child: _libraryMode
+                                          ? KeyedSubtree(
+                                              key: const ValueKey('details'),
+                                              child: _buildLibraryDetails(),
+                                            )
+                                          : KeyedSubtree(
+                                              key: const ValueKey('presets'),
+                                              child: PresetPanel(
+                                                presets: _presets,
+                                                thumbnails:
+                                                    _settings.presetThumbnails
+                                                    ? _presetThumbnails
+                                                    : null,
+                                                enabled: selected != null,
+                                                isApplied:
+                                                    _matchesAppliedPreset,
+                                                onApply: _applyPreset,
+                                                onSaveNew: () => unawaited(
+                                                  _saveCurrentAsPreset(),
+                                                ),
+                                                onImport: () =>
+                                                    unawaited(_importPresets()),
+                                                onRename: (preset) => unawaited(
+                                                  _renamePreset(preset),
+                                                ),
+                                                onExport: (preset) => unawaited(
+                                                  _exportPreset(preset),
+                                                ),
+                                                onDelete: (preset) => unawaited(
+                                                  _deletePreset(preset),
+                                                ),
+                                                onDeleteMany: (presets) =>
+                                                    unawaited(
+                                                      _deletePresets(presets),
+                                                    ),
+                                                onExportMany: (presets) =>
+                                                    unawaited(
+                                                      _exportPresets(presets),
+                                                    ),
+                                              ),
+                                            ),
                                     ),
                                   ),
                                 ),
                               ],
                             ),
                           ),
-                          if (_libraryMode)
-                            Expanded(child: _buildLibraryBody(selected))
-                          else
-                            Expanded(
-                              child: Stack(
-                                children: [
-                                  _ImageArea(
-                                    selected: selected,
-                                    fileMissing:
-                                        selected != null &&
-                                        _missingFiles.contains(selected.path),
-                                    // The camera's embedded preview once it
-                                    // has been read, the 200px filmstrip
-                                    // thumbnail until then — the second is
-                                    // instant because the strip already had
-                                    // it.
-                                    thumbnail: standIn,
-                                    thumbnailIsSmall: standInIsSmall,
-                                    // Uncapped: full quality, by request.
-                                    thumbnailDecodeWidth: null,
-                                    preview: selected == null
-                                        ? null
-                                        : _displayPreview(selected.path),
-                                    previewFadeGeneration:
-                                        _previewFadeGeneration,
-                                    neutralPreview: selected == null
-                                        ? null
-                                        : _neutralPreviews[selected.path],
-                                    beforeAfterMode: _beforeAfterMode,
-                                    viewController: _viewController,
-                                    viewportKey: _viewportKey,
-                                    zoomScale: _zoomScale,
-                                    onPointerSignal: _handlePointerSignal,
-                                    onResetZoom: _resetZoomAnimated,
-                                    onDoubleTapZoom: _onDoubleTapZoom,
-                                    editingMask:
-                                        (_beforeAfterMode || selected == null)
-                                        ? null
-                                        : _activeMask,
-                                    editingSource: selected == null
-                                        ? null
-                                        : _editSources[selected.path]?.preview,
-                                    onMaskGeometryChanged:
-                                        _onMaskGeometryChanged,
-                                    onMaskGeometryChangeEnd:
-                                        _onMaskGeometryChangeEnd,
-                                    brushRadius: _brushRadius,
-                                    brushHardness: _brushHardness,
-                                    brushErase: _brushErase,
-                                    brushFlow: _brushFlow,
-                                    onSampleColor: _onSampleMaskColor,
-                                    onSampleLuminance: _onSampleMaskLuminance,
-                                    wbEyedropperActive:
-                                        (_wbEyedropperActive ||
-                                            _profileHueEyedropperActive) &&
-                                        !_beforeAfterMode,
-                                    onSampleWhiteBalance: _onEyedropperSample,
-                                    maskOverlayVisible:
-                                        _maskOverlayVisible &&
-                                        !_isAdjustingMaskValue,
-                                    maskOverlayOpacity: _maskOverlayOpacity,
-                                    aiMaskMaps: _aiMaskMaps,
-                                    cropOverlayActive:
-                                        !_beforeAfterMode && _cropOverlayActive,
-                                    cropTransform: _cropTransform,
-                                    cropAspectRatio: _cropAspectRatio,
-                                    onCropTransformChanged:
-                                        _onCropTransformChanged,
-                                    onCropTransformChangeEnd:
-                                        _onCropTransformChangeEnd,
-                                    straighteningActive: _straighteningActive,
-                                    guidedModeActive: _guidedModeActive,
-                                    onSecondaryTapUp: _showImageContextMenu,
-                                  ),
-                                  // Only over the small stand-in. Once the
-                                  // camera's own image is up, the photo on
-                                  // screen is a real photograph at a real
-                                  // resolution, and a spinner on top of it
-                                  // says "wait" about something the user can
-                                  // already look at — the status line
-                                  // (_overlayInfo) carries the decode's
-                                  // progress instead.
-                                  if (_isDecodingPhoto &&
-                                      selected != null &&
-                                      standInIsSmall)
-                                    const Center(
-                                      child: SizedBox(
-                                        width: 32,
-                                        height: 32,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2.5,
-                                        ),
-                                      ),
-                                    ),
-                                  // Every loading operation surfaces here now
-                                  // (see _loadingOverlayHidden) — a compact
-                                  // status line in the preview's own bottom
-                                  // breathing room
-                                  // (_ImageArea._verticalBreathingRoom) rather
-                                  // than a modal covering the editor.
-                                  if (_loadingOverlayHidden)
-                                    Builder(
-                                      builder: (context) {
-                                        final info = _overlayInfo(
-                                          context,
-                                          selected,
-                                        );
-                                        if (info == null) {
-                                          return const SizedBox.shrink();
-                                        }
-                                        return Positioned(
-                                          left: 16,
-                                          right: 16,
-                                          bottom: 12,
-                                          child: Center(
-                                            child: _HiddenLoadingIndicator(
-                                              info: info,
-                                              onCancel: _cancelLoading,
+                          Expanded(
+                            child: AnimatedSwitcher(
+                              duration: AnimationsConfig.duration(
+                                context,
+                                const Duration(milliseconds: 240),
+                              ),
+                              switchInCurve: Curves.easeOutCubic,
+                              switchOutCurve: Curves.easeInCubic,
+                              transitionBuilder: _modeTransition,
+                              child: _libraryMode
+                                  ? KeyedSubtree(
+                                      key: const ValueKey('albums'),
+                                      child: _buildLibraryBody(selected),
+                                    )
+                                  : KeyedSubtree(
+                                      key: const ValueKey('editor'),
+                                      child: Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.stretch,
+                                        children: [
+                                          Expanded(
+                                            child: Stack(
+                                              children: [
+                                                _ImageArea(
+                                                  selected: selected,
+                                                  fileMissing:
+                                                      selected != null &&
+                                                      _missingFiles.contains(
+                                                        selected.path,
+                                                      ),
+                                                  // The camera's embedded preview once it
+                                                  // has been read, the 200px filmstrip
+                                                  // thumbnail until then — the second is
+                                                  // instant because the strip already had
+                                                  // it.
+                                                  thumbnail: standIn,
+                                                  thumbnailIsSmall:
+                                                      standInIsSmall,
+                                                  // Uncapped: full quality, by request.
+                                                  thumbnailDecodeWidth: null,
+                                                  preview: selected == null
+                                                      ? null
+                                                      : _displayPreview(
+                                                          selected.path,
+                                                        ),
+                                                  previewFadeGeneration:
+                                                      _previewFadeGeneration,
+                                                  neutralPreview:
+                                                      selected == null
+                                                      ? null
+                                                      : _neutralPreviews[selected
+                                                            .path],
+                                                  beforeAfterMode:
+                                                      _beforeAfterMode,
+                                                  viewController:
+                                                      _viewController,
+                                                  viewportKey: _viewportKey,
+                                                  zoomScale: _zoomScale,
+                                                  onPointerSignal:
+                                                      _handlePointerSignal,
+                                                  onResetZoom:
+                                                      _resetZoomAnimated,
+                                                  onDoubleTapZoom:
+                                                      _onDoubleTapZoom,
+                                                  editingMask:
+                                                      (_beforeAfterMode ||
+                                                          selected == null)
+                                                      ? null
+                                                      : _activeMask,
+                                                  editingSource:
+                                                      selected == null
+                                                      ? null
+                                                      : _editSources[selected
+                                                                .path]
+                                                            ?.preview,
+                                                  onMaskGeometryChanged:
+                                                      _onMaskGeometryChanged,
+                                                  onMaskGeometryChangeEnd:
+                                                      _onMaskGeometryChangeEnd,
+                                                  brushRadius: _brushRadius,
+                                                  brushHardness: _brushHardness,
+                                                  brushErase: _brushErase,
+                                                  brushFlow: _brushFlow,
+                                                  onSampleColor:
+                                                      _onSampleMaskColor,
+                                                  onSampleLuminance:
+                                                      _onSampleMaskLuminance,
+                                                  wbEyedropperActive:
+                                                      (_wbEyedropperActive ||
+                                                          _profileHueEyedropperActive) &&
+                                                      !_beforeAfterMode,
+                                                  onSampleWhiteBalance:
+                                                      _onEyedropperSample,
+                                                  maskOverlayVisible:
+                                                      _maskOverlayVisible &&
+                                                      !_isAdjustingMaskValue,
+                                                  maskOverlayOpacity:
+                                                      _maskOverlayOpacity,
+                                                  aiMaskMaps: _aiMaskMaps,
+                                                  cropOverlayActive:
+                                                      !_beforeAfterMode &&
+                                                      _cropOverlayActive,
+                                                  cropTransform: _cropTransform,
+                                                  cropAspectRatio:
+                                                      _cropAspectRatio,
+                                                  onCropTransformChanged:
+                                                      _onCropTransformChanged,
+                                                  onCropTransformChangeEnd:
+                                                      _onCropTransformChangeEnd,
+                                                  straighteningActive:
+                                                      _straighteningActive,
+                                                  guidedModeActive:
+                                                      _guidedModeActive,
+                                                  onSecondaryTapUp:
+                                                      _showImageContextMenu,
+                                                ),
+                                                // Only over the small stand-in. Once the
+                                                // camera's own image is up, the photo on
+                                                // screen is a real photograph at a real
+                                                // resolution, and a spinner on top of it
+                                                // says "wait" about something the user can
+                                                // already look at — the status line
+                                                // (_overlayInfo) carries the decode's
+                                                // progress instead.
+                                                if (_isDecodingPhoto &&
+                                                    selected != null &&
+                                                    standInIsSmall)
+                                                  const Center(
+                                                    child: SizedBox(
+                                                      width: 32,
+                                                      height: 32,
+                                                      child:
+                                                          CircularProgressIndicator(
+                                                            strokeWidth: 2.5,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                // Every loading operation surfaces here now
+                                                // (see _loadingOverlayHidden) — a compact
+                                                // status line in the preview's own bottom
+                                                // breathing room
+                                                // (_ImageArea._verticalBreathingRoom) rather
+                                                // than a modal covering the editor.
+                                                if (_loadingOverlayHidden)
+                                                  Builder(
+                                                    builder: (context) {
+                                                      final info = _overlayInfo(
+                                                        context,
+                                                        selected,
+                                                      );
+                                                      if (info == null) {
+                                                        return const SizedBox.shrink();
+                                                      }
+                                                      return Positioned(
+                                                        left: 16,
+                                                        right: 16,
+                                                        bottom: 12,
+                                                        child: Center(
+                                                          child: _HiddenLoadingIndicator(
+                                                            info: info,
+                                                            onCancel:
+                                                                _cancelLoading,
+                                                          ),
+                                                        ),
+                                                      );
+                                                    },
+                                                  ),
+                                              ],
                                             ),
                                           ),
-                                        );
-                                      },
+                                          _ControlsPanel(
+                                            values: _activeValues,
+                                            actions: _panelActions,
+                                            histogram: selected == null
+                                                ? null
+                                                : _histograms[selected.path],
+                                            metadata: selected == null
+                                                ? null
+                                                : _metadata[selected.path],
+                                            colorProfileMode:
+                                                colorProfileModeOf(
+                                                  _paramValues,
+                                                ),
+                                            colorProfileChoice:
+                                                _colorProfileChoice,
+                                            userColorProfiles:
+                                                _userColorProfiles,
+                                            customProfileMissing:
+                                                _customProfileMissing,
+                                            levelBusy: _levelBusy,
+                                            uprightBusy: _uprightBusy,
+                                            tabbedLayout:
+                                                _settings.tabbedControlsPanel,
+                                            tabIcons: _settings
+                                                .tabbedControlsPanelIcons,
+                                            selectedProfileIsUsers:
+                                                _selectedUserColorProfile !=
+                                                null,
+                                            wbEyedropperActive:
+                                                _wbEyedropperActive,
+                                            onExport: selected == null
+                                                ? null
+                                                : _exportCurrent,
+                                            exporting: _exporting,
+                                            enabled: selected != null,
+                                            curves: _activeCurves,
+                                            masks: _currentMasks,
+                                            activeMaskId: _activeMaskId,
+                                            maskOverlayVisible:
+                                                _maskOverlayVisible,
+                                            maskOverlayOpacity:
+                                                _maskOverlayOpacity,
+                                            brushRadius: _brushRadius,
+                                            brushHardness: _brushHardness,
+                                            brushErase: _brushErase,
+                                            brushFlow: _brushFlow,
+                                            aiMasksResolving: _aiMasksResolving,
+                                            aiMaskFailures: _aiMaskFailures,
+                                            cropOverlayActive:
+                                                _cropOverlayActive,
+                                            cropTransform: _cropTransform,
+                                            cropAspectRatio: _cropAspectRatio,
+                                            guidedModeActive: _guidedModeActive,
+                                            lensCorrection: _lensCorrection,
+                                            lensProfiles: _lensProfiles,
+                                            resolvedLensProfile:
+                                                selected == null
+                                                ? null
+                                                : _resolvedLensProfileFor(
+                                                    selected.path,
+                                                  ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                ],
-                              ),
                             ),
-                          if (!_libraryMode)
-                            _ControlsPanel(
-                              values: _activeValues,
-                              actions: _panelActions,
-                              histogram: selected == null
-                                  ? null
-                                  : _histograms[selected.path],
-                              metadata: selected == null
-                                  ? null
-                                  : _metadata[selected.path],
-                              colorProfileMode: colorProfileModeOf(
-                                _paramValues,
-                              ),
-                              colorProfileChoice: _colorProfileChoice,
-                              userColorProfiles: _userColorProfiles,
-                              customProfileMissing: _customProfileMissing,
-                              levelBusy: _levelBusy,
-                              uprightBusy: _uprightBusy,
-                              tabbedLayout: _settings.tabbedControlsPanel,
-                              tabIcons: _settings.tabbedControlsPanelIcons,
-                              selectedProfileIsUsers:
-                                  _selectedUserColorProfile != null,
-                              wbEyedropperActive: _wbEyedropperActive,
-                              onExport: selected == null
-                                  ? null
-                                  : _exportCurrent,
-                              exporting: _exporting,
-                              enabled: selected != null,
-                              curves: _activeCurves,
-                              masks: _currentMasks,
-                              activeMaskId: _activeMaskId,
-                              maskOverlayVisible: _maskOverlayVisible,
-                              maskOverlayOpacity: _maskOverlayOpacity,
-                              brushRadius: _brushRadius,
-                              brushHardness: _brushHardness,
-                              brushErase: _brushErase,
-                              brushFlow: _brushFlow,
-                              aiMasksResolving: _aiMasksResolving,
-                              aiMaskFailures: _aiMaskFailures,
-                              cropOverlayActive: _cropOverlayActive,
-                              cropTransform: _cropTransform,
-                              cropAspectRatio: _cropAspectRatio,
-                              guidedModeActive: _guidedModeActive,
-                              lensCorrection: _lensCorrection,
-                              lensProfiles: _lensProfiles,
-                              resolvedLensProfile: selected == null
-                                  ? null
-                                  : _resolvedLensProfileFor(selected.path),
-                            ),
+                          ),
                         ],
                       ),
                     ),
