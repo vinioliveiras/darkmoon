@@ -41,11 +41,11 @@ void main() {
             onDraftSettled: (_) {},
             strength: 100,
             contrast: 80,
-            photoPreview: (
+            photoPreview: Future.value((
               rgb: Float32List.fromList(List<double>.filled(4 * 4 * 3, 128.0)),
               width: 4,
               height: 4,
-            ),
+            )),
           ),
         ),
       ),

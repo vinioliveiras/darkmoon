@@ -157,6 +157,16 @@ const _previewPreloadConcurrency = 2;
 /// preload isolates run at below-normal priority.
 const _thumbnailsBeforePreload = 24;
 
+/// How many thumbnails stay in memory across folder changes. Opening an
+/// album used to drop every thumbnail and read the whole folder's back
+/// from the disk cache (a stat and a lookup per photo); kept, going back
+/// to an album is instant. 320 px JPEGs run 15-30 KB, so this is on the
+/// order of 60 MB at the cap; the current folder's own are never evicted.
+const _thumbnailMemoryCap = 2500;
+
+/// From how many photos a move shows its progress on the loading overlay.
+const _moveProgressThreshold = 10;
+
 /// How long to wait after the last slider change before actually
 /// re-rendering, restarted on every change — matches the Python app's
 /// DEBOUNCE_MS. Keeps a fast slider drag from queuing a render per frame.

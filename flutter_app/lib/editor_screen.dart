@@ -1716,6 +1716,11 @@ class _EditorScreenState extends State<EditorScreen>
     ]);
   }
 
+  /// True while the selected photo has not been decoded because the
+  /// folder was opened from Albums, where nothing shows the render. The
+  /// decode (and the neighbours' preload) runs when the editor opens.
+  bool _selectionDecodePending = false;
+
   void _setLibraryMode(bool value) {
     if (_libraryMode == value) {
       return;
@@ -1724,6 +1729,31 @@ class _EditorScreenState extends State<EditorScreen>
       unawaited(_flushCurrentEdits());
     }
     setState(() => _libraryMode = value);
+    if (!value) {
+      _startPendingSelectionDecode();
+    }
+  }
+
+  /// Decodes the selected photo (and preloads its neighbours) if opening
+  /// the folder skipped that for Albums. Browsing albums used to start a
+  /// full RAW decode plus a preload of the next photos on every album
+  /// opened or gone back to; none of it can be stopped once its isolate
+  /// is running, so a few quick hops pinned every core (user's report,
+  /// 2026-09-11).
+  void _startPendingSelectionDecode() {
+    if (!_selectionDecodePending) {
+      return;
+    }
+    _selectionDecodePending = false;
+    final index = _selectedIndex;
+    if (index == null || index >= _files.length) {
+      return;
+    }
+    final path = _files[index].path;
+    final generation = _folderGeneration;
+    unawaited(_loadEmbeddedPreview(path));
+    unawaited(_loadEditSourceAndRender(path, generation));
+    unawaited(_preloadPreviewCache(_files, index, generation));
   }
 
   /// The library's back arrow: the album shown before this one.
@@ -1920,9 +1950,38 @@ class _EditorScreenState extends State<EditorScreen>
   /// Moves [paths] into [folder] on disk (the library's "add to album")
   /// and follows them in the catalog: edits, ratings, recent files and
   /// the open folder, if it was one of the two.
+  /// Progress of a move of many photos, shown on the loading overlay;
+  /// null when none is running. Set for [_moveProgressThreshold] photos
+  /// or more — a handful moves before a scrim could even fade in.
+  ({int done, int total})? _moveProgress;
+  bool _moveStopRequested = false;
+
   Future<MoveOutcome> _movePhotos(List<String> paths, String folder) async {
     await _flushCurrentEdits();
-    final outcome = await movePhotosToFolder(paths, folder);
+    final showProgress = paths.length >= _moveProgressThreshold;
+    if (showProgress) {
+      _moveStopRequested = false;
+      setState(() => _moveProgress = (done: 0, total: paths.length));
+    }
+    MoveOutcome outcome;
+    try {
+      outcome = await movePhotosToFolder(
+        paths,
+        folder,
+        onProgress: showProgress
+            ? (done, total) {
+                if (mounted) {
+                  setState(() => _moveProgress = (done: done, total: total));
+                }
+              }
+            : null,
+        shouldStop: showProgress ? () => _moveStopRequested : null,
+      );
+    } finally {
+      if (showProgress && mounted) {
+        setState(() => _moveProgress = null);
+      }
+    }
     if (mounted) {
       await _followRenames(outcome.moved);
     }
@@ -2665,7 +2724,7 @@ class _EditorScreenState extends State<EditorScreen>
   void _beginLoadingFiles() {
     setState(() {
       _loading = true;
-      _thumbnails.clear();
+      // _thumbnails is kept: see _pruneThumbnails.
       _editSources.clear();
       _disposeAllPreviews();
       _histograms.clear();
@@ -2682,6 +2741,8 @@ class _EditorScreenState extends State<EditorScreen>
   /// discards its result instead of applying it once it (eventually)
   /// resolves, and resets the overlay state immediately.
   void _cancelLoading() {
+    // A move in progress stops after the photo it is on.
+    _moveStopRequested = true;
     _folderGeneration++;
     _renderRequestId++;
     _renderCancel?.set();
@@ -2729,6 +2790,7 @@ class _EditorScreenState extends State<EditorScreen>
     int generation,
   ) async {
     _resetZoom();
+    _pruneThumbnails(files);
     setState(() {
       _files = files;
       _selectedIndex = selectedIndex;
@@ -2748,23 +2810,53 @@ class _EditorScreenState extends State<EditorScreen>
           : _store.presets[files[selectedIndex].path];
     });
     _resetHistory();
+    // In Albums nothing shows the render, so the selected photo's decode
+    // and the neighbours' preload wait for the editor (see
+    // _startPendingSelectionDecode); only the thumbnails load now.
+    _selectionDecodePending = _libraryMode && selectedIndex != null;
     if (selectedIndex != null) {
       unawaited(_importSidecar(files[selectedIndex].path));
       unawaited(_saveLastActiveFile(files[selectedIndex].path));
-      unawaited(
-        _loadEditSourceAndRender(files[selectedIndex].path, generation),
-      );
+      if (!_libraryMode) {
+        unawaited(
+          _loadEditSourceAndRender(files[selectedIndex].path, generation),
+        );
+      }
     }
     // Recreate the gate the preload waits on (releasing any prior waiter),
     // then start both — the preload blocks on _loadThumbnails' progress.
     _completeVisibleThumbnailsReady();
     _visibleThumbnailsReady = Completer<void>();
-    unawaited(_preloadPreviewCache(files, selectedIndex, generation));
+    if (!_libraryMode) {
+      unawaited(_preloadPreviewCache(files, selectedIndex, generation));
+    }
     await _loadThumbnails(files, generation);
     if (!mounted || generation != _folderGeneration) {
       return;
     }
     setState(() => _loading = false);
+  }
+
+  /// Keeps [_thumbnails] under [_thumbnailMemoryCap] once a folder is
+  /// applied: the oldest entries that are not in [files] go first, in
+  /// insertion order, which [_loadThumbnails] refreshes on every hit so
+  /// the map is a rough least-recently-used list.
+  void _pruneThumbnails(List<RawFile> files) {
+    if (_thumbnails.length <= _thumbnailMemoryCap) {
+      return;
+    }
+    final keep = {for (final file in files) file.path};
+    final excess = _thumbnails.length - _thumbnailMemoryCap;
+    final doomed = <String>[];
+    for (final path in _thumbnails.keys) {
+      if (doomed.length >= excess) {
+        break;
+      }
+      if (!keep.contains(path)) {
+        doomed.add(path);
+      }
+    }
+    doomed.forEach(_thumbnails.remove);
   }
 
   Future<void> _loadThumbnails(List<RawFile> files, int generation) async {
@@ -2774,10 +2866,13 @@ class _EditorScreenState extends State<EditorScreen>
     Future<void> worker() async {
       while (queue.isNotEmpty) {
         final file = queue.removeAt(0);
+        // Still in memory from an earlier visit: no stat, no lookup. The
+        // entry is re-inserted below so it moves to the young end.
+        final inMemory = _thumbnails.remove(file.path);
         // Cache lookup/store happens here in the main isolate (see
         // ThumbnailCacheManager) — only the actual decode, on a cache
         // miss, goes to a background isolate.
-        var bytes = await cache?.lookup(file.path);
+        var bytes = inMemory ?? await cache?.lookup(file.path);
         final fromCache = bytes != null;
         bytes ??= await _decodeThumbnail(file);
         if (!mounted || generation != _folderGeneration) {
@@ -2890,6 +2985,8 @@ class _EditorScreenState extends State<EditorScreen>
       return;
     }
     unawaited(_flushCurrentEdits());
+    // A fresh selection decodes below whatever the folder open deferred.
+    _selectionDecodePending = false;
     final path = _files[index].path;
     _resetZoom();
     setState(() {
@@ -4708,6 +4805,13 @@ class _EditorScreenState extends State<EditorScreen>
   /// in priority order since only one can be shown at a time.
   _LoadingInfo? _overlayInfo(BuildContext context, RawFile? selected) {
     final l10n = AppLocalizations.of(context)!;
+    final move = _moveProgress;
+    if (move != null) {
+      return _LoadingInfo(
+        message: l10n.libraryMovingPhotos(move.done, move.total),
+        progress: move.total == 0 ? null : move.done / move.total,
+      );
+    }
     if (_loading) {
       return _LoadingInfo(
         message: _thumbnailsTotal > 0

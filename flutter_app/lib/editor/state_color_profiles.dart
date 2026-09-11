@@ -153,10 +153,11 @@ extension _EditorColorProfiles on _EditorScreenState {
     ColorProfile? initial,
     double? highlightHue,
   }) async {
-    final photoPreview = await _profilePreviewSource();
-    if (!mounted) {
-      return;
-    }
+    // Not awaited: the neutral render this reads (or makes) took the
+    // best part of a second on a large RAW, and the dialog sat closed
+    // for all of it (user's report, 2026-09-11). It opens on the chart
+    // now and the photo joins it when ready.
+    final photoPreview = _profilePreviewSource();
     final existingNames = _userColorProfiles.values
         .map((profile) => profile.name)
         .toSet();

@@ -60,9 +60,7 @@ class DarkmoonColors {
   static const inputOutline = Color(0x24FFFFFF);
   static const inputOutlineDisabled = Color(0x12FFFFFF);
   static const inputOutlineFocused = Color(0xD9FFFFFF);
-  static const inputHalo = Color(0x38FFFFFF);
   static const inputOutlineError = Color(0xFFE5484D);
-  static const inputHaloError = Color(0x40E5484D);
   static const textPrimary = Color(0xFFE5E6E8);
   static const textSecondary = Color(0xFFC7C8CA);
   static const textMuted = Color(0xFF898A8C);
@@ -321,16 +319,16 @@ ThemeData buildDarkmoonTheme() {
       disabledBorder: GlassInputBorder(
         borderSide: BorderSide(color: DarkmoonColors.inputOutlineDisabled),
       ),
+      // A bright outline alone on focus: the halo that first came with
+      // it read as a grey shadow around the field (user's call).
       focusedBorder: GlassInputBorder(
         borderSide: BorderSide(color: DarkmoonColors.inputOutlineFocused),
-        halo: DarkmoonColors.inputHalo,
       ),
       errorBorder: GlassInputBorder(
         borderSide: BorderSide(color: DarkmoonColors.inputOutlineError),
       ),
       focusedErrorBorder: GlassInputBorder(
         borderSide: BorderSide(color: DarkmoonColors.inputOutlineError),
-        halo: DarkmoonColors.inputHaloError,
       ),
     ),
     textSelectionTheme: const TextSelectionThemeData(

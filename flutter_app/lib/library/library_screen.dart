@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../catalog/jpeg_size.dart';
 import '../catalog/photo_meta_store.dart';
 import '../l10n/app_localizations.dart';
 import '../raw_files.dart';
@@ -210,10 +211,11 @@ class _LibraryBodyState extends State<LibraryBody> {
       _hiddenByRawOnly = widget.rawOnly ? common : 0;
       _unsupported = other;
     });
+    // Every cover is read again, not only the new albums': a photo moved
+    // into or out of a sub-album changes its cover and count (user's
+    // report, 2026-09-11). The old cover stays up until the new one is
+    // ready, so nothing blinks.
     for (final dir in dirs) {
-      if (_albumPreviews.containsKey(dir)) {
-        continue;
-      }
       // The cover shows whatever the album holds, in any format the app
       // reads; only the count follows the "RAW files only" setting.
       final all = await listRawFiles(dir);
@@ -1012,124 +1014,137 @@ class _AlbumTile extends StatelessWidget {
       );
     }
 
-    // A square cover, laid out for however many photos the album has:
-    // one fills it, two split it side by side, three give one the left
-    // half and stack the other two on the right, four make the 2x2 grid.
-    // Every cell crops its photo 1:1 (user's request), so whatever the
-    // count the cover is a clean mural with no empty cells.
+    // The cover is laid out for how many photos the album has and which
+    // way they face (user's requests, 2026-09-11): one fills it; two sit
+    // side by side, or one above the other when both are landscapes;
+    // three give the odd one out the long cell — a portrait the full
+    // height on the left with the others stacked beside it, a landscape
+    // the full width on top with the others side by side under it; four
+    // make the 2x2 grid. Every cell crops its photo to fit, so whatever
+    // the count the cover is a clean mural with no empty cells.
+    Widget row(List<Widget> cells) => Row(
+      children: [
+        for (var i = 0; i < cells.length; i++) ...[
+          if (i > 0) const SizedBox(width: 1),
+          Expanded(child: cells[i]),
+        ],
+      ],
+    );
+    Widget column(List<Widget> cells) => Column(
+      children: [
+        for (var i = 0; i < cells.length; i++) ...[
+          if (i > 0) const SizedBox(height: 1),
+          Expanded(child: cells[i]),
+        ],
+      ],
+    );
+    final sizes = [
+      for (final bytes in thumbnails) bytes == null ? null : jpegSizeOf(bytes),
+    ];
+    bool portrait(int i) {
+      final size = sizes[i];
+      return size != null && size.height > size.width;
+    }
+
+    bool landscape(int i) {
+      final size = sizes[i];
+      return size != null && size.height <= size.width;
+    }
+
     final mural = switch (thumbnails.length) {
       0 => cell(0),
       1 => cell(0),
-      2 => Row(
-        children: [
-          Expanded(child: cell(0)),
-          const SizedBox(width: 1),
-          Expanded(child: cell(1)),
-        ],
-      ),
-      3 => Row(
-        children: [
-          Expanded(child: cell(0)),
-          const SizedBox(width: 1),
-          Expanded(
-            child: Column(
-              children: [
-                Expanded(child: cell(1)),
-                const SizedBox(height: 1),
-                Expanded(child: cell(2)),
-              ],
-            ),
-          ),
-        ],
-      ),
-      _ => Column(
-        children: [
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(child: cell(0)),
-                const SizedBox(width: 1),
-                Expanded(child: cell(1)),
-              ],
-            ),
-          ),
-          const SizedBox(height: 1),
-          Expanded(
-            child: Row(
-              children: [
-                Expanded(child: cell(2)),
-                const SizedBox(width: 1),
-                Expanded(child: cell(3)),
-              ],
-            ),
-          ),
-        ],
-      ),
+      2 =>
+        landscape(0) && landscape(1)
+            ? column([cell(0), cell(1)])
+            : row([cell(0), cell(1)]),
+      3 => () {
+        const all = [0, 1, 2];
+        if (all.where(portrait).length >= 2) {
+          final wide = all.firstWhere(landscape, orElse: () => 0);
+          final rest = all.where((i) => i != wide).toList();
+          return column([
+            cell(wide),
+            row([cell(rest[0]), cell(rest[1])]),
+          ]);
+        }
+        final tall = all.firstWhere(portrait, orElse: () => 0);
+        final rest = all.where((i) => i != tall).toList();
+        return row([
+          cell(tall),
+          column([cell(rest[0]), cell(rest[1])]),
+        ]);
+      }(),
+      _ => column([
+        row([cell(0), cell(1)]),
+        row([cell(2), cell(3)]),
+      ]),
     };
-    return GestureDetector(
-      onTap: onOpen,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Center(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: DarkmoonColors.canvas,
-                    borderRadius: BorderRadius.circular(6),
-                    border: Border.all(
-                      color: highlighted
-                          ? DarkmoonColors.accent
-                          : DarkmoonColors.divider,
-                      width: highlighted ? 2 : 1,
-                    ),
+    // The cover fills the same box a photo's thumbnail does, so albums
+    // and photos sit in the grid at one size (user's call, 2026-09-11).
+    // Its own repaint layer: a selection or hover elsewhere in the grid
+    // leaves this tile's pixels alone.
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: onOpen,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: DarkmoonColors.canvas,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: highlighted
+                        ? DarkmoonColors.accent
+                        : DarkmoonColors.divider,
+                    width: highlighted ? 2 : 1,
                   ),
-                  clipBehavior: Clip.antiAlias,
-                  child: Stack(
-                    fit: StackFit.expand,
-                    children: [
-                      mural,
-                      Positioned(
-                        left: 4,
-                        top: 4,
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 5,
-                            vertical: 2,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.black54,
-                            borderRadius: BorderRadius.circular(3),
-                          ),
-                          child: const Icon(
-                            CupertinoIcons.folder_fill,
-                            size: 11,
-                            color: Colors.white,
-                          ),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    mural,
+                    Positioned(
+                      left: 4,
+                      top: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 5,
+                          vertical: 2,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: const Icon(
+                          CupertinoIcons.folder_fill,
+                          size: 11,
+                          color: Colors.white,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            count == null
-                ? name
-                : '$name  ·  ${l10n.libraryPhotoCount(count!)}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: DarkmoonColors.textSecondary,
-              fontSize: 11,
+            const SizedBox(height: 4),
+            Text(
+              count == null
+                  ? name
+                  : '$name  ·  ${l10n.libraryPhotoCount(count!)}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: DarkmoonColors.textSecondary,
+                fontSize: 11,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1165,116 +1180,121 @@ class _LibraryTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final label = meta?.label ?? '';
     final rating = meta?.rating ?? 0;
-    return GestureDetector(
-      onTap: onTap,
-      onDoubleTap: onDoubleTap,
-      onSecondaryTapUp: onSecondaryTapUp,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: DarkmoonColors.canvas,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: selected ? DarkmoonColors.accent : Colors.transparent,
-                  width: 2,
+    // Its own repaint layer, like the album tile's.
+    return RepaintBoundary(
+      child: GestureDetector(
+        onTap: onTap,
+        onDoubleTap: onDoubleTap,
+        onSecondaryTapUp: onSecondaryTapUp,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(
+                  color: DarkmoonColors.canvas,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: selected
+                        ? DarkmoonColors.accent
+                        : Colors.transparent,
+                    width: 2,
+                  ),
                 ),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  if (thumbnail == null && loading)
-                    const Center(
-                      child: SizedBox(
-                        width: 16,
-                        height: 16,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
+                clipBehavior: Clip.antiAlias,
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    if (thumbnail == null && loading)
+                      const Center(
+                        child: SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: DarkmoonColors.textMuted,
+                          ),
+                        ),
+                      )
+                    else if (thumbnail == null)
+                      const Center(
+                        child: Icon(
+                          CupertinoIcons.photo,
+                          size: 22,
                           color: DarkmoonColors.textMuted,
                         ),
+                      )
+                    else
+                      Image.memory(
+                        thumbnail!,
+                        fit: BoxFit.cover,
+                        gaplessPlayback: true,
                       ),
-                    )
-                  else if (thumbnail == null)
-                    const Center(
-                      child: Icon(
-                        CupertinoIcons.photo,
-                        size: 22,
-                        color: DarkmoonColors.textMuted,
-                      ),
-                    )
-                  else
-                    Image.memory(
-                      thumbnail!,
-                      fit: BoxFit.cover,
-                      gaplessPlayback: true,
-                    ),
-                  Positioned(
-                    left: 4,
-                    top: 4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 1,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                      child: Text(
-                        file.typeLabel,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 9,
-                          fontWeight: FontWeight.w600,
+                    Positioned(
+                      left: 4,
+                      top: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 1,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(3),
+                        ),
+                        child: Text(
+                          file.typeLabel,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                  if (edited)
-                    const Positioned(
-                      right: 4,
-                      top: 4,
-                      child: Icon(
-                        CupertinoIcons.pencil_circle_fill,
-                        size: 14,
-                        color: Colors.white,
+                    if (edited)
+                      const Positioned(
+                        right: 4,
+                        top: 4,
+                        child: Icon(
+                          CupertinoIcons.pencil_circle_fill,
+                          size: 14,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                  if (rating > 0)
-                    Positioned(
-                      left: 5,
-                      bottom: 6,
-                      child: RatingStars(rating, size: 10),
-                    ),
-                  if (label.isNotEmpty)
-                    Positioned(
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      child: Container(
-                        height: 3,
-                        color: photoLabelColor(label),
+                    if (rating > 0)
+                      Positioned(
+                        left: 5,
+                        bottom: 6,
+                        child: RatingStars(rating, size: 10),
                       ),
-                    ),
-                ],
+                    if (label.isNotEmpty)
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: Container(
+                          height: 3,
+                          color: photoLabelColor(label),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            file.name,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            textAlign: TextAlign.center,
-            style: const TextStyle(
-              color: DarkmoonColors.textSecondary,
-              fontSize: 11,
+            const SizedBox(height: 4),
+            Text(
+              file.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: DarkmoonColors.textSecondary,
+                fontSize: 11,
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

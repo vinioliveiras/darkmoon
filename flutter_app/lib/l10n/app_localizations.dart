@@ -316,6 +316,12 @@ abstract class AppLocalizations {
   /// **'{count, plural, =1{1 photo not moved: a file with that name already exists there} other{{count} photos not moved: files with those names already exist there}}'**
   String libraryMoveSkipped(int count);
 
+  /// No description provided for @libraryMovingPhotos.
+  ///
+  /// In en, this message translates to:
+  /// **'Moving photos... ({done}/{total})'**
+  String libraryMovingPhotos(int done, int total);
+
   /// No description provided for @libraryFolderExists.
   ///
   /// In en, this message translates to:
@@ -1855,7 +1861,7 @@ abstract class AppLocalizations {
   /// No description provided for @maskImageLayer.
   ///
   /// In en, this message translates to:
-  /// **'Full Image'**
+  /// **'Original Image'**
   String get maskImageLayer;
 
   /// No description provided for @maskLinearGradient.

@@ -161,6 +161,11 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String libraryMovingPhotos(int done, int total) {
+    return 'Fotos werden verschoben... ($done/$total)';
+  }
+
+  @override
   String get libraryFolderExists =>
       'Dort existiert bereits ein Album mit diesem Namen';
 
@@ -1049,7 +1054,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get gradeRangeGlobal => 'Global';
 
   @override
-  String get maskImageLayer => 'Ganzes Bild';
+  String get maskImageLayer => 'Originalbild';
 
   @override
   String get maskLinearGradient => 'Linearer Verlauf';

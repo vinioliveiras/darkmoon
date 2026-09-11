@@ -26,9 +26,11 @@ void main() {
     expect(enabled, isA<GlassInputBorder>());
     expect((enabled! as GlassInputBorder).borderRadius.topLeft.x, 8);
     expect((enabled as GlassInputBorder).halo.a, 0);
+    // Focus brightens the outline and adds nothing around it.
     final focused = decoration.focusedBorder;
     expect(focused, isA<GlassInputBorder>());
-    expect((focused! as GlassInputBorder).halo.a, greaterThan(0));
+    expect((focused! as GlassInputBorder).halo.a, 0);
+    expect(focused.borderSide.color, DarkmoonColors.inputOutlineFocused);
   });
 
   testWidgets('the capsule decoration rounds every border fully', (
@@ -56,10 +58,6 @@ void main() {
       expect(border, isA<GlassInputBorder>());
       expect((border! as GlassInputBorder).borderRadius.topLeft.x, 999);
     }
-    expect(
-      (decoration.focusedBorder! as GlassInputBorder).halo.a,
-      greaterThan(0),
-    );
     expect(decoration.hintText, 'find');
   });
 

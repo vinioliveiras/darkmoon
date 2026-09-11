@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 import 'dart:typed_data';
 
@@ -75,10 +76,11 @@ class ColorProfileEditorDialog extends StatefulWidget {
   });
 
   /// The open photo, downscaled to packed RGB (0..255, three floats per
-  /// pixel) for the preview's "current photo" source. Null when no photo
-  /// is open, which is the one case where only the reference chart is
-  /// offered.
-  final ({Float32List rgb, int width, int height})? photoPreview;
+  /// pixel) for the preview's "current photo" source. A future, so the
+  /// dialog opens before the photo's neutral render is done; it resolves
+  /// null when no photo is open, which is the one case where only the
+  /// reference chart is offered.
+  final Future<({Float32List rgb, int width, int height})?>? photoPreview;
 
   /// A hue in degrees just sampled from the photo. The dialog opens on the
   /// Colour tab with the range (or bin) that owns it marked, which is the
@@ -168,9 +170,25 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
 
   bool _advanced = false;
 
+  /// The open photo's preview source once [ColorProfileEditorDialog.photoPreview]
+  /// has delivered it; null until then, and for good when no photo is open.
+  ({Float32List rgb, int width, int height})? _photo;
+
   /// Built once. Regenerating it per frame would be wasted work — it never
   /// changes, only what is applied to it does.
   late final Float32List _referenceChart = buildReferenceChart();
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(
+      widget.photoPreview?.then((photo) {
+        if (mounted && photo != null) {
+          setState(() => _photo = photo);
+        }
+      }),
+    );
+  }
 
   /// Which range or bin the last sampled colour landed in, or null.
   late final int? _highlightBin = widget.highlightHue == null
@@ -636,7 +654,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
   /// the chart and ruins skin is exactly the mistake worth catching, and
   /// a switch hides it by only ever showing one of the two.
   Widget _buildPreview(AppLocalizations l10n) {
-    final photo = widget.photoPreview;
+    final photo = _photo;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       mainAxisSize: MainAxisSize.min,

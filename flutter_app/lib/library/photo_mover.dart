@@ -24,21 +24,36 @@ class MoveOutcome {
 /// rename across volumes falls back to copy-then-delete.
 Future<MoveOutcome> movePhotosToFolder(
   List<String> paths,
-  String folder,
-) async {
+  String folder, {
+
+  /// Called after each photo, with how many of [paths] are done.
+  void Function(int done, int total)? onProgress,
+
+  /// Checked before each photo; true stops the move there. What was
+  /// moved so far is still reported, so the caller can follow it.
+  bool Function()? shouldStop,
+}) async {
   final moved = <String, String>{};
   final skipped = <String>[];
+  var done = 0;
   for (final path in paths) {
+    if (shouldStop?.call() ?? false) {
+      break;
+    }
+    done++;
     if (p.equals(p.dirname(path), folder)) {
+      onProgress?.call(done, paths.length);
       continue;
     }
     final destination = p.join(folder, p.basename(path));
     final file = File(path);
     if (!await file.exists()) {
+      onProgress?.call(done, paths.length);
       continue;
     }
     if (await File(destination).exists()) {
       skipped.add(path);
+      onProgress?.call(done, paths.length);
       continue;
     }
     await _moveFile(file, destination);
@@ -50,6 +65,7 @@ Future<MoveOutcome> movePhotosToFolder(
       }
     }
     moved[path] = destination;
+    onProgress?.call(done, paths.length);
   }
   return MoveOutcome(moved: moved, skipped: skipped);
 }

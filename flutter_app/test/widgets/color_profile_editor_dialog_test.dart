@@ -40,7 +40,7 @@ void main() {
     ColorProfile? initial,
     Set<String> existingNames = const {},
     double? highlightHue,
-    ({Float32List rgb, int width, int height})? photoPreview,
+    Future<({Float32List rgb, int width, int height})?>? photoPreview,
   }) async {
     final drafts = <ColorProfile>[];
     await tester.pumpWidget(
@@ -226,7 +226,7 @@ void main() {
         width: 8,
         height: 6,
       );
-      await pumpDialog(tester, photoPreview: photo);
+      await pumpDialog(tester, photoPreview: Future.value(photo));
       final l10n = await AppLocalizations.delegate.load(const Locale('en'));
 
       await tester.tap(find.text(l10n.colorProfileEditorTabColor));
