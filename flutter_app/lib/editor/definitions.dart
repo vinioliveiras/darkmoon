@@ -954,3 +954,181 @@ const _colorizeKey = 'Colorize';
 const _colorizeIntensityKey = 'ColorizeIntensity';
 
 const _wbModeKey = 'WhiteBalanceMode';
+
+/// Every callback [_ControlsPanel] fires, as one object (2026-09-11).
+/// The panel took each as its own constructor parameter — 52 of its 98 —
+/// and the editor rebuilt the whole list every frame; they are all stable
+/// tear-offs of the editor State's methods, so it builds this once.
+class _ControlsPanelActions {
+  const _ControlsPanelActions({
+    required this.onWhiteBalanceMode,
+    required this.onToggleWbEyedropper,
+    required this.onChanged,
+    required this.onChangeEnd,
+    required this.onReset,
+    required this.onColorProfileChoiceChanged,
+    required this.onCreateColorProfile,
+    required this.onLevel,
+    required this.onUpright,
+    required this.onImportColorProfile,
+    required this.onEditColorProfile,
+    required this.onDuplicateColorProfile,
+    required this.onRenameColorProfile,
+    required this.onExportColorProfile,
+    required this.onDeleteColorProfile,
+    required this.onToneCurveChanged,
+    required this.onToneCurveChangeEnd,
+    required this.onColorCurveChanged,
+    required this.onColorCurveChangeEnd,
+    required this.onSelectMask,
+    required this.onAddMask,
+    required this.onToggleMaskEnabled,
+    required this.onToggleMaskInverted,
+    required this.onCloneMask,
+    required this.onDeleteMask,
+    required this.onMaskOpacityChanged,
+    required this.onMaskOpacityChangeEnd,
+    required this.onToggleMaskOverlayVisible,
+    required this.onBrushRadiusChanged,
+    required this.onBrushHardnessChanged,
+    required this.onToggleBrushErase,
+    required this.onUndoStroke,
+    required this.onBrushFlowChanged,
+    required this.onColorRangeToleranceChanged,
+    required this.onColorRangeToleranceChangeEnd,
+    required this.onColorRangeFeatherChanged,
+    required this.onColorRangeFeatherChangeEnd,
+    required this.onDepthGeometryChanged,
+    required this.onDepthGeometryChangeEnd,
+    required this.onLuminanceToleranceChanged,
+    required this.onLuminanceToleranceChangeEnd,
+    required this.onLuminanceFeatherChanged,
+    required this.onLuminanceFeatherChangeEnd,
+    required this.onCropTransformChanged,
+    required this.onCropTransformChangeEnd,
+    required this.onCropAspectRatioChanged,
+    required this.onToggleCropOverlay,
+    required this.onResetCropTransform,
+    required this.onStraighteningChanged,
+    required this.onToggleGuidedMode,
+    required this.onLensCorrectionChanged,
+    required this.onLensCorrectionChangeEnd,
+  });
+
+  final void Function(WbMode mode) onWhiteBalanceMode;
+
+  final VoidCallback onToggleWbEyedropper;
+
+  final void Function(String name, double value) onChanged;
+
+  final void Function(String name, double value) onChangeEnd;
+
+  final VoidCallback onReset;
+
+  final ValueChanged<int> onColorProfileChoiceChanged;
+
+  /// Opens the profile editor. Not a per-photo edit, which is why it
+  /// is a separate callback rather than another dropdown value.
+  final VoidCallback onCreateColorProfile;
+
+  /// Measures the open photo and straightens it — Crop & Transform's Level
+  /// button, and [levelBusy] while that runs.
+  final VoidCallback onLevel;
+
+  /// Fired by the Crop panel's Auto/Vertical/Full buttons — Level plus
+  /// the perspective correction — and [uprightBusy] while that runs.
+  final ValueChanged<UprightMode> onUpright;
+
+  final VoidCallback onImportColorProfile;
+
+  final VoidCallback onEditColorProfile;
+
+  final VoidCallback onDuplicateColorProfile;
+
+  final VoidCallback onRenameColorProfile;
+
+  final VoidCallback onExportColorProfile;
+
+  final VoidCallback onDeleteColorProfile;
+
+  final ValueChanged<List<CurvePoint>> onToneCurveChanged;
+
+  final ValueChanged<List<CurvePoint>> onToneCurveChangeEnd;
+
+  final void Function(String channel, List<CurvePoint> points)
+  onColorCurveChanged;
+
+  final void Function(String channel, List<CurvePoint> points)
+  onColorCurveChangeEnd;
+
+  final ValueChanged<String> onSelectMask;
+
+  final ValueChanged<MaskType> onAddMask;
+
+  final VoidCallback onToggleMaskEnabled;
+
+  final VoidCallback onToggleMaskInverted;
+
+  final VoidCallback onCloneMask;
+
+  final VoidCallback onDeleteMask;
+
+  final ValueChanged<double> onMaskOpacityChanged;
+
+  final ValueChanged<double> onMaskOpacityChangeEnd;
+
+  final VoidCallback onToggleMaskOverlayVisible;
+
+  final ValueChanged<double> onBrushRadiusChanged;
+
+  final ValueChanged<double> onBrushHardnessChanged;
+
+  final VoidCallback onToggleBrushErase;
+
+  final VoidCallback onUndoStroke;
+
+  final ValueChanged<double> onBrushFlowChanged;
+
+  final ValueChanged<double> onColorRangeToleranceChanged;
+
+  final ValueChanged<double> onColorRangeToleranceChangeEnd;
+
+  final ValueChanged<double> onColorRangeFeatherChanged;
+
+  final ValueChanged<double> onColorRangeFeatherChangeEnd;
+
+  /// Both take the whole rewritten [DepthGeometry] — see
+  /// `_EditorScreenState._onDepthGeometryChanged`.
+  final ValueChanged<DepthGeometry> onDepthGeometryChanged;
+
+  final ValueChanged<DepthGeometry> onDepthGeometryChangeEnd;
+
+  final ValueChanged<double> onLuminanceToleranceChanged;
+
+  final ValueChanged<double> onLuminanceToleranceChangeEnd;
+
+  final ValueChanged<double> onLuminanceFeatherChanged;
+
+  final ValueChanged<double> onLuminanceFeatherChangeEnd;
+
+  final ValueChanged<CropTransformParams> onCropTransformChanged;
+
+  final ValueChanged<CropTransformParams> onCropTransformChangeEnd;
+
+  final ValueChanged<double?> onCropAspectRatioChanged;
+
+  final VoidCallback onToggleCropOverlay;
+
+  final VoidCallback onResetCropTransform;
+
+  /// Fires as the Straighten slider is dragged (true) and once it's
+  /// released (false) — lets the crop overlay show a denser guide grid
+  /// only while the user's actively trying to level a horizon (item 28).
+  final ValueChanged<bool> onStraighteningChanged;
+
+  final VoidCallback onToggleGuidedMode;
+
+  final ValueChanged<LensCorrectionParams> onLensCorrectionChanged;
+
+  final ValueChanged<LensCorrectionParams> onLensCorrectionChangeEnd;
+}

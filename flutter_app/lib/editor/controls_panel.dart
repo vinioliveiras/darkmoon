@@ -8,102 +8,50 @@ part of '../editor_screen.dart';
 class _ControlsPanel extends StatefulWidget {
   const _ControlsPanel({
     required this.values,
+    required this.actions,
     required this.histogram,
     required this.metadata,
-    required this.onChanged,
-    required this.onChangeEnd,
-    required this.onReset,
     required this.colorProfileMode,
     required this.colorProfileChoice,
     required this.userColorProfiles,
     required this.customProfileMissing,
-    required this.onColorProfileChoiceChanged,
-    required this.onCreateColorProfile,
-    required this.onLevel,
     required this.levelBusy,
-    required this.onUpright,
     required this.uprightBusy,
     required this.tabbedLayout,
     required this.tabIcons,
-    required this.onImportColorProfile,
-    required this.onEditColorProfile,
-    required this.onDuplicateColorProfile,
-    required this.onRenameColorProfile,
-    required this.onExportColorProfile,
-    required this.onDeleteColorProfile,
     required this.selectedProfileIsUsers,
     required this.onExport,
     required this.exporting,
     required this.enabled,
     required this.curves,
-    required this.onToneCurveChanged,
-    required this.onToneCurveChangeEnd,
-    required this.onColorCurveChanged,
-    required this.onColorCurveChangeEnd,
     required this.masks,
     required this.activeMaskId,
-    required this.onSelectMask,
-    required this.onAddMask,
-    required this.onToggleMaskEnabled,
-    required this.onToggleMaskInverted,
-    required this.onCloneMask,
-    required this.onDeleteMask,
-    required this.onMaskOpacityChanged,
-    required this.onMaskOpacityChangeEnd,
     required this.maskOverlayVisible,
-    required this.onToggleMaskOverlayVisible,
     required this.maskOverlayOpacity,
     required this.brushRadius,
     required this.brushHardness,
     required this.brushErase,
-    required this.onBrushRadiusChanged,
-    required this.onBrushHardnessChanged,
-    required this.onToggleBrushErase,
-    required this.onUndoStroke,
-    required this.onColorRangeToleranceChanged,
-    required this.onColorRangeToleranceChangeEnd,
-    required this.onColorRangeFeatherChanged,
-    required this.onColorRangeFeatherChangeEnd,
-    required this.onDepthGeometryChanged,
-    required this.onDepthGeometryChangeEnd,
     required this.aiMasksResolving,
     required this.aiMaskFailures,
-    required this.onLuminanceToleranceChanged,
-    required this.onLuminanceToleranceChangeEnd,
-    required this.onLuminanceFeatherChanged,
-    required this.onLuminanceFeatherChangeEnd,
     required this.brushFlow,
-    required this.onBrushFlowChanged,
     required this.cropOverlayActive,
     required this.cropTransform,
-    required this.onCropTransformChanged,
-    required this.onCropTransformChangeEnd,
     required this.cropAspectRatio,
-    required this.onCropAspectRatioChanged,
-    required this.onToggleCropOverlay,
-    required this.onResetCropTransform,
-    required this.onStraighteningChanged,
     required this.guidedModeActive,
-    required this.onToggleGuidedMode,
     required this.lensCorrection,
-    required this.onLensCorrectionChanged,
-    required this.onLensCorrectionChangeEnd,
     required this.lensProfiles,
     required this.resolvedLensProfile,
-    required this.onWhiteBalanceMode,
     required this.wbEyedropperActive,
-    required this.onToggleWbEyedropper,
   });
 
   final Map<String, double> values;
+
+  /// Every callback the panel fires — one object the editor builds once,
+  /// since they are all stable tear-offs of its own methods.
+  final _ControlsPanelActions actions;
   final Histogram? histogram;
   final RawMetadata? metadata;
-  final void Function(WbMode mode) onWhiteBalanceMode;
   final bool wbEyedropperActive;
-  final VoidCallback onToggleWbEyedropper;
-  final void Function(String name, double value) onChanged;
-  final void Function(String name, double value) onChangeEnd;
-  final VoidCallback onReset;
 
   /// How strongly the *entire current edit* renders, 0..200% — see the
   /// top-level `_globalEditAmountKey`/`withGlobalEditAmountApplied`. Sits
@@ -121,11 +69,6 @@ class _ControlsPanel extends StatefulWidget {
   /// True when this photo refers to a user profile that is not installed —
   /// drives both the dropdown's placeholder entry and the warning below it.
   final bool customProfileMissing;
-  final ValueChanged<int> onColorProfileChoiceChanged;
-
-  /// Opens the profile editor. Not a per-photo edit, which is why it
-  /// is a separate callback rather than another dropdown value.
-  final VoidCallback onCreateColorProfile;
 
   /// Group the sections into tabs, or list them all in one scroll — see
   /// `AppSettings.tabbedControlsPanel`.
@@ -134,21 +77,9 @@ class _ControlsPanel extends StatefulWidget {
   /// Whether [tabbedLayout]'s tabs carry a glyph instead of a word.
   final bool tabIcons;
 
-  /// Measures the open photo and straightens it — Crop & Transform's Level
-  /// button, and [levelBusy] while that runs.
-  final VoidCallback onLevel;
   final bool levelBusy;
 
-  /// Fired by the Crop panel's Auto/Vertical/Full buttons — Level plus
-  /// the perspective correction — and [uprightBusy] while that runs.
-  final ValueChanged<UprightMode> onUpright;
   final bool uprightBusy;
-  final VoidCallback onImportColorProfile;
-  final VoidCallback onEditColorProfile;
-  final VoidCallback onDuplicateColorProfile;
-  final VoidCallback onRenameColorProfile;
-  final VoidCallback onExportColorProfile;
-  final VoidCallback onDeleteColorProfile;
 
   /// Whether the selected profile is one the user owns. The built-ins are
   /// not editable, renameable or deletable, so their menu offers only
@@ -163,49 +94,19 @@ class _ControlsPanel extends StatefulWidget {
   final bool enabled;
 
   final PhotoCurves curves;
-  final ValueChanged<List<CurvePoint>> onToneCurveChanged;
-  final ValueChanged<List<CurvePoint>> onToneCurveChangeEnd;
-  final void Function(String channel, List<CurvePoint> points)
-  onColorCurveChanged;
-  final void Function(String channel, List<CurvePoint> points)
-  onColorCurveChangeEnd;
 
   final List<MaskLayer> masks;
   final String activeMaskId;
-  final ValueChanged<String> onSelectMask;
-  final ValueChanged<MaskType> onAddMask;
-  final VoidCallback onToggleMaskEnabled;
-  final VoidCallback onToggleMaskInverted;
-  final VoidCallback onCloneMask;
-  final VoidCallback onDeleteMask;
-  final ValueChanged<double> onMaskOpacityChanged;
-  final ValueChanged<double> onMaskOpacityChangeEnd;
   final bool maskOverlayVisible;
-  final VoidCallback onToggleMaskOverlayVisible;
   final Map<MaskType, double> maskOverlayOpacity;
 
   final double brushRadius;
   final double brushHardness;
   final bool brushErase;
-  final ValueChanged<double> onBrushRadiusChanged;
-  final ValueChanged<double> onBrushHardnessChanged;
-  final VoidCallback onToggleBrushErase;
-  final VoidCallback onUndoStroke;
 
   /// Flow mask's live per-pass deposit-rate tool setting — shares the
   /// brush-drawing controls/state above, this is its one extra slider.
   final double brushFlow;
-  final ValueChanged<double> onBrushFlowChanged;
-
-  final ValueChanged<double> onColorRangeToleranceChanged;
-  final ValueChanged<double> onColorRangeToleranceChangeEnd;
-  final ValueChanged<double> onColorRangeFeatherChanged;
-  final ValueChanged<double> onColorRangeFeatherChangeEnd;
-
-  /// Both take the whole rewritten [DepthGeometry] — see
-  /// `_EditorScreenState._onDepthGeometryChanged`.
-  final ValueChanged<DepthGeometry> onDepthGeometryChanged;
-  final ValueChanged<DepthGeometry> onDepthGeometryChangeEnd;
 
   /// Which masks a model is currently thinking about, and which ones it
   /// failed on (with the reason) — the panel is the only place that can
@@ -214,32 +115,14 @@ class _ControlsPanel extends StatefulWidget {
   final Set<String> aiMasksResolving;
   final Map<String, String> aiMaskFailures;
 
-  final ValueChanged<double> onLuminanceToleranceChanged;
-  final ValueChanged<double> onLuminanceToleranceChangeEnd;
-  final ValueChanged<double> onLuminanceFeatherChanged;
-  final ValueChanged<double> onLuminanceFeatherChangeEnd;
-
   final bool cropOverlayActive;
   final CropTransformParams cropTransform;
-  final ValueChanged<CropTransformParams> onCropTransformChanged;
-  final ValueChanged<CropTransformParams> onCropTransformChangeEnd;
   final double? cropAspectRatio;
-  final ValueChanged<double?> onCropAspectRatioChanged;
-  final VoidCallback onToggleCropOverlay;
-  final VoidCallback onResetCropTransform;
-
-  /// Fires as the Straighten slider is dragged (true) and once it's
-  /// released (false) — lets the crop overlay show a denser guide grid
-  /// only while the user's actively trying to level a horizon (item 28).
-  final ValueChanged<bool> onStraighteningChanged;
 
   /// See [CropOverlay.guidedModeActive].
   final bool guidedModeActive;
-  final VoidCallback onToggleGuidedMode;
 
   final LensCorrectionParams lensCorrection;
-  final ValueChanged<LensCorrectionParams> onLensCorrectionChanged;
-  final ValueChanged<LensCorrectionParams> onLensCorrectionChangeEnd;
   final List<LensProfile> lensProfiles;
 
   /// The profile actually in effect for the selected photo right now --
@@ -326,18 +209,18 @@ class _ControlsPanelState extends State<_ControlsPanel>
 
   Widget _buildCropPanel() => _CropTransformPanel(
     params: widget.cropTransform,
-    onChanged: widget.onCropTransformChanged,
-    onChangeEnd: widget.onCropTransformChangeEnd,
+    onChanged: widget.actions.onCropTransformChanged,
+    onChangeEnd: widget.actions.onCropTransformChangeEnd,
     aspectRatio: widget.cropAspectRatio,
-    onAspectRatioChanged: widget.onCropAspectRatioChanged,
-    onDone: widget.onToggleCropOverlay,
-    onReset: widget.onResetCropTransform,
-    onStraighteningChanged: widget.onStraighteningChanged,
+    onAspectRatioChanged: widget.actions.onCropAspectRatioChanged,
+    onDone: widget.actions.onToggleCropOverlay,
+    onReset: widget.actions.onResetCropTransform,
+    onStraighteningChanged: widget.actions.onStraighteningChanged,
     guidedModeActive: widget.guidedModeActive,
-    onToggleGuidedMode: widget.onToggleGuidedMode,
-    onLevel: widget.onLevel,
+    onToggleGuidedMode: widget.actions.onToggleGuidedMode,
+    onLevel: widget.actions.onLevel,
     levelBusy: widget.levelBusy,
-    onUpright: widget.onUpright,
+    onUpright: widget.actions.onUpright,
     uprightBusy: widget.uprightBusy,
   );
 
@@ -386,18 +269,18 @@ class _ControlsPanelState extends State<_ControlsPanel>
   /// doesn't make the render itself any faster — it only changes *when*
   /// the resulting stall lands, not whether it happens.
   void _toggleCategoryEnabled(String key, bool value) {
-    widget.onChanged(key, value ? 1 : 0);
+    widget.actions.onChanged(key, value ? 1 : 0);
     final delay = AnimationsConfig.duration(
       context,
       const Duration(milliseconds: 200),
     );
     if (delay == Duration.zero) {
-      widget.onChangeEnd(key, value ? 1 : 0);
+      widget.actions.onChangeEnd(key, value ? 1 : 0);
       return;
     }
     Future.delayed(delay, () {
       if (!mounted) return;
-      widget.onChangeEnd(key, value ? 1 : 0);
+      widget.actions.onChangeEnd(key, value ? 1 : 0);
     });
   }
 
@@ -479,7 +362,8 @@ class _ControlsPanelState extends State<_ControlsPanel>
                   label: _wbModeLabel(l10n, mode),
                 ),
             ],
-            onChanged: (i) => widget.onWhiteBalanceMode(WbMode.values[i]),
+            onChanged: (i) =>
+                widget.actions.onWhiteBalanceMode(WbMode.values[i]),
           ),
         ),
         const SizedBox(width: 6),
@@ -489,7 +373,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
           child: IconButton(
             tooltip: l10n.wbEyedropperTooltip,
             isSelected: widget.wbEyedropperActive,
-            onPressed: widget.onToggleWbEyedropper,
+            onPressed: widget.actions.onToggleWbEyedropper,
             icon: const Icon(CupertinoIcons.eyedropper, size: 15),
           ),
         ),
@@ -576,14 +460,14 @@ class _ControlsPanelState extends State<_ControlsPanel>
   Widget build(BuildContext context) {
     final values = widget.values;
     final histogram = widget.histogram;
-    final onChanged = widget.onChanged;
-    final onChangeEnd = widget.onChangeEnd;
+    final onChanged = widget.actions.onChanged;
+    final onChangeEnd = widget.actions.onChangeEnd;
     final enabled = widget.enabled;
     final curves = widget.curves;
-    final onToneCurveChanged = widget.onToneCurveChanged;
-    final onToneCurveChangeEnd = widget.onToneCurveChangeEnd;
-    final onColorCurveChanged = widget.onColorCurveChanged;
-    final onColorCurveChangeEnd = widget.onColorCurveChangeEnd;
+    final onToneCurveChanged = widget.actions.onToneCurveChanged;
+    final onToneCurveChangeEnd = widget.actions.onToneCurveChangeEnd;
+    final onColorCurveChanged = widget.actions.onColorCurveChanged;
+    final onColorCurveChangeEnd = widget.actions.onColorCurveChangeEnd;
     final activeMask = widget.masks
         .where((m) => m.id == widget.activeMaskId)
         .firstOrNull;
@@ -605,16 +489,16 @@ class _ControlsPanelState extends State<_ControlsPanel>
         MaskSelector(
           masks: widget.masks,
           activeId: widget.activeMaskId,
-          onSelect: widget.onSelectMask,
-          onAdd: widget.onAddMask,
-          onToggleEnabled: widget.onToggleMaskEnabled,
-          onToggleInverted: widget.onToggleMaskInverted,
-          onClone: widget.onCloneMask,
-          onDelete: widget.onDeleteMask,
-          onOpacityChanged: widget.onMaskOpacityChanged,
-          onOpacityChangeEnd: widget.onMaskOpacityChangeEnd,
+          onSelect: widget.actions.onSelectMask,
+          onAdd: widget.actions.onAddMask,
+          onToggleEnabled: widget.actions.onToggleMaskEnabled,
+          onToggleInverted: widget.actions.onToggleMaskInverted,
+          onClone: widget.actions.onCloneMask,
+          onDelete: widget.actions.onDeleteMask,
+          onOpacityChanged: widget.actions.onMaskOpacityChanged,
+          onOpacityChangeEnd: widget.actions.onMaskOpacityChangeEnd,
           overlayVisible: widget.maskOverlayVisible,
-          onToggleOverlayVisible: widget.onToggleMaskOverlayVisible,
+          onToggleOverlayVisible: widget.actions.onToggleMaskOverlayVisible,
           overlayOpacity: widget.maskOverlayOpacity,
         ),
         if (isBrushActive) ...[
@@ -627,8 +511,8 @@ class _ControlsPanelState extends State<_ControlsPanel>
               max: 0.4,
               value: widget.brushRadius,
               decimals: 2,
-              onChanged: widget.onBrushRadiusChanged,
-              onChangeEnd: widget.onBrushRadiusChanged,
+              onChanged: widget.actions.onBrushRadiusChanged,
+              onChangeEnd: widget.actions.onBrushRadiusChanged,
             ),
           ),
           Padding(
@@ -639,8 +523,8 @@ class _ControlsPanelState extends State<_ControlsPanel>
               max: 1,
               value: widget.brushHardness,
               decimals: 2,
-              onChanged: widget.onBrushHardnessChanged,
-              onChangeEnd: widget.onBrushHardnessChanged,
+              onChanged: widget.actions.onBrushHardnessChanged,
+              onChangeEnd: widget.actions.onBrushHardnessChanged,
             ),
           ),
           Row(
@@ -663,7 +547,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 child: FittedBox(
                   child: Switch(
                     value: widget.brushErase,
-                    onChanged: (_) => widget.onToggleBrushErase(),
+                    onChanged: (_) => widget.actions.onToggleBrushErase(),
                     materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                   ),
                 ),
@@ -674,7 +558,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 width: 32,
                 child: IconButton(
                   tooltip: l10n.maskUndoStrokeTooltip,
-                  onPressed: widget.onUndoStroke,
+                  onPressed: widget.actions.onUndoStroke,
                   icon: const Icon(CupertinoIcons.arrow_uturn_left, size: 15),
                 ),
               ),
@@ -690,8 +574,8 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 value: widget.brushFlow,
                 decimals: 0,
                 defaultValue: defaultFlowAmount,
-                onChanged: widget.onBrushFlowChanged,
-                onChangeEnd: widget.onBrushFlowChanged,
+                onChanged: widget.actions.onBrushFlowChanged,
+                onChangeEnd: widget.actions.onBrushFlowChanged,
               ),
             ),
         ],
@@ -734,8 +618,8 @@ class _ControlsPanelState extends State<_ControlsPanel>
               max: 100,
               value: activeMask.colorRange.tolerance,
               decimals: 0,
-              onChanged: widget.onColorRangeToleranceChanged,
-              onChangeEnd: widget.onColorRangeToleranceChangeEnd,
+              onChanged: widget.actions.onColorRangeToleranceChanged,
+              onChangeEnd: widget.actions.onColorRangeToleranceChangeEnd,
             ),
           ),
           Padding(
@@ -746,8 +630,8 @@ class _ControlsPanelState extends State<_ControlsPanel>
               max: 100,
               value: activeMask.colorRange.feather,
               decimals: 0,
-              onChanged: widget.onColorRangeFeatherChanged,
-              onChangeEnd: widget.onColorRangeFeatherChangeEnd,
+              onChanged: widget.actions.onColorRangeFeatherChanged,
+              onChangeEnd: widget.actions.onColorRangeFeatherChangeEnd,
             ),
           ),
         ],
@@ -790,8 +674,8 @@ class _ControlsPanelState extends State<_ControlsPanel>
               max: 100,
               value: activeMask.luminance.tolerance,
               decimals: 0,
-              onChanged: widget.onLuminanceToleranceChanged,
-              onChangeEnd: widget.onLuminanceToleranceChangeEnd,
+              onChanged: widget.actions.onLuminanceToleranceChanged,
+              onChangeEnd: widget.actions.onLuminanceToleranceChangeEnd,
             ),
           ),
           Padding(
@@ -802,8 +686,8 @@ class _ControlsPanelState extends State<_ControlsPanel>
               max: 100,
               value: activeMask.luminance.feather,
               decimals: 0,
-              onChanged: widget.onLuminanceFeatherChanged,
-              onChangeEnd: widget.onLuminanceFeatherChangeEnd,
+              onChanged: widget.actions.onLuminanceFeatherChanged,
+              onChangeEnd: widget.actions.onLuminanceFeatherChangeEnd,
             ),
           ),
         ],
@@ -863,10 +747,10 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 max: 100,
                 value: activeMask.depth.near * 100,
                 decimals: 0,
-                onChanged: (v) => widget.onDepthGeometryChanged(
+                onChanged: (v) => widget.actions.onDepthGeometryChanged(
                   activeMask.depth.copyWith(near: v / 100),
                 ),
-                onChangeEnd: (v) => widget.onDepthGeometryChangeEnd(
+                onChangeEnd: (v) => widget.actions.onDepthGeometryChangeEnd(
                   activeMask.depth.copyWith(near: v / 100),
                 ),
               ),
@@ -879,10 +763,10 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 max: 100,
                 value: activeMask.depth.far * 100,
                 decimals: 0,
-                onChanged: (v) => widget.onDepthGeometryChanged(
+                onChanged: (v) => widget.actions.onDepthGeometryChanged(
                   activeMask.depth.copyWith(far: v / 100),
                 ),
-                onChangeEnd: (v) => widget.onDepthGeometryChangeEnd(
+                onChangeEnd: (v) => widget.actions.onDepthGeometryChangeEnd(
                   activeMask.depth.copyWith(far: v / 100),
                 ),
               ),
@@ -895,10 +779,10 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 max: 100,
                 value: activeMask.depth.feather,
                 decimals: 0,
-                onChanged: (v) => widget.onDepthGeometryChanged(
+                onChanged: (v) => widget.actions.onDepthGeometryChanged(
                   activeMask.depth.copyWith(feather: v),
                 ),
-                onChangeEnd: (v) => widget.onDepthGeometryChangeEnd(
+                onChangeEnd: (v) => widget.actions.onDepthGeometryChangeEnd(
                   activeMask.depth.copyWith(feather: v),
                 ),
               ),
@@ -919,7 +803,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 child: SizedBox(
                   height: 34,
                   child: OutlinedButton(
-                    onPressed: widget.onDeleteMask,
+                    onPressed: widget.actions.onDeleteMask,
                     child: Text(l10n.cancelButton),
                   ),
                 ),
@@ -929,7 +813,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 child: SizedBox(
                   height: 34,
                   child: FilledButton(
-                    onPressed: () => widget.onSelectMask(imageMaskId),
+                    onPressed: () => widget.actions.onSelectMask(imageMaskId),
                     child: Text(l10n.maskOkButton),
                   ),
                 ),
@@ -1175,6 +1059,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                                 ),
                                             ],
                                             onChanged: widget
+                                                .actions
                                                 .onColorProfileChoiceChanged,
                                           ),
                                         ),
@@ -1196,8 +1081,9 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                               color:
                                                   DarkmoonColors.textSecondary,
                                               icon: const Icon(Icons.add),
-                                              onPressed:
-                                                  widget.onCreateColorProfile,
+                                              onPressed: widget
+                                                  .actions
+                                                  .onCreateColorProfile,
                                             ),
                                           ),
                                         ),
@@ -1218,8 +1104,9 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                               // only mean something once a user
                                               // profile is the one selected.
                                               PopupMenuItem(
-                                                value:
-                                                    widget.onImportColorProfile,
+                                                value: widget
+                                                    .actions
+                                                    .onImportColorProfile,
                                                 child: Text(
                                                   l10n.colorProfileImportLabel,
                                                 ),
@@ -1228,14 +1115,16 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                                   .selectedProfileIsUsers) ...[
                                                 const PopupMenuDivider(),
                                                 PopupMenuItem(
-                                                  value:
-                                                      widget.onEditColorProfile,
+                                                  value: widget
+                                                      .actions
+                                                      .onEditColorProfile,
                                                   child: Text(
                                                     l10n.colorProfileEditLabel,
                                                   ),
                                                 ),
                                                 PopupMenuItem(
                                                   value: widget
+                                                      .actions
                                                       .onDuplicateColorProfile,
                                                   child: Text(
                                                     l10n.colorProfileDuplicateLabel,
@@ -1243,6 +1132,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                                 ),
                                                 PopupMenuItem(
                                                   value: widget
+                                                      .actions
                                                       .onRenameColorProfile,
                                                   child: Text(
                                                     l10n.presetRenameLabel,
@@ -1250,6 +1140,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                                 ),
                                                 PopupMenuItem(
                                                   value: widget
+                                                      .actions
                                                       .onExportColorProfile,
                                                   child: Text(
                                                     l10n.presetExportLabel,
@@ -1257,6 +1148,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                                 ),
                                                 PopupMenuItem(
                                                   value: widget
+                                                      .actions
                                                       .onDeleteColorProfile,
                                                   child: Text(
                                                     l10n.presetDeleteLabel,
@@ -1805,7 +1697,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                               label: l10n.sectionLensCorrection,
                               enabled: widget.lensCorrection.enabled,
                               onEnabledChanged: (v) =>
-                                  widget.onLensCorrectionChangeEnd(
+                                  widget.actions.onLensCorrectionChangeEnd(
                                     widget.lensCorrection.copyWith(enabled: v),
                                   ),
                               children: [
@@ -1817,9 +1709,11 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                     allProfiles: widget.lensProfiles,
                                     cameraMake:
                                         widget.metadata?.cameraMake ?? '',
-                                    onChanged: widget.onLensCorrectionChanged,
-                                    onChangeEnd:
-                                        widget.onLensCorrectionChangeEnd,
+                                    onChanged:
+                                        widget.actions.onLensCorrectionChanged,
+                                    onChangeEnd: widget
+                                        .actions
+                                        .onLensCorrectionChangeEnd,
                                   ),
                                 ),
                               ],

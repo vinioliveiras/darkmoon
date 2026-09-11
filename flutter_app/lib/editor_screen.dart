@@ -885,6 +885,65 @@ class _EditorScreenState extends State<EditorScreen>
   /// `setState` is protected, and an extension is not a subclass.
   void _rebuild(VoidCallback fn) => setState(fn);
 
+  /// The controls panel's callbacks — see [_ControlsPanelActions].
+  late final _panelActions = _ControlsPanelActions(
+    onWhiteBalanceMode: _applyWbMode,
+    onToggleWbEyedropper: _toggleWbEyedropper,
+    onChanged: _onActiveChanged,
+    onChangeEnd: _onActiveChangeEnd,
+    onReset: _resetActive,
+    onColorProfileChoiceChanged: _applyColorProfileChoice,
+    onCreateColorProfile: _openColorProfileEditor,
+    onLevel: _levelPhoto,
+    onUpright: _uprightAuto,
+    onImportColorProfile: _importColorProfile,
+    onEditColorProfile: _editSelectedColorProfile,
+    onDuplicateColorProfile: _duplicateSelectedColorProfile,
+    onRenameColorProfile: _renameSelectedColorProfile,
+    onExportColorProfile: _exportSelectedColorProfile,
+    onDeleteColorProfile: _deleteSelectedColorProfile,
+    onToneCurveChanged: _onActiveToneCurveChanged,
+    onToneCurveChangeEnd: _onActiveToneCurveChangeEnd,
+    onColorCurveChanged: _onActiveColorCurveChanged,
+    onColorCurveChangeEnd: _onActiveColorCurveChangeEnd,
+    onSelectMask: _selectMask,
+    onAddMask: _addMask,
+    onToggleMaskEnabled: _toggleActiveMaskEnabled,
+    onToggleMaskInverted: _toggleActiveMaskInverted,
+    onCloneMask: _cloneActiveMask,
+    onDeleteMask: _deleteActiveMask,
+    onMaskOpacityChanged: _onActiveMaskOpacityChanged,
+    onMaskOpacityChangeEnd: _onActiveMaskOpacityChangeEnd,
+    onToggleMaskOverlayVisible: _toggleMaskOverlayVisible,
+    onBrushRadiusChanged: _setBrushRadius,
+    onBrushHardnessChanged: _setBrushHardness,
+    onToggleBrushErase: _toggleBrushErase,
+    onUndoStroke: _undoLastStroke,
+    onBrushFlowChanged: _setBrushFlow,
+    onColorRangeToleranceChanged: _onColorRangeToleranceChanged,
+    onColorRangeToleranceChangeEnd: _onColorRangeToleranceChangeEnd,
+    onColorRangeFeatherChanged: _onColorRangeFeatherChanged,
+    onColorRangeFeatherChangeEnd: _onColorRangeFeatherChangeEnd,
+    onDepthGeometryChanged: _onDepthGeometryChanged,
+    onDepthGeometryChangeEnd: _onDepthGeometryChangeEnd,
+    onLuminanceToleranceChanged: _onLuminanceToleranceChanged,
+    onLuminanceToleranceChangeEnd: _onLuminanceToleranceChangeEnd,
+    onLuminanceFeatherChanged: _onLuminanceFeatherChanged,
+    onLuminanceFeatherChangeEnd: _onLuminanceFeatherChangeEnd,
+    onCropTransformChanged: _onCropTransformChanged,
+    onCropTransformChangeEnd: _onCropTransformChangeEnd,
+    onCropAspectRatioChanged: _setCropAspectRatio,
+    onToggleCropOverlay: _toggleCropOverlay,
+    onResetCropTransform: _resetCropTransform,
+    onStraighteningChanged: _setStraighteningActive,
+    onToggleGuidedMode: _toggleGuidedMode,
+    onLensCorrectionChanged: _onLensCorrectionChanged,
+    onLensCorrectionChangeEnd: _onLensCorrectionChangeEnd,
+  );
+
+  void _toggleWbEyedropper() =>
+      setState(() => _wbEyedropperActive = !_wbEyedropperActive);
+
   /// Where every rebuildable cache lives — resolved once, since the
   /// storage meter and the sweep both need it and neither can call
   /// path_provider from an isolate.
@@ -4493,109 +4552,43 @@ class _EditorScreenState extends State<EditorScreen>
                           ),
                           _ControlsPanel(
                             values: _activeValues,
+                            actions: _panelActions,
                             histogram: selected == null
                                 ? null
                                 : _histograms[selected.path],
                             metadata: selected == null
                                 ? null
                                 : _metadata[selected.path],
-                            onChanged: _onActiveChanged,
-                            onChangeEnd: _onActiveChangeEnd,
-                            onReset: _resetActive,
                             colorProfileMode: colorProfileModeOf(_paramValues),
                             colorProfileChoice: _colorProfileChoice,
                             userColorProfiles: _userColorProfiles,
                             customProfileMissing: _customProfileMissing,
-                            onColorProfileChoiceChanged:
-                                _applyColorProfileChoice,
-                            onCreateColorProfile: _openColorProfileEditor,
-                            onLevel: _levelPhoto,
                             levelBusy: _levelBusy,
-                            onUpright: _uprightAuto,
                             uprightBusy: _uprightBusy,
                             tabbedLayout: _settings.tabbedControlsPanel,
                             tabIcons: _settings.tabbedControlsPanelIcons,
-                            onImportColorProfile: _importColorProfile,
-                            onEditColorProfile: _editSelectedColorProfile,
-                            onDuplicateColorProfile:
-                                _duplicateSelectedColorProfile,
-                            onRenameColorProfile: _renameSelectedColorProfile,
-                            onExportColorProfile: _exportSelectedColorProfile,
-                            onDeleteColorProfile: _deleteSelectedColorProfile,
                             selectedProfileIsUsers:
                                 _selectedUserColorProfile != null,
-                            onWhiteBalanceMode: _applyWbMode,
                             wbEyedropperActive: _wbEyedropperActive,
-                            onToggleWbEyedropper: () => setState(
-                              () => _wbEyedropperActive = !_wbEyedropperActive,
-                            ),
                             onExport: selected == null ? null : _exportCurrent,
                             exporting: _exporting,
                             enabled: selected != null,
                             curves: _activeCurves,
-                            onToneCurveChanged: _onActiveToneCurveChanged,
-                            onToneCurveChangeEnd: _onActiveToneCurveChangeEnd,
-                            onColorCurveChanged: _onActiveColorCurveChanged,
-                            onColorCurveChangeEnd: _onActiveColorCurveChangeEnd,
                             masks: _currentMasks,
                             activeMaskId: _activeMaskId,
-                            onSelectMask: _selectMask,
-                            onAddMask: _addMask,
-                            onToggleMaskEnabled: _toggleActiveMaskEnabled,
-                            onToggleMaskInverted: _toggleActiveMaskInverted,
-                            onCloneMask: _cloneActiveMask,
-                            onDeleteMask: _deleteActiveMask,
-                            onMaskOpacityChanged: _onActiveMaskOpacityChanged,
-                            onMaskOpacityChangeEnd:
-                                _onActiveMaskOpacityChangeEnd,
                             maskOverlayVisible: _maskOverlayVisible,
-                            onToggleMaskOverlayVisible:
-                                _toggleMaskOverlayVisible,
                             maskOverlayOpacity: _maskOverlayOpacity,
                             brushRadius: _brushRadius,
                             brushHardness: _brushHardness,
                             brushErase: _brushErase,
-                            onBrushRadiusChanged: _setBrushRadius,
-                            onBrushHardnessChanged: _setBrushHardness,
-                            onToggleBrushErase: _toggleBrushErase,
-                            onUndoStroke: _undoLastStroke,
                             brushFlow: _brushFlow,
-                            onBrushFlowChanged: _setBrushFlow,
-                            onColorRangeToleranceChanged:
-                                _onColorRangeToleranceChanged,
-                            onColorRangeToleranceChangeEnd:
-                                _onColorRangeToleranceChangeEnd,
-                            onColorRangeFeatherChanged:
-                                _onColorRangeFeatherChanged,
-                            onColorRangeFeatherChangeEnd:
-                                _onColorRangeFeatherChangeEnd,
-                            onDepthGeometryChanged: _onDepthGeometryChanged,
-                            onDepthGeometryChangeEnd: _onDepthGeometryChangeEnd,
                             aiMasksResolving: _aiMasksResolving,
                             aiMaskFailures: _aiMaskFailures,
-                            onLuminanceToleranceChanged:
-                                _onLuminanceToleranceChanged,
-                            onLuminanceToleranceChangeEnd:
-                                _onLuminanceToleranceChangeEnd,
-                            onLuminanceFeatherChanged:
-                                _onLuminanceFeatherChanged,
-                            onLuminanceFeatherChangeEnd:
-                                _onLuminanceFeatherChangeEnd,
                             cropOverlayActive: _cropOverlayActive,
                             cropTransform: _cropTransform,
-                            onCropTransformChanged: _onCropTransformChanged,
-                            onCropTransformChangeEnd: _onCropTransformChangeEnd,
                             cropAspectRatio: _cropAspectRatio,
-                            onCropAspectRatioChanged: _setCropAspectRatio,
-                            onToggleCropOverlay: _toggleCropOverlay,
-                            onResetCropTransform: _resetCropTransform,
-                            onStraighteningChanged: _setStraighteningActive,
                             guidedModeActive: _guidedModeActive,
-                            onToggleGuidedMode: _toggleGuidedMode,
                             lensCorrection: _lensCorrection,
-                            onLensCorrectionChanged: _onLensCorrectionChanged,
-                            onLensCorrectionChangeEnd:
-                                _onLensCorrectionChangeEnd,
                             lensProfiles: _lensProfiles,
                             resolvedLensProfile: selected == null
                                 ? null
