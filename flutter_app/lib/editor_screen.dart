@@ -4810,6 +4810,7 @@ class _EditorScreenState extends State<EditorScreen>
                                 ),
                                 Expanded(
                                   child: FolderSidebar(
+                                    width: _controlsPanelWidth,
                                     roots: _settings.libraryFolders,
                                     // Real bug report (2026-09-01): a
                                     // common-image entry stayed clickable

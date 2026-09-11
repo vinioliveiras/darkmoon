@@ -40,7 +40,12 @@ class FolderSidebar extends StatelessWidget {
     this.refreshToken,
     this.onCreateSubfolder,
     this.onDeleteFolder,
+    this.width = 300,
   });
+
+  /// The column's width — the editor passes its left column's, so the
+  /// tree fills it edge to edge (it used to be 220 in a 300 column).
+  final double width;
 
   final List<String> roots;
   final List<String> recentFiles;
@@ -124,7 +129,7 @@ class FolderSidebar extends StatelessWidget {
     );
     if (roots.isEmpty && recentFiles.isEmpty) {
       return Container(
-        width: double.infinity,
+        width: width,
         color: DarkmoonColors.panel,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -162,7 +167,7 @@ class FolderSidebar extends StatelessWidget {
       );
     }
     return Container(
-      width: double.infinity,
+      width: width,
       color: DarkmoonColors.panel,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
