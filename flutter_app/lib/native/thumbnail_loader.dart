@@ -13,7 +13,12 @@ import 'libraw.dart';
 /// before re-encoding is what actually matters for speed: encoding a
 /// full-size image dominates the cost (~3.5s), not the LibRaw extraction
 /// (~20ms) or JPEG decode (~1.1s) it's layered on top of.
-const int thumbnailMaxDimension = 200;
+/// 320 since 2026-09-11: the same JPEG serves the filmstrip (104 px
+/// tiles) and the library grid (up to 190 px tiles, sharp on a HiDPI
+/// display), so one decode and one cache entry per photo — never two
+/// sizes. The thumbnail cache directory moved with it, so nothing at the
+/// old size lingers.
+const int thumbnailMaxDimension = 320;
 
 /// Extracts + decodes a RAW file's embedded thumbnail, bakes in its EXIF
 /// orientation (so portrait shots don't come out sideways — Flutter's own

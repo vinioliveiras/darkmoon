@@ -7,7 +7,7 @@ import 'package:image/image.dart' as img;
 /// its own constant so this file doesn't need to import that one just for
 /// a number (avoids pulling in its `dart:io` dependency on a code path
 /// that's meant to run on the main isolate).
-const _fastThumbnailMaxDimension = 200;
+const _fastThumbnailMaxDimension = 320;
 
 /// Fast-path thumbnail decode for JPEG common images, using the platform's
 /// native (Skia, via `dart:ui`) decoder to downscale *while* decoding

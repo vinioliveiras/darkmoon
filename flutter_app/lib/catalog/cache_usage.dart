@@ -59,7 +59,7 @@ Map<String, CacheCategory> _rootsIn(String documentsDir) {
   return {
     p.join(base, 'previews'): CacheCategory.previews,
     p.join(base, 'camera_match'): CacheCategory.previews,
-    p.join(base, 'thumbnails'): CacheCategory.thumbnails,
+    p.join(base, 'thumbnails-320'): CacheCategory.thumbnails,
     p.join(base, 'ai_enhance_cache'): CacheCategory.aiResults,
     p.join(base, 'ai_mask_cache'): CacheCategory.aiResults,
     p.join(base, 'colorize_cache'): CacheCategory.aiResults,

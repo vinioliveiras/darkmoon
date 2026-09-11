@@ -50,12 +50,21 @@ class RatingStars extends StatelessWidget {
 }
 
 /// A context menu's rating row: five stars, the current ones lit; tapping
-/// the current rating clears it, as Meridian does.
-class RatingPicker extends StatelessWidget {
+/// the current rating clears it, as Meridian does. Keeps its own copy of
+/// the value so the row updates in place — the menu stays open after a
+/// pick (2026-09-11, user's request), and [onPick] just applies it.
+class RatingPicker extends StatefulWidget {
   const RatingPicker({super.key, required this.rating, required this.onPick});
 
   final int rating;
   final ValueChanged<int> onPick;
+
+  @override
+  State<RatingPicker> createState() => _RatingPickerState();
+}
+
+class _RatingPickerState extends State<RatingPicker> {
+  late int _rating = widget.rating;
 
   @override
   Widget build(BuildContext context) {
@@ -66,14 +75,18 @@ class RatingPicker extends StatelessWidget {
         const SizedBox(width: 12),
         for (var i = 1; i <= 5; i++)
           InkWell(
-            onTap: () => onPick(i == rating ? 0 : i),
+            onTap: () {
+              final next = i == _rating ? 0 : i;
+              setState(() => _rating = next);
+              widget.onPick(next);
+            },
             borderRadius: BorderRadius.circular(4),
             child: Padding(
               padding: const EdgeInsets.all(2),
               child: Icon(
-                i <= rating ? CupertinoIcons.star_fill : CupertinoIcons.star,
+                i <= _rating ? CupertinoIcons.star_fill : CupertinoIcons.star,
                 size: 16,
-                color: i <= rating
+                color: i <= _rating
                     ? DarkmoonColors.accent
                     : DarkmoonColors.textMuted,
               ),
@@ -84,12 +97,20 @@ class RatingPicker extends StatelessWidget {
   }
 }
 
-/// A context menu's label row: the five colour dots and "none".
-class LabelPicker extends StatelessWidget {
+/// A context menu's label row: the five colour dots and "none". Same
+/// stay-open behaviour as [RatingPicker].
+class LabelPicker extends StatefulWidget {
   const LabelPicker({super.key, required this.label, required this.onPick});
 
   final String label;
   final ValueChanged<String> onPick;
+
+  @override
+  State<LabelPicker> createState() => _LabelPickerState();
+}
+
+class _LabelPickerState extends State<LabelPicker> {
+  late String _label = widget.label;
 
   @override
   Widget build(BuildContext context) {
@@ -102,11 +123,14 @@ class LabelPicker extends StatelessWidget {
           Tooltip(
             message: photoLabelName(l10n, name),
             child: InkWell(
-              onTap: () => onPick(name),
+              onTap: () {
+                setState(() => _label = name);
+                widget.onPick(name);
+              },
               borderRadius: BorderRadius.circular(10),
               child: Padding(
                 padding: const EdgeInsets.all(3),
-                child: LabelDot(name: name, selected: name == label),
+                child: LabelDot(name: name, selected: name == _label),
               ),
             ),
           ),

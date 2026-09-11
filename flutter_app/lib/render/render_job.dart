@@ -19,7 +19,7 @@ import 'render_params.dart';
 /// constant here to avoid this file depending on the thumbnail loader just
 /// for one number. Public so `render_job_gpu.dart`'s `renderJobToJpegGpu`
 /// can reuse the exact same value for its own thumbnail encode.
-const int filmstripThumbnailMaxDimension = 200;
+const int filmstripThumbnailMaxDimension = 320;
 
 /// A single `compute()` request: apply [params] (and any [masks], stacked
 /// on top) to [source] and encode the result as JPEG. Bundled into one

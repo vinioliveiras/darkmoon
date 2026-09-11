@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -13,6 +12,7 @@ import '../theme.dart';
 import '../widgets/folder_sidebar.dart';
 import '../widgets/photo_meta_widgets.dart';
 import '../widgets/text_prompt_dialog.dart';
+import 'album_picker_dialog.dart';
 import 'photo_mover.dart';
 
 /// What the library hands back to the editor when a photo is chosen: the
@@ -413,16 +413,43 @@ class _LibraryScreenState extends State<LibraryScreen> {
     setState(() => _treeToken++);
   }
 
-  /// "Move to folder…": a folder picker, then the move.
-  Future<void> _moveToPickedFolder(List<RawFile> targets) async {
-    final l10n = AppLocalizations.of(context)!;
-    final folder = await FilePicker.getDirectoryPath(
-      dialogTitle: l10n.libraryMoveToAction,
+  /// "Move to album…": the library's own folder tree, then the move.
+  Future<void> _moveToPickedAlbum(List<RawFile> targets) async {
+    final album = await showAlbumPickerDialog(
+      context,
+      roots: widget.libraryFolders(),
+      current: _folder,
     );
-    if (folder == null || !mounted) {
+    if (album == null || !mounted) {
       return;
     }
-    await _movePhotos([for (final f in targets) f.path], folder);
+    await _movePhotos([for (final f in targets) f.path], album);
+  }
+
+  /// A new album (folder inside the one shown) holding [paths] — from a
+  /// photo dropped on another, or the menu's "new album with these".
+  Future<void> _newAlbumWith(List<String> paths) async {
+    final l10n = AppLocalizations.of(context)!;
+    final parent = _folder;
+    if (parent == null || paths.isEmpty) {
+      return;
+    }
+    final name = await showTextPromptDialog(
+      context,
+      title: l10n.libraryNewAlbumTitle,
+    );
+    if (name == null || name.trim().isEmpty || !mounted) {
+      return;
+    }
+    final created = await widget.onCreateFolder(parent, name);
+    if (!mounted) {
+      return;
+    }
+    if (created == null) {
+      _toast(l10n.libraryFolderExists);
+      return;
+    }
+    await _movePhotos(paths, created);
   }
 
   Future<void> _showContextMenu(Offset globalPosition, RawFile file) async {
@@ -453,17 +480,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
         PopupMenuItem(
           child: RatingPicker(
             rating: widget.metaOf(file.path)?.rating ?? 0,
-            onPick: (rating) => Navigator.of(
-              context,
-            ).pop<VoidCallback>(() => _setRating(targets, rating)),
+            onPick: (rating) => _setRating(targets, rating),
           ),
         ),
         PopupMenuItem(
           child: LabelPicker(
             label: widget.metaOf(file.path)?.label ?? '',
-            onPick: (label) => Navigator.of(
-              context,
-            ).pop<VoidCallback>(() => _setLabel(targets, label)),
+            onPick: (label) => _setLabel(targets, label),
           ),
         ),
         PopupMenuItem(
@@ -472,9 +495,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ),
         const PopupMenuDivider(),
         PopupMenuItem(
-          value: () => unawaited(_moveToPickedFolder(targets)),
+          value: () => unawaited(_moveToPickedAlbum(targets)),
           child: Text(l10n.libraryMoveToAction),
         ),
+        if (_folder != null)
+          PopupMenuItem(
+            value: () =>
+                unawaited(_newAlbumWith([for (final f in targets) f.path])),
+            child: Text(l10n.libraryNewAlbumFromSelection),
+          ),
         const PopupMenuDivider(),
         PopupMenuItem(
           value: () {
@@ -932,7 +961,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
               unawaited(_showContextMenu(details.globalPosition, file)),
         );
         // Dragging a tile carries the whole selection when the tile is
-        // part of it — onto a folder on the left, which moves the files.
+        // part of it — onto a folder on the left, which moves the files,
+        // or onto another photo, which makes a new album of them all.
         return Draggable<List<String>>(
           data: [for (final f in _targets(file)) f.path],
           dragAnchorStrategy: pointerDragAnchorStrategy,
@@ -941,7 +971,33 @@ class _LibraryScreenState extends State<LibraryScreen> {
             thumbnail: _thumbnails[file.path],
           ),
           childWhenDragging: Opacity(opacity: 0.4, child: tile),
-          child: tile,
+          child: DragTarget<List<String>>(
+            onWillAcceptWithDetails: (details) =>
+                _folder != null && !details.data.contains(file.path),
+            onAcceptWithDetails: (details) =>
+                unawaited(_newAlbumWith([...details.data, file.path])),
+            builder: (context, candidates, _) => Stack(
+              fit: StackFit.passthrough,
+              children: [
+                tile,
+                if (candidates.isNotEmpty)
+                  Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(
+                            color: DarkmoonColors.accent,
+                            width: 2,
+                          ),
+                          color: DarkmoonColors.accent.withValues(alpha: 0.15),
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
         );
       },
     );

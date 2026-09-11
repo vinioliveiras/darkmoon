@@ -109,7 +109,7 @@ abstract class AppLocalizations {
   /// No description provided for @menuOpenFolder.
   ///
   /// In en, this message translates to:
-  /// **'Add Folder'**
+  /// **'Add album folder'**
   String get menuOpenFolder;
 
   /// No description provided for @menuSettings.
@@ -199,14 +199,32 @@ abstract class AppLocalizations {
   /// No description provided for @libraryNewAlbumTooltip.
   ///
   /// In en, this message translates to:
-  /// **'New album: a folder inside this one'**
+  /// **'New album inside this one'**
   String get libraryNewAlbumTooltip;
 
   /// No description provided for @libraryMoveToAction.
   ///
   /// In en, this message translates to:
-  /// **'Move to folder…'**
+  /// **'Move to album…'**
   String get libraryMoveToAction;
+
+  /// No description provided for @libraryNewAlbumFromSelection.
+  ///
+  /// In en, this message translates to:
+  /// **'New album with these photos…'**
+  String get libraryNewAlbumFromSelection;
+
+  /// No description provided for @libraryPickAlbumTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to album'**
+  String get libraryPickAlbumTitle;
+
+  /// No description provided for @libraryPickAlbumConfirm.
+  ///
+  /// In en, this message translates to:
+  /// **'Move'**
+  String get libraryPickAlbumConfirm;
 
   /// No description provided for @libraryMoveSkipped.
   ///
@@ -217,7 +235,7 @@ abstract class AppLocalizations {
   /// No description provided for @libraryFolderExists.
   ///
   /// In en, this message translates to:
-  /// **'A folder with that name already exists there'**
+  /// **'An album with that name already exists there'**
   String get libraryFolderExists;
 
   /// No description provided for @libraryEditTagsAction.
@@ -349,13 +367,13 @@ abstract class AppLocalizations {
   /// No description provided for @sidebarFoldersSection.
   ///
   /// In en, this message translates to:
-  /// **'FOLDERS'**
+  /// **'ALBUMS'**
   String get sidebarFoldersSection;
 
   /// No description provided for @sidebarRemoveFolderTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Remove folder'**
+  /// **'Remove album from the library'**
   String get sidebarRemoveFolderTooltip;
 
   /// No description provided for @sidebarRemoveRecentFileTooltip.
@@ -367,7 +385,7 @@ abstract class AppLocalizations {
   /// No description provided for @sidebarFolderNotFoundTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Folder not found — remove it from the list'**
+  /// **'Album not found — remove it from the list'**
   String get sidebarFolderNotFoundTooltip;
 
   /// No description provided for @sidebarPresetsSection.

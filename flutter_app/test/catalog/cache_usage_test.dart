@@ -42,7 +42,7 @@ void main() {
       write(['previews', 'v5', '2048px', 'a.cache'], 1000);
       write(['camera_match', 'v5', 'a.cache'], 50);
       write(['previews', 'v5', 'native', 'a.cache'], 9000);
-      write(['thumbnails', 'a.cache'], 300);
+      write(['thumbnails-320', 'a.cache'], 300);
       write(['ai_enhance_cache', 'a.png'], 700);
       write(['colorize_cache', 'a.png'], 200);
 
@@ -116,9 +116,9 @@ void main() {
 
     test('leaves thumbnails alone too', () {
       // Small, and the filmstrip is unusable without them.
-      write(['thumbnails', 'a.cache'], 9000, ageDays: 365);
+      write(['thumbnails-320', 'a.cache'], 9000, ageDays: 365);
       enforceCacheLimit(CacheLimitRequest(root.path, 0));
-      expect(sizeOf(['thumbnails', 'a.cache']), 9000);
+      expect(sizeOf(['thumbnails-320', 'a.cache']), 9000);
     });
 
     test('stops as soon as it fits, rather than emptying the cache', () {
@@ -161,7 +161,7 @@ void main() {
     test('one category goes and the others stay', () {
       write(['previews', 'v5', '2048px', 'a.cache'], 100);
       write(['previews', 'v5', 'native', 'a.cache'], 200);
-      write(['thumbnails', 'a.cache'], 300);
+      write(['thumbnails-320', 'a.cache'], 300);
       write(['ai_enhance_cache', 'a.png'], 400);
 
       final freed = clearCacheCategories(
@@ -176,7 +176,7 @@ void main() {
             'full-resolution sources live under previews/ but are a '
             'category of their own',
       );
-      expect(sizeOf(['thumbnails', 'a.cache']), 300);
+      expect(sizeOf(['thumbnails-320', 'a.cache']), 300);
       expect(sizeOf(['ai_enhance_cache', 'a.png']), 400);
     });
 
@@ -205,7 +205,7 @@ void main() {
     test('every category at once empties the lot', () {
       write(['previews', 'v5', '2048px', 'a.cache'], 100);
       write(['previews', 'v5', 'native', 'a.cache'], 200);
-      write(['thumbnails', 'a.cache'], 300);
+      write(['thumbnails-320', 'a.cache'], 300);
       write(['colorize_cache', 'a.png'], 400);
       write(['presets', 'mine.xmp'], 999);
 

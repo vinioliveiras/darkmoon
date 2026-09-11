@@ -12,7 +12,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuOpenFile => 'Open File';
 
   @override
-  String get menuOpenFolder => 'Add Folder';
+  String get menuOpenFolder => 'Add album folder';
 
   @override
   String get menuSettings => 'Settings';
@@ -69,10 +69,19 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryNewAlbumTitle => 'New album';
 
   @override
-  String get libraryNewAlbumTooltip => 'New album: a folder inside this one';
+  String get libraryNewAlbumTooltip => 'New album inside this one';
 
   @override
-  String get libraryMoveToAction => 'Move to folder…';
+  String get libraryMoveToAction => 'Move to album…';
+
+  @override
+  String get libraryNewAlbumFromSelection => 'New album with these photos…';
+
+  @override
+  String get libraryPickAlbumTitle => 'Move to album';
+
+  @override
+  String get libraryPickAlbumConfirm => 'Move';
 
   @override
   String libraryMoveSkipped(int count) {
@@ -88,7 +97,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get libraryFolderExists =>
-      'A folder with that name already exists there';
+      'An album with that name already exists there';
 
   @override
   String get libraryEditTagsAction => 'Edit tags…';
@@ -165,17 +174,17 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidebarOpenTooltip => 'Open a file or add a folder';
 
   @override
-  String get sidebarFoldersSection => 'FOLDERS';
+  String get sidebarFoldersSection => 'ALBUMS';
 
   @override
-  String get sidebarRemoveFolderTooltip => 'Remove folder';
+  String get sidebarRemoveFolderTooltip => 'Remove album from the library';
 
   @override
   String get sidebarRemoveRecentFileTooltip => 'Remove from recent files';
 
   @override
   String get sidebarFolderNotFoundTooltip =>
-      'Folder not found — remove it from the list';
+      'Album not found — remove it from the list';
 
   @override
   String get sidebarPresetsSection => 'PRESETS';

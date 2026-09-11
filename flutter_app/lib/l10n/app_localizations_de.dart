@@ -12,7 +12,7 @@ class AppLocalizationsDe extends AppLocalizations {
   String get menuOpenFile => 'Datei öffnen';
 
   @override
-  String get menuOpenFolder => 'Ordner hinzufügen';
+  String get menuOpenFolder => 'Albumordner hinzufügen';
 
   @override
   String get menuSettings => 'Einstellungen';
@@ -69,10 +69,19 @@ class AppLocalizationsDe extends AppLocalizations {
   String get libraryNewAlbumTitle => 'Neues Album';
 
   @override
-  String get libraryNewAlbumTooltip => 'Neues Album: ein Ordner in diesem';
+  String get libraryNewAlbumTooltip => 'Neues Album in diesem';
 
   @override
-  String get libraryMoveToAction => 'In Ordner verschieben…';
+  String get libraryMoveToAction => 'In Album verschieben…';
+
+  @override
+  String get libraryNewAlbumFromSelection => 'Neues Album mit diesen Fotos…';
+
+  @override
+  String get libraryPickAlbumTitle => 'In Album verschieben';
+
+  @override
+  String get libraryPickAlbumConfirm => 'Verschieben';
 
   @override
   String libraryMoveSkipped(int count) {
@@ -89,7 +98,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get libraryFolderExists =>
-      'Dort existiert bereits ein Ordner mit diesem Namen';
+      'Dort existiert bereits ein Album mit diesem Namen';
 
   @override
   String get libraryEditTagsAction => 'Tags bearbeiten…';
@@ -166,10 +175,10 @@ class AppLocalizationsDe extends AppLocalizations {
   String get sidebarOpenTooltip => 'Datei oeffnen oder Ordner hinzufuegen';
 
   @override
-  String get sidebarFoldersSection => 'ORDNER';
+  String get sidebarFoldersSection => 'ALBEN';
 
   @override
-  String get sidebarRemoveFolderTooltip => 'Ordner entfernen';
+  String get sidebarRemoveFolderTooltip => 'Album aus der Bibliothek entfernen';
 
   @override
   String get sidebarRemoveRecentFileTooltip =>
@@ -177,7 +186,7 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get sidebarFolderNotFoundTooltip =>
-      'Ordner nicht gefunden — aus der Liste entfernen';
+      'Album nicht gefunden — aus der Liste entfernen';
 
   @override
   String get sidebarPresetsSection => 'VORGABEN';

@@ -208,17 +208,13 @@ class _FilmstripState extends State<_Filmstrip> {
           // them falls through to this item and closes it with nothing.
           child: RatingPicker(
             rating: widget.metaOf(file.path)?.rating ?? 0,
-            onPick: (rating) => Navigator.of(
-              context,
-            ).pop<VoidCallback>(() => widget.onSetRating(file, rating)),
+            onPick: (rating) => widget.onSetRating(file, rating),
           ),
         ),
         PopupMenuItem(
           child: LabelPicker(
             label: widget.metaOf(file.path)?.label ?? '',
-            onPick: (label) => Navigator.of(
-              context,
-            ).pop<VoidCallback>(() => widget.onSetLabel(file, label)),
+            onPick: (label) => widget.onSetLabel(file, label),
           ),
         ),
         const PopupMenuDivider(),

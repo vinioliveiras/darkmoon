@@ -12,7 +12,7 @@ class AppLocalizationsPt extends AppLocalizations {
   String get menuOpenFile => 'Abrir arquivo';
 
   @override
-  String get menuOpenFolder => 'Adicionar pasta';
+  String get menuOpenFolder => 'Adicionar pasta de álbuns';
 
   @override
   String get menuSettings => 'Configurações';
@@ -69,10 +69,19 @@ class AppLocalizationsPt extends AppLocalizations {
   String get libraryNewAlbumTitle => 'Novo álbum';
 
   @override
-  String get libraryNewAlbumTooltip => 'Novo álbum: uma pasta dentro desta';
+  String get libraryNewAlbumTooltip => 'Novo álbum dentro deste';
 
   @override
-  String get libraryMoveToAction => 'Mover para pasta…';
+  String get libraryMoveToAction => 'Mover para álbum…';
+
+  @override
+  String get libraryNewAlbumFromSelection => 'Novo álbum com estas fotos…';
+
+  @override
+  String get libraryPickAlbumTitle => 'Mover para álbum';
+
+  @override
+  String get libraryPickAlbumConfirm => 'Mover';
 
   @override
   String libraryMoveSkipped(int count) {
@@ -86,7 +95,7 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
-  String get libraryFolderExists => 'Já existe uma pasta com esse nome lá';
+  String get libraryFolderExists => 'Já existe um álbum com esse nome lá';
 
   @override
   String get libraryEditTagsAction => 'Editar tags…';
@@ -163,17 +172,17 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sidebarOpenTooltip => 'Abrir um arquivo ou adicionar uma pasta';
 
   @override
-  String get sidebarFoldersSection => 'PASTAS';
+  String get sidebarFoldersSection => 'ÁLBUNS';
 
   @override
-  String get sidebarRemoveFolderTooltip => 'Remover pasta';
+  String get sidebarRemoveFolderTooltip => 'Remover álbum da biblioteca';
 
   @override
   String get sidebarRemoveRecentFileTooltip => 'Remover dos arquivos recentes';
 
   @override
   String get sidebarFolderNotFoundTooltip =>
-      'Pasta não encontrada — remova da lista';
+      'Álbum não encontrado — remova da lista';
 
   @override
   String get sidebarPresetsSection => 'PRESETS';
