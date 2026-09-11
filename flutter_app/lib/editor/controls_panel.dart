@@ -486,11 +486,9 @@ class _ControlsPanelState extends State<_ControlsPanel>
     final masksBlock = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        MaskSelector(
+        MaskLayerControls(
           masks: widget.masks,
           activeId: widget.activeMaskId,
-          onSelect: widget.actions.onSelectMask,
-          onAdd: widget.actions.onAddMask,
           onToggleEnabled: widget.actions.onToggleMaskEnabled,
           onToggleInverted: widget.actions.onToggleMaskInverted,
           onClone: widget.actions.onCloneMask,
@@ -884,6 +882,25 @@ class _ControlsPanelState extends State<_ControlsPanel>
                       ],
                     ),
                   ),
+                // The mask picker is pinned under the histogram in both
+                // layouts (user's call, 2026-09-11): which mask the
+                // sections apply to has to stay in view while they scroll.
+                // The active mask's own controls follow the layout below.
+                if (!widget.cropOverlayActive)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(
+                      _controlsPanelInset,
+                      10,
+                      _controlsPanelInset,
+                      8,
+                    ),
+                    child: MaskSelector(
+                      masks: widget.masks,
+                      activeId: widget.activeMaskId,
+                      onSelect: widget.actions.onSelectMask,
+                      onAdd: widget.actions.onAddMask,
+                    ),
+                  ),
                 // Crop takes the whole panel, in both layouts. It is a
                 // mode rather than another section — nothing else in here
                 // acts on a photo while it is open, and leaving the masks
@@ -930,7 +947,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                         // bar have had their share, so the sections always keep
                         // the larger half. Collapses to nothing on a panel too
                         // short to hold all three rather than overflowing.
-                        maxHeight: ((panelBox.maxHeight - 280) * 0.5).clamp(
+                        maxHeight: ((panelBox.maxHeight - 350) * 0.5).clamp(
                           0.0,
                           320.0,
                         ),

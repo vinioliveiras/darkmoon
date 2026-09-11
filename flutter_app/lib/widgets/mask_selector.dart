@@ -13,8 +13,10 @@ const imageMaskId = 'image';
 
 /// Photomator-style mask picker: a pill showing the mask currently being
 /// edited (tap to switch between "Image" and any added masks) plus a "+"
-/// button to add a new one. When a real mask (not "Image") is active,
-/// shows its enabled/invert toggles and a delete button underneath.
+/// button to add a new one. Only that: the active mask's own controls
+/// are [MaskLayerControls], so the picker can stay pinned under the
+/// histogram while they scroll with the sections (user's call,
+/// 2026-09-11).
 class MaskSelector extends StatelessWidget {
   const MaskSelector({
     super.key,
@@ -22,48 +24,12 @@ class MaskSelector extends StatelessWidget {
     required this.activeId,
     required this.onSelect,
     required this.onAdd,
-    required this.onToggleEnabled,
-    required this.onToggleInverted,
-    required this.onClone,
-    required this.onDelete,
-    required this.onOpacityChanged,
-    required this.onOpacityChangeEnd,
-    required this.overlayVisible,
-    required this.onToggleOverlayVisible,
-    required this.overlayOpacity,
   });
 
   final List<MaskLayer> masks;
   final String activeId;
   final ValueChanged<String> onSelect;
   final ValueChanged<MaskType> onAdd;
-  final VoidCallback onToggleEnabled;
-  final VoidCallback onToggleInverted;
-
-  /// Duplicates the active mask (geometry, values, curves — everything
-  /// but the id/name) into a new sibling layer, selected right after.
-  final VoidCallback onClone;
-  final VoidCallback onDelete;
-
-  /// How strongly the active mask's effect applies, 0..100 — see
-  /// [MaskLayer.opacity].
-  final ValueChanged<double> onOpacityChanged;
-  final ValueChanged<double> onOpacityChangeEnd;
-
-  /// Whether the active mask's on-canvas overlay (shaded coverage area,
-  /// handles) is currently shown.
-  final bool overlayVisible;
-  final VoidCallback onToggleOverlayVisible;
-
-  /// How opaque that on-canvas overlay's shading is (0..1), one value per
-  /// mask type — a display-only preference, independent of
-  /// [onOpacityChanged]'s real mask-effect strength. The active mask's own
-  /// type picks which entry is shown/edited.
-  final Map<MaskType, double> overlayOpacity;
-
-  MaskLayer? get _active => activeId == imageMaskId
-      ? null
-      : masks.where((m) => m.id == activeId).firstOrNull;
 
   IconData _typeIcon(MaskType type) => switch (type) {
     MaskType.linearGradient => CupertinoIcons.arrowtriangle_down_fill,
@@ -82,7 +48,6 @@ class MaskSelector extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final active = _active;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -200,92 +165,153 @@ class MaskSelector extends StatelessWidget {
             ),
           ],
         ),
-        if (active != null) ...[
-          const SizedBox(height: 6),
-          Row(
-            children: [
-              Expanded(
-                child: SizedBox(
-                  height: 34,
-                  child: IconButton(
-                    tooltip: overlayVisible
-                        ? l10n.maskOverlayVisibleTooltip
-                        : l10n.maskOverlayHiddenTooltip,
-                    onPressed: onToggleOverlayVisible,
-                    icon: Icon(
-                      overlayVisible
-                          ? CupertinoIcons.eye
-                          : CupertinoIcons.eye_slash,
-                      size: 15,
-                    ),
+      ],
+    );
+  }
+}
+
+/// The active mask's own controls, under the picker: the overlay eye,
+/// enable, clone and delete, Invert and the opacity slider. Nothing for
+/// the base image layer.
+class MaskLayerControls extends StatelessWidget {
+  const MaskLayerControls({
+    super.key,
+    required this.masks,
+    required this.activeId,
+    required this.onToggleEnabled,
+    required this.onToggleInverted,
+    required this.onClone,
+    required this.onDelete,
+    required this.onOpacityChanged,
+    required this.onOpacityChangeEnd,
+    required this.overlayVisible,
+    required this.onToggleOverlayVisible,
+    required this.overlayOpacity,
+  });
+
+  final List<MaskLayer> masks;
+  final String activeId;
+  final VoidCallback onToggleEnabled;
+  final VoidCallback onToggleInverted;
+
+  /// Duplicates the active mask (geometry, values, curves — everything
+  /// but the id/name) into a new sibling layer, selected right after.
+  final VoidCallback onClone;
+  final VoidCallback onDelete;
+
+  /// How strongly the active mask's effect applies, 0..100 — see
+  /// [MaskLayer.opacity].
+  final ValueChanged<double> onOpacityChanged;
+  final ValueChanged<double> onOpacityChangeEnd;
+
+  /// Whether the active mask's on-canvas overlay (shaded coverage area,
+  /// handles) is currently shown.
+  final bool overlayVisible;
+  final VoidCallback onToggleOverlayVisible;
+
+  /// How opaque that on-canvas overlay's shading is (0..1), one value per
+  /// mask type — a display-only preference, independent of
+  /// [onOpacityChanged]'s real mask-effect strength. The active mask's own
+  /// type picks which entry is shown/edited.
+  final Map<MaskType, double> overlayOpacity;
+
+  MaskLayer? get _active => activeId == imageMaskId
+      ? null
+      : masks.where((m) => m.id == activeId).firstOrNull;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final active = _active;
+    if (active == null) {
+      return const SizedBox.shrink();
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 34,
+                child: IconButton(
+                  tooltip: overlayVisible
+                      ? l10n.maskOverlayVisibleTooltip
+                      : l10n.maskOverlayHiddenTooltip,
+                  onPressed: onToggleOverlayVisible,
+                  icon: Icon(
+                    overlayVisible
+                        ? CupertinoIcons.eye
+                        : CupertinoIcons.eye_slash,
+                    size: 15,
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: SizedBox(
-                  height: 34,
-                  child: IconButton(
-                    tooltip: active.enabled
-                        ? l10n.maskDisableTooltip
-                        : l10n.maskEnableTooltip,
-                    onPressed: onToggleEnabled,
-                    icon: Icon(
-                      active.enabled
-                          ? CupertinoIcons.checkmark_circle_fill
-                          : CupertinoIcons.circle,
-                      size: 15,
-                      color: active.enabled
-                          ? DarkmoonColors.accent
-                          : DarkmoonColors.textMuted,
-                    ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: SizedBox(
+                height: 34,
+                child: IconButton(
+                  tooltip: active.enabled
+                      ? l10n.maskDisableTooltip
+                      : l10n.maskEnableTooltip,
+                  onPressed: onToggleEnabled,
+                  icon: Icon(
+                    active.enabled
+                        ? CupertinoIcons.checkmark_circle_fill
+                        : CupertinoIcons.circle,
+                    size: 15,
+                    color: active.enabled
+                        ? DarkmoonColors.accent
+                        : DarkmoonColors.textMuted,
                   ),
                 ),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: SizedBox(
-                  height: 34,
-                  child: IconButton(
-                    tooltip: l10n.maskCloneTooltip,
-                    onPressed: onClone,
-                    icon: const Icon(CupertinoIcons.square_on_square, size: 15),
-                  ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: SizedBox(
+                height: 34,
+                child: IconButton(
+                  tooltip: l10n.maskCloneTooltip,
+                  onPressed: onClone,
+                  icon: const Icon(CupertinoIcons.square_on_square, size: 15),
                 ),
               ),
-              const SizedBox(width: 6),
-              Expanded(
-                child: SizedBox(
-                  height: 34,
-                  child: IconButton(
-                    tooltip: l10n.maskDeleteTooltip,
-                    onPressed: onDelete,
-                    icon: const Icon(CupertinoIcons.trash, size: 15),
-                  ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: SizedBox(
+                height: 34,
+                child: IconButton(
+                  tooltip: l10n.maskDeleteTooltip,
+                  onPressed: onDelete,
+                  icon: const Icon(CupertinoIcons.trash, size: 15),
                 ),
               ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          // Enable/disable now lives in the power-icon button above, so this
-          // row carries only Invert (full width).
-          _MaskToggleChip(
-            label: l10n.maskInvertLabel,
-            value: active.inverted,
-            onTap: onToggleInverted,
-          ),
-          const SizedBox(height: 8),
-          SliderRow(
-            name: l10n.maskOpacityLabel,
-            min: 0,
-            max: 100,
-            value: active.opacity,
-            decimals: 0,
-            defaultValue: 100,
-            onChanged: onOpacityChanged,
-            onChangeEnd: onOpacityChangeEnd,
-          ),
-        ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        // Enable/disable now lives in the power-icon button above, so this
+        // row carries only Invert (full width).
+        _MaskToggleChip(
+          label: l10n.maskInvertLabel,
+          value: active.inverted,
+          onTap: onToggleInverted,
+        ),
+        const SizedBox(height: 8),
+        SliderRow(
+          name: l10n.maskOpacityLabel,
+          min: 0,
+          max: 100,
+          value: active.opacity,
+          decimals: 0,
+          defaultValue: 100,
+          onChanged: onOpacityChanged,
+          onChangeEnd: onOpacityChangeEnd,
+        ),
       ],
     );
   }
