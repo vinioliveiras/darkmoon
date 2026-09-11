@@ -355,29 +355,6 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
             onChangeEnd: (v) => setState(() => _contrast = v),
           ),
         ],
-        const SizedBox(height: 16),
-        Text(
-          l10n.colorProfileEditorResetHint,
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
-        ),
-        const SizedBox(height: 6),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: () {
-              setState(() {
-                _tonePoints = List<CurvePoint>.of(identityToneCurve);
-                _hueShift = List<double>.of(identityColorProfile.hueShift);
-                _satMul = List<double>.of(identityColorProfile.satMul);
-                _lumMul = List<double>.of(identityColorProfile.lumMul);
-              });
-              _settled();
-            },
-            child: Text(l10n.colorProfileEditorReset),
-          ),
-        ),
       ],
     );
   }
@@ -677,6 +654,31 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
             baseContrast: _contrast,
           ),
         ],
+        // Reset sits under what it resets, the previews, rather than
+        // among the controls of one tab (user's call, 2026-09-11).
+        const SizedBox(height: 12),
+        Text(
+          l10n.colorProfileEditorResetHint,
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
+        ),
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: () {
+              setState(() {
+                _tonePoints = List<CurvePoint>.of(identityToneCurve);
+                _hueShift = List<double>.of(identityColorProfile.hueShift);
+                _satMul = List<double>.of(identityColorProfile.satMul);
+                _lumMul = List<double>.of(identityColorProfile.lumMul);
+              });
+              _settled();
+            },
+            child: Text(l10n.colorProfileEditorReset),
+          ),
+        ),
       ],
     );
   }
