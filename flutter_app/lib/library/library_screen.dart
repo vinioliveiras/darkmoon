@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:path/path.dart' as p;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -41,6 +43,9 @@ class LibraryBody extends StatefulWidget {
     required this.libraryFolders,
     required this.onOpen,
     required this.onSelectionChanged,
+    required this.onOpenAlbum,
+    required this.rawOnly,
+    required this.treeToken,
     required this.onAddFolder,
     required this.onSetRating,
     required this.onSetLabel,
@@ -83,6 +88,17 @@ class LibraryBody extends StatefulWidget {
   /// The primary selected photo whenever the selection changes (null for
   /// none) — the left column's details panel follows it.
   final ValueChanged<RawFile?> onSelectionChanged;
+
+  /// Opens a sub-album (a folder inside the open one) — the grid shows
+  /// each as a tile with a mosaic of its first photos (2026-09-11).
+  final ValueChanged<String> onOpenAlbum;
+
+  /// The library's "RAW files only" setting, for the sub-albums' mosaics.
+  final bool rawOnly;
+
+  /// Changes when a folder was created, moved or deleted, so the
+  /// sub-albums are listed again.
+  final Object? treeToken;
   final Future<void> Function() onAddFolder;
   final void Function(RawFile file, int rating) onSetRating;
   final void Function(RawFile file, String label) onSetLabel;
@@ -125,15 +141,73 @@ class _LibraryBodyState extends State<LibraryBody> {
   String? _anchorPath;
   final _focusNode = FocusNode();
 
+  /// The open album's sub-albums (folders inside it), and for each the
+  /// files its mosaic is made of — up to four — and its photo count.
+  List<String> _subAlbums = const [];
+  final Map<String, _AlbumPreview> _albumPreviews = {};
+  int _albumGeneration = 0;
+
   @override
   void initState() {
     super.initState();
     _query.addListener(() => setState(() {}));
+    unawaited(_listSubAlbums());
+  }
+
+  Future<void> _listSubAlbums() async {
+    final folder = widget.folder;
+    final generation = ++_albumGeneration;
+    if (folder == null) {
+      if (_subAlbums.isNotEmpty) {
+        setState(() {
+          _subAlbums = const [];
+          _albumPreviews.clear();
+        });
+      }
+      return;
+    }
+    List<String> dirs;
+    try {
+      final entries = await Directory(folder).list().toList();
+      dirs = [for (final e in entries.whereType<Directory>()) e.path]
+        ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+    } catch (_) {
+      dirs = const [];
+    }
+    if (!mounted || generation != _albumGeneration) {
+      return;
+    }
+    setState(() {
+      _subAlbums = dirs;
+      _albumPreviews.removeWhere((path, _) => !dirs.contains(path));
+    });
+    for (final dir in dirs) {
+      if (_albumPreviews.containsKey(dir)) {
+        continue;
+      }
+      final files = await listRawFiles(dir, rawOnly: widget.rawOnly);
+      if (!mounted || generation != _albumGeneration) {
+        return;
+      }
+      final preview = _AlbumPreview(
+        files: files.take(4).toList(),
+        count: files.length,
+      );
+      setState(() => _albumPreviews[dir] = preview);
+      for (final file in preview.files) {
+        _requestThumbnail(file);
+      }
+    }
   }
 
   @override
   void didUpdateWidget(covariant LibraryBody oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.folder != widget.folder ||
+        oldWidget.treeToken != widget.treeToken ||
+        oldWidget.rawOnly != widget.rawOnly) {
+      unawaited(_listSubAlbums());
+    }
     if (!identical(oldWidget.files, widget.files)) {
       // The album was reloaded (a move, a delete, another album): keep
       // only what is still here.
@@ -747,7 +821,13 @@ class _LibraryBodyState extends State<LibraryBody> {
       );
     }
     final visible = _visibleFiles;
-    if (visible.isEmpty) {
+    final query = _query.text.trim().toLowerCase();
+    final albums = [
+      for (final album in _subAlbums)
+        if (query.isEmpty || p.basename(album).toLowerCase().contains(query))
+          album,
+    ];
+    if (visible.isEmpty && albums.isEmpty) {
       return Center(
         child: Text(
           widget.files.isEmpty ? l10n.libraryEmpty : l10n.libraryNoMatches,
@@ -763,9 +843,28 @@ class _LibraryBodyState extends State<LibraryBody> {
         crossAxisSpacing: 12,
         childAspectRatio: 0.84,
       ),
-      itemCount: visible.length,
+      itemCount: albums.length + visible.length,
       itemBuilder: (context, index) {
-        final file = visible[index];
+        if (index < albums.length) {
+          final album = albums[index];
+          final preview = _albumPreviews[album];
+          return DragTarget<List<String>>(
+            onWillAcceptWithDetails: (details) => details.data.isNotEmpty,
+            onAcceptWithDetails: (details) =>
+                unawaited(_movePhotos(details.data, album)),
+            builder: (context, candidates, _) => _AlbumTile(
+              name: p.basename(album),
+              count: preview?.count,
+              thumbnails: [
+                for (final file in preview?.files ?? const <RawFile>[])
+                  _thumbnailOf(file),
+              ],
+              highlighted: candidates.isNotEmpty,
+              onOpen: () => widget.onOpenAlbum(album),
+            ),
+          );
+        }
+        final file = visible[index - albums.length];
         if (!_thumbnailKnown(file)) {
           _requestThumbnail(file);
         }
@@ -822,6 +921,132 @@ class _LibraryBodyState extends State<LibraryBody> {
           ),
         );
       },
+    );
+  }
+}
+
+/// A sub-album's mosaic material: its first photos and how many it has.
+class _AlbumPreview {
+  const _AlbumPreview({required this.files, required this.count});
+
+  final List<RawFile> files;
+  final int count;
+}
+
+/// A sub-album in the grid: a 2x2 mosaic of its first photos, a small
+/// folder mark in the corner, its name and its photo count. One click
+/// opens it — it is a place, not a photo — and photos dropped on it move
+/// inside.
+class _AlbumTile extends StatelessWidget {
+  const _AlbumTile({
+    required this.name,
+    required this.count,
+    required this.thumbnails,
+    required this.highlighted,
+    required this.onOpen,
+  });
+
+  final String name;
+  final int? count;
+  final List<Uint8List?> thumbnails;
+  final bool highlighted;
+  final VoidCallback onOpen;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    Widget cell(int i) {
+      final bytes = i < thumbnails.length ? thumbnails[i] : null;
+      return Container(
+        color: DarkmoonColors.canvas,
+        child: bytes == null
+            ? null
+            : Image.memory(bytes, fit: BoxFit.cover, gaplessPlayback: true),
+      );
+    }
+
+    return GestureDetector(
+      onTap: onOpen,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: DarkmoonColors.canvas,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                  color: highlighted
+                      ? DarkmoonColors.accent
+                      : DarkmoonColors.divider,
+                  width: highlighted ? 2 : 1,
+                ),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                fit: StackFit.expand,
+                children: [
+                  Column(
+                    children: [
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(child: cell(0)),
+                            const SizedBox(width: 1),
+                            Expanded(child: cell(1)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 1),
+                      Expanded(
+                        child: Row(
+                          children: [
+                            Expanded(child: cell(2)),
+                            const SizedBox(width: 1),
+                            Expanded(child: cell(3)),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  Positioned(
+                    left: 4,
+                    top: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 5,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.black54,
+                        borderRadius: BorderRadius.circular(3),
+                      ),
+                      child: const Icon(
+                        CupertinoIcons.folder_fill,
+                        size: 11,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            count == null
+                ? name
+                : '$name  ·  ${l10n.libraryPhotoCount(count!)}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+            style: const TextStyle(
+              color: DarkmoonColors.textSecondary,
+              fontSize: 11,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

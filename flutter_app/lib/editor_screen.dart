@@ -1760,6 +1760,9 @@ class _EditorScreenState extends State<EditorScreen>
       isEdited: _isPhotoEdited,
       libraryFolders: () => _settings.libraryFolders,
       onSelectionChanged: _onLibrarySelectionChanged,
+      onOpenAlbum: (album) => unawaited(_loadFolder(album)),
+      rawOnly: _settings.rawOnly,
+      treeToken: _folderTreeToken,
       onOpen: (file) {
         final index = _files.indexWhere((f) => f.path == file.path);
         if (index >= 0 && index != _selectedIndex) {
@@ -4991,6 +4994,11 @@ class _EditorScreenState extends State<EditorScreen>
                                     ),
                                   ),
                                 ),
+                                if (_libraryMode)
+                                  _LibraryColumnFooter(
+                                    onOpenSettings: _openSettings,
+                                    onOpenAbout: _openAbout,
+                                  ),
                               ],
                             ),
                           ),

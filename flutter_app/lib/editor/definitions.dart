@@ -1362,3 +1362,48 @@ class _LibraryDetailsPanel extends StatelessWidget {
     );
   }
 }
+
+/// The bottom of the left column in the Albums tab: the Settings and
+/// About buttons the editor's toolbar carries, since that toolbar is not
+/// shown there (2026-09-11, user's request). The same pill and segments.
+class _LibraryColumnFooter extends StatelessWidget {
+  const _LibraryColumnFooter({
+    required this.onOpenSettings,
+    required this.onOpenAbout,
+  });
+
+  final VoidCallback onOpenSettings;
+  final VoidCallback onOpenAbout;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      color: DarkmoonColors.panel,
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: _ToolbarPill(
+          height: _squareButtonSize,
+          showChrome: false,
+          children: [
+            _ToolbarSegment(
+              icon: CupertinoIcons.gear_alt,
+              iconSize: _squareButtonIconSize,
+              width: _squareButtonSize,
+              onTap: onOpenSettings,
+              tooltip: l10n.menuSettings,
+            ),
+            _ToolbarSegment(
+              icon: CupertinoIcons.info_circle,
+              iconSize: _squareButtonIconSize,
+              width: _squareButtonSize,
+              onTap: onOpenAbout,
+              tooltip: l10n.menuAbout,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
