@@ -113,6 +113,7 @@ import 'widgets/slider_row.dart';
 import 'widgets/styled_dropdown.dart';
 import 'widgets/photo_meta_widgets.dart';
 import 'widgets/text_prompt_dialog.dart';
+import 'widgets/typing_aware_shortcuts.dart';
 import 'widgets/tone_curve_editor.dart';
 import 'widgets/white_balance_eyedropper_overlay.dart';
 
@@ -4775,15 +4776,6 @@ class _EditorScreenState extends State<EditorScreen>
         // (Cmd+Shift+Z above is the one), but binding it costs nothing and
         // keeps muscle memory working for anyone moving between the two.
         _cmdShortcut(LogicalKeyboardKey.keyY): _redo,
-        // Rating and colour label on the selected photo (2026-09-11), on
-        // the keys every RAW editor uses: 0-5 stars, 6-9 red/yellow/
-        // green/blue. A focused text field takes digits first, as with
-        // every other binding here.
-        for (var stars = 0; stars <= 5; stars++)
-          SingleActivator(_digitKeys[stars]): () => _rateSelected(stars),
-        for (var i = 0; i < 4; i++)
-          SingleActivator(_digitKeys[6 + i]): () =>
-              _labelSelected(photoLabelNames[i]),
         // Filmstrip navigation (2026-09-01, explicit user request) — a
         // focused text field (e.g. the Cloud AI token field) consumes
         // arrow keys itself for cursor movement before they ever reach
@@ -4793,10 +4785,24 @@ class _EditorScreenState extends State<EditorScreen>
         const SingleActivator(LogicalKeyboardKey.arrowRight): () =>
             _selectAdjacentPhoto(1),
       },
-      child: Focus(
-        focusNode: _shortcutsFocusNode,
-        autofocus: true,
-        child: _buildScaffold(selected),
+      // Rating and colour label on the selected photo (2026-09-11), on
+      // the keys every RAW editor uses: 0-5 stars, 6-9 red/yellow/
+      // green/blue. Digits are the one kind of key a text field does not
+      // take first, so these stand aside while one has focus — see
+      // [TypingAwareShortcuts].
+      child: TypingAwareShortcuts(
+        bindings: {
+          for (var stars = 0; stars <= 5; stars++)
+            SingleActivator(_digitKeys[stars]): () => _rateSelected(stars),
+          for (var i = 0; i < 4; i++)
+            SingleActivator(_digitKeys[6 + i]): () =>
+                _labelSelected(photoLabelNames[i]),
+        },
+        child: Focus(
+          focusNode: _shortcutsFocusNode,
+          autofocus: true,
+          child: _buildScaffold(selected),
+        ),
       ),
     );
   }

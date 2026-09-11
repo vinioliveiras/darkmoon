@@ -14,6 +14,7 @@ import '../theme.dart';
 import '../widgets/glass_input_border.dart';
 import '../widgets/photo_meta_widgets.dart';
 import '../widgets/text_prompt_dialog.dart';
+import '../widgets/typing_aware_shortcuts.dart';
 import 'album_picker_dialog.dart';
 import 'photo_mover.dart';
 
@@ -659,29 +660,35 @@ class _LibraryBodyState extends State<LibraryBody> {
             _selectAllVisible,
         const SingleActivator(LogicalKeyboardKey.keyA, meta: true):
             _selectAllVisible,
-        for (var stars = 0; stars <= 5; stars++)
-          SingleActivator(_digitKeys[stars]): () => _rateSelected(stars),
-        for (var i = 0; i < 4; i++)
-          SingleActivator(_digitKeys[6 + i]): () =>
-              _labelSelected(photoLabelNames[i]),
       },
-      child: Focus(
-        focusNode: _focusNode,
-        autofocus: true,
-        child: Container(
-          color: DarkmoonColors.background,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _buildToolbar(l10n),
-              if (_hiddenByRawOnly > 0)
-                _NoticeBar(
-                  message: l10n.libraryHiddenByRawOnly(_hiddenByRawOnly),
-                  actionLabel: l10n.libraryShowAllFormats,
-                  onAction: widget.onShowAllFormats,
-                ),
-              Expanded(child: _buildGrid(l10n)),
-            ],
+      // Digits rate and label, unless the search box is being typed in —
+      // see [TypingAwareShortcuts].
+      child: TypingAwareShortcuts(
+        bindings: {
+          for (var stars = 0; stars <= 5; stars++)
+            SingleActivator(_digitKeys[stars]): () => _rateSelected(stars),
+          for (var i = 0; i < 4; i++)
+            SingleActivator(_digitKeys[6 + i]): () =>
+                _labelSelected(photoLabelNames[i]),
+        },
+        child: Focus(
+          focusNode: _focusNode,
+          autofocus: true,
+          child: Container(
+            color: DarkmoonColors.background,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _buildToolbar(l10n),
+                if (_hiddenByRawOnly > 0)
+                  _NoticeBar(
+                    message: l10n.libraryHiddenByRawOnly(_hiddenByRawOnly),
+                    actionLabel: l10n.libraryShowAllFormats,
+                    onAction: widget.onShowAllFormats,
+                  ),
+                Expanded(child: _buildGrid(l10n)),
+              ],
+            ),
           ),
         ),
       ),
