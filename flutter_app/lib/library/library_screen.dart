@@ -63,6 +63,7 @@ class LibraryScreen extends StatefulWidget {
     required this.onRemoveRecentFile,
     required this.onShowOnDisk,
     required this.onResetEdits,
+    required this.onDelete,
     required this.onSetTags,
     required this.onMovePhotos,
     required this.onMoveFolder,
@@ -92,6 +93,10 @@ class LibraryScreen extends StatefulWidget {
   final ValueChanged<String> onRemoveRecentFile;
   final void Function(RawFile file) onShowOnDisk;
   final void Function(RawFile file) onResetEdits;
+
+  /// Sends photos to the Recycle Bin (after the editor's confirmation);
+  /// how many went.
+  final Future<int> Function(List<RawFile> files) onDelete;
   final void Function(RawFile file, List<String> tags) onSetTags;
 
   /// Moves photos into a folder on disk and follows them in the catalog.
@@ -483,9 +488,22 @@ class _LibraryScreenState extends State<LibraryScreen> {
           value: () => widget.onShowOnDisk(file),
           child: Text(l10n.filmstripShowOnDiskAction),
         ),
+        PopupMenuItem(
+          value: () => unawaited(_delete(targets)),
+          child: Text(l10n.filmstripDeleteAction),
+        ),
       ],
     );
     action?.call();
+  }
+
+  Future<void> _delete(List<RawFile> targets) async {
+    final deleted = await widget.onDelete(targets);
+    if (!mounted || deleted == 0) {
+      return;
+    }
+    _selection.clear();
+    await _refresh();
   }
 
   /// Keywords for [targets], edited as one comma-separated line seeded
@@ -567,6 +585,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
         const SingleActivator(LogicalKeyboardKey.enter): () {
           if (_primarySelected case final file?) {
             _open(file);
+          }
+        },
+        const SingleActivator(LogicalKeyboardKey.delete): () {
+          final selected = _selectedFiles;
+          if (selected.isNotEmpty) {
+            unawaited(_delete(selected));
           }
         },
         const SingleActivator(LogicalKeyboardKey.keyA, control: true):

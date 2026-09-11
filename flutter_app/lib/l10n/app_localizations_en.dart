@@ -887,6 +887,17 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
+  String filmstripDeleteConfirmManyMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'This sends $count photos to the Recycle Bin and deletes their saved edits. You can restore the photos from the Recycle Bin, but not their edits.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String filmstripDeleteFailedMessage(String name, String error) {
     return 'Couldn\'t delete \"$name\": $error';
   }

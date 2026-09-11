@@ -904,6 +904,17 @@ class AppLocalizationsDe extends AppLocalizations {
   }
 
   @override
+  String filmstripDeleteConfirmManyMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Dadurch werden $count Fotos in den Papierkorb verschoben und ihre gespeicherten Bearbeitungen gelöscht. Du kannst die Fotos aus dem Papierkorb wiederherstellen, aber nicht die Bearbeitungen.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String filmstripDeleteFailedMessage(String name, String error) {
     return '\"$name\" konnte nicht gelöscht werden: $error';
   }

@@ -1648,6 +1648,12 @@ abstract class AppLocalizations {
   /// **'This sends \"{name}\" to the Recycle Bin and deletes its saved edits. You can restore the photo from the Recycle Bin, but not its edits.'**
   String filmstripDeleteConfirmMessage(String name);
 
+  /// No description provided for @filmstripDeleteConfirmManyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, other{This sends {count} photos to the Recycle Bin and deletes their saved edits. You can restore the photos from the Recycle Bin, but not their edits.}}'**
+  String filmstripDeleteConfirmManyMessage(int count);
+
   /// No description provided for @filmstripDeleteFailedMessage.
   ///
   /// In en, this message translates to:

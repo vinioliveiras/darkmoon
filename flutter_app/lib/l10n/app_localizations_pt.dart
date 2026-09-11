@@ -892,6 +892,17 @@ class AppLocalizationsPt extends AppLocalizations {
   }
 
   @override
+  String filmstripDeleteConfirmManyMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          'Isso envia $count fotos para a Lixeira e apaga suas edições salvas. Você pode restaurar as fotos pela Lixeira, mas não as edições.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String filmstripDeleteFailedMessage(String name, String error) {
     return 'Não foi possível excluir \"$name\": $error';
   }

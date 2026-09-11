@@ -264,6 +264,7 @@
   "filmstripResetEditsConfirmMessage": "Isso volta \"{name}\" ao estado original — todo ajuste, curva e máscara. Não pode ser desfeito.",
   "filmstripDeleteConfirmTitle": "Excluir foto?",
   "filmstripDeleteConfirmMessage": "Isso envia \"{name}\" para a Lixeira e apaga suas edições salvas. Você pode restaurar a foto pela Lixeira, mas não as edições.",
+  "filmstripDeleteConfirmManyMessage": "{count, plural, other{Isso envia {count} fotos para a Lixeira e apaga suas edições salvas. Você pode restaurar as fotos pela Lixeira, mas não as edições.}}",
   "filmstripDeleteFailedMessage": "Não foi possível excluir \"{name}\": {error}",
   "sectionColorProfile": "PERFIL DE COR",
   "sectionWhiteBalance": "BALANÇO DE BRANCO",

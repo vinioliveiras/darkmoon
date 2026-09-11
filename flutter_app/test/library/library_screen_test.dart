@@ -66,6 +66,7 @@ void main() {
                       onRemoveRecentFile: (_) {},
                       onShowOnDisk: (_) {},
                       onResetEdits: (_) {},
+                      onDelete: (files) async => 0,
                       onSetTags: (file, tags) => meta[file.path] =
                           (meta[file.path] ?? const PhotoMeta()).copyWith(
                             tags: tags,

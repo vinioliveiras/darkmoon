@@ -263,6 +263,7 @@
   "filmstripResetEditsConfirmMessage": "Dadurch wird \"{name}\" auf den unbearbeiteten Zustand zurückgesetzt — jede Anpassung, Kurve und Maske. Dies kann nicht rückgängig gemacht werden.",
   "filmstripDeleteConfirmTitle": "Foto löschen?",
   "filmstripDeleteConfirmMessage": "Dadurch wird \"{name}\" in den Papierkorb verschoben und die gespeicherten Bearbeitungen werden gelöscht. Du kannst das Foto aus dem Papierkorb wiederherstellen, aber nicht die Bearbeitungen.",
+  "filmstripDeleteConfirmManyMessage": "{count, plural, other{Dadurch werden {count} Fotos in den Papierkorb verschoben und ihre gespeicherten Bearbeitungen gelöscht. Du kannst die Fotos aus dem Papierkorb wiederherstellen, aber nicht die Bearbeitungen.}}",
   "filmstripDeleteFailedMessage": "\"{name}\" konnte nicht gelöscht werden: {error}",
   "sectionColorProfile": "FARBPROFIL",
   "sectionWhiteBalance": "WEISSABGLEICH",

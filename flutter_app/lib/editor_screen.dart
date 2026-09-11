@@ -1659,6 +1659,7 @@ class _EditorScreenState extends State<EditorScreen>
           onRemoveRecentFile: _removeRecentFile,
           onShowOnDisk: (file) => unawaited(_revealInExplorer(file)),
           onResetEdits: (file) => unawaited(_resetAllEditsFor(file)),
+          onDelete: _deleteFiles,
           onSetTags: _setTags,
           onMovePhotos: _movePhotos,
           onMoveFolder: _moveFolder,
@@ -1688,6 +1689,9 @@ class _EditorScreenState extends State<EditorScreen>
     final current = _store.meta[file.path] ?? const PhotoMeta();
     _setPhotoMeta(file.path, current.copyWith(tags: tags));
   }
+
+  /// Bumped after a move so the sidebar's folder tree re-lists.
+  int _folderTreeToken = 0;
 
   /// Moves [paths] into [folder] on disk (the library's "add to album")
   /// and follows them in the catalog: edits, ratings, recent files and
@@ -1730,6 +1734,7 @@ class _EditorScreenState extends State<EditorScreen>
     if (renames.isEmpty) {
       return;
     }
+    _folderTreeToken++;
     String follow(String path) => renames[path] ?? path;
     _store.rekey(renames);
     unawaited(_store.save());
@@ -2192,7 +2197,16 @@ class _EditorScreenState extends State<EditorScreen>
   /// piece of in-memory/persisted state keyed by its path — mirrors
   /// [_removeLibraryFolder]'s cleanup list, minus the fields that only
   /// make sense at folder granularity.
-  Future<void> _deleteFile(RawFile file) async {
+  Future<void> _deleteFile(RawFile file) => _deleteFiles([file]);
+
+  /// Sends [files] to the Recycle Bin after one confirmation, and drops
+  /// their edits, caches and filmstrip entries. Files not in the open
+  /// folder (the library deleting elsewhere) just lose their catalog
+  /// entries. Returns how many were deleted.
+  Future<int> _deleteFiles(List<RawFile> files) async {
+    if (files.isEmpty) {
+      return 0;
+    }
     final l10n = AppLocalizations.of(context)!;
     final confirmed = await showAnimatedDialog<bool>(
       context: context,
@@ -2200,7 +2214,11 @@ class _EditorScreenState extends State<EditorScreen>
         backgroundColor: DarkmoonColors.dialogBackground,
         shape: dialogShape,
         title: Text(l10n.filmstripDeleteConfirmTitle),
-        content: Text(l10n.filmstripDeleteConfirmMessage(file.name)),
+        content: Text(
+          files.length == 1
+              ? l10n.filmstripDeleteConfirmMessage(files.single.name)
+              : l10n.filmstripDeleteConfirmManyMessage(files.length),
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
@@ -2214,48 +2232,55 @@ class _EditorScreenState extends State<EditorScreen>
       ),
     );
     if (confirmed != true || !mounted) {
-      return;
+      return 0;
     }
-    final path = file.path;
-    try {
-      await _moveToRecycleBin(path);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            duration: const Duration(seconds: 3),
-            content: Text(l10n.filmstripDeleteFailedMessage(file.name, '$e')),
-          ),
-        );
+    await _flushCurrentEdits();
+    final deleted = <String>{};
+    for (final file in files) {
+      try {
+        await _moveToRecycleBin(file.path);
+        deleted.add(file.path);
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              duration: const Duration(seconds: 3),
+              content: Text(l10n.filmstripDeleteFailedMessage(file.name, '$e')),
+            ),
+          );
+        }
       }
-      return;
     }
-    if (!mounted) {
-      return;
+    if (!mounted || deleted.isEmpty) {
+      return deleted.length;
     }
-    final removedIndex = _files.indexWhere((f) => f.path == path);
+    final selectedPath = _selectedIndex == null
+        ? null
+        : _files[_selectedIndex!].path;
     setState(() {
       _files = [
         for (final f in _files)
-          if (f.path != path) f,
+          if (!deleted.contains(f.path)) f,
       ];
-      _thumbnails.remove(path);
-      _editSources.remove(path);
-      _disposePreviewsFor(path);
-      _histograms.remove(path);
-      _metadata.remove(path);
-      _store.values.remove(path);
-      _store.curves.remove(path);
-
-      if (removedIndex == _selectedIndex) {
+      for (final path in deleted) {
+        _thumbnails.remove(path);
+        _editSources.remove(path);
+        _disposePreviewsFor(path);
+        _histograms.remove(path);
+        _metadata.remove(path);
+      }
+      _store.removeWhere(deleted.contains);
+      // Keep pointing at the same photo; the one deleted loses its
+      // selection rather than handing it to whatever slid into its slot.
+      _selectedIndex = selectedPath == null || deleted.contains(selectedPath)
+          ? null
+          : _files.indexWhere((f) => f.path == selectedPath);
+      if (_selectedIndex == -1) {
         _selectedIndex = null;
-      } else if (_selectedIndex != null && removedIndex < _selectedIndex!) {
-        // Every index after the removed one shifted down by one — keep
-        // pointing at the same photo, not whatever slid into its old slot.
-        _selectedIndex = _selectedIndex! - 1;
       }
     });
-    await _store.saveEdits();
+    await _store.save();
+    return deleted.length;
   }
 
   /// Opens just the one selected file — no folder scan, so the filmstrip
@@ -4624,6 +4649,15 @@ class _EditorScreenState extends State<EditorScreen>
                                         _setIncludeSubfolders,
                                     onOpenFile: _openFile,
                                     onOpenFolder: _openFolder,
+                                    // A filmstrip tile dropped on a folder
+                                    // moves the photo there (2026-09-11),
+                                    // as in the library; a folder dropped
+                                    // on another moves the folder.
+                                    onDropPaths: (folder, paths) =>
+                                        unawaited(_movePhotos(paths, folder)),
+                                    onDropFolder: (folder, target) =>
+                                        unawaited(_moveFolder(folder, target)),
+                                    refreshToken: _folderTreeToken,
                                   ),
                                 ),
                                 Container(
