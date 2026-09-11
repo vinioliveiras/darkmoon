@@ -4,6 +4,7 @@ import '../catalog/mask_store.dart';
 import '../catalog/photo_meta_store.dart';
 import '../catalog/photo_preset_store.dart';
 import '../catalog/sidecar_xmp.dart';
+import '../library/photo_mover.dart' show rekeyUnderFolder;
 import '../render/mask.dart';
 import '../render/tone_curve.dart';
 
@@ -102,6 +103,41 @@ class PhotoEditStore {
       meta[path] = value;
     }
   }
+
+  /// Moves every entry keyed by a path in [renames] (old → new) to the
+  /// new path, in every map — a photo moved on disk keeps its edits,
+  /// preset marker and rating. In memory only; follow with [save].
+  void rekey(Map<String, String> renames) {
+    if (renames.isEmpty) {
+      return;
+    }
+    values = _rekeyed(values, renames);
+    curves = _rekeyed(curves, renames);
+    masks = _rekeyed(masks, renames);
+    presets = _rekeyed(presets, renames);
+    meta = _rekeyed(meta, renames);
+  }
+
+  /// [rekey] for every path that is [oldFolder] or inside it — a folder
+  /// moved on disk.
+  void rekeyFolder(String oldFolder, String newFolder) {
+    final renames = <String, String>{};
+    for (final path in paths) {
+      final next = rekeyUnderFolder(path, oldFolder, newFolder);
+      if (next != path) {
+        renames[path] = next;
+      }
+    }
+    rekey(renames);
+  }
+
+  static Map<String, T> _rekeyed<T>(
+    Map<String, T> map,
+    Map<String, String> renames,
+  ) => {
+    for (final entry in map.entries)
+      renames[entry.key] ?? entry.key: entry.value,
+  };
 
   /// Drops [path] from every map (in memory only — follow with [save]).
   void removeWhere(bool Function(String path) test) {

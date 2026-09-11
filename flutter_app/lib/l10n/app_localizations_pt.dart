@@ -66,6 +66,40 @@ class AppLocalizationsPt extends AppLocalizations {
   String get libraryOpenInEditor => 'Editar';
 
   @override
+  String get libraryNewAlbumTitle => 'Novo álbum';
+
+  @override
+  String get libraryNewAlbumTooltip => 'Novo álbum: uma pasta dentro desta';
+
+  @override
+  String get libraryMoveToAction => 'Mover para pasta…';
+
+  @override
+  String libraryMoveSkipped(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count fotos não movidas: já existem arquivos com esses nomes lá',
+      one: '1 foto não movida: já existe um arquivo com esse nome lá',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get libraryFolderExists => 'Já existe uma pasta com esse nome lá';
+
+  @override
+  String get libraryEditTagsAction => 'Editar tags…';
+
+  @override
+  String get libraryEditTagsTitle => 'Tags, separadas por vírgula';
+
+  @override
+  String librarySelectedCount(int selected, int total) {
+    return '$selected de $total selecionadas';
+  }
+
+  @override
   String get aboutDialogTitle => 'Sobre o darkmoon';
 
   @override

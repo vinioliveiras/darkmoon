@@ -35,6 +35,9 @@ class FolderSidebar extends StatelessWidget {
     required this.onIncludeSubfoldersChanged,
     required this.onOpenFile,
     required this.onOpenFolder,
+    this.onDropPaths,
+    this.onDropFolder,
+    this.refreshToken,
   });
 
   final List<String> roots;
@@ -62,6 +65,20 @@ class FolderSidebar extends StatelessWidget {
   /// used to be the File menu.
   final VoidCallback onOpenFile;
   final VoidCallback onOpenFolder;
+
+  /// Photos (a `List<String>` of paths) dragged onto a folder row land
+  /// here — the library's "move into this album". Null: rows accept no
+  /// drops.
+  final void Function(String folder, List<String> paths)? onDropPaths;
+
+  /// A folder row dragged onto another lands here (the dragged folder,
+  /// then the folder it was dropped on). Null: folder rows cannot be
+  /// dragged. Root folders are never dragged — they are the library.
+  final void Function(String folder, String targetParent)? onDropFolder;
+
+  /// Changing this makes every expanded row re-list its subfolders —
+  /// after a folder was created or moved.
+  final Object? refreshToken;
   final ValueChanged<bool> onIncludeSubfoldersChanged;
 
   @override
@@ -164,6 +181,9 @@ class FolderSidebar extends StatelessWidget {
                       onSelect: onSelect,
                       onRemove: onRemove,
                       initiallyExpanded: true,
+                      onDropPaths: onDropPaths,
+                      onDropFolder: onDropFolder,
+                      refreshToken: refreshToken,
                     ),
                 ],
               ),
@@ -400,12 +420,18 @@ class _FolderNode extends StatefulWidget {
     required this.onSelect,
     this.onRemove,
     this.initiallyExpanded = false,
+    this.onDropPaths,
+    this.onDropFolder,
+    this.refreshToken,
   });
 
   final String path;
   final int depth;
   final String? selectedPath;
   final ValueChanged<String> onSelect;
+  final void Function(String folder, List<String> paths)? onDropPaths;
+  final void Function(String folder, String targetParent)? onDropFolder;
+  final Object? refreshToken;
 
   /// Only set on root nodes (depth 0) — subfolders aren't independently
   /// removable, so their nested [_FolderNode]s are built without this.
@@ -468,6 +494,34 @@ class _FolderNodeState extends State<_FolderNode> {
       await _loadChildren();
     }
     setState(() => _expanded = !_expanded);
+  }
+
+  @override
+  void didUpdateWidget(covariant _FolderNode oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.refreshToken != oldWidget.refreshToken && _children != null) {
+      unawaited(_loadChildren());
+    }
+  }
+
+  /// Whether a drag carrying [data] may land on this folder: photos
+  /// always; a folder unless it is this one or one of its ancestors.
+  bool _accepts(Object? data) {
+    if (widget.onDropPaths != null && data is List<String>) {
+      return true;
+    }
+    if (widget.onDropFolder != null && data is String) {
+      return !p.equals(data, widget.path) && !p.isWithin(data, widget.path);
+    }
+    return false;
+  }
+
+  void _accept(Object data) {
+    if (data is List<String>) {
+      widget.onDropPaths?.call(widget.path, data);
+    } else if (data is String) {
+      widget.onDropFolder?.call(data, widget.path);
+    }
   }
 
   static Future<List<Directory>> _listSubfolders(String path) async {
@@ -580,20 +634,74 @@ class _FolderNodeState extends State<_FolderNode> {
         ],
       ),
     );
+    // Distinct names on purpose: a builder that referred to the variable
+    // it is assigned to would build itself, without end.
+    final inner = Material(
+      color: isSelected
+          ? DarkmoonColors.accent.withValues(alpha: 0.10)
+          : Colors.transparent,
+      child: InkWell(onTap: () => widget.onSelect(widget.path), child: row),
+    );
+    Widget live = inner;
+    if (widget.onDropPaths != null || widget.onDropFolder != null) {
+      live = DragTarget<Object>(
+        onWillAcceptWithDetails: (details) => _accepts(details.data),
+        onAcceptWithDetails: (details) => _accept(details.data),
+        builder: (context, candidates, _) => DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border.all(
+              color: candidates.isNotEmpty
+                  ? DarkmoonColors.accent
+                  : Colors.transparent,
+            ),
+            borderRadius: BorderRadius.circular(4),
+          ),
+          child: inner,
+        ),
+      );
+    }
+    if (widget.onDropFolder != null && widget.depth > 0) {
+      final dropTarget = live;
+      live = Draggable<String>(
+        data: widget.path,
+        dragAnchorStrategy: pointerDragAnchorStrategy,
+        feedback: Material(
+          color: Colors.transparent,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: DarkmoonColors.surfaceRaised,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: DarkmoonColors.accent),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  CupertinoIcons.folder,
+                  size: 14,
+                  color: DarkmoonColors.textSecondary,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _name,
+                  style: const TextStyle(
+                    color: DarkmoonColors.textPrimary,
+                    fontSize: 12,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        childWhenDragging: Opacity(opacity: 0.4, child: dropTarget),
+        child: dropTarget,
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _missing
-            ? row
-            : Material(
-                color: isSelected
-                    ? DarkmoonColors.accent.withValues(alpha: 0.10)
-                    : Colors.transparent,
-                child: InkWell(
-                  onTap: () => widget.onSelect(widget.path),
-                  child: row,
-                ),
-              ),
+        _missing ? row : live,
         _AnimatedFolderExpand(
           expanded: _expanded && _children != null,
           child: Column(
@@ -601,10 +709,14 @@ class _FolderNodeState extends State<_FolderNode> {
             children: [
               for (final dir in _children ?? const <Directory>[])
                 _FolderNode(
+                  key: ValueKey(dir.path),
                   path: dir.path,
                   depth: widget.depth + 1,
                   selectedPath: widget.selectedPath,
                   onSelect: widget.onSelect,
+                  onDropPaths: widget.onDropPaths,
+                  onDropFolder: widget.onDropFolder,
+                  refreshToken: widget.refreshToken,
                 ),
             ],
           ),

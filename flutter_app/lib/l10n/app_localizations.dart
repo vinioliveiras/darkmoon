@@ -190,6 +190,54 @@ abstract class AppLocalizations {
   /// **'Edit'**
   String get libraryOpenInEditor;
 
+  /// No description provided for @libraryNewAlbumTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'New album'**
+  String get libraryNewAlbumTitle;
+
+  /// No description provided for @libraryNewAlbumTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'New album: a folder inside this one'**
+  String get libraryNewAlbumTooltip;
+
+  /// No description provided for @libraryMoveToAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Move to folder…'**
+  String get libraryMoveToAction;
+
+  /// No description provided for @libraryMoveSkipped.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 photo not moved: a file with that name already exists there} other{{count} photos not moved: files with those names already exist there}}'**
+  String libraryMoveSkipped(int count);
+
+  /// No description provided for @libraryFolderExists.
+  ///
+  /// In en, this message translates to:
+  /// **'A folder with that name already exists there'**
+  String get libraryFolderExists;
+
+  /// No description provided for @libraryEditTagsAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Edit tags…'**
+  String get libraryEditTagsAction;
+
+  /// No description provided for @libraryEditTagsTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Tags, separated by commas'**
+  String get libraryEditTagsTitle;
+
+  /// No description provided for @librarySelectedCount.
+  ///
+  /// In en, this message translates to:
+  /// **'{selected} of {total} selected'**
+  String librarySelectedCount(int selected, int total);
+
   /// No description provided for @aboutDialogTitle.
   ///
   /// In en, this message translates to:

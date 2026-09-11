@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:darkmoon/catalog/photo_meta_store.dart';
 import 'package:darkmoon/l10n/app_localizations.dart';
 import 'package:darkmoon/library/library_screen.dart';
+import 'package:darkmoon/library/photo_mover.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -65,6 +66,13 @@ void main() {
                       onRemoveRecentFile: (_) {},
                       onShowOnDisk: (_) {},
                       onResetEdits: (_) {},
+                      onSetTags: (file, tags) => meta[file.path] =
+                          (meta[file.path] ?? const PhotoMeta()).copyWith(
+                            tags: tags,
+                          ),
+                      onMovePhotos: movePhotosToFolder,
+                      onMoveFolder: moveFolderInto,
+                      onCreateFolder: createSubfolder,
                     ),
                   ),
                 );
@@ -139,5 +147,32 @@ void main() {
       find.text('Add a folder to the library to browse it here'),
       findsOneWidget,
     );
+  });
+
+  testWidgets('Ctrl-click builds a selection and a rating key rates it all', (
+    tester,
+  ) async {
+    await tester.pumpWidget(app(folders: [folder]));
+    await tester.runAsync(() async {
+      await tester.tap(find.byKey(const Key('open')));
+      await tester.pump();
+      await Future<void>.delayed(const Duration(milliseconds: 400));
+    });
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('alpha.jpg'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.tap(find.text('gamma.jpg'));
+    await tester.pump(const Duration(milliseconds: 400));
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('2 of 3 selected'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.digit2);
+    await tester.pumpAndSettle();
+    expect(ratings[p.join(folder, 'alpha.jpg')], 2);
+    expect(ratings[p.join(folder, 'gamma.jpg')], 2);
+    expect(ratings.containsKey(p.join(folder, 'beta.jpg')), isFalse);
   });
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -11,6 +12,8 @@ import '../raw_files.dart';
 import '../theme.dart';
 import '../widgets/folder_sidebar.dart';
 import '../widgets/photo_meta_widgets.dart';
+import '../widgets/text_prompt_dialog.dart';
+import 'photo_mover.dart';
 
 /// What the library hands back to the editor when a photo is chosen: the
 /// folder to load (null for a single file opened from the recent list)
@@ -24,9 +27,15 @@ class LibraryOpenRequest {
 
 /// The Home screen (2026-09-11, the user's Solstice-style library): the
 /// library's folders on the left, a grid of the chosen folder's photos on
-/// the right, filtered by name, rating and colour label; a double-click
-/// (or Enter) opens the photo in the editor. Pushed over the editor as a
-/// route and pops with a [LibraryOpenRequest].
+/// the right, filtered by name, rating, colour label and keyword; a
+/// double-click (or Enter) opens the photo in the editor. Pushed over the
+/// editor as a route and pops with a [LibraryOpenRequest].
+///
+/// Albums are folders (the user's call): "new album" creates a folder
+/// inside the one shown, dragging photos onto a folder in the tree moves
+/// them there on disk, dragging a folder onto another moves the folder.
+/// The editor does the moving and re-keys its catalog; see
+/// `photo_mover.dart`.
 ///
 /// Everything it shows belongs to the editor — the folder list and the
 /// filters are settings, the thumbnails come from the editor's cache, the
@@ -54,6 +63,10 @@ class LibraryScreen extends StatefulWidget {
     required this.onRemoveRecentFile,
     required this.onShowOnDisk,
     required this.onResetEdits,
+    required this.onSetTags,
+    required this.onMovePhotos,
+    required this.onMoveFolder,
+    required this.onCreateFolder,
   });
 
   final List<String> Function() libraryFolders;
@@ -79,6 +92,18 @@ class LibraryScreen extends StatefulWidget {
   final ValueChanged<String> onRemoveRecentFile;
   final void Function(RawFile file) onShowOnDisk;
   final void Function(RawFile file) onResetEdits;
+  final void Function(RawFile file, List<String> tags) onSetTags;
+
+  /// Moves photos into a folder on disk and follows them in the catalog.
+  final Future<MoveOutcome> Function(List<String> paths, String folder)
+  onMovePhotos;
+
+  /// Moves a folder into another; the new path, or null when refused.
+  final Future<String?> Function(String folder, String targetParent)
+  onMoveFolder;
+
+  /// Creates a folder inside another; its path, or null when refused.
+  final Future<String?> Function(String parent, String name) onCreateFolder;
 
   /// How many thumbnails decode at once for tiles that have none cached.
   static const int thumbnailConcurrency = 3;
@@ -100,8 +125,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
   final _query = TextEditingController();
   int _minRating = 0;
   String _labelFilter = '';
-  String? _selectedPath;
+
+  /// Selected photos, and the one the last plain click or shift-range
+  /// started from. Every action — keys, menu, drag — applies to the
+  /// whole selection when the photo it was invoked on is part of it.
+  final Set<String> _selection = {};
+  String? _anchorPath;
   final _focusNode = FocusNode();
+
+  /// Bumped after a folder is created or moved, so the tree re-lists.
+  int _treeToken = 0;
 
   @override
   void initState() {
@@ -130,7 +163,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
       _folder = folder;
       _recentFile = null;
       _listing = true;
-      _selectedPath = null;
+      _selection.clear();
+      _anchorPath = null;
     });
     final files = await listRawFiles(
       folder,
@@ -153,7 +187,10 @@ class _LibraryScreenState extends State<LibraryScreen> {
       _recentFile = path;
       _listing = false;
       _files = [RawFile(path, DateTime.now())];
-      _selectedPath = path;
+      _selection
+        ..clear()
+        ..add(path);
+      _anchorPath = path;
     });
   }
 
@@ -203,10 +240,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final query = _query.text.trim().toLowerCase();
     return [
       for (final file in _files)
-        if ((query.isEmpty || file.name.toLowerCase().contains(query)) &&
+        if ((query.isEmpty || _matchesQuery(file, query)) &&
             _passesMetaFilters(file))
           file,
     ];
+  }
+
+  /// File name or any keyword.
+  bool _matchesQuery(RawFile file, String query) {
+    if (file.name.toLowerCase().contains(query)) {
+      return true;
+    }
+    final tags = widget.metaOf(file.path)?.tags ?? const [];
+    return tags.any((tag) => tag.toLowerCase().contains(query));
   }
 
   bool _passesMetaFilters(RawFile file) {
@@ -224,24 +270,169 @@ class _LibraryScreenState extends State<LibraryScreen> {
     ).pop(LibraryOpenRequest(folder: _folder, path: file.path));
   }
 
-  RawFile? get _selectedFile {
-    final path = _selectedPath;
-    if (path == null) {
+  /// The selection in the grid's order.
+  List<RawFile> get _selectedFiles => [
+    for (final file in _files)
+      if (_selection.contains(file.path)) file,
+  ];
+
+  /// The photo Enter opens: the anchor when it is selected, else the
+  /// first selected.
+  RawFile? get _primarySelected {
+    final selected = _selectedFiles;
+    if (selected.isEmpty) {
       return null;
     }
-    for (final file in _files) {
-      if (file.path == path) {
+    for (final file in selected) {
+      if (file.path == _anchorPath) {
         return file;
       }
     }
-    return null;
+    return selected.first;
+  }
+
+  /// What an action invoked on [file] applies to: the whole selection
+  /// when [file] is in it, else [file] alone.
+  List<RawFile> _targets(RawFile file) =>
+      _selection.contains(file.path) ? _selectedFiles : [file];
+
+  /// A click on [file]: plain selects it alone, Ctrl (Cmd) toggles it,
+  /// Shift extends from the anchor across the visible order.
+  void _clickSelect(RawFile file) {
+    _focusNode.requestFocus();
+    final keys = HardwareKeyboard.instance;
+    final toggle = keys.isControlPressed || keys.isMetaPressed;
+    final range = keys.isShiftPressed;
+    setState(() {
+      if (toggle) {
+        if (!_selection.remove(file.path)) {
+          _selection.add(file.path);
+          _anchorPath = file.path;
+        }
+      } else if (range && _anchorPath != null) {
+        final visible = _visibleFiles;
+        final a = visible.indexWhere((f) => f.path == _anchorPath);
+        final b = visible.indexWhere((f) => f.path == file.path);
+        if (a < 0 || b < 0) {
+          _selection
+            ..clear()
+            ..add(file.path);
+          _anchorPath = file.path;
+        } else {
+          final lo = a < b ? a : b;
+          final hi = a < b ? b : a;
+          _selection.clear();
+          for (var i = lo; i <= hi; i++) {
+            _selection.add(visible[i].path);
+          }
+        }
+      } else {
+        _selection
+          ..clear()
+          ..add(file.path);
+        _anchorPath = file.path;
+      }
+    });
+  }
+
+  void _selectAllVisible() {
+    setState(() {
+      _selection
+        ..clear()
+        ..addAll(_visibleFiles.map((f) => f.path));
+    });
+  }
+
+  // ---- moving (albums are folders)
+
+  void _toast(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), duration: const Duration(seconds: 4)),
+    );
+  }
+
+  /// Moves [paths] into [folder] and re-lists what is shown.
+  Future<void> _movePhotos(List<String> paths, String folder) async {
+    final l10n = AppLocalizations.of(context)!;
+    final outcome = await widget.onMovePhotos(paths, folder);
+    if (!mounted) {
+      return;
+    }
+    if (outcome.skipped.isNotEmpty) {
+      _toast(l10n.libraryMoveSkipped(outcome.skipped.length));
+    }
+    _selection.removeAll(outcome.moved.keys);
+    _treeToken++;
+    await _refresh();
+  }
+
+  Future<void> _moveFolder(String folder, String targetParent) async {
+    final l10n = AppLocalizations.of(context)!;
+    final moved = await widget.onMoveFolder(folder, targetParent);
+    if (!mounted) {
+      return;
+    }
+    if (moved == null) {
+      _toast(l10n.libraryFolderExists);
+      return;
+    }
+    if (_folder != null) {
+      _folder = rekeyUnderFolder(_folder!, folder, moved);
+    }
+    _treeToken++;
+    await _refresh();
+  }
+
+  /// "New album": a folder inside the one shown.
+  Future<void> _createAlbum() async {
+    final l10n = AppLocalizations.of(context)!;
+    final parent = _folder;
+    if (parent == null) {
+      return;
+    }
+    final name = await showTextPromptDialog(
+      context,
+      title: l10n.libraryNewAlbumTitle,
+    );
+    if (name == null || name.trim().isEmpty || !mounted) {
+      return;
+    }
+    final created = await widget.onCreateFolder(parent, name);
+    if (!mounted) {
+      return;
+    }
+    if (created == null) {
+      _toast(l10n.libraryFolderExists);
+      return;
+    }
+    setState(() => _treeToken++);
+  }
+
+  /// "Move to folder…": a folder picker, then the move.
+  Future<void> _moveToPickedFolder(List<RawFile> targets) async {
+    final l10n = AppLocalizations.of(context)!;
+    final folder = await FilePicker.getDirectoryPath(
+      dialogTitle: l10n.libraryMoveToAction,
+    );
+    if (folder == null || !mounted) {
+      return;
+    }
+    await _movePhotos([for (final f in targets) f.path], folder);
   }
 
   Future<void> _showContextMenu(Offset globalPosition, RawFile file) async {
     final l10n = AppLocalizations.of(context)!;
     final overlay =
         Overlay.of(context).context.findRenderObject()! as RenderBox;
-    setState(() => _selectedPath = file.path);
+    if (!_selection.contains(file.path)) {
+      setState(() {
+        _selection
+          ..clear()
+          ..add(file.path);
+        _anchorPath = file.path;
+      });
+    }
+    final targets = _targets(file);
     final action = await showMenu<VoidCallback>(
       context: context,
       position: RelativeRect.fromRect(
@@ -259,7 +450,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
             rating: widget.metaOf(file.path)?.rating ?? 0,
             onPick: (rating) => Navigator.of(
               context,
-            ).pop<VoidCallback>(() => _setRating(file, rating)),
+            ).pop<VoidCallback>(() => _setRating(targets, rating)),
           ),
         ),
         PopupMenuItem(
@@ -267,12 +458,25 @@ class _LibraryScreenState extends State<LibraryScreen> {
             label: widget.metaOf(file.path)?.label ?? '',
             onPick: (label) => Navigator.of(
               context,
-            ).pop<VoidCallback>(() => _setLabel(file, label)),
+            ).pop<VoidCallback>(() => _setLabel(targets, label)),
           ),
+        ),
+        PopupMenuItem(
+          value: () => unawaited(_editTags(file, targets)),
+          child: Text(l10n.libraryEditTagsAction),
         ),
         const PopupMenuDivider(),
         PopupMenuItem(
-          value: () => widget.onResetEdits(file),
+          value: () => unawaited(_moveToPickedFolder(targets)),
+          child: Text(l10n.libraryMoveToAction),
+        ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: () {
+            for (final f in targets) {
+              widget.onResetEdits(f);
+            }
+          },
           child: Text(l10n.filmstripResetEditsAction),
         ),
         PopupMenuItem(
@@ -284,27 +488,59 @@ class _LibraryScreenState extends State<LibraryScreen> {
     action?.call();
   }
 
-  void _setRating(RawFile file, int rating) {
-    widget.onSetRating(file, rating);
+  /// Keywords for [targets], edited as one comma-separated line seeded
+  /// from [file]'s.
+  Future<void> _editTags(RawFile file, List<RawFile> targets) async {
+    final l10n = AppLocalizations.of(context)!;
+    final current = widget.metaOf(file.path)?.tags ?? const [];
+    final text = await showTextPromptDialog(
+      context,
+      title: l10n.libraryEditTagsTitle,
+      initialValue: current.join(', '),
+    );
+    if (text == null || !mounted) {
+      return;
+    }
+    final seen = <String>{};
+    final tags = [
+      for (final part in text.split(','))
+        if (part.trim().isNotEmpty && seen.add(part.trim())) part.trim(),
+    ];
+    for (final f in targets) {
+      widget.onSetTags(f, tags);
+    }
     setState(() {});
   }
 
-  void _setLabel(RawFile file, String label) {
-    widget.onSetLabel(file, label);
+  void _setRating(List<RawFile> files, int rating) {
+    for (final file in files) {
+      widget.onSetRating(file, rating);
+    }
+    setState(() {});
+  }
+
+  void _setLabel(List<RawFile> files, String label) {
+    for (final file in files) {
+      widget.onSetLabel(file, label);
+    }
     setState(() {});
   }
 
   void _rateSelected(int rating) {
-    if (_selectedFile case final file?) {
-      _setRating(file, rating);
+    final selected = _selectedFiles;
+    if (selected.isNotEmpty) {
+      _setRating(selected, rating);
     }
   }
 
+  /// The label pressed again clears — judged on the primary photo.
   void _labelSelected(String label) {
-    if (_selectedFile case final file?) {
-      final current = widget.metaOf(file.path)?.label ?? '';
-      _setLabel(file, current == label ? '' : label);
+    final selected = _selectedFiles;
+    if (selected.isEmpty) {
+      return;
     }
+    final current = widget.metaOf(_primarySelected!.path)?.label ?? '';
+    _setLabel(selected, current == label ? '' : label);
   }
 
   static const _digitKeys = [
@@ -329,10 +565,14 @@ class _LibraryScreenState extends State<LibraryScreen> {
         const SingleActivator(LogicalKeyboardKey.escape): () =>
             Navigator.of(context).maybePop(),
         const SingleActivator(LogicalKeyboardKey.enter): () {
-          if (_selectedFile case final file?) {
+          if (_primarySelected case final file?) {
             _open(file);
           }
         },
+        const SingleActivator(LogicalKeyboardKey.keyA, control: true):
+            _selectAllVisible,
+        const SingleActivator(LogicalKeyboardKey.keyA, meta: true):
+            _selectAllVisible,
         for (var stars = 0; stars <= 5; stars++)
           SingleActivator(_digitKeys[stars]): () => _rateSelected(stars),
         for (var i = 0; i < 4; i++)
@@ -342,9 +582,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
       child: Focus(
         focusNode: _focusNode,
         autofocus: true,
-        child: Material(
-          color: DarkmoonColors.background,
-          child: Row(
+        child: Scaffold(
+          backgroundColor: DarkmoonColors.background,
+          body: Row(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SizedBox(
@@ -411,6 +651,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
                             }
                           }),
                         ),
+                        onDropPaths: (folder, paths) =>
+                            unawaited(_movePhotos(paths, folder)),
+                        onDropFolder: (folder, target) =>
+                            unawaited(_moveFolder(folder, target)),
+                        refreshToken: _treeToken,
                       ),
                     ),
                   ],
@@ -476,12 +721,31 @@ class _LibraryScreenState extends State<LibraryScreen> {
                 ),
               ),
               Text(
-                l10n.libraryPhotoCount(visible.length),
+                _selection.length > 1
+                    ? l10n.librarySelectedCount(
+                        _selection.length,
+                        visible.length,
+                      )
+                    : l10n.libraryPhotoCount(visible.length),
                 style: const TextStyle(
                   color: DarkmoonColors.textMuted,
                   fontSize: 12,
                 ),
               ),
+              if (_folder != null) ...[
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: l10n.libraryNewAlbumTooltip,
+                  child: IconButton(
+                    icon: const Icon(
+                      CupertinoIcons.folder_badge_plus,
+                      size: 18,
+                    ),
+                    color: DarkmoonColors.textSecondary,
+                    onPressed: () => unawaited(_createAlbum()),
+                  ),
+                ),
+              ],
             ],
           ),
           Padding(
@@ -631,20 +895,29 @@ class _LibraryScreenState extends State<LibraryScreen> {
         if (!_thumbnails.containsKey(file.path)) {
           _requestThumbnail(file);
         }
-        return _LibraryTile(
+        final tile = _LibraryTile(
           file: file,
           thumbnail: _thumbnails[file.path],
           loading: !_thumbnails.containsKey(file.path),
           meta: widget.metaOf(file.path),
           edited: widget.isEdited(file.path),
-          selected: file.path == _selectedPath,
-          onTap: () {
-            _focusNode.requestFocus();
-            setState(() => _selectedPath = file.path);
-          },
+          selected: _selection.contains(file.path),
+          onTap: () => _clickSelect(file),
           onDoubleTap: () => _open(file),
           onSecondaryTapUp: (details) =>
               unawaited(_showContextMenu(details.globalPosition, file)),
+        );
+        // Dragging a tile carries the whole selection when the tile is
+        // part of it — onto a folder on the left, which moves the files.
+        return Draggable<List<String>>(
+          data: [for (final f in _targets(file)) f.path],
+          dragAnchorStrategy: pointerDragAnchorStrategy,
+          feedback: _DragFeedback(
+            count: _targets(file).length,
+            thumbnail: _thumbnails[file.path],
+          ),
+          childWhenDragging: Opacity(opacity: 0.4, child: tile),
+          child: tile,
         );
       },
     );
@@ -827,6 +1100,63 @@ class _LibraryTile extends StatelessWidget {
               fontSize: 11,
             ),
           ),
+        ],
+      ),
+    );
+  }
+}
+
+/// What travels under the pointer while dragging: the thumbnail with the
+/// number of photos carried.
+class _DragFeedback extends StatelessWidget {
+  const _DragFeedback({required this.count, required this.thumbnail});
+
+  final int count;
+  final Uint8List? thumbnail;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: DarkmoonColors.canvas,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: DarkmoonColors.accent, width: 1),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: thumbnail == null
+                ? const Icon(
+                    CupertinoIcons.photo,
+                    color: DarkmoonColors.textMuted,
+                  )
+                : Image.memory(thumbnail!, fit: BoxFit.cover),
+          ),
+          if (count > 1)
+            Positioned(
+              right: -6,
+              top: -6,
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: DarkmoonColors.accent,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$count',
+                  style: const TextStyle(
+                    color: DarkmoonColors.background,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

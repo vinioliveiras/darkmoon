@@ -37,6 +37,7 @@ import 'export/export_job.dart';
 import 'export/export_metadata.dart';
 import 'l10n/app_localizations.dart';
 import 'library/library_screen.dart';
+import 'library/photo_mover.dart';
 import 'native/camera_match.dart';
 import 'native/common_image_thumbnail.dart';
 import 'native/edit_source.dart';
@@ -1658,6 +1659,10 @@ class _EditorScreenState extends State<EditorScreen>
           onRemoveRecentFile: _removeRecentFile,
           onShowOnDisk: (file) => unawaited(_revealInExplorer(file)),
           onResetEdits: (file) => unawaited(_resetAllEditsFor(file)),
+          onSetTags: _setTags,
+          onMovePhotos: _movePhotos,
+          onMoveFolder: _moveFolder,
+          onCreateFolder: createSubfolder,
         ),
       ),
     );
@@ -1675,6 +1680,91 @@ class _EditorScreenState extends State<EditorScreen>
       await _loadFolder(folder, selectPath: request.path);
     } else {
       await _selectRecentFile(request.path);
+    }
+  }
+
+  /// Sets [file]'s keywords (`dc:subject`).
+  void _setTags(RawFile file, List<String> tags) {
+    final current = _store.meta[file.path] ?? const PhotoMeta();
+    _setPhotoMeta(file.path, current.copyWith(tags: tags));
+  }
+
+  /// Moves [paths] into [folder] on disk (the library's "add to album")
+  /// and follows them in the catalog: edits, ratings, recent files and
+  /// the open folder, if it was one of the two.
+  Future<MoveOutcome> _movePhotos(List<String> paths, String folder) async {
+    await _flushCurrentEdits();
+    final outcome = await movePhotosToFolder(paths, folder);
+    if (mounted) {
+      await _followRenames(outcome.moved);
+    }
+    return outcome;
+  }
+
+  /// Moves [folder] into [targetParent] on disk (an album moved) and
+  /// follows every path under it.
+  Future<String?> _moveFolder(String folder, String targetParent) async {
+    await _flushCurrentEdits();
+    final moved = await moveFolderInto(folder, targetParent);
+    if (moved == null || moved == folder || !mounted) {
+      return moved;
+    }
+    final renames = <String, String>{};
+    for (final path in {
+      ..._store.paths,
+      ..._settings.recentFiles,
+      ..._settings.libraryFolders,
+      if (_currentFolder != null) _currentFolder!,
+      if (_settings.lastActiveFolder != null) _settings.lastActiveFolder!,
+    }) {
+      final next = rekeyUnderFolder(path, folder, moved);
+      if (next != path) {
+        renames[path] = next;
+      }
+    }
+    await _followRenames(renames);
+    return moved;
+  }
+
+  Future<void> _followRenames(Map<String, String> renames) async {
+    if (renames.isEmpty) {
+      return;
+    }
+    String follow(String path) => renames[path] ?? path;
+    _store.rekey(renames);
+    unawaited(_store.save());
+    final next = _settings.copyWith(
+      recentFiles: [for (final path in _settings.recentFiles) follow(path)],
+      libraryFolders: [
+        for (final folder in _settings.libraryFolders) follow(folder),
+      ],
+      lastActiveFolder: _settings.lastActiveFolder == null
+          ? null
+          : follow(_settings.lastActiveFolder!),
+    );
+    setState(() => _settings = next);
+    unawaited(saveSettings(next));
+    // The in-memory per-photo caches are keyed by the old paths; the
+    // folder reload below rebuilds them from disk for whatever is still
+    // here, and the moved photos' disk caches are keyed by content, so
+    // they simply hit again under the new path.
+    final selectedPath = _selectedIndex == null
+        ? null
+        : follow(_files[_selectedIndex!].path);
+    final folder = _currentFolder;
+    if (folder != null) {
+      final movedFolder = follow(folder);
+      final touched =
+          movedFolder != folder ||
+          renames.keys.any((path) => p.isWithin(folder, path)) ||
+          renames.values.any((path) => p.isWithin(folder, path));
+      if (touched) {
+        await _loadFolder(movedFolder, selectPath: selectedPath);
+      }
+    } else if (_currentSingleFile case final single?) {
+      if (renames.containsKey(single)) {
+        await _loadSingleFile(renames[single]!);
+      }
     }
   }
 
