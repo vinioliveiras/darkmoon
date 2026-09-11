@@ -836,20 +836,6 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
                 horizontal: 10,
                 vertical: 10,
               ),
-              filled: true,
-              fillColor: DarkmoonColors.canvas,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: DarkmoonColors.border),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: DarkmoonColors.border),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(6),
-                borderSide: const BorderSide(color: DarkmoonColors.accent),
-              ),
               suffixIcon: IconButton(
                 icon: Icon(
                   _obscureToken ? CupertinoIcons.eye : CupertinoIcons.eye_slash,

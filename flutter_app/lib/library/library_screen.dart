@@ -10,6 +10,7 @@ import '../catalog/photo_meta_store.dart';
 import '../l10n/app_localizations.dart';
 import '../raw_files.dart';
 import '../theme.dart';
+import '../widgets/glass_input_border.dart';
 import '../widgets/photo_meta_widgets.dart';
 import '../widgets/text_prompt_dialog.dart';
 import 'album_picker_dialog.dart';
@@ -805,10 +806,10 @@ class _LibraryBodyState extends State<LibraryBody> {
                         color: DarkmoonColors.textPrimary,
                         fontSize: 12,
                       ),
-                      decoration: InputDecoration(
-                        isDense: true,
+                      decoration: capsuleInputDecoration(
+                        context,
                         contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 10,
+                          horizontal: 12,
                           vertical: 8,
                         ),
                         hintText: l10n.librarySearchHint,
@@ -820,12 +821,6 @@ class _LibraryBodyState extends State<LibraryBody> {
                           CupertinoIcons.search,
                           size: 14,
                           color: DarkmoonColors.textMuted,
-                        ),
-                        filled: true,
-                        fillColor: DarkmoonColors.canvas,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(6),
-                          borderSide: BorderSide.none,
                         ),
                       ),
                     ),
@@ -1017,9 +1012,60 @@ class _AlbumTile extends StatelessWidget {
       );
     }
 
-    // A square cover of four square cells: each photo is cropped 1:1
-    // before it joins the mosaic (user's request), so the four sit in a
-    // clean grid whatever their own shapes.
+    // A square cover, laid out for however many photos the album has:
+    // one fills it, two split it side by side, three give one the left
+    // half and stack the other two on the right, four make the 2x2 grid.
+    // Every cell crops its photo 1:1 (user's request), so whatever the
+    // count the cover is a clean mural with no empty cells.
+    final mural = switch (thumbnails.length) {
+      0 => cell(0),
+      1 => cell(0),
+      2 => Row(
+        children: [
+          Expanded(child: cell(0)),
+          const SizedBox(width: 1),
+          Expanded(child: cell(1)),
+        ],
+      ),
+      3 => Row(
+        children: [
+          Expanded(child: cell(0)),
+          const SizedBox(width: 1),
+          Expanded(
+            child: Column(
+              children: [
+                Expanded(child: cell(1)),
+                const SizedBox(height: 1),
+                Expanded(child: cell(2)),
+              ],
+            ),
+          ),
+        ],
+      ),
+      _ => Column(
+        children: [
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(child: cell(0)),
+                const SizedBox(width: 1),
+                Expanded(child: cell(1)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 1),
+          Expanded(
+            child: Row(
+              children: [
+                Expanded(child: cell(2)),
+                const SizedBox(width: 1),
+                Expanded(child: cell(3)),
+              ],
+            ),
+          ),
+        ],
+      ),
+    };
     return GestureDetector(
       onTap: onOpen,
       child: Column(
@@ -1044,29 +1090,7 @@ class _AlbumTile extends StatelessWidget {
                   child: Stack(
                     fit: StackFit.expand,
                     children: [
-                      Column(
-                        children: [
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Expanded(child: cell(0)),
-                                const SizedBox(width: 1),
-                                Expanded(child: cell(1)),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 1),
-                          Expanded(
-                            child: Row(
-                              children: [
-                                Expanded(child: cell(2)),
-                                const SizedBox(width: 1),
-                                Expanded(child: cell(3)),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
+                      mural,
                       Positioned(
                         left: 4,
                         top: 4,

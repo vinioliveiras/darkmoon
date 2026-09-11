@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
 import '../theme.dart';
+import 'glass_input_border.dart';
 
 /// A single entry in a [StyledDropdown]. Carries the raw value plus its
 /// label and (optional) leading icon so the dropdown can render both the
@@ -451,36 +452,16 @@ class _StyledDropdownMenuState<T> extends State<_StyledDropdownMenu<T>> {
                             color: DarkmoonColors.textPrimary,
                             fontSize: 12.5,
                           ),
-                          decoration: InputDecoration(
-                            isDense: true,
+                          decoration: capsuleInputDecoration(
+                            context,
                             hintText: widget.searchHintText,
                             hintStyle: const TextStyle(
                               color: DarkmoonColors.textMuted,
                               fontSize: 12.5,
                             ),
                             contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 8,
+                              horizontal: 12,
                               vertical: 8,
-                            ),
-                            filled: true,
-                            fillColor: DarkmoonColors.panel,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              borderSide: const BorderSide(
-                                color: DarkmoonColors.border,
-                              ),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              borderSide: const BorderSide(
-                                color: DarkmoonColors.border,
-                              ),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(6),
-                              borderSide: const BorderSide(
-                                color: DarkmoonColors.accent,
-                              ),
                             ),
                           ),
                         ),

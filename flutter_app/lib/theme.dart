@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import 'widgets/glass_input_border.dart';
+
 /// Colors mirror the Python/PySide6 build's Photomator-inspired dark palette,
 /// so the two versions stay visually consistent while this port is built out.
 // Every gray below is a deliberately blue-leaning neutral (R < G < B, not
@@ -49,6 +51,18 @@ class DarkmoonColors {
   /// register (e.g. under the top File/Settings bar) rather than read
   /// as a visible rule the way [divider] does elsewhere.
   static const dividerDark = Color(0xFF131416);
+
+  /// Text fields (macOS 26 look, see the theme's `inputDecorationTheme`).
+  /// White at low alpha rather than a fixed grey, so the field lifts off
+  /// whichever surface it sits on by the same small step.
+  static const inputFill = Color(0x14FFFFFF);
+  static const inputHover = Color(0x0AFFFFFF);
+  static const inputOutline = Color(0x24FFFFFF);
+  static const inputOutlineDisabled = Color(0x12FFFFFF);
+  static const inputOutlineFocused = Color(0xD9FFFFFF);
+  static const inputHalo = Color(0x38FFFFFF);
+  static const inputOutlineError = Color(0xFFE5484D);
+  static const inputHaloError = Color(0x40E5484D);
   static const textPrimary = Color(0xFFE5E6E8);
   static const textSecondary = Color(0xFFC7C8CA);
   static const textMuted = Color(0xFF898A8C);
@@ -284,6 +298,45 @@ ThemeData buildDarkmoonTheme() {
       overlayColor: WidgetStatePropertyAll(Colors.transparent),
       labelStyle: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600),
       unselectedLabelStyle: TextStyle(fontSize: 12.5),
+    ),
+    // Text fields after macOS 26: a rounded hairline over a fill that is
+    // a faint lift of whatever it sits on (so the same field reads right
+    // on the panel, a dialog or a menu), a touch brighter under the
+    // pointer, and on focus a soft halo around the outline instead of a
+    // thicker line. Every field inherits this; search boxes ask for the
+    // capsule variant with [capsuleInputDecoration].
+    inputDecorationTheme: const InputDecorationThemeData(
+      isDense: true,
+      filled: true,
+      fillColor: DarkmoonColors.inputFill,
+      hoverColor: DarkmoonColors.inputHover,
+      contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      hintStyle: TextStyle(color: DarkmoonColors.textMuted, fontSize: 12.5),
+      border: GlassInputBorder(
+        borderSide: BorderSide(color: DarkmoonColors.inputOutline),
+      ),
+      enabledBorder: GlassInputBorder(
+        borderSide: BorderSide(color: DarkmoonColors.inputOutline),
+      ),
+      disabledBorder: GlassInputBorder(
+        borderSide: BorderSide(color: DarkmoonColors.inputOutlineDisabled),
+      ),
+      focusedBorder: GlassInputBorder(
+        borderSide: BorderSide(color: DarkmoonColors.inputOutlineFocused),
+        halo: DarkmoonColors.inputHalo,
+      ),
+      errorBorder: GlassInputBorder(
+        borderSide: BorderSide(color: DarkmoonColors.inputOutlineError),
+      ),
+      focusedErrorBorder: GlassInputBorder(
+        borderSide: BorderSide(color: DarkmoonColors.inputOutlineError),
+        halo: DarkmoonColors.inputHaloError,
+      ),
+    ),
+    textSelectionTheme: const TextSelectionThemeData(
+      cursorColor: DarkmoonColors.accent,
+      selectionColor: Color(0x40FFFFFF),
+      selectionHandleColor: DarkmoonColors.accent,
     ),
     elevatedButtonTheme: ElevatedButtonThemeData(
       style:

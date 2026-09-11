@@ -90,6 +90,7 @@ import 'theme.dart';
 import 'widgets/about_dialog.dart';
 import 'widgets/ai_denoise_dialog.dart';
 import 'widgets/color_profile_editor_dialog.dart';
+import 'widgets/collapse_down.dart';
 import 'widgets/colorize_dialog.dart';
 import 'widgets/animated_dialog.dart';
 import 'widgets/brush_mask_overlay.dart';
@@ -5254,67 +5255,85 @@ class _EditorScreenState extends State<EditorScreen>
                         ],
                       ),
                     ),
-                    if (!_libraryMode)
-                      _ViewerToolbar(
-                        onOpenSettings: _openSettings,
-                        onOpenAbout: _openAbout,
-                        zoomLabel: _zoomScale == 1.0
-                            ? AppLocalizations.of(context)!.zoomFit
-                            : '${(_zoomScale * 100).round()}%',
-                        beforeAfterMode: _beforeAfterMode,
-                        beforeAfterEnabled: selected != null,
-                        onZoomIn: _zoomIn,
-                        onZoomOut: _zoomOut,
-                        onZoomFit: _resetZoomAnimated,
-                        onToggleBeforeAfter: selected == null
-                            ? null
-                            : _toggleBeforeAfter,
-                        canUndo: _history.canUndo,
-                        canRedo: _history.canRedo,
-                        onUndo: _undo,
-                        onRedo: _redo,
-                        aiDenoiseActive:
-                            AiDenoiseParams.fromValues(_paramValues).level !=
-                                null ||
-                            (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0 ||
-                            (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0 ||
-                            (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0 ||
-                            (_paramValues[_restoreDetailKey] ?? 0.0) > 0 ||
-                            (_paramValues[_cloudDenoiseProviderKey] ?? 0.0) > 0,
-                        onOpenAiDenoise: selected == null
-                            ? null
-                            : _openAiDenoiseDialog,
-                        colorizeActive: (_paramValues[_colorizeKey] ?? 0.0) > 0,
-                        onOpenColorize: selected == null
-                            ? null
-                            : _openColorizeDialog,
-                        cropOverlayActive: _cropOverlayActive,
-                        onToggleCropOverlay: selected == null
-                            ? null
-                            : _toggleCropOverlay,
-                        onExport: selected == null ? null : _exportCurrent,
-                        exporting: _exporting,
-                        onReset: _resetActive,
+                    // The toolbar and the filmstrip fold down and away
+                    // when Albums opens, and rise back for the editor.
+                    CollapseDown(
+                      shown: !_libraryMode,
+                      duration: AnimationsConfig.duration(
+                        context,
+                        const Duration(milliseconds: 240),
                       ),
-                    if (!_libraryMode)
-                      _Filmstrip(
-                        files: _files,
-                        selectedIndex: _selectedIndex,
-                        thumbnails: _thumbnails,
-                        onSelect: _selectIndex,
-                        isEdited: _isPhotoEdited,
-                        onResetEdits: (file) =>
-                            unawaited(_resetAllEditsFor(file)),
-                        onShowOnDisk: (file) =>
-                            unawaited(_revealInExplorer(file)),
-                        onDelete: (file) => unawaited(_deleteFile(file)),
-                        onCopyEdits: _copyEditsFor,
-                        onPasteEdits: _pasteEditsFor,
-                        hasCopiedEdits: _hasCopiedEdits,
-                        metaOf: (path) => _store.meta[path],
-                        onSetRating: _setRating,
-                        onSetLabel: _setLabel,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _ViewerToolbar(
+                            onOpenSettings: _openSettings,
+                            onOpenAbout: _openAbout,
+                            zoomLabel: _zoomScale == 1.0
+                                ? AppLocalizations.of(context)!.zoomFit
+                                : '${(_zoomScale * 100).round()}%',
+                            beforeAfterMode: _beforeAfterMode,
+                            beforeAfterEnabled: selected != null,
+                            onZoomIn: _zoomIn,
+                            onZoomOut: _zoomOut,
+                            onZoomFit: _resetZoomAnimated,
+                            onToggleBeforeAfter: selected == null
+                                ? null
+                                : _toggleBeforeAfter,
+                            canUndo: _history.canUndo,
+                            canRedo: _history.canRedo,
+                            onUndo: _undo,
+                            onRedo: _redo,
+                            aiDenoiseActive:
+                                AiDenoiseParams.fromValues(
+                                      _paramValues,
+                                    ).level !=
+                                    null ||
+                                (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0 ||
+                                (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0 ||
+                                (_paramValues[_neuralRawDenoiseKey] ?? 0.0) >
+                                    0 ||
+                                (_paramValues[_restoreDetailKey] ?? 0.0) > 0 ||
+                                (_paramValues[_cloudDenoiseProviderKey] ??
+                                        0.0) >
+                                    0,
+                            onOpenAiDenoise: selected == null
+                                ? null
+                                : _openAiDenoiseDialog,
+                            colorizeActive:
+                                (_paramValues[_colorizeKey] ?? 0.0) > 0,
+                            onOpenColorize: selected == null
+                                ? null
+                                : _openColorizeDialog,
+                            cropOverlayActive: _cropOverlayActive,
+                            onToggleCropOverlay: selected == null
+                                ? null
+                                : _toggleCropOverlay,
+                            onExport: selected == null ? null : _exportCurrent,
+                            exporting: _exporting,
+                            onReset: _resetActive,
+                          ),
+                          _Filmstrip(
+                            files: _files,
+                            selectedIndex: _selectedIndex,
+                            thumbnails: _thumbnails,
+                            onSelect: _selectIndex,
+                            isEdited: _isPhotoEdited,
+                            onResetEdits: (file) =>
+                                unawaited(_resetAllEditsFor(file)),
+                            onShowOnDisk: (file) =>
+                                unawaited(_revealInExplorer(file)),
+                            onDelete: (file) => unawaited(_deleteFile(file)),
+                            onCopyEdits: _copyEditsFor,
+                            onPasteEdits: _pasteEditsFor,
+                            hasCopiedEdits: _hasCopiedEdits,
+                            metaOf: (path) => _store.meta[path],
+                            onSetRating: _setRating,
+                            onSetLabel: _setLabel,
+                          ),
+                        ],
                       ),
+                    ),
                   ],
                 ),
                 Builder(

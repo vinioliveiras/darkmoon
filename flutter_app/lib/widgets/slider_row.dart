@@ -357,8 +357,7 @@ class _SliderRowState extends State<SliderRow> {
       ),
       decoration: const InputDecoration(
         isDense: true,
-        contentPadding: EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-        border: OutlineInputBorder(),
+        contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       ),
       keyboardType: const TextInputType.numberWithOptions(
         decimal: true,
