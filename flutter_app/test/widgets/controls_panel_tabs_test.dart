@@ -111,7 +111,7 @@ void main() {
     final lefts = <double>[];
     for (final label in labels) {
       final tab = find.descendant(
-        of: find.byType(TabBar),
+        of: find.byType(TabBar).last,
         matching: find.text(label),
       );
       expect(tab, findsOneWidget, reason: '$label is missing from the bar');
@@ -138,7 +138,7 @@ void main() {
       await pumpEditor(tester);
       expect(
         tester.getRect(find.byType(MaskSelector)).bottom,
-        lessThanOrEqualTo(tester.getRect(find.byType(TabBar)).top),
+        lessThanOrEqualTo(tester.getRect(find.byType(TabBar).last).top),
         reason:
             'a mask is what every section below applies to, so it must not '
             'scroll away to reach a slider',
