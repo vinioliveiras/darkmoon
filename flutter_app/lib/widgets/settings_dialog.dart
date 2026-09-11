@@ -27,6 +27,7 @@ class SettingsDialog extends StatefulWidget {
     required this.onClearThumbnails,
     this.cacheUsage,
     this.onClearCaches,
+    this.onRemoveSidecars,
     required this.onClearCatalog,
     required this.onPruneMissing,
     this.nativeWidth,
@@ -55,6 +56,10 @@ class SettingsDialog extends StatefulWidget {
   /// Empties the given cache categories — see `_clearCaches`. Null leaves
   /// the storage meter read-only.
   final void Function(Set<CacheCategory> categories)? onClearCaches;
+
+  /// Deletes the `.xmp` files this app wrote beside the library's photos
+  /// (Data tab), for the user who turned sidecars off.
+  final Future<void> Function()? onRemoveSidecars;
   final VoidCallback onClearCatalog;
 
   /// Removes saved edits/curves/masks/presets/recent-file entries for
@@ -487,6 +492,14 @@ class _SettingsDialogState extends State<SettingsDialog>
             value: _settings.writeXmpSidecars,
             onChanged: (v) => _update(_settings.copyWith(writeXmpSidecars: v)),
           ),
+          if (widget.onRemoveSidecars != null)
+            _ClearDataRow(
+              label: l10n.settingsRemoveSidecarsButton,
+              onPressed: () => _confirmAndRun(
+                l10n.confirmRemoveSidecarsMessage,
+                widget.onRemoveSidecars!,
+              ),
+            ),
           const SizedBox(height: 6),
           CacheStorageMeter(
             usage: widget.cacheUsage,

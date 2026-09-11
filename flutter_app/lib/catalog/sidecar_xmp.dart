@@ -278,6 +278,38 @@ PhotoSidecar? sidecarFromXmp(String xmlSource) {
   );
 }
 
+/// Deletes every `.xmp` this app wrote (its `x:xmptk` says so; files
+/// from other applications are left alone) under [folders], recursively.
+/// Returns how many went. For the user who turned sidecars off and wants
+/// the folders clean again (2026-09-11).
+Future<int> removeDarkmoonSidecars(Iterable<String> folders) async {
+  var removed = 0;
+  for (final folder in folders) {
+    final dir = Directory(folder);
+    if (!await dir.exists()) {
+      continue;
+    }
+    await for (final entity in dir.list(recursive: true, followLinks: false)) {
+      if (entity is! File || p.extension(entity.path).toLowerCase() != '.xmp') {
+        continue;
+      }
+      try {
+        final head = await entity
+            .openRead(0, 512)
+            .transform(const Utf8Decoder(allowMalformed: true))
+            .join();
+        if (head.contains('x:xmptk="darkmoon"')) {
+          await entity.delete();
+          removed++;
+        }
+      } catch (e, st) {
+        DevLog.logError('sidecar cleanup skipped ${entity.path}', e, st);
+      }
+    }
+  }
+  return removed;
+}
+
 /// [photoPath]'s sidecar, or null when there is none (or it is not XMP).
 Future<PhotoSidecar?> readSidecar(String photoPath) async {
   final file = sidecarFileFor(photoPath);

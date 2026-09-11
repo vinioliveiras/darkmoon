@@ -3,127 +3,109 @@ import 'dart:async';
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:path/path.dart' as p;
 
 import '../catalog/photo_meta_store.dart';
 import '../l10n/app_localizations.dart';
 import '../raw_files.dart';
 import '../theme.dart';
-import '../widgets/folder_sidebar.dart';
 import '../widgets/photo_meta_widgets.dart';
 import '../widgets/text_prompt_dialog.dart';
 import 'album_picker_dialog.dart';
 import 'photo_mover.dart';
 
-/// What the library hands back to the editor when a photo is chosen: the
-/// folder to load (null for a single file opened from the recent list)
-/// and the photo to select in it.
-class LibraryOpenRequest {
-  const LibraryOpenRequest({required this.folder, required this.path});
-
-  final String? folder;
-  final String path;
-}
-
-/// The Home screen (2026-09-11, the user's Solstice-style library): the
-/// library's folders on the left, a grid of the chosen folder's photos on
-/// the right, filtered by name, rating, colour label and keyword; a
-/// double-click (or Enter) opens the photo in the editor. Pushed over the
-/// editor as a route and pops with a [LibraryOpenRequest].
+/// The library — the "Albums" tab of the editor screen (2026-09-11): a
+/// grid of the open album's photos, filtered by name, rating, colour
+/// label and keyword, with selection, ratings, moves and deletes. The
+/// left column (the album tree, the recent files) is the editor's own,
+/// shared with the Editor tab; this widget is the right-hand side, and
+/// everything it shows is the editor's state, handed in.
 ///
 /// Albums are folders (the user's call): "new album" creates a folder
-/// inside the one shown, dragging photos onto a folder in the tree moves
-/// them there on disk, dragging a folder onto another moves the folder.
-/// The editor does the moving and re-keys its catalog; see
-/// `photo_mover.dart`.
-///
-/// Everything it shows belongs to the editor — the folder list and the
-/// filters are settings, the thumbnails come from the editor's cache, the
-/// ratings from its store — so it takes getters and callbacks rather than
-/// copies: a folder added or a filter toggled here is the editor's own
-/// state, re-read after the callback returns.
-class LibraryScreen extends StatefulWidget {
-  const LibraryScreen({
+/// inside the open one, dropping photos onto a folder in the tree moves
+/// them there on disk, dropping a photo onto another photo makes a new
+/// album of them. The editor does the moving and re-keys its catalog;
+/// see `photo_mover.dart`.
+class LibraryBody extends StatefulWidget {
+  const LibraryBody({
     super.key,
-    required this.libraryFolders,
-    required this.recentFiles,
-    required this.rawOnly,
-    required this.includeSubfolders,
-    required this.initialFolder,
+    required this.files,
+    required this.folder,
+    required this.title,
+    required this.hasLibrary,
+    required this.canGoBack,
+    required this.onBack,
+    required this.thumbnails,
     required this.thumbnailFor,
     required this.metaOf,
     required this.isEdited,
+    required this.libraryFolders,
+    required this.onOpen,
+    required this.onAddFolder,
     required this.onSetRating,
     required this.onSetLabel,
-    required this.onRawOnlyChanged,
-    required this.onIncludeSubfoldersChanged,
-    required this.onAddFolder,
-    required this.onRemoveFolder,
-    required this.onOpenFile,
-    required this.onRemoveRecentFile,
-    required this.onShowOnDisk,
-    required this.onResetEdits,
-    required this.onDelete,
     required this.onSetTags,
     required this.onMovePhotos,
-    required this.onMoveFolder,
     required this.onCreateFolder,
+    required this.onDelete,
+    required this.onShowOnDisk,
+    required this.onResetEdits,
   });
 
-  final List<String> Function() libraryFolders;
-  final List<String> Function() recentFiles;
-  final bool Function() rawOnly;
-  final bool Function() includeSubfolders;
+  /// The photos of the open album (or the single opened file).
+  final List<RawFile> files;
 
-  /// The folder to show first — the editor's current one, if any.
-  final String? initialFolder;
+  /// The open album's path — null for a single file or nothing open.
+  final String? folder;
 
-  /// A photo's filmstrip-sized JPEG thumbnail, from the editor's caches or
-  /// decoded on demand; null when it cannot be produced.
+  /// What the header shows: the album's name, the file's, or the app's
+  /// own word for the library.
+  final String title;
+
+  /// Whether the library has any folder at all (else the empty state).
+  final bool hasLibrary;
+
+  /// Whether the back arrow has a previous album to return to.
+  final bool canGoBack;
+  final VoidCallback onBack;
+
+  /// The thumbnails the editor already holds, by path; anything missing
+  /// is asked of [thumbnailFor].
+  final Map<String, Uint8List> thumbnails;
   final Future<Uint8List?> Function(RawFile file) thumbnailFor;
   final PhotoMeta? Function(String path) metaOf;
   final bool Function(String path) isEdited;
+  final List<String> Function() libraryFolders;
+
+  /// Opens the photo in the Editor tab.
+  final ValueChanged<RawFile> onOpen;
+  final Future<void> Function() onAddFolder;
   final void Function(RawFile file, int rating) onSetRating;
   final void Function(RawFile file, String label) onSetLabel;
-  final ValueChanged<bool> onRawOnlyChanged;
-  final ValueChanged<bool> onIncludeSubfoldersChanged;
-  final Future<void> Function() onAddFolder;
-  final ValueChanged<String> onRemoveFolder;
-  final Future<void> Function() onOpenFile;
-  final ValueChanged<String> onRemoveRecentFile;
-  final void Function(RawFile file) onShowOnDisk;
-  final void Function(RawFile file) onResetEdits;
+  final void Function(RawFile file, List<String> tags) onSetTags;
+
+  /// Moves photos into a folder on disk and follows them in the catalog;
+  /// the editor reloads the open album afterwards, so [files] changes.
+  final Future<MoveOutcome> Function(List<String> paths, String folder)
+  onMovePhotos;
+
+  /// Creates a folder inside another; its path, or null when refused.
+  final Future<String?> Function(String parent, String name) onCreateFolder;
 
   /// Sends photos to the Recycle Bin (after the editor's confirmation);
   /// how many went.
   final Future<int> Function(List<RawFile> files) onDelete;
-  final void Function(RawFile file, List<String> tags) onSetTags;
-
-  /// Moves photos into a folder on disk and follows them in the catalog.
-  final Future<MoveOutcome> Function(List<String> paths, String folder)
-  onMovePhotos;
-
-  /// Moves a folder into another; the new path, or null when refused.
-  final Future<String?> Function(String folder, String targetParent)
-  onMoveFolder;
-
-  /// Creates a folder inside another; its path, or null when refused.
-  final Future<String?> Function(String parent, String name) onCreateFolder;
+  final void Function(RawFile file) onShowOnDisk;
+  final void Function(RawFile file) onResetEdits;
 
   /// How many thumbnails decode at once for tiles that have none cached.
   static const int thumbnailConcurrency = 3;
 
   @override
-  State<LibraryScreen> createState() => _LibraryScreenState();
+  State<LibraryBody> createState() => _LibraryBodyState();
 }
 
-class _LibraryScreenState extends State<LibraryScreen> {
-  String? _folder;
-  String? _recentFile;
-  List<RawFile> _files = const [];
-  bool _listing = false;
-  int _generation = 0;
-  final Map<String, Uint8List?> _thumbnails = {};
+class _LibraryBodyState extends State<LibraryBody> {
+  final Map<String, Uint8List?> _fallbackThumbnails = {};
   final Set<String> _thumbnailsLoading = {};
   final List<RawFile> _thumbnailQueue = [];
   int _thumbnailsInFlight = 0;
@@ -138,20 +120,27 @@ class _LibraryScreenState extends State<LibraryScreen> {
   String? _anchorPath;
   final _focusNode = FocusNode();
 
-  /// Bumped after a folder is created or moved, so the tree re-lists.
-  int _treeToken = 0;
-
   @override
   void initState() {
     super.initState();
     _query.addListener(() => setState(() {}));
-    final folders = widget.libraryFolders();
-    final initial = widget.initialFolder;
-    final start = initial != null && folders.contains(initial)
-        ? initial
-        : (initial ?? (folders.isEmpty ? null : folders.first));
-    if (start != null) {
-      unawaited(_showFolder(start));
+  }
+
+  @override
+  void didUpdateWidget(covariant LibraryBody oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!identical(oldWidget.files, widget.files)) {
+      // The album was reloaded (a move, a delete, another album): keep
+      // only what is still here.
+      final present = {for (final f in widget.files) f.path};
+      _selection.retainWhere(present.contains);
+      if (_anchorPath != null && !present.contains(_anchorPath)) {
+        _anchorPath = null;
+      }
+      if (oldWidget.folder != widget.folder) {
+        _selection.clear();
+        _anchorPath = null;
+      }
     }
   }
 
@@ -162,55 +151,15 @@ class _LibraryScreenState extends State<LibraryScreen> {
     super.dispose();
   }
 
-  Future<void> _showFolder(String folder) async {
-    final generation = ++_generation;
-    setState(() {
-      _folder = folder;
-      _recentFile = null;
-      _listing = true;
-      _selection.clear();
-      _anchorPath = null;
-    });
-    final files = await listRawFiles(
-      folder,
-      rawOnly: widget.rawOnly(),
-      includeSubfolders: widget.includeSubfolders(),
-    );
-    if (!mounted || generation != _generation) {
-      return;
-    }
-    setState(() {
-      _files = files;
-      _listing = false;
-    });
-  }
+  Uint8List? _thumbnailOf(RawFile file) =>
+      widget.thumbnails[file.path] ?? _fallbackThumbnails[file.path];
 
-  void _showRecentFile(String path) {
-    _generation++;
-    setState(() {
-      _folder = null;
-      _recentFile = path;
-      _listing = false;
-      _files = [RawFile(path, DateTime.now())];
-      _selection
-        ..clear()
-        ..add(path);
-      _anchorPath = path;
-    });
-  }
-
-  /// Re-lists after a setting the sidebar changed (RAW only, subfolders).
-  Future<void> _refresh() async {
-    if (_folder case final folder?) {
-      await _showFolder(folder);
-    } else {
-      setState(() {});
-    }
-  }
+  bool _thumbnailKnown(RawFile file) =>
+      widget.thumbnails.containsKey(file.path) ||
+      _fallbackThumbnails.containsKey(file.path);
 
   void _requestThumbnail(RawFile file) {
-    if (_thumbnails.containsKey(file.path) ||
-        _thumbnailsLoading.contains(file.path)) {
+    if (_thumbnailKnown(file) || _thumbnailsLoading.contains(file.path)) {
       return;
     }
     _thumbnailsLoading.add(file.path);
@@ -219,7 +168,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   }
 
   void _pumpThumbnails() {
-    while (_thumbnailsInFlight < LibraryScreen.thumbnailConcurrency &&
+    while (_thumbnailsInFlight < LibraryBody.thumbnailConcurrency &&
         _thumbnailQueue.isNotEmpty) {
       // Newest request first: the tiles on screen now, not the ones the
       // user scrolled past.
@@ -233,7 +182,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
               _thumbnailsInFlight--;
               _thumbnailsLoading.remove(file.path);
               if (mounted) {
-                setState(() => _thumbnails[file.path] = bytes);
+                setState(() => _fallbackThumbnails[file.path] = bytes);
                 _pumpThumbnails();
               }
             }),
@@ -244,7 +193,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
   List<RawFile> get _visibleFiles {
     final query = _query.text.trim().toLowerCase();
     return [
-      for (final file in _files)
+      for (final file in widget.files)
         if ((query.isEmpty || _matchesQuery(file, query)) &&
             _passesMetaFilters(file))
           file,
@@ -269,15 +218,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
         (_labelFilter.isEmpty || meta.label == _labelFilter);
   }
 
-  void _open(RawFile file) {
-    Navigator.of(
-      context,
-    ).pop(LibraryOpenRequest(folder: _folder, path: file.path));
-  }
-
   /// The selection in the grid's order.
   List<RawFile> get _selectedFiles => [
-    for (final file in _files)
+    for (final file in widget.files)
       if (_selection.contains(file.path)) file,
   ];
 
@@ -356,7 +299,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  /// Moves [paths] into [folder] and re-lists what is shown.
   Future<void> _movePhotos(List<String> paths, String folder) async {
     final l10n = AppLocalizations.of(context)!;
     final outcome = await widget.onMovePhotos(paths, folder);
@@ -366,32 +308,18 @@ class _LibraryScreenState extends State<LibraryScreen> {
     if (outcome.skipped.isNotEmpty) {
       _toast(l10n.libraryMoveSkipped(outcome.skipped.length));
     }
-    _selection.removeAll(outcome.moved.keys);
-    _treeToken++;
-    await _refresh();
+    setState(() => _selection.removeAll(outcome.moved.keys));
   }
 
-  Future<void> _moveFolder(String folder, String targetParent) async {
-    final l10n = AppLocalizations.of(context)!;
-    final moved = await widget.onMoveFolder(folder, targetParent);
-    if (!mounted) {
-      return;
-    }
-    if (moved == null) {
-      _toast(l10n.libraryFolderExists);
-      return;
-    }
-    if (_folder != null) {
-      _folder = rekeyUnderFolder(_folder!, folder, moved);
-    }
-    _treeToken++;
-    await _refresh();
-  }
+  /// "New album": an empty folder inside the open one.
+  Future<void> _createAlbum() => _newAlbumWith(const []);
 
-  /// "New album": a folder inside the one shown.
-  Future<void> _createAlbum() async {
+  /// A new album (folder inside the open one) holding [paths] — from a
+  /// photo dropped on another, the menu's "new album with these", or
+  /// the toolbar button with nothing.
+  Future<void> _newAlbumWith(List<String> paths) async {
     final l10n = AppLocalizations.of(context)!;
-    final parent = _folder;
+    final parent = widget.folder;
     if (parent == null) {
       return;
     }
@@ -410,7 +338,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
       _toast(l10n.libraryFolderExists);
       return;
     }
-    setState(() => _treeToken++);
+    if (paths.isNotEmpty) {
+      await _movePhotos(paths, created);
+    }
   }
 
   /// "Move to album…": the library's own folder tree, then the move.
@@ -418,38 +348,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
     final album = await showAlbumPickerDialog(
       context,
       roots: widget.libraryFolders(),
-      current: _folder,
+      current: widget.folder,
     );
     if (album == null || !mounted) {
       return;
     }
     await _movePhotos([for (final f in targets) f.path], album);
-  }
-
-  /// A new album (folder inside the one shown) holding [paths] — from a
-  /// photo dropped on another, or the menu's "new album with these".
-  Future<void> _newAlbumWith(List<String> paths) async {
-    final l10n = AppLocalizations.of(context)!;
-    final parent = _folder;
-    if (parent == null || paths.isEmpty) {
-      return;
-    }
-    final name = await showTextPromptDialog(
-      context,
-      title: l10n.libraryNewAlbumTitle,
-    );
-    if (name == null || name.trim().isEmpty || !mounted) {
-      return;
-    }
-    final created = await widget.onCreateFolder(parent, name);
-    if (!mounted) {
-      return;
-    }
-    if (created == null) {
-      _toast(l10n.libraryFolderExists);
-      return;
-    }
-    await _movePhotos(paths, created);
   }
 
   Future<void> _showContextMenu(Offset globalPosition, RawFile file) async {
@@ -473,7 +377,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
       ),
       items: [
         PopupMenuItem(
-          value: () => _open(file),
+          value: () => widget.onOpen(file),
           child: Text(l10n.libraryOpenInEditor),
         ),
         const PopupMenuDivider(),
@@ -498,7 +402,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
           value: () => unawaited(_moveToPickedAlbum(targets)),
           child: Text(l10n.libraryMoveToAction),
         ),
-        if (_folder != null)
+        if (widget.folder != null)
           PopupMenuItem(
             value: () =>
                 unawaited(_newAlbumWith([for (final f in targets) f.path])),
@@ -528,11 +432,9 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   Future<void> _delete(List<RawFile> targets) async {
     final deleted = await widget.onDelete(targets);
-    if (!mounted || deleted == 0) {
-      return;
+    if (mounted && deleted > 0) {
+      setState(_selection.clear);
     }
-    _selection.clear();
-    await _refresh();
   }
 
   /// Keywords for [targets], edited as one comma-separated line seeded
@@ -606,14 +508,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final folders = widget.libraryFolders();
     return CallbackShortcuts(
       bindings: {
-        const SingleActivator(LogicalKeyboardKey.escape): () =>
-            Navigator.of(context).maybePop(),
         const SingleActivator(LogicalKeyboardKey.enter): () {
           if (_primarySelected case final file?) {
-            _open(file);
+            widget.onOpen(file);
           }
         },
         const SingleActivator(LogicalKeyboardKey.delete): () {
@@ -635,99 +534,13 @@ class _LibraryScreenState extends State<LibraryScreen> {
       child: Focus(
         focusNode: _focusNode,
         autofocus: true,
-        child: Scaffold(
-          backgroundColor: DarkmoonColors.background,
-          body: Row(
+        child: Container(
+          color: DarkmoonColors.background,
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              SizedBox(
-                width: 260,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _LibraryHeader(l10n: l10n),
-                    Expanded(
-                      child: FolderSidebar(
-                        roots: folders,
-                        recentFiles: widget.rawOnly()
-                            ? widget.recentFiles().where(isRawFile).toList()
-                            : widget.recentFiles(),
-                        selectedPath: _folder,
-                        selectedRecentFile: _recentFile,
-                        onSelect: (path) => unawaited(_showFolder(path)),
-                        onRemove: (path) {
-                          widget.onRemoveFolder(path);
-                          if (_folder == path) {
-                            _generation++;
-                            _folder = null;
-                            _files = const [];
-                          }
-                          setState(() {});
-                        },
-                        onSelectRecentFile: _showRecentFile,
-                        onRemoveRecentFile: (path) {
-                          widget.onRemoveRecentFile(path);
-                          if (_recentFile == path) {
-                            _recentFile = null;
-                            _files = const [];
-                          }
-                          setState(() {});
-                        },
-                        rawOnly: widget.rawOnly(),
-                        onRawOnlyChanged: (value) {
-                          widget.onRawOnlyChanged(value);
-                          unawaited(_refresh());
-                        },
-                        includeSubfolders: widget.includeSubfolders(),
-                        onIncludeSubfoldersChanged: (value) {
-                          widget.onIncludeSubfoldersChanged(value);
-                          unawaited(_refresh());
-                        },
-                        onOpenFile: () => unawaited(
-                          widget.onOpenFile().then((_) {
-                            if (mounted) {
-                              setState(() {});
-                            }
-                          }),
-                        ),
-                        onOpenFolder: () => unawaited(
-                          widget.onAddFolder().then((_) {
-                            if (!mounted) {
-                              return;
-                            }
-                            final added = widget.libraryFolders();
-                            final newest = added.isEmpty ? null : added.last;
-                            if (newest != null && newest != _folder) {
-                              unawaited(_showFolder(newest));
-                            } else {
-                              setState(() {});
-                            }
-                          }),
-                        ),
-                        onDropPaths: (folder, paths) =>
-                            unawaited(_movePhotos(paths, folder)),
-                        onDropFolder: (folder, target) =>
-                            unawaited(_moveFolder(folder, target)),
-                        refreshToken: _treeToken,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const VerticalDivider(
-                width: 1,
-                thickness: 1,
-                color: DarkmoonColors.divider,
-              ),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    _buildToolbar(l10n),
-                    Expanded(child: _buildGrid(l10n, folders)),
-                  ],
-                ),
-              ),
+              _buildToolbar(l10n),
+              Expanded(child: _buildGrid(l10n)),
             ],
           ),
         ),
@@ -737,11 +550,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
 
   Widget _buildToolbar(AppLocalizations l10n) {
     final visible = _visibleFiles;
-    final title = _recentFile != null
-        ? p.basename(_recentFile!)
-        : _folder == null
-        ? l10n.menuLibrary
-        : p.basename(_folder!);
     return Container(
       padding: const EdgeInsets.fromLTRB(4, 4, 12, 8),
       decoration: const BoxDecoration(
@@ -754,16 +562,16 @@ class _LibraryScreenState extends State<LibraryScreen> {
           Row(
             children: [
               Tooltip(
-                message: l10n.libraryBackTooltip,
+                message: l10n.libraryBackFolderTooltip,
                 child: IconButton(
                   icon: const Icon(CupertinoIcons.chevron_left, size: 18),
                   color: DarkmoonColors.textSecondary,
-                  onPressed: () => Navigator.of(context).maybePop(),
+                  onPressed: widget.canGoBack ? widget.onBack : null,
                 ),
               ),
               Expanded(
                 child: Text(
-                  title,
+                  widget.title,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
@@ -785,7 +593,7 @@ class _LibraryScreenState extends State<LibraryScreen> {
                   fontSize: 12,
                 ),
               ),
-              if (_folder != null) ...[
+              if (widget.folder != null) ...[
                 const SizedBox(width: 8),
                 Tooltip(
                   message: l10n.libraryNewAlbumTooltip,
@@ -894,8 +702,8 @@ class _LibraryScreenState extends State<LibraryScreen> {
     );
   }
 
-  Widget _buildGrid(AppLocalizations l10n, List<String> folders) {
-    if (folders.isEmpty && _recentFile == null) {
+  Widget _buildGrid(AppLocalizations l10n) {
+    if (!widget.hasLibrary && widget.files.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -913,23 +721,11 @@ class _LibraryScreenState extends State<LibraryScreen> {
         ),
       );
     }
-    if (_listing) {
-      return const Center(
-        child: SizedBox(
-          width: 22,
-          height: 22,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: DarkmoonColors.textMuted,
-          ),
-        ),
-      );
-    }
     final visible = _visibleFiles;
     if (visible.isEmpty) {
       return Center(
         child: Text(
-          _files.isEmpty ? l10n.libraryEmpty : l10n.libraryNoMatches,
+          widget.files.isEmpty ? l10n.libraryEmpty : l10n.libraryNoMatches,
           style: const TextStyle(color: DarkmoonColors.textMuted),
         ),
       );
@@ -945,18 +741,19 @@ class _LibraryScreenState extends State<LibraryScreen> {
       itemCount: visible.length,
       itemBuilder: (context, index) {
         final file = visible[index];
-        if (!_thumbnails.containsKey(file.path)) {
+        if (!_thumbnailKnown(file)) {
           _requestThumbnail(file);
         }
+        final thumbnail = _thumbnailOf(file);
         final tile = _LibraryTile(
           file: file,
-          thumbnail: _thumbnails[file.path],
-          loading: !_thumbnails.containsKey(file.path),
+          thumbnail: thumbnail,
+          loading: !_thumbnailKnown(file),
           meta: widget.metaOf(file.path),
           edited: widget.isEdited(file.path),
           selected: _selection.contains(file.path),
           onTap: () => _clickSelect(file),
-          onDoubleTap: () => _open(file),
+          onDoubleTap: () => widget.onOpen(file),
           onSecondaryTapUp: (details) =>
               unawaited(_showContextMenu(details.globalPosition, file)),
         );
@@ -968,12 +765,12 @@ class _LibraryScreenState extends State<LibraryScreen> {
           dragAnchorStrategy: pointerDragAnchorStrategy,
           feedback: _DragFeedback(
             count: _targets(file).length,
-            thumbnail: _thumbnails[file.path],
+            thumbnail: thumbnail,
           ),
           childWhenDragging: Opacity(opacity: 0.4, child: tile),
           child: DragTarget<List<String>>(
             onWillAcceptWithDetails: (details) =>
-                _folder != null && !details.data.contains(file.path),
+                widget.folder != null && !details.data.contains(file.path),
             onAcceptWithDetails: (details) =>
                 unawaited(_newAlbumWith([...details.data, file.path])),
             builder: (context, candidates, _) => Stack(
@@ -1000,43 +797,6 @@ class _LibraryScreenState extends State<LibraryScreen> {
           ),
         );
       },
-    );
-  }
-}
-
-class _LibraryHeader extends StatelessWidget {
-  const _LibraryHeader({required this.l10n});
-
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.symmetric(horizontal: 16),
-      alignment: Alignment.centerLeft,
-      decoration: const BoxDecoration(
-        color: DarkmoonColors.panel,
-        border: Border(bottom: BorderSide(color: DarkmoonColors.divider)),
-      ),
-      child: Row(
-        children: [
-          const Icon(
-            CupertinoIcons.house_fill,
-            size: 15,
-            color: DarkmoonColors.textSecondary,
-          ),
-          const SizedBox(width: 8),
-          Text(
-            l10n.menuLibrary,
-            style: const TextStyle(
-              color: DarkmoonColors.textPrimary,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
     );
   }
 }

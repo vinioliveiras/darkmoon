@@ -38,6 +38,8 @@ class FolderSidebar extends StatelessWidget {
     this.onDropPaths,
     this.onDropFolder,
     this.refreshToken,
+    this.onCreateSubfolder,
+    this.onDeleteFolder,
   });
 
   final List<String> roots;
@@ -79,6 +81,13 @@ class FolderSidebar extends StatelessWidget {
   /// Changing this makes every expanded row re-list its subfolders —
   /// after a folder was created or moved.
   final Object? refreshToken;
+
+  /// A folder row's context menu (2026-09-11): "new album here" creates
+  /// a folder inside it, "delete album" sends it to the Recycle Bin.
+  /// Null: rows have no menu. The header's "+" also offers "new album"
+  /// inside the selected folder when this is set.
+  final ValueChanged<String>? onCreateSubfolder;
+  final ValueChanged<String>? onDeleteFolder;
   final ValueChanged<bool> onIncludeSubfoldersChanged;
 
   @override
@@ -96,6 +105,11 @@ class FolderSidebar extends StatelessWidget {
         itemBuilder: (context) => [
           PopupMenuItem(value: onOpenFile, child: Text(l10n.menuOpenFile)),
           PopupMenuItem(value: onOpenFolder, child: Text(l10n.menuOpenFolder)),
+          if (onCreateSubfolder != null && selectedPath != null)
+            PopupMenuItem(
+              value: () => onCreateSubfolder!(selectedPath!),
+              child: Text(l10n.sidebarNewAlbumAction),
+            ),
         ],
         onSelected: (callback) => callback(),
         child: const Padding(
@@ -110,7 +124,7 @@ class FolderSidebar extends StatelessWidget {
     );
     if (roots.isEmpty && recentFiles.isEmpty) {
       return Container(
-        width: 300,
+        width: double.infinity,
         color: DarkmoonColors.panel,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -148,7 +162,7 @@ class FolderSidebar extends StatelessWidget {
       );
     }
     return Container(
-      width: 220,
+      width: double.infinity,
       color: DarkmoonColors.panel,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -184,6 +198,8 @@ class FolderSidebar extends StatelessWidget {
                       onDropPaths: onDropPaths,
                       onDropFolder: onDropFolder,
                       refreshToken: refreshToken,
+                      onCreateSubfolder: onCreateSubfolder,
+                      onDeleteFolder: onDeleteFolder,
                     ),
                 ],
               ),
@@ -423,6 +439,8 @@ class _FolderNode extends StatefulWidget {
     this.onDropPaths,
     this.onDropFolder,
     this.refreshToken,
+    this.onCreateSubfolder,
+    this.onDeleteFolder,
   });
 
   final String path;
@@ -432,6 +450,8 @@ class _FolderNode extends StatefulWidget {
   final void Function(String folder, List<String> paths)? onDropPaths;
   final void Function(String folder, String targetParent)? onDropFolder;
   final Object? refreshToken;
+  final ValueChanged<String>? onCreateSubfolder;
+  final ValueChanged<String>? onDeleteFolder;
 
   /// Only set on root nodes (depth 0) — subfolders aren't independently
   /// removable, so their nested [_FolderNode]s are built without this.
@@ -514,6 +534,32 @@ class _FolderNodeState extends State<_FolderNode> {
       return !p.equals(data, widget.path) && !p.isWithin(data, widget.path);
     }
     return false;
+  }
+
+  Future<void> _showMenu(BuildContext context, Offset globalPosition) async {
+    final l10n = AppLocalizations.of(context)!;
+    final overlay =
+        Overlay.of(context).context.findRenderObject()! as RenderBox;
+    final action = await showMenu<VoidCallback>(
+      context: context,
+      position: RelativeRect.fromRect(
+        globalPosition & const Size(1, 1),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        if (widget.onCreateSubfolder != null)
+          PopupMenuItem(
+            value: () => widget.onCreateSubfolder!(widget.path),
+            child: Text(l10n.sidebarNewAlbumAction),
+          ),
+        if (widget.onDeleteFolder != null)
+          PopupMenuItem(
+            value: () => widget.onDeleteFolder!(widget.path),
+            child: Text(l10n.sidebarDeleteAlbumAction),
+          ),
+      ],
+    );
+    action?.call();
   }
 
   void _accept(Object data) {
@@ -636,11 +682,19 @@ class _FolderNodeState extends State<_FolderNode> {
     );
     // Distinct names on purpose: a builder that referred to the variable
     // it is assigned to would build itself, without end.
+    final hasMenu =
+        widget.onCreateSubfolder != null || widget.onDeleteFolder != null;
     final inner = Material(
       color: isSelected
           ? DarkmoonColors.accent.withValues(alpha: 0.10)
           : Colors.transparent,
-      child: InkWell(onTap: () => widget.onSelect(widget.path), child: row),
+      child: InkWell(
+        onTap: () => widget.onSelect(widget.path),
+        onSecondaryTapUp: hasMenu
+            ? (details) => unawaited(_showMenu(context, details.globalPosition))
+            : null,
+        child: row,
+      ),
     );
     Widget live = inner;
     if (widget.onDropPaths != null || widget.onDropFolder != null) {
@@ -717,6 +771,8 @@ class _FolderNodeState extends State<_FolderNode> {
                   onDropPaths: widget.onDropPaths,
                   onDropFolder: widget.onDropFolder,
                   refreshToken: widget.refreshToken,
+                  onCreateSubfolder: widget.onCreateSubfolder,
+                  onDeleteFolder: widget.onDeleteFolder,
                 ),
             ],
           ),

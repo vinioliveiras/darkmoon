@@ -21,6 +21,29 @@ class AppLocalizationsDe extends AppLocalizations {
   String get menuAbout => 'Über';
 
   @override
+  String get tabAlbums => 'Alben';
+
+  @override
+  String get tabEditor => 'Editor';
+
+  @override
+  String get sidebarNewAlbumAction => 'Neues Album hier…';
+
+  @override
+  String get sidebarDeleteAlbumAction => 'Album löschen…';
+
+  @override
+  String get libraryDeleteAlbumConfirmTitle => 'Album löschen?';
+
+  @override
+  String libraryDeleteAlbumConfirmMessage(String name) {
+    return 'Dadurch werden das Album \"$name\" und alles darin in den Papierkorb verschoben und die gespeicherten Bearbeitungen seiner Fotos gelöscht.';
+  }
+
+  @override
+  String get libraryBackFolderTooltip => 'Zurück zum vorherigen Album';
+
+  @override
   String get menuLibrary => 'Bibliothek';
 
   @override
@@ -767,6 +790,26 @@ class AppLocalizationsDe extends AppLocalizations {
   @override
   String get settingsXmpSidecarHint =>
       'Speichert die Bearbeitungen jedes Fotos in einer .xmp-Datei daneben, damit sie beim Verschieben mitkommen und von anderen Editoren gelesen werden können';
+
+  @override
+  String get settingsRemoveSidecarsButton =>
+      'Die von dieser App geschriebenen .xmp-Dateien entfernen';
+
+  @override
+  String get confirmRemoveSidecarsMessage =>
+      'Dadurch werden alle .xmp-Begleitdateien gelöscht, die darkmoon neben den Fotos in den Bibliotheksordnern geschrieben hat. Begleitdateien anderer Anwendungen bleiben erhalten. Deine Bearbeitungen bleiben im Katalog.';
+
+  @override
+  String removeSidecarsResultMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Begleitdateien entfernt',
+      one: '1 Begleitdatei entfernt',
+      zero: 'Keine darkmoon-Begleitdateien gefunden',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get settingsThumbnailThreadsLabel =>

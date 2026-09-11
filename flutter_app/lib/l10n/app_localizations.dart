@@ -124,6 +124,48 @@ abstract class AppLocalizations {
   /// **'About'**
   String get menuAbout;
 
+  /// No description provided for @tabAlbums.
+  ///
+  /// In en, this message translates to:
+  /// **'Albums'**
+  String get tabAlbums;
+
+  /// No description provided for @tabEditor.
+  ///
+  /// In en, this message translates to:
+  /// **'Editor'**
+  String get tabEditor;
+
+  /// No description provided for @sidebarNewAlbumAction.
+  ///
+  /// In en, this message translates to:
+  /// **'New album here…'**
+  String get sidebarNewAlbumAction;
+
+  /// No description provided for @sidebarDeleteAlbumAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete album…'**
+  String get sidebarDeleteAlbumAction;
+
+  /// No description provided for @libraryDeleteAlbumConfirmTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete album?'**
+  String get libraryDeleteAlbumConfirmTitle;
+
+  /// No description provided for @libraryDeleteAlbumConfirmMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This sends the album \"{name}\" and everything in it to the Recycle Bin, and deletes the saved edits of its photos.'**
+  String libraryDeleteAlbumConfirmMessage(String name);
+
+  /// No description provided for @libraryBackFolderTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Back to the previous album'**
+  String get libraryBackFolderTooltip;
+
   /// No description provided for @menuLibrary.
   ///
   /// In en, this message translates to:
@@ -1431,6 +1473,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Saves each photo\'s edits in a .xmp file next to it, so they follow the photo when it moves and can be read by other editors'**
   String get settingsXmpSidecarHint;
+
+  /// No description provided for @settingsRemoveSidecarsButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove the .xmp files this app wrote'**
+  String get settingsRemoveSidecarsButton;
+
+  /// No description provided for @confirmRemoveSidecarsMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'This deletes every .xmp sidecar darkmoon wrote beside the photos in your library folders. Sidecars written by other applications are kept. Your edits stay in the catalog.'**
+  String get confirmRemoveSidecarsMessage;
+
+  /// No description provided for @removeSidecarsResultMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =0{No darkmoon sidecars found} =1{Removed 1 sidecar} other{Removed {count} sidecars}}'**
+  String removeSidecarsResultMessage(int count);
 
   /// No description provided for @settingsThumbnailThreadsLabel.
   ///

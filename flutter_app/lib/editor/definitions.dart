@@ -1132,3 +1132,94 @@ class _ControlsPanelActions {
 
   final ValueChanged<LensCorrectionParams> onLensCorrectionChangeEnd;
 }
+
+/// The two tabs at the top of the left column (2026-09-11, user's
+/// design): Albums — the library grid on the right — and Editor. The
+/// column itself (album tree, recent files, presets) is the same under
+/// both; only the right-hand side changes.
+class _ModeTabs extends StatelessWidget {
+  const _ModeTabs({required this.libraryMode, required this.onChanged});
+
+  final bool libraryMode;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Container(
+      height: 40,
+      padding: const EdgeInsets.fromLTRB(10, 6, 10, 4),
+      color: DarkmoonColors.panel,
+      child: Row(
+        children: [
+          Expanded(
+            child: _ModeTab(
+              label: l10n.tabAlbums,
+              icon: CupertinoIcons.rectangle_grid_2x2,
+              selected: libraryMode,
+              onTap: () => onChanged(true),
+            ),
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: _ModeTab(
+              label: l10n.tabEditor,
+              icon: CupertinoIcons.slider_horizontal_3,
+              selected: !libraryMode,
+              onTap: () => onChanged(false),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ModeTab extends StatelessWidget {
+  const _ModeTab({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? DarkmoonColors.surfaceRaised : Colors.transparent,
+      borderRadius: BorderRadius.circular(6),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(6),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 13,
+              color: selected
+                  ? DarkmoonColors.textPrimary
+                  : DarkmoonColors.textMuted,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                color: selected
+                    ? DarkmoonColors.textPrimary
+                    : DarkmoonColors.textSecondary,
+                fontSize: 12,
+                fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}

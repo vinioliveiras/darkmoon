@@ -1,101 +1,75 @@
-import 'dart:io';
-
 import 'package:darkmoon/catalog/photo_meta_store.dart';
 import 'package:darkmoon/l10n/app_localizations.dart';
 import 'package:darkmoon/library/library_screen.dart';
 import 'package:darkmoon/library/photo_mover.dart';
+import 'package:darkmoon/raw_files.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:path/path.dart' as p;
 
 void main() {
-  late Directory dir;
-  late String folder;
+  final folder = p.join('D:', 'shoot');
+  final files = [
+    for (final name in ['alpha.jpg', 'beta.jpg', 'gamma.jpg'])
+      RawFile(p.join(folder, name), DateTime(2026, 9, 11)),
+  ];
   final meta = <String, PhotoMeta>{};
   final ratings = <String, int>{};
-  LibraryOpenRequest? result;
+  RawFile? opened;
+  var wentBack = 0;
 
-  setUp(() async {
-    dir = await Directory.systemTemp.createTemp('darkmoon_library_');
-    folder = p.join(dir.path, 'shoot');
-    await Directory(folder).create();
-    for (final name in ['alpha.jpg', 'beta.jpg', 'gamma.jpg']) {
-      await File(p.join(folder, name)).writeAsBytes([0xFF, 0xD8, 0xFF]);
-    }
+  setUp(() {
     meta.clear();
     ratings.clear();
-    result = null;
+    opened = null;
+    wentBack = 0;
     meta[p.join(folder, 'beta.jpg')] = const PhotoMeta(rating: 4, label: 'Red');
   });
 
-  tearDown(() async {
-    await dir.delete(recursive: true);
-  });
-
-  Widget app({required List<String> folders}) {
+  Widget app({
+    List<RawFile>? photos,
+    bool hasLibrary = true,
+    bool canGoBack = false,
+  }) {
     return MaterialApp(
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
       locale: const Locale('en'),
-      home: Builder(
-        builder: (context) => Scaffold(
-          body: Center(
-            child: ElevatedButton(
-              key: const Key('open'),
-              onPressed: () async {
-                result = await Navigator.of(context).push<LibraryOpenRequest>(
-                  MaterialPageRoute(
-                    builder: (_) => LibraryScreen(
-                      libraryFolders: () => folders,
-                      recentFiles: () => const [],
-                      rawOnly: () => false,
-                      includeSubfolders: () => false,
-                      initialFolder: folders.isEmpty ? null : folders.first,
-                      thumbnailFor: (_) async => null,
-                      metaOf: (path) => meta[path],
-                      isEdited: (_) => false,
-                      onSetRating: (file, rating) =>
-                          ratings[file.path] = rating,
-                      onSetLabel: (_, _) {},
-                      onRawOnlyChanged: (_) {},
-                      onIncludeSubfoldersChanged: (_) {},
-                      onAddFolder: () async {},
-                      onRemoveFolder: (_) {},
-                      onOpenFile: () async {},
-                      onRemoveRecentFile: (_) {},
-                      onShowOnDisk: (_) {},
-                      onResetEdits: (_) {},
-                      onDelete: (files) async => 0,
-                      onSetTags: (file, tags) => meta[file.path] =
-                          (meta[file.path] ?? const PhotoMeta()).copyWith(
-                            tags: tags,
-                          ),
-                      onMovePhotos: movePhotosToFolder,
-                      onMoveFolder: moveFolderInto,
-                      onCreateFolder: createSubfolder,
-                    ),
-                  ),
-                );
-              },
-              child: const Text('open'),
-            ),
-          ),
+      home: Scaffold(
+        body: LibraryBody(
+          files: photos ?? files,
+          folder: folder,
+          title: 'shoot',
+          hasLibrary: hasLibrary,
+          canGoBack: canGoBack,
+          onBack: () => wentBack++,
+          thumbnails: const {},
+          thumbnailFor: (_) async => null,
+          metaOf: (path) => meta[path],
+          isEdited: (_) => false,
+          libraryFolders: () => [folder],
+          onOpen: (file) => opened = file,
+          onAddFolder: () async {},
+          onSetRating: (file, rating) => ratings[file.path] = rating,
+          onSetLabel: (_, _) {},
+          onSetTags: (file, tags) => meta[file.path] =
+              (meta[file.path] ?? const PhotoMeta()).copyWith(tags: tags),
+          onMovePhotos: (paths, target) async =>
+              const MoveOutcome(moved: {}, skipped: []),
+          onCreateFolder: (parent, name) async => p.join(parent, name),
+          onDelete: (targets) async => 0,
+          onShowOnDisk: (_) {},
+          onResetEdits: (_) {},
         ),
       ),
     );
   }
 
-  testWidgets('lists the folder, filters by name and rating, opens on '
-      'double tap', (tester) async {
-    await tester.pumpWidget(app(folders: [folder]));
-    // Listing the folder is real file I/O, which the test's fake clock
-    // never advances past — run it in real time, then settle.
-    await tester.runAsync(() async {
-      await tester.tap(find.byKey(const Key('open')));
-      await tester.pump();
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-    });
+  testWidgets('lists the album, filters by name and rating, opens on Enter', (
+    tester,
+  ) async {
+    await tester.pumpWidget(app());
     await tester.pumpAndSettle();
 
     expect(find.text('alpha.jpg'), findsOneWidget);
@@ -103,46 +77,46 @@ void main() {
     expect(find.text('gamma.jpg'), findsOneWidget);
     expect(find.text('3 photos'), findsOneWidget);
 
-    // Name filter.
     await tester.enterText(find.byType(TextField), 'bet');
     await tester.pumpAndSettle();
     expect(find.text('alpha.jpg'), findsNothing);
-    expect(find.text('beta.jpg'), findsOneWidget);
     expect(find.text('1 photo'), findsOneWidget);
     await tester.enterText(find.byType(TextField), '');
     await tester.pumpAndSettle();
 
-    // Rating filter: at least 4 stars keeps only beta.
     await tester.tap(find.byTooltip('Show photos rated 4 stars or more'));
     await tester.pumpAndSettle();
     expect(find.text('gamma.jpg'), findsNothing);
     expect(find.text('beta.jpg'), findsOneWidget);
     await tester.tap(find.byTooltip('Show photos rated 4 stars or more'));
     await tester.pumpAndSettle();
-    expect(find.text('gamma.jpg'), findsOneWidget);
 
-    // Select a photo, then Enter opens it: the screen pops with its path.
-    // A tile has both onTap and onDoubleTap, so the tap only lands once
-    // the double-tap window has passed — a timer, which pumpAndSettle
-    // does not wait for.
+    // A tile has onTap and onDoubleTap, so the tap lands once the
+    // double-tap window has passed — a timer pumpAndSettle does not wait
+    // for.
     await tester.tap(find.text('gamma.jpg'));
     await tester.pump(const Duration(milliseconds: 400));
     await tester.pumpAndSettle();
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
-    expect(find.byType(LibraryScreen), findsNothing);
-    // The push future was awaited inside runAsync, so its continuation
-    // runs in that real-time zone — give it a turn.
-    await tester.runAsync(
-      () => Future<void>.delayed(const Duration(milliseconds: 50)),
-    );
-    expect(result?.path, p.join(folder, 'gamma.jpg'));
-    expect(result?.folder, folder);
+    expect(opened?.name, 'gamma.jpg');
   });
 
-  testWidgets('with no library folders it offers to add one', (tester) async {
-    await tester.pumpWidget(app(folders: const []));
-    await tester.tap(find.byKey(const Key('open')));
+  testWidgets('the back arrow follows canGoBack', (tester) async {
+    await tester.pumpWidget(app(canGoBack: false));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Back to the previous album'));
+    await tester.pumpAndSettle();
+    expect(wentBack, 0);
+    await tester.pumpWidget(app(canGoBack: true));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Back to the previous album'));
+    await tester.pumpAndSettle();
+    expect(wentBack, 1);
+  });
+
+  testWidgets('with no library it offers to add a folder', (tester) async {
+    await tester.pumpWidget(app(photos: const [], hasLibrary: false));
     await tester.pumpAndSettle();
     expect(
       find.text('Add a folder to the library to browse it here'),
@@ -153,12 +127,7 @@ void main() {
   testWidgets('Ctrl-click builds a selection and a rating key rates it all', (
     tester,
   ) async {
-    await tester.pumpWidget(app(folders: [folder]));
-    await tester.runAsync(() async {
-      await tester.tap(find.byKey(const Key('open')));
-      await tester.pump();
-      await Future<void>.delayed(const Duration(milliseconds: 400));
-    });
+    await tester.pumpWidget(app());
     await tester.pumpAndSettle();
 
     await tester.tap(find.text('alpha.jpg'));

@@ -21,6 +21,29 @@ class AppLocalizationsEn extends AppLocalizations {
   String get menuAbout => 'About';
 
   @override
+  String get tabAlbums => 'Albums';
+
+  @override
+  String get tabEditor => 'Editor';
+
+  @override
+  String get sidebarNewAlbumAction => 'New album here…';
+
+  @override
+  String get sidebarDeleteAlbumAction => 'Delete album…';
+
+  @override
+  String get libraryDeleteAlbumConfirmTitle => 'Delete album?';
+
+  @override
+  String libraryDeleteAlbumConfirmMessage(String name) {
+    return 'This sends the album \"$name\" and everything in it to the Recycle Bin, and deletes the saved edits of its photos.';
+  }
+
+  @override
+  String get libraryBackFolderTooltip => 'Back to the previous album';
+
+  @override
   String get menuLibrary => 'Library';
 
   @override
@@ -757,6 +780,26 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get settingsXmpSidecarHint =>
       'Saves each photo\'s edits in a .xmp file next to it, so they follow the photo when it moves and can be read by other editors';
+
+  @override
+  String get settingsRemoveSidecarsButton =>
+      'Remove the .xmp files this app wrote';
+
+  @override
+  String get confirmRemoveSidecarsMessage =>
+      'This deletes every .xmp sidecar darkmoon wrote beside the photos in your library folders. Sidecars written by other applications are kept. Your edits stay in the catalog.';
+
+  @override
+  String removeSidecarsResultMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Removed $count sidecars',
+      one: 'Removed 1 sidecar',
+      zero: 'No darkmoon sidecars found',
+    );
+    return '$_temp0';
+  }
 
   @override
   String get settingsThumbnailThreadsLabel => 'Thumbnail loading threads';

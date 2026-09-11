@@ -19,7 +19,7 @@ import 'catalog/ai_mask_cache_dir.dart';
 import 'catalog/native_source_cache.dart';
 import 'catalog/photo_meta_store.dart';
 import 'catalog/preview_cache_dir.dart';
-import 'catalog/sidecar_xmp.dart' show readSidecar;
+import 'catalog/sidecar_xmp.dart' show readSidecar, removeDarkmoonSidecars;
 import 'catalog/ai_enhance_cache.dart';
 import 'catalog/ai_enhance_cache_dir.dart';
 import 'catalog/cloud_denoise_cache.dart';
@@ -1383,6 +1383,7 @@ class _EditorScreenState extends State<EditorScreen>
         },
         onClearThumbnails: () => unawaited(_clearThumbnailCache()),
         onClearCatalog: () => unawaited(_clearCatalogData()),
+        onRemoveSidecars: _removeSidecars,
         onPruneMissing: () => unawaited(_pruneMissingCatalogEntries()),
       ),
     );
@@ -1632,55 +1633,201 @@ class _EditorScreenState extends State<EditorScreen>
     LogicalKeyboardKey.digit9,
   ];
 
-  /// The Home button: the library screen over the editor. Comes back with
-  /// the photo to open, if the user chose one.
-  Future<void> _openLibrary() async {
-    if (_openingToolbarDialog) {
+  /// The Albums tab (2026-09-11): the library grid takes the right-hand
+  /// side in place of the preview, controls, toolbar and filmstrip; the
+  /// left column stays. Opening a photo from the grid switches back.
+  bool _libraryMode = false;
+
+  /// Albums shown before the current one, most recent last — the
+  /// library's back arrow. Capped so a long browsing session does not
+  /// grow it without bound.
+  final List<String> _folderHistory = [];
+  bool _restoringFolder = false;
+
+  void _setLibraryMode(bool value) {
+    if (_libraryMode == value) {
       return;
     }
-    final request = await Navigator.of(context).push<LibraryOpenRequest>(
-      MaterialPageRoute(
-        builder: (_) => LibraryScreen(
-          libraryFolders: () => _settings.libraryFolders,
-          recentFiles: () => _settings.recentFiles,
-          rawOnly: () => _settings.rawOnly,
-          includeSubfolders: () => _settings.includeSubfolders,
-          initialFolder: _currentFolder,
-          thumbnailFor: _libraryThumbnail,
-          metaOf: (path) => _store.meta[path],
-          isEdited: _isPhotoEdited,
-          onSetRating: _setRating,
-          onSetLabel: _setLabel,
-          onRawOnlyChanged: _setRawOnly,
-          onIncludeSubfoldersChanged: _setIncludeSubfolders,
-          onAddFolder: _openFolder,
-          onRemoveFolder: _removeLibraryFolder,
-          onOpenFile: _openFile,
-          onRemoveRecentFile: _removeRecentFile,
-          onShowOnDisk: (file) => unawaited(_revealInExplorer(file)),
-          onResetEdits: (file) => unawaited(_resetAllEditsFor(file)),
-          onDelete: _deleteFiles,
-          onSetTags: _setTags,
-          onMovePhotos: _movePhotos,
-          onMoveFolder: _moveFolder,
-          onCreateFolder: createSubfolder,
+    if (value) {
+      unawaited(_flushCurrentEdits());
+    }
+    setState(() => _libraryMode = value);
+  }
+
+  /// The library's back arrow: the album shown before this one.
+  Future<void> _goBackFolder() async {
+    if (_folderHistory.isEmpty) {
+      return;
+    }
+    final previous = _folderHistory.removeLast();
+    _restoringFolder = true;
+    try {
+      await _loadFolder(previous);
+    } finally {
+      _restoringFolder = false;
+    }
+  }
+
+  Widget _buildLibraryBody(RawFile? selected) {
+    final l10n = AppLocalizations.of(context)!;
+    final folder = _currentFolder;
+    final single = _currentSingleFile;
+    return LibraryBody(
+      files: _files,
+      folder: folder,
+      title: folder != null
+          ? p.basename(folder)
+          : single != null
+          ? p.basename(single)
+          : l10n.tabAlbums,
+      hasLibrary: _settings.libraryFolders.isNotEmpty,
+      canGoBack: _folderHistory.isNotEmpty,
+      onBack: () => unawaited(_goBackFolder()),
+      thumbnails: _thumbnails,
+      thumbnailFor: _libraryThumbnail,
+      metaOf: (path) => _store.meta[path],
+      isEdited: _isPhotoEdited,
+      libraryFolders: () => _settings.libraryFolders,
+      onOpen: (file) {
+        final index = _files.indexWhere((f) => f.path == file.path);
+        if (index >= 0 && index != _selectedIndex) {
+          _selectIndex(index);
+        }
+        _setLibraryMode(false);
+      },
+      onAddFolder: _openFolder,
+      onSetRating: _setRating,
+      onSetLabel: _setLabel,
+      onSetTags: _setTags,
+      onMovePhotos: _movePhotos,
+      onCreateFolder: (parent, name) async {
+        final created = await createSubfolder(parent, name);
+        if (created != null && mounted) {
+          setState(() => _folderTreeToken++);
+        }
+        return created;
+      },
+      onDelete: _deleteFiles,
+      onShowOnDisk: (file) => unawaited(_revealInExplorer(file)),
+      onResetEdits: (file) => unawaited(_resetAllEditsFor(file)),
+    );
+  }
+
+  /// "New album here…" on a folder in the tree: a folder inside it.
+  Future<void> _createAlbumIn(String parent) async {
+    final l10n = AppLocalizations.of(context)!;
+    final name = await showTextPromptDialog(
+      context,
+      title: l10n.libraryNewAlbumTitle,
+    );
+    if (name == null || name.trim().isEmpty || !mounted) {
+      return;
+    }
+    final created = await createSubfolder(parent, name);
+    if (!mounted) {
+      return;
+    }
+    if (created == null) {
+      _notify(detail: l10n.libraryFolderExists);
+      return;
+    }
+    setState(() => _folderTreeToken++);
+  }
+
+  /// "Delete album…" on a folder in the tree: the folder and everything
+  /// in it go to the Recycle Bin after a confirmation; the catalog drops
+  /// what was under it, and the view moves to its parent if it was open.
+  Future<void> _deleteFolder(String folder) async {
+    final l10n = AppLocalizations.of(context)!;
+    final confirmed = await showAnimatedDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: DarkmoonColors.dialogBackground,
+        shape: dialogShape,
+        title: Text(l10n.libraryDeleteAlbumConfirmTitle),
+        content: Text(
+          l10n.libraryDeleteAlbumConfirmMessage(p.basename(folder)),
         ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text(l10n.cancelButton),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text(l10n.filmstripDeleteAction),
+          ),
+        ],
       ),
     );
-    if (!mounted || request == null) {
+    if (confirmed != true || !mounted) {
       return;
     }
-    if (request.folder case final folder?) {
-      if (folder == _currentFolder) {
-        final index = _files.indexWhere((f) => f.path == request.path);
-        if (index >= 0) {
-          _selectIndex(index);
-          return;
-        }
+    await _flushCurrentEdits();
+    try {
+      await _moveDirectoryToRecycleBin(folder);
+    } catch (e) {
+      if (mounted) {
+        _notify(
+          detail: l10n.filmstripDeleteFailedMessage(p.basename(folder), '$e'),
+        );
       }
-      await _loadFolder(folder, selectPath: request.path);
-    } else {
-      await _selectRecentFile(request.path);
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    bool under(String path) =>
+        p.equals(path, folder) || p.isWithin(folder, path);
+    _store.removeWhere(under);
+    unawaited(_store.save());
+    final next = _settings.copyWith(
+      libraryFolders: [
+        for (final root in _settings.libraryFolders)
+          if (!under(root)) root,
+      ],
+      recentFiles: [
+        for (final path in _settings.recentFiles)
+          if (!under(path)) path,
+      ],
+    );
+    setState(() {
+      _settings = next;
+      _folderTreeToken++;
+      _folderHistory.removeWhere(under);
+    });
+    unawaited(saveSettings(next));
+    final current = _currentFolder;
+    if (current != null && under(current)) {
+      final parent = p.dirname(folder);
+      final parentInLibrary = next.libraryFolders.any(
+        (root) => p.equals(root, parent) || p.isWithin(root, parent),
+      );
+      if (parentInLibrary) {
+        await _loadFolder(parent);
+      } else {
+        setState(() {
+          _files = [];
+          _selectedIndex = null;
+          _currentFolder = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _moveDirectoryToRecycleBin(String path) async {
+    final escaped = path.replaceAll("'", "''");
+    final result = await Process.run('powershell.exe', [
+      '-NoProfile',
+      '-Command',
+      "Add-Type -AssemblyName Microsoft.VisualBasic; "
+          "[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteDirectory("
+          "'$escaped', "
+          "'OnlyErrorDialogs', "
+          "'SendToRecycleBin')",
+    ]);
+    if (result.exitCode != 0) {
+      throw Exception(result.stderr.toString().trim());
     }
   }
 
@@ -1738,6 +1885,25 @@ class _EditorScreenState extends State<EditorScreen>
     String follow(String path) => renames[path] ?? path;
     _store.rekey(renames);
     unawaited(_store.save());
+    // Thumbnails follow too — in memory and in the on-disk cache, which
+    // is keyed by path — so the reload below finds them under the new
+    // paths instead of decoding every moved photo again (user's report,
+    // 2026-09-11).
+    for (final entry in renames.entries) {
+      final bytes = _thumbnails.remove(entry.key);
+      if (bytes != null) {
+        _thumbnails[entry.value] = bytes;
+        unawaited(_thumbnailCache?.store(entry.value, bytes));
+      } else {
+        unawaited(
+          _thumbnailCache?.lookup(entry.key).then((cached) {
+            if (cached != null) {
+              unawaited(_thumbnailCache?.store(entry.value, cached));
+            }
+          }),
+        );
+      }
+    }
     final next = _settings.copyWith(
       recentFiles: [for (final path in _settings.recentFiles) follow(path)],
       libraryFolders: [
@@ -1770,6 +1936,19 @@ class _EditorScreenState extends State<EditorScreen>
       if (renames.containsKey(single)) {
         await _loadSingleFile(renames[single]!);
       }
+    }
+  }
+
+  /// Settings → Data: deletes the `.xmp` files this app wrote under the
+  /// library's folders, and says how many.
+  Future<void> _removeSidecars() async {
+    final removed = await removeDarkmoonSidecars(_settings.libraryFolders);
+    if (mounted) {
+      _notify(
+        detail: AppLocalizations.of(
+          context,
+        )!.removeSidecarsResultMessage(removed),
+      );
     }
   }
 
@@ -2347,6 +2526,13 @@ class _EditorScreenState extends State<EditorScreen>
     unawaited(_flushCurrentEdits());
     final generation = ++_folderGeneration;
     _beginLoadingFiles();
+    final previous = _currentFolder;
+    if (previous != null && previous != folder && !_restoringFolder) {
+      _folderHistory.add(previous);
+      if (_folderHistory.length > 50) {
+        _folderHistory.removeAt(0);
+      }
+    }
     _currentFolder = folder;
     _currentSingleFile = null;
     if (_settings.lastActiveFolder != folder) {
@@ -4618,6 +4804,10 @@ class _EditorScreenState extends State<EditorScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
+                                _ModeTabs(
+                                  libraryMode: _libraryMode,
+                                  onChanged: _setLibraryMode,
+                                ),
                                 Expanded(
                                   child: FolderSidebar(
                                     roots: _settings.libraryFolders,
@@ -4658,6 +4848,10 @@ class _EditorScreenState extends State<EditorScreen>
                                     onDropFolder: (folder, target) =>
                                         unawaited(_moveFolder(folder, target)),
                                     refreshToken: _folderTreeToken,
+                                    onCreateSubfolder: (folder) =>
+                                        unawaited(_createAlbumIn(folder)),
+                                    onDeleteFolder: (folder) =>
+                                        unawaited(_deleteFolder(folder)),
                                   ),
                                 ),
                                 Container(
@@ -4700,234 +4894,245 @@ class _EditorScreenState extends State<EditorScreen>
                               ],
                             ),
                           ),
-                          Expanded(
-                            child: Stack(
-                              children: [
-                                _ImageArea(
-                                  selected: selected,
-                                  fileMissing:
+                          if (_libraryMode)
+                            Expanded(child: _buildLibraryBody(selected))
+                          else
+                            Expanded(
+                              child: Stack(
+                                children: [
+                                  _ImageArea(
+                                    selected: selected,
+                                    fileMissing:
+                                        selected != null &&
+                                        _missingFiles.contains(selected.path),
+                                    // The camera's embedded preview once it
+                                    // has been read, the 200px filmstrip
+                                    // thumbnail until then — the second is
+                                    // instant because the strip already had
+                                    // it.
+                                    thumbnail: standIn,
+                                    thumbnailIsSmall: standInIsSmall,
+                                    // Uncapped: full quality, by request.
+                                    thumbnailDecodeWidth: null,
+                                    preview: selected == null
+                                        ? null
+                                        : _displayPreview(selected.path),
+                                    previewFadeGeneration:
+                                        _previewFadeGeneration,
+                                    neutralPreview: selected == null
+                                        ? null
+                                        : _neutralPreviews[selected.path],
+                                    beforeAfterMode: _beforeAfterMode,
+                                    viewController: _viewController,
+                                    viewportKey: _viewportKey,
+                                    zoomScale: _zoomScale,
+                                    onPointerSignal: _handlePointerSignal,
+                                    onResetZoom: _resetZoomAnimated,
+                                    onDoubleTapZoom: _onDoubleTapZoom,
+                                    editingMask:
+                                        (_beforeAfterMode || selected == null)
+                                        ? null
+                                        : _activeMask,
+                                    editingSource: selected == null
+                                        ? null
+                                        : _editSources[selected.path]?.preview,
+                                    onMaskGeometryChanged:
+                                        _onMaskGeometryChanged,
+                                    onMaskGeometryChangeEnd:
+                                        _onMaskGeometryChangeEnd,
+                                    brushRadius: _brushRadius,
+                                    brushHardness: _brushHardness,
+                                    brushErase: _brushErase,
+                                    brushFlow: _brushFlow,
+                                    onSampleColor: _onSampleMaskColor,
+                                    onSampleLuminance: _onSampleMaskLuminance,
+                                    wbEyedropperActive:
+                                        (_wbEyedropperActive ||
+                                            _profileHueEyedropperActive) &&
+                                        !_beforeAfterMode,
+                                    onSampleWhiteBalance: _onEyedropperSample,
+                                    maskOverlayVisible:
+                                        _maskOverlayVisible &&
+                                        !_isAdjustingMaskValue,
+                                    maskOverlayOpacity: _maskOverlayOpacity,
+                                    aiMaskMaps: _aiMaskMaps,
+                                    cropOverlayActive:
+                                        !_beforeAfterMode && _cropOverlayActive,
+                                    cropTransform: _cropTransform,
+                                    cropAspectRatio: _cropAspectRatio,
+                                    onCropTransformChanged:
+                                        _onCropTransformChanged,
+                                    onCropTransformChangeEnd:
+                                        _onCropTransformChangeEnd,
+                                    straighteningActive: _straighteningActive,
+                                    guidedModeActive: _guidedModeActive,
+                                    onSecondaryTapUp: _showImageContextMenu,
+                                  ),
+                                  // Only over the small stand-in. Once the
+                                  // camera's own image is up, the photo on
+                                  // screen is a real photograph at a real
+                                  // resolution, and a spinner on top of it
+                                  // says "wait" about something the user can
+                                  // already look at — the status line
+                                  // (_overlayInfo) carries the decode's
+                                  // progress instead.
+                                  if (_isDecodingPhoto &&
                                       selected != null &&
-                                      _missingFiles.contains(selected.path),
-                                  // The camera's embedded preview once it
-                                  // has been read, the 200px filmstrip
-                                  // thumbnail until then — the second is
-                                  // instant because the strip already had
-                                  // it.
-                                  thumbnail: standIn,
-                                  thumbnailIsSmall: standInIsSmall,
-                                  // Uncapped: full quality, by request.
-                                  thumbnailDecodeWidth: null,
-                                  preview: selected == null
-                                      ? null
-                                      : _displayPreview(selected.path),
-                                  previewFadeGeneration: _previewFadeGeneration,
-                                  neutralPreview: selected == null
-                                      ? null
-                                      : _neutralPreviews[selected.path],
-                                  beforeAfterMode: _beforeAfterMode,
-                                  viewController: _viewController,
-                                  viewportKey: _viewportKey,
-                                  zoomScale: _zoomScale,
-                                  onPointerSignal: _handlePointerSignal,
-                                  onResetZoom: _resetZoomAnimated,
-                                  onDoubleTapZoom: _onDoubleTapZoom,
-                                  editingMask:
-                                      (_beforeAfterMode || selected == null)
-                                      ? null
-                                      : _activeMask,
-                                  editingSource: selected == null
-                                      ? null
-                                      : _editSources[selected.path]?.preview,
-                                  onMaskGeometryChanged: _onMaskGeometryChanged,
-                                  onMaskGeometryChangeEnd:
-                                      _onMaskGeometryChangeEnd,
-                                  brushRadius: _brushRadius,
-                                  brushHardness: _brushHardness,
-                                  brushErase: _brushErase,
-                                  brushFlow: _brushFlow,
-                                  onSampleColor: _onSampleMaskColor,
-                                  onSampleLuminance: _onSampleMaskLuminance,
-                                  wbEyedropperActive:
-                                      (_wbEyedropperActive ||
-                                          _profileHueEyedropperActive) &&
-                                      !_beforeAfterMode,
-                                  onSampleWhiteBalance: _onEyedropperSample,
-                                  maskOverlayVisible:
-                                      _maskOverlayVisible &&
-                                      !_isAdjustingMaskValue,
-                                  maskOverlayOpacity: _maskOverlayOpacity,
-                                  aiMaskMaps: _aiMaskMaps,
-                                  cropOverlayActive:
-                                      !_beforeAfterMode && _cropOverlayActive,
-                                  cropTransform: _cropTransform,
-                                  cropAspectRatio: _cropAspectRatio,
-                                  onCropTransformChanged:
-                                      _onCropTransformChanged,
-                                  onCropTransformChangeEnd:
-                                      _onCropTransformChangeEnd,
-                                  straighteningActive: _straighteningActive,
-                                  guidedModeActive: _guidedModeActive,
-                                  onSecondaryTapUp: _showImageContextMenu,
-                                ),
-                                // Only over the small stand-in. Once the
-                                // camera's own image is up, the photo on
-                                // screen is a real photograph at a real
-                                // resolution, and a spinner on top of it
-                                // says "wait" about something the user can
-                                // already look at — the status line
-                                // (_overlayInfo) carries the decode's
-                                // progress instead.
-                                if (_isDecodingPhoto &&
-                                    selected != null &&
-                                    standInIsSmall)
-                                  const Center(
-                                    child: SizedBox(
-                                      width: 32,
-                                      height: 32,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2.5,
+                                      standInIsSmall)
+                                    const Center(
+                                      child: SizedBox(
+                                        width: 32,
+                                        height: 32,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2.5,
+                                        ),
                                       ),
                                     ),
-                                  ),
-                                // Every loading operation surfaces here now
-                                // (see _loadingOverlayHidden) — a compact
-                                // status line in the preview's own bottom
-                                // breathing room
-                                // (_ImageArea._verticalBreathingRoom) rather
-                                // than a modal covering the editor.
-                                if (_loadingOverlayHidden)
-                                  Builder(
-                                    builder: (context) {
-                                      final info = _overlayInfo(
-                                        context,
-                                        selected,
-                                      );
-                                      if (info == null) {
-                                        return const SizedBox.shrink();
-                                      }
-                                      return Positioned(
-                                        left: 16,
-                                        right: 16,
-                                        bottom: 12,
-                                        child: Center(
-                                          child: _HiddenLoadingIndicator(
-                                            info: info,
-                                            onCancel: _cancelLoading,
+                                  // Every loading operation surfaces here now
+                                  // (see _loadingOverlayHidden) — a compact
+                                  // status line in the preview's own bottom
+                                  // breathing room
+                                  // (_ImageArea._verticalBreathingRoom) rather
+                                  // than a modal covering the editor.
+                                  if (_loadingOverlayHidden)
+                                    Builder(
+                                      builder: (context) {
+                                        final info = _overlayInfo(
+                                          context,
+                                          selected,
+                                        );
+                                        if (info == null) {
+                                          return const SizedBox.shrink();
+                                        }
+                                        return Positioned(
+                                          left: 16,
+                                          right: 16,
+                                          bottom: 12,
+                                          child: Center(
+                                            child: _HiddenLoadingIndicator(
+                                              info: info,
+                                              onCancel: _cancelLoading,
+                                            ),
                                           ),
-                                        ),
-                                      );
-                                    },
-                                  ),
-                              ],
+                                        );
+                                      },
+                                    ),
+                                ],
+                              ),
                             ),
-                          ),
-                          _ControlsPanel(
-                            values: _activeValues,
-                            actions: _panelActions,
-                            histogram: selected == null
-                                ? null
-                                : _histograms[selected.path],
-                            metadata: selected == null
-                                ? null
-                                : _metadata[selected.path],
-                            colorProfileMode: colorProfileModeOf(_paramValues),
-                            colorProfileChoice: _colorProfileChoice,
-                            userColorProfiles: _userColorProfiles,
-                            customProfileMissing: _customProfileMissing,
-                            levelBusy: _levelBusy,
-                            uprightBusy: _uprightBusy,
-                            tabbedLayout: _settings.tabbedControlsPanel,
-                            tabIcons: _settings.tabbedControlsPanelIcons,
-                            selectedProfileIsUsers:
-                                _selectedUserColorProfile != null,
-                            wbEyedropperActive: _wbEyedropperActive,
-                            onExport: selected == null ? null : _exportCurrent,
-                            exporting: _exporting,
-                            enabled: selected != null,
-                            curves: _activeCurves,
-                            masks: _currentMasks,
-                            activeMaskId: _activeMaskId,
-                            maskOverlayVisible: _maskOverlayVisible,
-                            maskOverlayOpacity: _maskOverlayOpacity,
-                            brushRadius: _brushRadius,
-                            brushHardness: _brushHardness,
-                            brushErase: _brushErase,
-                            brushFlow: _brushFlow,
-                            aiMasksResolving: _aiMasksResolving,
-                            aiMaskFailures: _aiMaskFailures,
-                            cropOverlayActive: _cropOverlayActive,
-                            cropTransform: _cropTransform,
-                            cropAspectRatio: _cropAspectRatio,
-                            guidedModeActive: _guidedModeActive,
-                            lensCorrection: _lensCorrection,
-                            lensProfiles: _lensProfiles,
-                            resolvedLensProfile: selected == null
-                                ? null
-                                : _resolvedLensProfileFor(selected.path),
-                          ),
+                          if (!_libraryMode)
+                            _ControlsPanel(
+                              values: _activeValues,
+                              actions: _panelActions,
+                              histogram: selected == null
+                                  ? null
+                                  : _histograms[selected.path],
+                              metadata: selected == null
+                                  ? null
+                                  : _metadata[selected.path],
+                              colorProfileMode: colorProfileModeOf(
+                                _paramValues,
+                              ),
+                              colorProfileChoice: _colorProfileChoice,
+                              userColorProfiles: _userColorProfiles,
+                              customProfileMissing: _customProfileMissing,
+                              levelBusy: _levelBusy,
+                              uprightBusy: _uprightBusy,
+                              tabbedLayout: _settings.tabbedControlsPanel,
+                              tabIcons: _settings.tabbedControlsPanelIcons,
+                              selectedProfileIsUsers:
+                                  _selectedUserColorProfile != null,
+                              wbEyedropperActive: _wbEyedropperActive,
+                              onExport: selected == null
+                                  ? null
+                                  : _exportCurrent,
+                              exporting: _exporting,
+                              enabled: selected != null,
+                              curves: _activeCurves,
+                              masks: _currentMasks,
+                              activeMaskId: _activeMaskId,
+                              maskOverlayVisible: _maskOverlayVisible,
+                              maskOverlayOpacity: _maskOverlayOpacity,
+                              brushRadius: _brushRadius,
+                              brushHardness: _brushHardness,
+                              brushErase: _brushErase,
+                              brushFlow: _brushFlow,
+                              aiMasksResolving: _aiMasksResolving,
+                              aiMaskFailures: _aiMaskFailures,
+                              cropOverlayActive: _cropOverlayActive,
+                              cropTransform: _cropTransform,
+                              cropAspectRatio: _cropAspectRatio,
+                              guidedModeActive: _guidedModeActive,
+                              lensCorrection: _lensCorrection,
+                              lensProfiles: _lensProfiles,
+                              resolvedLensProfile: selected == null
+                                  ? null
+                                  : _resolvedLensProfileFor(selected.path),
+                            ),
                         ],
                       ),
                     ),
-                    _ViewerToolbar(
-                      onOpenLibrary: _openLibrary,
-                      onOpenSettings: _openSettings,
-                      onOpenAbout: _openAbout,
-                      zoomLabel: _zoomScale == 1.0
-                          ? AppLocalizations.of(context)!.zoomFit
-                          : '${(_zoomScale * 100).round()}%',
-                      beforeAfterMode: _beforeAfterMode,
-                      beforeAfterEnabled: selected != null,
-                      onZoomIn: _zoomIn,
-                      onZoomOut: _zoomOut,
-                      onZoomFit: _resetZoomAnimated,
-                      onToggleBeforeAfter: selected == null
-                          ? null
-                          : _toggleBeforeAfter,
-                      canUndo: _history.canUndo,
-                      canRedo: _history.canRedo,
-                      onUndo: _undo,
-                      onRedo: _redo,
-                      aiDenoiseActive:
-                          AiDenoiseParams.fromValues(_paramValues).level !=
-                              null ||
-                          (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0 ||
-                          (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0 ||
-                          (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0 ||
-                          (_paramValues[_restoreDetailKey] ?? 0.0) > 0 ||
-                          (_paramValues[_cloudDenoiseProviderKey] ?? 0.0) > 0,
-                      onOpenAiDenoise: selected == null
-                          ? null
-                          : _openAiDenoiseDialog,
-                      colorizeActive: (_paramValues[_colorizeKey] ?? 0.0) > 0,
-                      onOpenColorize: selected == null
-                          ? null
-                          : _openColorizeDialog,
-                      cropOverlayActive: _cropOverlayActive,
-                      onToggleCropOverlay: selected == null
-                          ? null
-                          : _toggleCropOverlay,
-                      onExport: selected == null ? null : _exportCurrent,
-                      exporting: _exporting,
-                      onReset: _resetActive,
-                    ),
-                    _Filmstrip(
-                      files: _files,
-                      selectedIndex: _selectedIndex,
-                      thumbnails: _thumbnails,
-                      onSelect: _selectIndex,
-                      isEdited: _isPhotoEdited,
-                      onResetEdits: (file) =>
-                          unawaited(_resetAllEditsFor(file)),
-                      onShowOnDisk: (file) =>
-                          unawaited(_revealInExplorer(file)),
-                      onDelete: (file) => unawaited(_deleteFile(file)),
-                      onCopyEdits: _copyEditsFor,
-                      onPasteEdits: _pasteEditsFor,
-                      hasCopiedEdits: _hasCopiedEdits,
-                      metaOf: (path) => _store.meta[path],
-                      onSetRating: _setRating,
-                      onSetLabel: _setLabel,
-                    ),
+                    if (!_libraryMode)
+                      _ViewerToolbar(
+                        onOpenSettings: _openSettings,
+                        onOpenAbout: _openAbout,
+                        zoomLabel: _zoomScale == 1.0
+                            ? AppLocalizations.of(context)!.zoomFit
+                            : '${(_zoomScale * 100).round()}%',
+                        beforeAfterMode: _beforeAfterMode,
+                        beforeAfterEnabled: selected != null,
+                        onZoomIn: _zoomIn,
+                        onZoomOut: _zoomOut,
+                        onZoomFit: _resetZoomAnimated,
+                        onToggleBeforeAfter: selected == null
+                            ? null
+                            : _toggleBeforeAfter,
+                        canUndo: _history.canUndo,
+                        canRedo: _history.canRedo,
+                        onUndo: _undo,
+                        onRedo: _redo,
+                        aiDenoiseActive:
+                            AiDenoiseParams.fromValues(_paramValues).level !=
+                                null ||
+                            (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0 ||
+                            (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0 ||
+                            (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0 ||
+                            (_paramValues[_restoreDetailKey] ?? 0.0) > 0 ||
+                            (_paramValues[_cloudDenoiseProviderKey] ?? 0.0) > 0,
+                        onOpenAiDenoise: selected == null
+                            ? null
+                            : _openAiDenoiseDialog,
+                        colorizeActive: (_paramValues[_colorizeKey] ?? 0.0) > 0,
+                        onOpenColorize: selected == null
+                            ? null
+                            : _openColorizeDialog,
+                        cropOverlayActive: _cropOverlayActive,
+                        onToggleCropOverlay: selected == null
+                            ? null
+                            : _toggleCropOverlay,
+                        onExport: selected == null ? null : _exportCurrent,
+                        exporting: _exporting,
+                        onReset: _resetActive,
+                      ),
+                    if (!_libraryMode)
+                      _Filmstrip(
+                        files: _files,
+                        selectedIndex: _selectedIndex,
+                        thumbnails: _thumbnails,
+                        onSelect: _selectIndex,
+                        isEdited: _isPhotoEdited,
+                        onResetEdits: (file) =>
+                            unawaited(_resetAllEditsFor(file)),
+                        onShowOnDisk: (file) =>
+                            unawaited(_revealInExplorer(file)),
+                        onDelete: (file) => unawaited(_deleteFile(file)),
+                        onCopyEdits: _copyEditsFor,
+                        onPasteEdits: _pasteEditsFor,
+                        hasCopiedEdits: _hasCopiedEdits,
+                        metaOf: (path) => _store.meta[path],
+                        onSetRating: _setRating,
+                        onSetLabel: _setLabel,
+                      ),
                   ],
                 ),
                 Builder(

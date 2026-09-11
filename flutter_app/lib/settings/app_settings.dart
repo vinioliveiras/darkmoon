@@ -99,7 +99,7 @@ class AppSettings {
     this.editEmbeddedJpeg = false,
     this.cacheMaxBytes = defaultCacheMaxBytes,
     this.useGpuRender = true,
-    this.writeXmpSidecars = true,
+    this.writeXmpSidecars = false,
     this.tabbedControlsPanel = false,
     this.tabbedControlsPanelIcons = false,
     this.presetThumbnails = true,
@@ -174,9 +174,10 @@ class AppSettings {
 
   /// Whether each photo's edits are also written to a `.xmp` sidecar next
   /// to the photo (`catalog/sidecar_xmp.dart`), and a sidecar is adopted
-  /// when a photo the catalog has never seen is opened. On by default:
-  /// the catalog is keyed by absolute path, so without the sidecar a
-  /// moved folder is a folder with every edit gone.
+  /// when a photo the catalog has never seen is opened. **Off by default
+  /// since 2026-09-11** (user: a file beside every photo litters the
+  /// folders); the catalog follows moves made inside the app itself, so
+  /// the sidecar is for interchange with other editors, opt-in.
   final bool writeXmpSidecars;
 
   /// Whether the editing panel groups its sections into Adjust / Colour /
