@@ -39,6 +39,34 @@ class AppLocalizationsPt extends AppLocalizations {
   String get libraryNoTags => 'Sem tags';
 
   @override
+  String libraryHiddenByRawOnly(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count fotos deste álbum estão ocultas porque \"Somente arquivos RAW\" está marcado',
+      one:
+          '1 foto deste álbum está oculta porque \"Somente arquivos RAW\" está marcado',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get libraryShowAllFormats => 'Mostrar todos os formatos';
+
+  @override
+  String libraryUnsupportedFiles(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other:
+          '$count arquivos deste álbum estão em formatos que este app não abre',
+      one: '1 arquivo deste álbum está num formato que este app não abre',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get sidebarNewAlbumAction => 'Novo álbum aqui…';
 
   @override

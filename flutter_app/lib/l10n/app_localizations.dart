@@ -160,6 +160,24 @@ abstract class AppLocalizations {
   /// **'No tags'**
   String get libraryNoTags;
 
+  /// No description provided for @libraryHiddenByRawOnly.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 photo in this album is hidden because \"RAW files only\" is on} other{{count} photos in this album are hidden because \"RAW files only\" is on}}'**
+  String libraryHiddenByRawOnly(int count);
+
+  /// No description provided for @libraryShowAllFormats.
+  ///
+  /// In en, this message translates to:
+  /// **'Show all formats'**
+  String get libraryShowAllFormats;
+
+  /// No description provided for @libraryUnsupportedFiles.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 file in this album is in a format this app cannot open} other{{count} files in this album are in formats this app cannot open}}'**
+  String libraryUnsupportedFiles(int count);
+
   /// No description provided for @sidebarNewAlbumAction.
   ///
   /// In en, this message translates to:

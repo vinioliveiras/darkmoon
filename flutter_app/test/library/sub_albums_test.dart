@@ -55,6 +55,7 @@ void main() {
             onSelectionChanged: (_) {},
             onOpenAlbum: (album) => openedAlbum = album,
             rawOnly: false,
+            onShowAllFormats: () {},
             treeToken: 0,
             onAddFolder: () async {},
             onSetRating: (_, _) {},

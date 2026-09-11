@@ -53,6 +53,7 @@ void main() {
           onSelectionChanged: (_) {},
           onOpenAlbum: (_) {},
           rawOnly: false,
+          onShowAllFormats: () {},
           treeToken: 0,
           onAddFolder: () async {},
           onSetRating: (file, rating) => ratings[file.path] = rating,

@@ -1762,6 +1762,7 @@ class _EditorScreenState extends State<EditorScreen>
       onSelectionChanged: _onLibrarySelectionChanged,
       onOpenAlbum: (album) => unawaited(_loadFolder(album)),
       rawOnly: _settings.rawOnly,
+      onShowAllFormats: () => _setRawOnly(false),
       treeToken: _folderTreeToken,
       onOpen: (file) {
         final index = _files.indexWhere((f) => f.path == file.path);
@@ -4950,6 +4951,17 @@ class _EditorScreenState extends State<EditorScreen>
                                       switchInCurve: Curves.easeOutCubic,
                                       switchOutCurve: Curves.easeInCubic,
                                       transitionBuilder: _modeTransition,
+                                      // Both halves fill the same box, so
+                                      // the panel above never moves while
+                                      // presets and details cross-fade.
+                                      layoutBuilder: (current, previous) =>
+                                          Stack(
+                                            fit: StackFit.expand,
+                                            children: [
+                                              ...previous,
+                                              if (current != null) current,
+                                            ],
+                                          ),
                                       child: _libraryMode
                                           ? KeyedSubtree(
                                               key: const ValueKey('details'),

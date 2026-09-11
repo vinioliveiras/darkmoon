@@ -1213,11 +1213,20 @@ class _LibraryDetailsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final file = this.file;
+    // The presets panel's own header geometry, so the heading sits on
+    // the same line under either tab and the switch between them reads
+    // as one panel changing content, not two panels swapping.
     final header = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
-      child: Text(
-        l10n.libraryDetailsSection,
-        style: Theme.of(context).textTheme.labelSmall,
+      padding: const EdgeInsets.fromLTRB(12, 12, 8, 6),
+      child: SizedBox(
+        height: 24,
+        child: Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: Text(
+            l10n.libraryDetailsSection,
+            style: Theme.of(context).textTheme.labelSmall,
+          ),
+        ),
       ),
     );
     if (file == null) {
@@ -1246,7 +1255,7 @@ class _LibraryDetailsPanel extends StatelessWidget {
         children: [
           header,
           Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
             child: Text(
               file.name,
               maxLines: 2,

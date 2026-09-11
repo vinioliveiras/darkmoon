@@ -45,6 +45,7 @@ class LibraryBody extends StatefulWidget {
     required this.onSelectionChanged,
     required this.onOpenAlbum,
     required this.rawOnly,
+    required this.onShowAllFormats,
     required this.treeToken,
     required this.onAddFolder,
     required this.onSetRating,
@@ -93,8 +94,10 @@ class LibraryBody extends StatefulWidget {
   /// each as a tile with a mosaic of its first photos (2026-09-11).
   final ValueChanged<String> onOpenAlbum;
 
-  /// The library's "RAW files only" setting, for the sub-albums' mosaics.
+  /// The library's "RAW files only" setting: when it hides photos of the
+  /// open album, the grid says so, and [onShowAllFormats] turns it off.
   final bool rawOnly;
+  final VoidCallback onShowAllFormats;
 
   /// Changes when a folder was created, moved or deleted, so the
   /// sub-albums are listed again.
@@ -147,32 +150,55 @@ class _LibraryBodyState extends State<LibraryBody> {
   final Map<String, _AlbumPreview> _albumPreviews = {};
   int _albumGeneration = 0;
 
+  /// Files of the open album the grid is not showing: common-format
+  /// photos hidden by "RAW files only", and files in formats this app
+  /// cannot open at all — so an album that looks empty says why.
+  int _hiddenByRawOnly = 0;
+  int _unsupported = 0;
+
   @override
   void initState() {
     super.initState();
     _query.addListener(() => setState(() {}));
-    unawaited(_listSubAlbums());
+    unawaited(_scanFolder());
   }
 
-  Future<void> _listSubAlbums() async {
+  /// Lists the open album once: its sub-albums, and what of its own
+  /// files the grid cannot show.
+  Future<void> _scanFolder() async {
     final folder = widget.folder;
     final generation = ++_albumGeneration;
     if (folder == null) {
-      if (_subAlbums.isNotEmpty) {
+      if (_subAlbums.isNotEmpty || _hiddenByRawOnly > 0 || _unsupported > 0) {
         setState(() {
           _subAlbums = const [];
           _albumPreviews.clear();
+          _hiddenByRawOnly = 0;
+          _unsupported = 0;
         });
       }
       return;
     }
-    List<String> dirs;
+    var dirs = const <String>[];
+    var common = 0;
+    var other = 0;
     try {
       final entries = await Directory(folder).list().toList();
       dirs = [for (final e in entries.whereType<Directory>()) e.path]
         ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+      for (final entry in entries.whereType<File>()) {
+        final ext = p.extension(entry.path).toLowerCase();
+        if (rawExtensions.contains(ext)) {
+          continue;
+        }
+        if (commonImageExtensions.contains(ext)) {
+          common++;
+        } else if (ext != '.xmp' && !p.basename(entry.path).startsWith('.')) {
+          other++;
+        }
+      }
     } catch (_) {
-      dirs = const [];
+      // An album that cannot be listed shows as empty.
     }
     if (!mounted || generation != _albumGeneration) {
       return;
@@ -180,17 +206,22 @@ class _LibraryBodyState extends State<LibraryBody> {
     setState(() {
       _subAlbums = dirs;
       _albumPreviews.removeWhere((path, _) => !dirs.contains(path));
+      _hiddenByRawOnly = widget.rawOnly ? common : 0;
+      _unsupported = other;
     });
     for (final dir in dirs) {
       if (_albumPreviews.containsKey(dir)) {
         continue;
       }
-      final files = await listRawFiles(dir, rawOnly: widget.rawOnly);
+      // The cover shows whatever the album holds, in any format the app
+      // reads; only the count follows the "RAW files only" setting.
+      final all = await listRawFiles(dir);
+      final files = widget.rawOnly ? all.where((f) => f.isRaw).toList() : all;
       if (!mounted || generation != _albumGeneration) {
         return;
       }
       final preview = _AlbumPreview(
-        files: files.take(4).toList(),
+        files: all.take(4).toList(),
         count: files.length,
       );
       setState(() => _albumPreviews[dir] = preview);
@@ -205,8 +236,9 @@ class _LibraryBodyState extends State<LibraryBody> {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.folder != widget.folder ||
         oldWidget.treeToken != widget.treeToken ||
-        oldWidget.rawOnly != widget.rawOnly) {
-      unawaited(_listSubAlbums());
+        oldWidget.rawOnly != widget.rawOnly ||
+        !identical(oldWidget.files, widget.files)) {
+      unawaited(_scanFolder());
     }
     if (!identical(oldWidget.files, widget.files)) {
       // The album was reloaded (a move, a delete, another album): keep
@@ -639,6 +671,12 @@ class _LibraryBodyState extends State<LibraryBody> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               _buildToolbar(l10n),
+              if (_hiddenByRawOnly > 0)
+                _NoticeBar(
+                  message: l10n.libraryHiddenByRawOnly(_hiddenByRawOnly),
+                  actionLabel: l10n.libraryShowAllFormats,
+                  onAction: widget.onShowAllFormats,
+                ),
               Expanded(child: _buildGrid(l10n)),
             ],
           ),
@@ -828,10 +866,24 @@ class _LibraryBodyState extends State<LibraryBody> {
           album,
     ];
     if (visible.isEmpty && albums.isEmpty) {
+      final String message;
+      if (widget.files.isNotEmpty) {
+        message = l10n.libraryNoMatches;
+      } else if (_hiddenByRawOnly > 0) {
+        message = l10n.libraryHiddenByRawOnly(_hiddenByRawOnly);
+      } else if (_unsupported > 0) {
+        message = l10n.libraryUnsupportedFiles(_unsupported);
+      } else {
+        message = l10n.libraryEmpty;
+      }
       return Center(
-        child: Text(
-          widget.files.isEmpty ? l10n.libraryEmpty : l10n.libraryNoMatches,
-          style: const TextStyle(color: DarkmoonColors.textMuted),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Text(
+            message,
+            textAlign: TextAlign.center,
+            style: const TextStyle(color: DarkmoonColors.textMuted),
+          ),
         ),
       );
     }
@@ -965,70 +1017,78 @@ class _AlbumTile extends StatelessWidget {
       );
     }
 
+    // A square cover of four square cells: each photo is cropped 1:1
+    // before it joins the mosaic (user's request), so the four sit in a
+    // clean grid whatever their own shapes.
     return GestureDetector(
       onTap: onOpen,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Expanded(
-            child: Container(
-              decoration: BoxDecoration(
-                color: DarkmoonColors.canvas,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(
-                  color: highlighted
-                      ? DarkmoonColors.accent
-                      : DarkmoonColors.divider,
-                  width: highlighted ? 2 : 1,
-                ),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  Column(
+            child: Center(
+              child: AspectRatio(
+                aspectRatio: 1,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: DarkmoonColors.canvas,
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: highlighted
+                          ? DarkmoonColors.accent
+                          : DarkmoonColors.divider,
+                      width: highlighted ? 2 : 1,
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    fit: StackFit.expand,
                     children: [
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Expanded(child: cell(0)),
-                            const SizedBox(width: 1),
-                            Expanded(child: cell(1)),
-                          ],
-                        ),
+                      Column(
+                        children: [
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Expanded(child: cell(0)),
+                                const SizedBox(width: 1),
+                                Expanded(child: cell(1)),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 1),
+                          Expanded(
+                            child: Row(
+                              children: [
+                                Expanded(child: cell(2)),
+                                const SizedBox(width: 1),
+                                Expanded(child: cell(3)),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      const SizedBox(height: 1),
-                      Expanded(
-                        child: Row(
-                          children: [
-                            Expanded(child: cell(2)),
-                            const SizedBox(width: 1),
-                            Expanded(child: cell(3)),
-                          ],
+                      Positioned(
+                        left: 4,
+                        top: 4,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 5,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.black54,
+                            borderRadius: BorderRadius.circular(3),
+                          ),
+                          child: const Icon(
+                            CupertinoIcons.folder_fill,
+                            size: 11,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ],
                   ),
-                  Positioned(
-                    left: 4,
-                    top: 4,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 5,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.black54,
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                      child: const Icon(
-                        CupertinoIcons.folder_fill,
-                        size: 11,
-                        color: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -1247,6 +1307,51 @@ class _DragFeedback extends StatelessWidget {
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A line under the toolbar saying what the grid is not showing, with
+/// the one action that changes it.
+class _NoticeBar extends StatelessWidget {
+  const _NoticeBar({
+    required this.message,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final String message;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 6, 12, 6),
+      decoration: const BoxDecoration(
+        color: DarkmoonColors.surfaceRaised,
+        border: Border(bottom: BorderSide(color: DarkmoonColors.divider)),
+      ),
+      child: Row(
+        children: [
+          const Icon(
+            CupertinoIcons.eye_slash,
+            size: 14,
+            color: DarkmoonColors.textSecondary,
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(
+                color: DarkmoonColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ),
+          TextButton(onPressed: onAction, child: Text(actionLabel)),
         ],
       ),
     );
