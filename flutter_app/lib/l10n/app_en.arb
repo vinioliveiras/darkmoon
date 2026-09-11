@@ -447,7 +447,6 @@
   "lensCorrectionSearchNoMatches": "No matches",
   "colorProfileEditorTitleNew": "New colour profile",
   "colorProfileEditorTitleEdit": "Edit colour profile",
-  "colorProfileEditorTabTone": "Tone",
   "colorProfileEditorTabColor": "Colour",
   "colorProfileEditorTabBase": "Base",
   "colorProfileEditorToneHint": "Remaps brightness while keeping colour. Drag a point to reshape, click empty space to add one, right-click to remove.",

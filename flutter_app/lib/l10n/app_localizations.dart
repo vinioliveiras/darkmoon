@@ -2584,12 +2584,6 @@ abstract class AppLocalizations {
   /// **'Edit colour profile'**
   String get colorProfileEditorTitleEdit;
 
-  /// No description provided for @colorProfileEditorTabTone.
-  ///
-  /// In en, this message translates to:
-  /// **'Tone'**
-  String get colorProfileEditorTabTone;
-
   /// No description provided for @colorProfileEditorTabColor.
   ///
   /// In en, this message translates to:

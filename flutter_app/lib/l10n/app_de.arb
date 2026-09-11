@@ -422,7 +422,6 @@
   "lensCorrectionSearchNoMatches": "Keine Treffer",
   "colorProfileEditorTitleNew": "Neues Farbprofil",
   "colorProfileEditorTitleEdit": "Farbprofil bearbeiten",
-  "colorProfileEditorTabTone": "Tonwert",
   "colorProfileEditorTabColor": "Farbe",
   "colorProfileEditorTabBase": "Basis",
   "colorProfileEditorToneHint": "Bildet die Helligkeit neu ab und behält die Farbe. Punkt ziehen zum Formen, in den freien Bereich klicken zum Hinzufügen, Rechtsklick zum Entfernen.",

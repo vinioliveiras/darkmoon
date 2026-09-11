@@ -148,7 +148,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
   late double _strength = widget.strength ?? 100.0;
   late double _contrast = widget.contrast ?? calBaseContrast;
   late final TabController _tabController = TabController(
-    length: 3,
+    length: 2,
     vsync: this,
     // Straight to Colour when reopened after a sample: the user asked a
     // question about a colour and this is the answer.
@@ -255,71 +255,132 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
 
   // ------------------------------------------------------------ tone tab
 
-  Widget _buildToneTab(AppLocalizations l10n) => ListView(
-    padding: const EdgeInsets.only(right: kScrollbarGutter),
-    children: [
-      Padding(
-        padding: const EdgeInsets.only(bottom: 10),
-        child: Text(
-          l10n.colorProfileEditorToneHint,
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
-        ),
-      ),
-      ToneCurveEditor(
-        points: _tonePoints,
-        // Wider than tall, unlike the panel's own curve editors. The two
-        // sliders below are what the curve is judged against, and both
-        // have to be on screen at the same time as it for that to work —
-        // at 1.5 the second one sat on the dialog's bottom edge even on a
-        // 1000-point-tall window (measured 2026-09-09).
-        aspectRatio: 2.1,
-        onChanged: (points) {
-          setState(() => _tonePoints = points);
-          _changed();
-        },
-        onChangeEnd: (points) {
-          setState(() => _tonePoints = points);
-          _settled();
-        },
-      ),
-      const SizedBox(height: 16),
-      ...[
+  /// The Base tab: the profile's name, its tone curve with the two
+  /// preview sliders, and the reset. The name and the reset had a tab of
+  /// their own until 2026-09-11; two controls did not earn one (user's
+  /// call), so they bracket the curve here.
+  Widget _buildBaseTab(AppLocalizations l10n) {
+    final name = _nameController.text.trim();
+    final duplicate =
+        name.isNotEmpty &&
+        name != widget.initial.name &&
+        widget.existingNames.contains(name);
+    return ListView(
+      padding: const EdgeInsets.only(right: kScrollbarGutter),
+      children: [
         Text(
-          l10n.colorProfileEditorPhotoSlidersHint,
+          l10n.colorProfileEditorNameLabel,
           style: Theme.of(
             context,
           ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 6),
+        TextField(
+          controller: _nameController,
+          onChanged: (_) => setState(() {}),
+          style: const TextStyle(
+            fontSize: 13,
+            color: DarkmoonColors.textPrimary,
+          ),
+          decoration: const InputDecoration(isDense: true),
+        ),
+        if (duplicate)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text(
+              l10n.colorProfileEditorNameTaken,
+              style: Theme.of(
+                context,
+              ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
+            ),
+          ),
+        const SizedBox(height: 16),
         Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: SliderRow(
-            name: l10n.presetAmountLabel,
-            min: 0,
-            max: 200,
-            value: _strength,
-            decimals: 0,
-            valueSuffix: '%',
-            defaultValue: 100,
-            onChanged: (v) => setState(() => _strength = v),
-            onChangeEnd: (v) => setState(() => _strength = v),
+          padding: const EdgeInsets.only(bottom: 10),
+          child: Text(
+            l10n.colorProfileEditorToneHint,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
           ),
         ),
-        SliderRow(
-          name: l10n.sliderColorProfileAmount,
-          min: 0,
-          max: 150,
-          value: _contrast,
-          decimals: 0,
-          defaultValue: calBaseContrast,
-          onChanged: (v) => setState(() => _contrast = v),
-          onChangeEnd: (v) => setState(() => _contrast = v),
+        ToneCurveEditor(
+          points: _tonePoints,
+          // Wider than tall, unlike the panel's own curve editors. The two
+          // sliders below are what the curve is judged against, and both
+          // have to be on screen at the same time as it for that to work —
+          // at 1.5 the second one sat on the dialog's bottom edge even on a
+          // 1000-point-tall window (measured 2026-09-09).
+          aspectRatio: 2.1,
+          onChanged: (points) {
+            setState(() => _tonePoints = points);
+            _changed();
+          },
+          onChangeEnd: (points) {
+            setState(() => _tonePoints = points);
+            _settled();
+          },
+        ),
+        const SizedBox(height: 16),
+        ...[
+          Text(
+            l10n.colorProfileEditorPhotoSlidersHint,
+            style: Theme.of(
+              context,
+            ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: SliderRow(
+              name: l10n.presetAmountLabel,
+              min: 0,
+              max: 200,
+              value: _strength,
+              decimals: 0,
+              valueSuffix: '%',
+              defaultValue: 100,
+              onChanged: (v) => setState(() => _strength = v),
+              onChangeEnd: (v) => setState(() => _strength = v),
+            ),
+          ),
+          SliderRow(
+            name: l10n.sliderColorProfileAmount,
+            min: 0,
+            max: 150,
+            value: _contrast,
+            decimals: 0,
+            defaultValue: calBaseContrast,
+            onChanged: (v) => setState(() => _contrast = v),
+            onChangeEnd: (v) => setState(() => _contrast = v),
+          ),
+        ],
+        const SizedBox(height: 16),
+        Text(
+          l10n.colorProfileEditorResetHint,
+          style: Theme.of(
+            context,
+          ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
+        ),
+        const SizedBox(height: 6),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: () {
+              setState(() {
+                _tonePoints = List<CurvePoint>.of(identityToneCurve);
+                _hueShift = List<double>.of(identityColorProfile.hueShift);
+                _satMul = List<double>.of(identityColorProfile.satMul);
+                _lumMul = List<double>.of(identityColorProfile.lumMul);
+              });
+              _settled();
+            },
+            child: Text(l10n.colorProfileEditorReset),
+          ),
         ),
       ],
-    ],
-  );
+    );
+  }
 
   // ----------------------------------------------------------- colour tab
 
@@ -579,68 +640,6 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
 
   // ------------------------------------------------------------ base tab
 
-  Widget _buildBaseTab(AppLocalizations l10n) {
-    final name = _nameController.text.trim();
-    final duplicate =
-        name.isNotEmpty &&
-        name != widget.initial.name &&
-        widget.existingNames.contains(name);
-    return ListView(
-      padding: const EdgeInsets.only(right: kScrollbarGutter),
-      children: [
-        Text(
-          l10n.colorProfileEditorNameLabel,
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
-        ),
-        const SizedBox(height: 6),
-        TextField(
-          controller: _nameController,
-          onChanged: (_) => setState(() {}),
-          style: const TextStyle(
-            fontSize: 13,
-            color: DarkmoonColors.textPrimary,
-          ),
-          decoration: const InputDecoration(isDense: true),
-        ),
-        if (duplicate)
-          Padding(
-            padding: const EdgeInsets.only(top: 6),
-            child: Text(
-              l10n.colorProfileEditorNameTaken,
-              style: Theme.of(
-                context,
-              ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
-            ),
-          ),
-        const SizedBox(height: 16),
-        Text(
-          l10n.colorProfileEditorResetHint,
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
-        ),
-        const SizedBox(height: 6),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: () {
-              setState(() {
-                _tonePoints = List<CurvePoint>.of(identityToneCurve);
-                _hueShift = List<double>.of(identityColorProfile.hueShift);
-                _satMul = List<double>.of(identityColorProfile.satMul);
-                _lumMul = List<double>.of(identityColorProfile.lumMul);
-              });
-              _settled();
-            },
-            child: Text(l10n.colorProfileEditorReset),
-          ),
-        ),
-      ],
-    );
-  }
-
   /// The left column: the profile applied to two different subjects at
   /// once.
   ///
@@ -741,15 +740,11 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
                       tabs: [
                         Tab(
                           height: kTabHeight,
-                          text: l10n.colorProfileEditorTabTone,
+                          text: l10n.colorProfileEditorTabBase,
                         ),
                         Tab(
                           height: kTabHeight,
                           text: l10n.colorProfileEditorTabColor,
-                        ),
-                        Tab(
-                          height: kTabHeight,
-                          text: l10n.colorProfileEditorTabBase,
                         ),
                       ],
                     ),
@@ -769,11 +764,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
                       // swallowed whole, which is how "the sliders do not
                       // follow the mouse" was reported (2026-09-09). The
                       // Colour tab's 24 sliders had it too.
-                      children: [
-                        _buildToneTab(l10n),
-                        _buildColorTab(l10n),
-                        _buildBaseTab(l10n),
-                      ],
+                      children: [_buildBaseTab(l10n), _buildColorTab(l10n)],
                     ),
                   ),
                 ],

@@ -1411,9 +1411,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get colorProfileEditorTitleEdit => 'Editar perfil de cor';
 
   @override
-  String get colorProfileEditorTabTone => 'Tom';
-
-  @override
   String get colorProfileEditorTabColor => 'Cor';
 
   @override

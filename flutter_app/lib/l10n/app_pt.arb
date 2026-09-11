@@ -423,7 +423,6 @@
   "lensCorrectionSearchNoMatches": "Nenhum resultado",
   "colorProfileEditorTitleNew": "Novo perfil de cor",
   "colorProfileEditorTitleEdit": "Editar perfil de cor",
-  "colorProfileEditorTabTone": "Tom",
   "colorProfileEditorTabColor": "Cor",
   "colorProfileEditorTabBase": "Base",
   "colorProfileEditorToneHint": "Remapeia o brilho preservando a cor. Arraste um ponto para moldar, clique no vazio para adicionar, botão direito para remover.",
