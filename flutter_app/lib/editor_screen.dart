@@ -84,6 +84,7 @@ import 'render/hsl.dart';
 import 'render/lens_correction.dart';
 import 'render/luminance.dart' show luminanceRgb;
 import 'render/mask.dart';
+import 'render/negative.dart';
 import 'render/gpu/gpu_capability.dart';
 import 'render/gpu/gpu_pass.dart' show gpuCanRenderAtScale;
 import 'render/gpu/render_job_gpu.dart';
@@ -389,6 +390,11 @@ class _EditorScreenState extends State<EditorScreen>
   /// The bundled film tables (see `film_lut_library.dart`), null until
   /// [_loadFilmLuts] lands.
   FilmLutLibrary? _filmLuts;
+
+  /// The Negative section's measured density range, per source (see
+  /// [_negativeBoundsFor]). An Expando so a source that is replaced (an
+  /// AI pass, a reload) simply gets measured again.
+  final Expando<NegativeBounds> _negativeBounds = Expando();
 
   /// [_colorProfiles]'s entry for the currently-active [ColorProfileMode],
   /// but only when that mode actually wants one
@@ -1255,6 +1261,24 @@ class _EditorScreenState extends State<EditorScreen>
     if (_selectedIndex != null && (_paramValues[_filmKey] ?? 0) > 0) {
       _scheduleRender(live: false);
     }
+  }
+
+  /// The density range the Negative section normalises [path]'s photo
+  /// against, measured once from its live source pixels — null when the
+  /// section is off in [values] or the source is not loaded yet.
+  NegativeBounds? _negativeBoundsFor(String? path, Map<String, double> values) {
+    if (path == null || (values[_negativeKey] ?? 0) == 0) {
+      return null;
+    }
+    final source = _editSources[path]?.live;
+    if (source == null) {
+      return null;
+    }
+    return _negativeBounds[source] ??= analyzeNegativeBounds(
+      source.rgbBytes,
+      source.width,
+      source.height,
+    );
   }
 
   /// The film table [values] point at — null for none, or for a table the
@@ -3737,6 +3761,7 @@ class _EditorScreenState extends State<EditorScreen>
         colorProfileStrength: _effectiveColorProfileStrength,
         cameraColorHasFit: _cameraColorFitAvailable(path),
         filmLut: _filmLutFor(_effectiveParamValues()),
+        negativeBounds: _negativeBoundsFor(path, _effectiveParamValues()),
       ),
       masks: _effectiveMasks,
       aiMaskMaps: _aiMaskMaps,
@@ -4465,6 +4490,7 @@ class _EditorScreenState extends State<EditorScreen>
         colorProfile: profile,
         cameraColorHasFit: _cameraColorFitAvailable(path),
         filmLut: _filmLutFor(preset.values),
+        negativeBounds: _negativeBoundsFor(path, preset.values),
       ),
     );
   }

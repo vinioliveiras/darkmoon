@@ -213,6 +213,16 @@ void main() {
     expect(scaled['FilmAmount'], 50.0);
   });
 
+  test('the Negative switch is never scaled, its sliders are', () {
+    final scaled = withGlobalEditAmountApplied({
+      amountKey: 0.0,
+      'Negative': 1.0,
+      'NegativeExposure': 0.8,
+    });
+    expect(scaled['Negative'], 1.0);
+    expect(scaled['NegativeExposure'], 0.0);
+  });
+
   test('Temperature and Tint are never scaled', () {
     // They are not 0-centred deltas, so scaling them toward a default
     // would fight the as-shot-relative white balance model.

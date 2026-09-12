@@ -111,6 +111,22 @@ class GpuStageCache {
       // (detailScale derives from it).
       ..write('|rs=')
       ..write(p.renderScale)
+      // negative.frag, the very first pass when the section is on: its
+      // sliders and the measured bounds both change every pixel after.
+      ..write('|ng=')
+      ..write(
+        p.negative.enabled
+            ? [
+                p.negative.redWeight,
+                p.negative.greenWeight,
+                p.negative.blueWeight,
+                p.negative.exposure,
+                p.negative.contrast,
+                ...?p.negativeBounds?.min,
+                ...?p.negativeBounds?.max,
+              ].join(',')
+            : '0',
+      )
       // _runPreDenoise: white balance and exposure.
       ..write('|t=')
       ..write(p.temperature)

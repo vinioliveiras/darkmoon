@@ -4,6 +4,7 @@ import 'color_grading.dart';
 import 'color_mixer.dart';
 import 'color_profile.dart';
 import 'film_lut.dart';
+import 'negative.dart';
 import 'grain.dart';
 import 'sharpen.dart';
 import 'tone_curve.dart';
@@ -51,6 +52,8 @@ class RenderParams {
     this.grain = const GrainParams(),
     this.filmLut,
     this.filmAmount = 0.5,
+    this.negative = const NegativeParams(),
+    this.negativeBounds,
     this.renderScale = 1.0,
   });
 
@@ -72,10 +75,13 @@ class RenderParams {
     double renderScale = 1.0,
     bool cameraColorHasFit = false,
     FilmLut? filmLut,
+    NegativeBounds? negativeBounds,
   }) {
     const defaults = RenderParams();
     return RenderParams(
       filmLut: filmLut,
+      negative: NegativeParams.fromValues(values),
+      negativeBounds: negativeBounds,
       filmAmount: ((values['FilmAmount'] ?? defaultFilmAmount) / 100).clamp(
         0.0,
         1.0,
@@ -200,6 +206,15 @@ class RenderParams {
   /// Amount slider. Ignored when [filmLut] is null.
   final double filmAmount;
 
+  /// The Negative section (see `negative.dart`): runs first, before
+  /// Exposure and White Balance, when enabled.
+  final NegativeParams negative;
+
+  /// The photo's measured density range for [negative] — resolved by the
+  /// editor from the source pixels, null when the section is off. The
+  /// conversion needs both; with either missing it is skipped.
+  final NegativeBounds? negativeBounds;
+
   /// Multiplier applied to every neighbourhood-based radius/sigma —
   /// `frameLongEdge / calRadiusReferenceLongEdge`.
   ///
@@ -259,6 +274,8 @@ class RenderParams {
     grain: grain,
     filmLut: filmLut,
     filmAmount: filmAmount,
+    negative: negative,
+    negativeBounds: negativeBounds,
     renderScale: scale,
   );
 

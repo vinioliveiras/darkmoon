@@ -7,6 +7,7 @@ import 'package:darkmoon/render/color_profile.dart';
 import 'package:darkmoon/render/gpu/gpu_stage_cache.dart';
 import 'package:darkmoon/render/film_lut.dart';
 import 'package:darkmoon/render/grain.dart';
+import 'package:darkmoon/render/negative.dart';
 import 'package:darkmoon/render/render_params.dart';
 import 'package:darkmoon/render/sharpen.dart';
 import 'package:darkmoon/render/tone_curve.dart';
@@ -55,6 +56,14 @@ final Map<String, RenderParams> _beforeAiDenoise = {
     aiDenoise: AiDenoiseParams(level: AiDenoiseLevel.medium),
   ),
   'renderScale': const RenderParams().withRenderScaleFor(4000, 3000),
+  'negative': const RenderParams(
+    negative: NegativeParams(enabled: true),
+    negativeBounds: NegativeBounds(min: [0, 0, 0], max: [1, 1, 1]),
+  ),
+  'negativeBounds': const RenderParams(
+    negative: NegativeParams(enabled: true),
+    negativeBounds: NegativeBounds(min: [0.1, 0, 0], max: [1, 1, 1]),
+  ),
 };
 
 /// Fields read between the two boundaries: a change keeps afterAiDenoise
@@ -167,7 +176,7 @@ void main() {
   test('every RenderParams field is classified above', () {
     // RenderParams has no reflection; the field count is pinned by hand so
     // a new field trips this test and sends its author to gpu_stage_cache.
-    const fieldsInRenderParams = 31;
+    const fieldsInRenderParams = 33;
     final classified =
         _beforeAiDenoise.length +
         _betweenBoundaries.length +

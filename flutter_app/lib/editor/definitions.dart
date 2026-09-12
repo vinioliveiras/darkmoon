@@ -42,6 +42,16 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderCameraColor;
     case 'FilmAmount':
       return l10n.sliderFilmAmount;
+    case 'NegativeRed':
+      return l10n.sliderNegativeRed;
+    case 'NegativeGreen':
+      return l10n.sliderNegativeGreen;
+    case 'NegativeBlue':
+      return l10n.sliderNegativeBlue;
+    case 'NegativeExposure':
+      return l10n.sliderExposure;
+    case 'NegativeContrast':
+      return l10n.sliderContrast;
     case 'Vibrance':
       return l10n.sliderVibrance;
     case 'Saturation':
@@ -587,6 +597,8 @@ Map<String, double> withGlobalEditAmountApplied(Map<String, double> values) {
     ..remove(_globalEditAmountKey)
     // An id, not a quantity — see _filmSliders.
     ..remove(_filmKey)
+    // A switch, not a quantity — see _negativeSliders.
+    ..remove(_negativeKey)
     // The Colour Mixer and Colour Grading build their keys at runtime, so
     // they are not in [_defaultParamValues] and this loop simply never
     // reached them — the Amount slider did nothing at all to either, and a
@@ -740,6 +752,22 @@ const _filmSliders = [
   _SliderSpec(_filmAmountKey, 0, 100, defaultFilmAmount),
 ];
 
+/// The Negative section (2026-09-12, `lib/render/negative.dart`): the
+/// switch itself is [_negativeKey] (0/1, off by default — a photo is a
+/// negative or it is not), then the three channel weights and the
+/// curve's exposure and contrast. Global-only like Film, and kept out of
+/// the global Amount scaling for the same reason: a switch is not a
+/// quantity. No Amount slider by design — see negative.dart's header.
+const _negativeKey = 'Negative';
+const _negativeSliders = [
+  _SliderSpec(_negativeKey, 0, 1, 0),
+  _SliderSpec('NegativeRed', 0.5, 1.5, 1.0, decimals: 2),
+  _SliderSpec('NegativeGreen', 0.5, 1.5, 1.0, decimals: 2),
+  _SliderSpec('NegativeBlue', 0.5, 1.5, 1.0, decimals: 2),
+  _SliderSpec('NegativeExposure', -1, 1, 0, decimals: 2),
+  _SliderSpec('NegativeContrast', 0.5, 2, 1.0, decimals: 2),
+];
+
 /// Meridian's parametric Tone Curve — four region sliders plus the three
 /// split points that set where each region ends. Lives under the Tone
 /// Curve editor; toggled off with the TONE CURVE section switch. Split
@@ -772,6 +800,7 @@ Map<String, double> _defaultParamValues() {
     for (final spec in _vignetteSliders) spec.name: spec.defaultValue,
     for (final spec in _grainSliders) spec.name: spec.defaultValue,
     for (final spec in _filmSliders) spec.name: spec.defaultValue,
+    for (final spec in _negativeSliders) spec.name: spec.defaultValue,
     for (final spec in _parametricCurveSliders) spec.name: spec.defaultValue,
     // Lens Correction is also global-only (see RenderJob.lensCorrection's
     // doc comment) and lives outside [_sections] for the same reason as

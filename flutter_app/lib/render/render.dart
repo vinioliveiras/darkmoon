@@ -15,6 +15,7 @@ import 'grain.dart';
 import 'hsl.dart';
 import 'local_contrast.dart';
 import 'mask.dart';
+import 'negative.dart';
 import 'render_params.dart';
 import 'sharpen.dart';
 import 'tone_curve.dart';
@@ -244,6 +245,15 @@ void _applyAdjustmentSteps(
 /// computed as, and the buffer keeps its headroom past 255 through
 /// [linearToSrgbExtended].
 void applyExposureAndWhiteBalance(Float32List buffer, RenderParams params) {
+  // The negative conversion goes first of all — inside this function
+  // rather than as a call of its own so both renderers (this file's
+  // _applyAdjustmentSteps and render_parallel.dart) run it without
+  // either having to know. The GPU counterpart is negative.frag, run
+  // before point_ops_pre_denoise.frag in renderImageGpu.
+  final negativeBounds = params.negativeBounds;
+  if (params.negative.enabled && negativeBounds != null) {
+    applyNegative(buffer, params.negative, negativeBounds);
+  }
   final exposureFactor = params.exposure == 0
       ? 1.0
       : math.pow(2.0, params.exposure / calExposureUnitsPerStop).toDouble();

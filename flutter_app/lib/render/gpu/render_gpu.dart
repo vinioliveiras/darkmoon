@@ -7,6 +7,7 @@ import '../blur.dart' show scaledNoiseRadius;
 import '../calibration.dart';
 import '../color_grading.dart';
 import '../film_lut.dart';
+import '../negative.dart';
 import '../render.dart' show needsTonalBlur;
 import '../render_params.dart';
 import '../tone_curve.dart';
@@ -227,8 +228,22 @@ Future<ui.Image> renderImageGpu(
           'from (canResume said otherwise)',
         );
       }
+      // Negative conversion first, where applyExposureAndWhiteBalance
+      // runs it on the CPU; skipped entirely (no pass) when off.
+      final negativeBounds = params.negativeBounds;
+      final positive = params.negative.enabled && negativeBounds != null
+          ? chain.add(
+              await _runNegative(
+                source,
+                width,
+                height,
+                params.negative,
+                negativeBounds,
+              ),
+            )
+          : source;
       final afterExposureAndWb = chain.add(
-        await _runPreDenoise(source, width, height, params),
+        await _runPreDenoise(positive, width, height, params),
       );
       // detailScale, not renderScale, on all three of chroma smoothing,
       // denoise and sharpen — mirrors render.dart's CPU ordering exactly.
@@ -395,6 +410,40 @@ Future<ui.Image> renderImageGpu(
   );
   chain.disposeAllExcept();
   return result;
+}
+
+/// `shaders/negative.frag` — negative.dart's applyNegative on the GPU.
+Future<ui.Image> _runNegative(
+  ui.Image source,
+  int width,
+  int height,
+  NegativeParams negative,
+  NegativeBounds bounds,
+) {
+  final curve = negative.curve;
+  return GpuPass.run(
+    'shaders/negative.frag',
+    floats: [
+      width.toDouble(),
+      height.toDouble(),
+      bounds.min[0],
+      bounds.min[1],
+      bounds.min[2],
+      bounds.max[0],
+      bounds.max[1],
+      bounds.max[2],
+      negative.redWeight,
+      negative.greenWeight,
+      negative.blueWeight,
+      curve.k,
+      curve.x0,
+      curve.y0,
+      curve.scale,
+    ],
+    samplers: [source],
+    outputWidth: width,
+    outputHeight: height,
+  );
 }
 
 /// The film table as the `size*size` x `size` RGBA texture

@@ -1121,6 +1121,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sectionFilm => 'FILME';
 
   @override
+  String get sectionNegative => 'NEGATIVO';
+
+  @override
+  String get sliderNegativeRed => 'Vermelho';
+
+  @override
+  String get sliderNegativeGreen => 'Verde';
+
+  @override
+  String get sliderNegativeBlue => 'Azul';
+
+  @override
   String get filmNone => 'Nenhum';
 
   @override
