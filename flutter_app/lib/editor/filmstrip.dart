@@ -482,18 +482,45 @@ class _FilmstripDragFeedback extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: Colors.transparent,
-      child: Container(
-        width: 64,
-        height: 64,
-        decoration: BoxDecoration(
-          color: DarkmoonColors.canvas,
-          borderRadius: BorderRadius.circular(6),
-          border: Border.all(color: DarkmoonColors.accent),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: thumbnail == null
-            ? const Icon(CupertinoIcons.photo, color: DarkmoonColors.textMuted)
-            : Image.memory(thumbnail!, fit: BoxFit.cover),
+      child: Stack(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: DarkmoonColors.canvas,
+              borderRadius: BorderRadius.circular(6),
+              border: Border.all(color: DarkmoonColors.accent),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: thumbnail == null
+                ? const Icon(
+                    CupertinoIcons.photo,
+                    color: DarkmoonColors.textMuted,
+                  )
+                : Image.memory(thumbnail!, fit: BoxFit.cover),
+          ),
+          // What the drop makes: a folder with a plus, the new-album icon,
+          // over the photo being carried (user's request, 2026-09-12).
+          const Positioned.fill(
+            child: Center(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.all(Radius.circular(8)),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(
+                    CupertinoIcons.folder_badge_plus,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

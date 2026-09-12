@@ -1114,21 +1114,19 @@ class _AlbumTile extends StatelessWidget {
                   fit: StackFit.expand,
                   children: [
                     mural,
-                    Positioned(
-                      left: 4,
-                      top: 4,
+                    // The folder mark sits in the middle of the cover
+                    // (user's call, 2026-09-12): the one thing that says
+                    // "album" whatever the mosaic shows.
+                    Center(
                       child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 5,
-                          vertical: 2,
-                        ),
+                        padding: const EdgeInsets.all(7),
                         decoration: BoxDecoration(
                           color: Colors.black54,
-                          borderRadius: BorderRadius.circular(3),
+                          borderRadius: BorderRadius.circular(9),
                         ),
                         child: const Icon(
                           CupertinoIcons.folder_fill,
-                          size: 11,
+                          size: 22,
                           color: Colors.white,
                         ),
                       ),
@@ -1337,6 +1335,26 @@ class _DragFeedback extends StatelessWidget {
                     color: DarkmoonColors.textMuted,
                   )
                 : Image.memory(thumbnail!, fit: BoxFit.cover),
+          ),
+          // What the drop makes: a folder with a plus, the new-album icon,
+          // over the photo being carried (user's request, 2026-09-12).
+          const Positioned.fill(
+            child: Center(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: Colors.black54,
+                  borderRadius: BorderRadius.all(Radius.circular(8)),
+                ),
+                child: Padding(
+                  padding: EdgeInsets.all(6),
+                  child: Icon(
+                    CupertinoIcons.folder_badge_plus,
+                    size: 20,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+            ),
           ),
           if (count > 1)
             Positioned(
