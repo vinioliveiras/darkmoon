@@ -311,6 +311,17 @@ const lamaInpaintModelSpec = OnnxModelSpec(
 // carrying only the file name and the session cache key — the tile
 // geometry fields are set to each model's real fixed input size for
 // documentation value, not because anything reads them.
+//
+// WebGPU first, then the CPU, never DirectML (2026-09-12, user's call:
+// the GPU wherever it answers correctly). DirectML crashes SAM's decoder
+// and was slower on every one of the five (2026-09-08). WebGPU was
+// checked with `tool/ai_mask_gpu_probe.dart`, map against map: the same
+// answer as the CPU on all four (within a level; SAM's decoder 18 on a
+// few isolated pixels). Cold, with the shaders compiling, it is slower on
+// three of them (sky 2.6 s vs 1.0, depth 2.9 vs 1.0, SAM decoder 2.1 vs
+// 0.6) and faster or even on two (foreground 0.5 vs 0.8, SAM encoder 4.0
+// vs 4.2); sessions are cached per process, so a second mask on the same
+// photo skips the compile. Measured while nothing else held the GPU.
 
 /// SAM ViT-B image encoder (Apache-2.0, facebookresearch/segment-anything)
 /// — turns one photo into the 1x256x64x64 embedding
@@ -321,7 +332,7 @@ const samEncoderModelSpec = OnnxModelSpec(
   fileName: 'sam_vit_b_01ec64_encoder.onnx',
   inputTileSize: 1024,
   scaleFactor: 1,
-  cpuOnly: true,
+  avoidDirectMl: true,
 );
 
 /// SAM ViT-B prompt decoder — embedding plus a point or box in, mask out.
@@ -330,7 +341,7 @@ const samDecoderModelSpec = OnnxModelSpec(
   fileName: 'sam_vit_b_01ec64_decoder.onnx',
   inputTileSize: 1024,
   scaleFactor: 1,
-  cpuOnly: true,
+  avoidDirectMl: true,
 );
 
 /// Sky segmentation (U-2-Net architecture, xiongzhu666/Sky-Segmentation-
@@ -340,7 +351,7 @@ const skySegModelSpec = OnnxModelSpec(
   fileName: 'skyseg-u2net.onnx',
   inputTileSize: 320,
   scaleFactor: 1,
-  cpuOnly: true,
+  avoidDirectMl: true,
 );
 
 /// U-2-Net salient object detection (Apache-2.0, xuebinqin/U-2-Net) —
@@ -350,7 +361,7 @@ const foregroundSegModelSpec = OnnxModelSpec(
   fileName: 'u2net.onnx',
   inputTileSize: 320,
   scaleFactor: 1,
-  cpuOnly: true,
+  avoidDirectMl: true,
 );
 
 /// Depth Anything V2 Small (Apache-2.0, DepthAnything/Depth-Anything-V2) —
@@ -360,7 +371,7 @@ const depthAnythingModelSpec = OnnxModelSpec(
   fileName: 'depth_anything_v2_vits.onnx',
   inputTileSize: 518,
   scaleFactor: 1,
-  cpuOnly: true,
+  avoidDirectMl: true,
 );
 
 /// Thrown when an ONNX Runtime C API call returns a non-null `OrtStatus*`.
