@@ -177,6 +177,24 @@ class _ViewerToolbar extends StatelessWidget {
                       ),
                     ],
                   ),
+                  // Before/After sits with the view controls, right of
+                  // Fit to Window (user's call, 2026-09-12): it is a way
+                  // of looking, not an edit.
+                  const SizedBox(width: 6),
+                  _ToolbarPill(
+                    height: _squareButtonSize,
+                    showChrome: false,
+                    children: [
+                      _ToolbarSegment(
+                        icon: CupertinoIcons.square_split_2x1,
+                        iconSize: _squareButtonIconSize,
+                        width: _squareButtonSize,
+                        selected: beforeAfterMode,
+                        onTap: locked ? null : onToggleBeforeAfter,
+                        tooltip: l10n.beforeAfterButton,
+                      ),
+                    ],
+                  ),
                   const Spacer(),
                   // Centered in this Expanded region (a Spacer on both
                   // sides, not just before it) — the toolbar's most
@@ -274,21 +292,6 @@ class _ViewerToolbar extends StatelessWidget {
                         selected: removeActive || removeModeActive,
                         onTap: locked ? null : onToggleRemove,
                         tooltip: l10n.removeButton,
-                      ),
-                    ],
-                  ),
-                  const SizedBox(width: 6),
-                  _ToolbarPill(
-                    height: _squareButtonSize,
-                    showChrome: false,
-                    children: [
-                      _ToolbarSegment(
-                        icon: CupertinoIcons.square_split_2x1,
-                        iconSize: _squareButtonIconSize,
-                        width: _squareButtonSize,
-                        selected: beforeAfterMode,
-                        onTap: locked ? null : onToggleBeforeAfter,
-                        tooltip: l10n.beforeAfterButton,
                       ),
                     ],
                   ),

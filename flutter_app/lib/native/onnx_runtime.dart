@@ -26,6 +26,7 @@ class OnnxModelSpec {
     this.channels = 3,
     this.customAbsolutePath,
     this.cpuOnly = false,
+    this.avoidDirectMl = false,
   });
 
   /// Builds a spec for a user-supplied model file (Settings' "custom
@@ -41,7 +42,8 @@ class OnnxModelSpec {
       scaleFactor = 1,
       channels = 3,
       customAbsolutePath = absolutePath,
-      cpuOnly = false;
+      cpuOnly = false,
+      avoidDirectMl = false;
 
   final String fileName;
   final int inputTileSize;
@@ -84,6 +86,14 @@ class OnnxModelSpec {
   /// unlike the tiled denoise/upscale models that run hundreds of tiles
   /// through one warm session.
   final bool cpuOnly;
+
+  /// Skips DirectML but keeps WebGPU. For a graph DirectML accepts at
+  /// session creation and then fails inside a node at run time — which
+  /// the provider fallback cannot catch, since it only wraps creation.
+  /// LaMa is the case (2026-09-12): its Fourier units' MatMul dies in
+  /// DirectML, while WebGPU runs the graph, with a few nodes placed back
+  /// on the CPU by the runtime, in 1.55 s against 2.33 s on the CPU.
+  final bool avoidDirectMl;
 
   int get outputTileSize => inputTileSize * scaleFactor;
 
@@ -275,14 +285,13 @@ const ddcolorModelSpec = OnnxModelSpec(
 /// removal (2026-09-12). Two inputs, `image` 1x3x512x512 in 0..1 and
 /// `mask` 1x1x512x512 with 1 for the hole; one output, 1x3x512x512 in
 /// 0..255 — measured on the file, not assumed. Run through [OnnxModel.runGraph]
-/// like the mask models, since [runTile] knows one input. CPU only: the
-/// network is built on Fourier units, which the DirectML provider has no
-/// kernels for, and a 512 tile takes about two seconds on the CPU.
+/// like the mask models, since [runTile] knows one input. WebGPU or CPU,
+/// never DirectML: see [OnnxModelSpec.avoidDirectMl] for the measurement.
 const lamaInpaintModelSpec = OnnxModelSpec(
   fileName: 'inpainting_lama_2025jan.onnx',
   inputTileSize: 512,
   scaleFactor: 1,
-  cpuOnly: true,
+  avoidDirectMl: true,
 );
 
 // The five models behind the AI mask types (`ai_mask_models.dart`). None
@@ -942,11 +951,20 @@ class OnnxModel {
   /// [OnnxModelSpec.cpuOnly] model. An explicit `DARKMOON_ONNX_EP` still
   /// wins, so the crash this exists to dodge stays reproducible on demand.
   static List<OnnxExecutionProvider> _providerChainFor(OnnxModelSpec spec) {
-    if (!spec.cpuOnly) {
+    final override = Platform.environment['DARKMOON_ONNX_EP']?.toLowerCase();
+    if (override != null && override.isNotEmpty) {
       return _providerChain;
     }
-    final override = Platform.environment['DARKMOON_ONNX_EP']?.toLowerCase();
-    return override != null && override.isNotEmpty ? _providerChain : const [];
+    if (spec.cpuOnly) {
+      return const [];
+    }
+    if (spec.avoidDirectMl) {
+      return [
+        for (final provider in _providerChain)
+          if (provider != OnnxExecutionProvider.directMl) provider,
+      ];
+    }
+    return _providerChain;
   }
 
   static OnnxModel _create(OnnxModelSpec spec) {
