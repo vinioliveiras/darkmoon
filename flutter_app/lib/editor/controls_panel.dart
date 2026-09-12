@@ -303,9 +303,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
 
   /// Section names the user has collapsed, Meridian-style — every section
   /// starts expanded, matching the panel's previous (always-open) layout.
-  // Negative starts folded: it is off for almost every photo, and an
-  // open section of inert sliders reads as something to fix.
-  final Set<String> _collapsed = {'NEGATIVE'};
+  final Set<String> _collapsed = {};
 
   /// A category switch flips (and its own slide animation starts) the
   /// instant it's tapped — [onChanged] fires synchronously, same as any
@@ -1108,41 +1106,6 @@ class _ControlsPanelState extends State<_ControlsPanel>
                             masksBlock,
                             const SizedBox(height: 8),
                           ],
-                          // Negative conversion leads the Adjust tab: it
-                          // turns the scan into a positive before any
-                          // other slider sees it. Global only — a mask
-                          // layer renders over the converted base.
-                          if (_inTab(_ControlsTab.adjust) &&
-                              widget.activeMaskId == imageMaskId)
-                            ..._section(
-                              'NEGATIVE',
-                              label: l10n.sectionNegative,
-                              enabled: (values[_negativeKey] ?? 0) != 0,
-                              onEnabledChanged: (v) {
-                                onChanged(_negativeKey, v ? 1.0 : 0.0);
-                                onChangeEnd(_negativeKey, v ? 1.0 : 0.0);
-                              },
-                              children: [
-                                for (final spec in _negativeSliders.skip(1))
-                                  Padding(
-                                    padding: const EdgeInsets.only(bottom: 12),
-                                    child: SliderRow(
-                                      name: _sliderLabel(l10n, spec.name),
-                                      min: spec.min,
-                                      max: spec.max,
-                                      value:
-                                          values[spec.name] ??
-                                          spec.defaultValue,
-                                      decimals: spec.decimals,
-                                      dragSensitivity: spec.dragSensitivity,
-                                      defaultValue: spec.defaultValue,
-                                      onChanged: (v) => onChanged(spec.name, v),
-                                      onChangeEnd: (v) =>
-                                          onChangeEnd(spec.name, v),
-                                    ),
-                                  ),
-                              ],
-                            ),
                           for (final entry in _sections.entries.where(
                             (e) => _inTab(_tabOf(e.key)),
                           )) ...[

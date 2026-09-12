@@ -1210,18 +1210,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get sectionFilm => 'FILM';
 
   @override
-  String get sectionNegative => 'NEGATIV';
-
-  @override
-  String get sliderNegativeRed => 'Rot';
-
-  @override
-  String get sliderNegativeGreen => 'Grün';
-
-  @override
-  String get sliderNegativeBlue => 'Blau';
-
-  @override
   String get filmNone => 'Keiner';
 
   @override

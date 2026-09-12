@@ -1,8 +1,11 @@
 // Negative conversion (2026-09-12): a scanned or photographed colour
-// negative turned into a positive, as the first thing the pipeline does
-// — before Exposure and White Balance, so every later stage edits a
-// positive, the way Solstice's converter hands its result to the normal
-// editor.
+// negative turned into a positive. Like Solstice's converter it is a
+// library action, not an edit: the Albums context menu opens
+// `library/negative_conversion_dialog.dart`, which previews these
+// functions and then writes a `<name>_Positive.tiff` beside each
+// original (`library/negative_converter.dart`), and that file is what
+// gets edited afterwards. (It was a render stage for a few hours on
+// 2026-09-12; the user asked for Solstice's shape instead.)
 //
 // The method is Solstice's `negative_conversion.rs`, stage for stage:
 //
@@ -21,12 +24,9 @@
 // 5. Output as 1/2.2 gamma, which is what the pipeline's display-referred
 //    buffer holds.
 //
-// CPU and GPU (`shaders/negative.frag`) run the same arithmetic; keep the
-// two identical, and the parity test in integration_test/ honest.
-//
-// No Amount slider, deliberately (the house rule's exception clause): a
-// negative is inverted or it is not — half an inversion is grey mush,
-// not a weaker version of the look. The five real controls are here.
+// [applyNegative] (float buffer, the dialog's preview) and
+// [convertNegativeRgb16] (bytes in, 16-bit out, the file) run the same
+// arithmetic; keep the two identical.
 
 import 'dart:math' as math;
 import 'dart:typed_data';
@@ -217,4 +217,80 @@ void applyNegative(
     buffer[i + 1] = math.pow(g.clamp(0.0, 1.0), 1 / 2.2) * 255.0;
     buffer[i + 2] = math.pow(b.clamp(0.0, 1.0), 1 / 2.2) * 255.0;
   }
+}
+
+/// [analyzeNegativeBounds] on a copy of [rgb] shrunk so its long edge is
+/// at most [maxDim] — what the file converter measures on, like
+/// Solstice's 1080 px reference: the percentiles are the same to well
+/// within a level, and a 24 MP frame does not need 24 M samples to say
+/// where its black and white are.
+NegativeBounds analyzeNegativeBoundsDownscaled(
+  Uint8List rgb,
+  int width,
+  int height, {
+  int maxDim = 1080,
+}) {
+  final scale = math.max(width, height) / maxDim;
+  if (scale <= 1) {
+    return analyzeNegativeBounds(rgb, width, height);
+  }
+  final w = math.max(1, (width / scale).round());
+  final h = math.max(1, (height / scale).round());
+  final small = Uint8List(w * h * 3);
+  for (var y = 0; y < h; y++) {
+    final sy = math.min(height - 1, (y * scale).floor());
+    for (var x = 0; x < w; x++) {
+      final sx = math.min(width - 1, (x * scale).floor());
+      final s = (sy * width + sx) * 3, d = (y * w + x) * 3;
+      small[d] = rgb[s];
+      small[d + 1] = rgb[s + 1];
+      small[d + 2] = rgb[s + 2];
+    }
+  }
+  return analyzeNegativeBounds(small, w, h);
+}
+
+/// [applyNegative]'s arithmetic on packed 8-bit sRGB [rgb], written out
+/// as 16-bit samples (0..65535) — the converter's path: the same stages
+/// without a 3-float-per-pixel working buffer, and with the tone curve's
+/// smooth output kept for the 16-bit TIFF instead of rounded to a byte.
+Uint16List convertNegativeRgb16(
+  Uint8List rgb,
+  NegativeParams params,
+  NegativeBounds bounds,
+) {
+  final out = Uint16List(rgb.length);
+  final c = params.curve;
+  final k = c.k, x0 = c.x0, y0 = c.y0, scale = c.scale;
+  final weights = [params.redWeight, params.greenWeight, params.blueWeight];
+  // Density per input level, once: 256 entries per channel share it.
+  final density = Float64List(256);
+  for (var v = 0; v < 256; v++) {
+    density[v] = _density(v.toDouble());
+  }
+  final px = Float64List(3);
+  for (var i = 0; i < rgb.length; i += 3) {
+    for (var ch = 0; ch < 3; ch++) {
+      var n =
+          (density[rgb[i + ch]] - bounds.min[ch]) /
+          (bounds.max[ch] - bounds.min[ch]);
+      n = math.max(n, 0.0) * weights[ch];
+      final sigmoid = 1.0 / (1.0 + math.exp(-k * (n - x0)));
+      px[ch] = ((sigmoid - y0) * scale).clamp(0.0, 1.0);
+    }
+    var r = px[0], g = px[1], b = px[2];
+    final luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    final maxCh = math.max(r, math.max(g, b));
+    if (maxCh > 0.9) {
+      final overflow = ((maxCh - 0.9) * 10.0).clamp(0.0, 1.0);
+      final satReduction = overflow * overflow;
+      r += (luma - r) * satReduction;
+      g += (luma - g) * satReduction;
+      b += (luma - b) * satReduction;
+    }
+    out[i] = (math.pow(r.clamp(0.0, 1.0), 1 / 2.2) * 65535).round();
+    out[i + 1] = (math.pow(g.clamp(0.0, 1.0), 1 / 2.2) * 65535).round();
+    out[i + 2] = (math.pow(b.clamp(0.0, 1.0), 1 / 2.2) * 65535).round();
+  }
+  return out;
 }

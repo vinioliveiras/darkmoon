@@ -2122,30 +2122,6 @@ abstract class AppLocalizations {
   /// **'FILM'**
   String get sectionFilm;
 
-  /// No description provided for @sectionNegative.
-  ///
-  /// In en, this message translates to:
-  /// **'NEGATIVE'**
-  String get sectionNegative;
-
-  /// No description provided for @sliderNegativeRed.
-  ///
-  /// In en, this message translates to:
-  /// **'Red'**
-  String get sliderNegativeRed;
-
-  /// No description provided for @sliderNegativeGreen.
-  ///
-  /// In en, this message translates to:
-  /// **'Green'**
-  String get sliderNegativeGreen;
-
-  /// No description provided for @sliderNegativeBlue.
-  ///
-  /// In en, this message translates to:
-  /// **'Blue'**
-  String get sliderNegativeBlue;
-
   /// No description provided for @filmNone.
   ///
   /// In en, this message translates to:
