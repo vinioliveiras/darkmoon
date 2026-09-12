@@ -37,7 +37,8 @@ class _ControlsPanel extends StatefulWidget {
     required this.cropOverlayActive,
     required this.removeModeActive,
     required this.removeHasStrokes,
-    required this.removalCount,
+    required this.removeGrow,
+    required this.removals,
     required this.removalBusy,
     required this.cropTransform,
     required this.cropAspectRatio,
@@ -125,7 +126,8 @@ class _ControlsPanel extends StatefulWidget {
   /// [_RemoveObjectsPanel].
   final bool removeModeActive;
   final bool removeHasStrokes;
-  final int removalCount;
+  final double removeGrow;
+  final List<Removal> removals;
   final bool removalBusy;
   final CropTransformParams cropTransform;
   final double? cropAspectRatio;
@@ -222,8 +224,10 @@ class _ControlsPanelState extends State<_ControlsPanel>
     brushRadius: widget.brushRadius,
     brushHardness: widget.brushHardness,
     brushErase: widget.brushErase,
+    grow: widget.removeGrow,
     hasStrokes: widget.removeHasStrokes,
-    removalCount: widget.removalCount,
+    masks: widget.masks,
+    removals: widget.removals,
     busy: widget.removalBusy,
     actions: widget.actions,
   );

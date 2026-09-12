@@ -838,12 +838,6 @@ abstract class AppLocalizations {
   /// **'Clear'**
   String get removeClearStrokes;
 
-  /// No description provided for @removeUndoRemoval.
-  ///
-  /// In en, this message translates to:
-  /// **'Undo last removal'**
-  String get removeUndoRemoval;
-
   /// No description provided for @removeDoneButton.
   ///
   /// In en, this message translates to:
@@ -873,6 +867,60 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Removal failed'**
   String get removeFailedStatus;
+
+  /// No description provided for @removePatchName.
+  ///
+  /// In en, this message translates to:
+  /// **'Removal {n}'**
+  String removePatchName(int n);
+
+  /// No description provided for @removeGrowLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Expand'**
+  String get removeGrowLabel;
+
+  /// No description provided for @removeWithMaskLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Or remove what a mask covers'**
+  String get removeWithMaskLabel;
+
+  /// No description provided for @removeWithMaskPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove with a mask…'**
+  String get removeWithMaskPlaceholder;
+
+  /// No description provided for @removeListTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Removals'**
+  String get removeListTitle;
+
+  /// No description provided for @removeVisibleTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Applied — click to hide'**
+  String get removeVisibleTooltip;
+
+  /// No description provided for @removeHiddenTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Hidden — click to apply'**
+  String get removeHiddenTooltip;
+
+  /// No description provided for @removeDeleteTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Delete this removal'**
+  String get removeDeleteTooltip;
+
+  /// No description provided for @removeMaskNotReadyMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'That mask is still being computed. Try again in a moment.'**
+  String get removeMaskNotReadyMessage;
 
   /// No description provided for @removeCountLabel.
   ///

@@ -1035,7 +1035,10 @@ class _ControlsPanelActions {
     required this.onLensCorrectionChangeEnd,
     required this.onToggleRemoveMode,
     required this.onRunRemoval,
-    required this.onUndoRemoval,
+    required this.onRemoveWithMask,
+    required this.onToggleRemovalVisible,
+    required this.onDeleteRemoval,
+    required this.onRemoveGrowChanged,
     required this.onUndoRemoveStroke,
     required this.onClearRemoveStrokes,
   });
@@ -1147,10 +1150,14 @@ class _ControlsPanelActions {
   final VoidCallback onResetCropTransform;
 
   /// Object removal (2026-09-12): in and out of the mode, run the model
-  /// over the painted strokes, drop the last removal, and edit the strokes.
+  /// over the painted strokes or over a mask of the stack, hide or delete
+  /// one removal, the Expand setting, and edit the strokes.
   final VoidCallback onToggleRemoveMode;
   final VoidCallback onRunRemoval;
-  final VoidCallback onUndoRemoval;
+  final ValueChanged<String> onRemoveWithMask;
+  final ValueChanged<int> onToggleRemovalVisible;
+  final ValueChanged<int> onDeleteRemoval;
+  final ValueChanged<double> onRemoveGrowChanged;
   final VoidCallback onUndoRemoveStroke;
   final VoidCallback onClearRemoveStrokes;
 

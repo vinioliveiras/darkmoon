@@ -5,16 +5,20 @@
 part of '../editor_screen.dart';
 
 /// Takes the whole controls panel while removal mode is on, the way the
-/// crop panel does: the brush's size and hardness, the strokes' undo and
-/// clear, the Remove button that runs the model over what was painted,
-/// and a way back out. The strokes themselves are painted on the canvas.
+/// crop panel does. After Solstice's inpainting panel: paint with the
+/// brush and press Remove, or take an existing mask (Subject, Sky, a
+/// gradient, a colour range) as the removal; Expand grows the coverage
+/// past a segmentation's exact edge; and every removal made is a patch
+/// in a list, to hide or delete on its own.
 class _RemoveObjectsPanel extends StatelessWidget {
   const _RemoveObjectsPanel({
     required this.brushRadius,
     required this.brushHardness,
     required this.brushErase,
+    required this.grow,
     required this.hasStrokes,
-    required this.removalCount,
+    required this.masks,
+    required this.removals,
     required this.busy,
     required this.actions,
   });
@@ -23,11 +27,17 @@ class _RemoveObjectsPanel extends StatelessWidget {
   final double brushHardness;
   final bool brushErase;
 
+  /// How far the coverage is grown, in percent of the photo's width.
+  final double grow;
+
   /// Whether anything is painted and waiting to be removed.
   final bool hasStrokes;
 
-  /// How many removals the photo already carries.
-  final int removalCount;
+  /// The photo's masks, offered as removals.
+  final List<MaskLayer> masks;
+
+  /// The removals the photo carries, oldest first.
+  final List<Removal> removals;
 
   /// The model is running; the buttons wait for it.
   final bool busy;
@@ -38,6 +48,9 @@ class _RemoveObjectsPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final muted = theme.textTheme.labelSmall?.copyWith(
+      color: DarkmoonColors.textMuted,
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -74,6 +87,20 @@ class _RemoveObjectsPanel extends StatelessWidget {
             decimals: 2,
             onChanged: actions.onBrushHardnessChanged,
             onChangeEnd: actions.onBrushHardnessChanged,
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: SliderRow(
+            name: l10n.removeGrowLabel,
+            min: 0,
+            max: 5,
+            value: grow,
+            decimals: 1,
+            valueSuffix: '%',
+            defaultValue: 0.5,
+            onChanged: actions.onRemoveGrowChanged,
+            onChangeEnd: actions.onRemoveGrowChanged,
           ),
         ),
         Row(
@@ -115,33 +142,83 @@ class _RemoveObjectsPanel extends StatelessWidget {
           child: Text(l10n.removeRunButton),
         ),
         const SizedBox(height: 6),
-        Row(
-          children: [
-            TextButton(
-              onPressed: hasStrokes && !busy
-                  ? actions.onClearRemoveStrokes
-                  : null,
-              child: Text(l10n.removeClearStrokes),
-            ),
-            const Spacer(),
-            TextButton(
-              onPressed: removalCount > 0 && !busy
-                  ? actions.onUndoRemoval
-                  : null,
-              child: Text(l10n.removeUndoRemoval),
-            ),
-          ],
-        ),
-        if (removalCount > 0)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Text(
-              l10n.removeCountLabel(removalCount),
-              style: theme.textTheme.labelSmall?.copyWith(
-                color: DarkmoonColors.textMuted,
-              ),
-            ),
+        Align(
+          alignment: Alignment.centerLeft,
+          child: TextButton(
+            onPressed: hasStrokes && !busy
+                ? actions.onClearRemoveStrokes
+                : null,
+            child: Text(l10n.removeClearStrokes),
           ),
+        ),
+        if (masks.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          Text(l10n.removeWithMaskLabel, style: muted),
+          const SizedBox(height: 6),
+          // Choosing a mask runs the removal at once, the way the add-mask
+          // menu adds at once — there is nothing else to set first.
+          StyledDropdown<String>(
+            value: null,
+            placeholder: l10n.removeWithMaskPlaceholder,
+            items: [
+              for (final mask in masks)
+                StyledDropdownItem(value: mask.id, label: mask.name),
+            ],
+            onChanged: busy ? (_) {} : actions.onRemoveWithMask,
+          ),
+        ],
+        if (removals.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          Text(l10n.removeListTitle, style: muted),
+          const SizedBox(height: 4),
+          for (var i = 0; i < removals.length; i++)
+            Row(
+              children: [
+                SizedBox(
+                  height: 30,
+                  width: 30,
+                  child: IconButton(
+                    tooltip: removals[i].visible
+                        ? l10n.removeVisibleTooltip
+                        : l10n.removeHiddenTooltip,
+                    onPressed: busy
+                        ? null
+                        : () => actions.onToggleRemovalVisible(i),
+                    icon: Icon(
+                      removals[i].visible
+                          ? CupertinoIcons.eye
+                          : CupertinoIcons.eye_slash,
+                      size: 14,
+                      color: removals[i].visible
+                          ? DarkmoonColors.textPrimary
+                          : DarkmoonColors.textMuted,
+                    ),
+                  ),
+                ),
+                Expanded(
+                  child: Text(
+                    removals[i].name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: removals[i].visible
+                          ? DarkmoonColors.textPrimary
+                          : DarkmoonColors.textMuted,
+                    ),
+                  ),
+                ),
+                SizedBox(
+                  height: 30,
+                  width: 30,
+                  child: IconButton(
+                    tooltip: l10n.removeDeleteTooltip,
+                    onPressed: busy ? null : () => actions.onDeleteRemoval(i),
+                    icon: const Icon(CupertinoIcons.trash, size: 14),
+                  ),
+                ),
+              ],
+            ),
+        ],
         const SizedBox(height: 16),
         Align(
           alignment: Alignment.centerRight,

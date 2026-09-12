@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../diagnostics/dev_log.dart';
 import '../render/mask.dart';
+import 'removal.dart';
 import '../render/tone_curve.dart';
 import 'atomic_json_file.dart';
 import 'legacy_filename_migration.dart';
@@ -285,44 +286,46 @@ Future<void> clearPhotoMasks() async {
 
 // ---------------------------------------------------------------- removals
 
-/// Object removals (2026-09-12): per photo, the brush strokes of each
-/// removal in the order they were applied. Its own file, in the brush
-/// encoding above; the pixels themselves live in the inpaint cache and
-/// are recomputed from these when that misses.
+/// Object removals (2026-09-12): per photo, each removal's coverage in
+/// the order they were applied (see `Removal`). Its own file; the pixels
+/// themselves live in the inpaint cache and are recomputed from these
+/// when that misses.
 Future<File> _inpaintFile() async {
   final dir = await _maskDir();
   return File(p.join(dir.path, 'darkmoon_inpaint.json'));
 }
 
-Future<Map<String, List<BrushGeometry>>> loadPhotoInpaints() async {
+Future<Map<String, List<Removal>>> loadPhotoInpaints() async {
   try {
     final file = await _inpaintFile();
     final raw = await readJsonObject(file, what: 'inpaint');
     if (raw == null) {
       return {};
     }
-    return {
-      for (final entry in raw.entries)
-        entry.key: [
-          for (final removal in entry.value as List)
-            _decodeBrush(removal as List<dynamic>),
-        ],
-    };
+    final result = <String, List<Removal>>{};
+    for (final entry in raw.entries) {
+      final removals = [
+        for (final removal in entry.value as List)
+          if (Removal.fromJson(removal) case final parsed?) parsed,
+      ];
+      if (removals.isNotEmpty) {
+        result[entry.key] = removals;
+      }
+    }
+    return result;
   } catch (e, st) {
     DevLog.logError('loadInpaints failed, treating removals as empty', e, st);
     return {};
   }
 }
 
-Future<void> savePhotoInpaints(
-  Map<String, List<BrushGeometry>> inpaints,
-) async {
+Future<void> savePhotoInpaints(Map<String, List<Removal>> inpaints) async {
   final file = await _inpaintFile();
   await writeJsonFileAtomically(
     file,
     jsonEncode({
       for (final entry in inpaints.entries)
-        entry.key: [for (final removal in entry.value) _encodeBrush(removal)],
+        entry.key: [for (final removal in entry.value) removal.toJson()],
     }),
   );
 }

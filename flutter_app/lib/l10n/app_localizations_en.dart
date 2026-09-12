@@ -447,9 +447,6 @@ class AppLocalizationsEn extends AppLocalizations {
   String get removeClearStrokes => 'Clear';
 
   @override
-  String get removeUndoRemoval => 'Undo last removal';
-
-  @override
   String get removeDoneButton => 'Done';
 
   @override
@@ -466,6 +463,36 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get removeFailedStatus => 'Removal failed';
+
+  @override
+  String removePatchName(int n) {
+    return 'Removal $n';
+  }
+
+  @override
+  String get removeGrowLabel => 'Expand';
+
+  @override
+  String get removeWithMaskLabel => 'Or remove what a mask covers';
+
+  @override
+  String get removeWithMaskPlaceholder => 'Remove with a mask…';
+
+  @override
+  String get removeListTitle => 'Removals';
+
+  @override
+  String get removeVisibleTooltip => 'Applied — click to hide';
+
+  @override
+  String get removeHiddenTooltip => 'Hidden — click to apply';
+
+  @override
+  String get removeDeleteTooltip => 'Delete this removal';
+
+  @override
+  String get removeMaskNotReadyMessage =>
+      'That mask is still being computed. Try again in a moment.';
 
   @override
   String removeCountLabel(int count) {

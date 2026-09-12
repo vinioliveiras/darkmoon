@@ -1,5 +1,8 @@
-// Object removal (2026-09-12): the brush painted over what should go,
-// the removals a photo carries, and running the model over them.
+// Object removal (2026-09-12): the brush painted over what should go, a
+// mask turned into a removal, the removals a photo carries, and running
+// the model over them. After Solstice's inpainting panel: every removal
+// is a "patch" that can be hidden or deleted on its own, and it can come
+// from any mask, not only the brush.
 //
 // A `part` of editor_screen.dart holding methods of _EditorScreenState,
 // as an extension: same library, same private scope, fields stay on the
@@ -8,8 +11,7 @@ part of '../editor_screen.dart';
 
 extension _EditorInpaint on _EditorScreenState {
   /// The removals applied to [path], oldest first.
-  List<BrushGeometry> _removalsFor(String path) =>
-      _store.inpaints[path] ?? const [];
+  List<Removal> _removalsFor(String path) => _store.inpaints[path] ?? const [];
 
   /// Whether the selected photo is showing removals — its source is the
   /// model's result, not the plain decode.
@@ -71,43 +73,130 @@ extension _EditorInpaint on _EditorScreenState {
     _rebuild(() => _removeStrokes = const BrushGeometry());
   }
 
-  /// Commits the painted strokes as one more removal of the selected
-  /// photo and runs the model. On failure the removal is taken back.
-  Future<void> _runRemoval() async {
-    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
-    if (selected == null ||
-        _removeStrokes.strokes.isEmpty ||
-        _isRunningInpaint) {
-      return;
-    }
-    final path = selected.path;
-    final previous = _removalsFor(path);
-    final removals = [...previous, _removeStrokes];
-    await _setRemovals(path, previous, removals);
+  void _setRemoveGrow(double value) {
+    _rebuild(() => _removeGrow = value);
   }
 
-  /// Drops the selected photo's last removal and recomputes the rest.
-  Future<void> _undoLastRemoval() async {
+  /// [mask]'s coverage as a removal, rasterised at the preview's
+  /// resolution (which is what a colour range or an AI mask needs to be
+  /// judged against) and grown by the Expand setting. Null when the
+  /// preview is not decoded yet or an AI mask's map is still computing.
+  Removal? _rasterizeRemoval(String path, MaskLayer mask, String name) {
+    final preview = _editSources[path]?.preview;
+    if (preview == null) {
+      return null;
+    }
+    final width = preview.width;
+    final height = preview.height;
+    final aiMap = _aiMaskMaps[mask.id];
+    if (aiMaskTypes.contains(mask.type) && aiMap == null) {
+      return null;
+    }
+    Float32List? buffer;
+    if (mask.type == MaskType.colorRange || mask.type == MaskType.luminance) {
+      final bytes = preview.rgbBytes;
+      buffer = Float32List(bytes.length);
+      for (var i = 0; i < bytes.length; i++) {
+        buffer[i] = bytes[i].toDouble();
+      }
+    }
+    var alpha = computeMaskAlpha(
+      mask,
+      width,
+      height,
+      sourceForColorRange: buffer,
+      aiMap: aiMap,
+    );
+    final grow = (_removeGrow / 100 * width).round();
+    if (grow > 0) {
+      alpha = dilateAlpha(alpha, width, height, grow);
+    }
+    final longer = math.max(width, height);
+    var storedWidth = width;
+    var storedHeight = height;
+    if (longer > removalMaxDimension) {
+      final scale = removalMaxDimension / longer;
+      storedWidth = math.max(1, (width * scale).round());
+      storedHeight = math.max(1, (height * scale).round());
+      alpha = resampleAlpha(alpha, width, height, storedWidth, storedHeight);
+    }
+    return Removal(
+      name: name,
+      width: storedWidth,
+      height: storedHeight,
+      alphaPng: encodeAlphaPng(alpha, storedWidth, storedHeight),
+    );
+  }
+
+  /// Commits the painted strokes as one more removal of the selected
+  /// photo and runs the model.
+  Future<void> _runRemoval() async {
+    if (_removeStrokes.strokes.isEmpty) {
+      return;
+    }
+    await _addRemovalFrom(_removeLayer);
+  }
+
+  /// One more removal from a mask of the stack, by id.
+  Future<void> _removeWithMask(String maskId) async {
+    final mask = _currentMasks.where((m) => m.id == maskId).firstOrNull;
+    if (mask == null) {
+      return;
+    }
+    await _addRemovalFrom(mask);
+  }
+
+  Future<void> _addRemovalFrom(MaskLayer mask) async {
     final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
     if (selected == null || _isRunningInpaint) {
       return;
     }
+    final l10n = AppLocalizations.of(context)!;
     final path = selected.path;
     final previous = _removalsFor(path);
-    if (previous.isEmpty) {
+    final removal = _rasterizeRemoval(
+      path,
+      mask,
+      l10n.removePatchName(previous.length + 1),
+    );
+    if (removal == null) {
+      _notify(detail: l10n.removeMaskNotReadyMessage);
       return;
     }
-    await _setRemovals(
-      path,
-      previous,
-      previous.sublist(0, previous.length - 1),
-    );
+    await _setRemovals(path, previous, [...previous, removal]);
+  }
+
+  Future<void> _toggleRemovalVisible(int index) async {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null || _isRunningInpaint) {
+      return;
+    }
+    final previous = _removalsFor(selected.path);
+    if (index < 0 || index >= previous.length) {
+      return;
+    }
+    final next = [...previous];
+    next[index] = previous[index].copyWith(visible: !previous[index].visible);
+    await _setRemovals(selected.path, previous, next);
+  }
+
+  Future<void> _deleteRemoval(int index) async {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null || _isRunningInpaint) {
+      return;
+    }
+    final previous = _removalsFor(selected.path);
+    if (index < 0 || index >= previous.length) {
+      return;
+    }
+    final next = [...previous]..removeAt(index);
+    await _setRemovals(selected.path, previous, next);
   }
 
   Future<void> _setRemovals(
     String path,
-    List<BrushGeometry> previous,
-    List<BrushGeometry> removals,
+    List<Removal> previous,
+    List<Removal> removals,
   ) async {
     _storeRemovals(path, removals);
     _rebuild(() => _removeStrokes = const BrushGeometry());
@@ -126,7 +215,7 @@ extension _EditorInpaint on _EditorScreenState {
 
   /// Records [removals] as [path]'s, in the store and as the marker in
   /// the slider values that says the source carries them.
-  void _storeRemovals(String path, List<BrushGeometry> removals) {
+  void _storeRemovals(String path, List<Removal> removals) {
     if (removals.isEmpty) {
       _store.inpaints.remove(path);
     } else {
@@ -140,7 +229,7 @@ extension _EditorInpaint on _EditorScreenState {
   /// Swaps [path]'s edit source for its removals' result — or for the
   /// plain decode when [removals] is empty. False when the run failed or
   /// was cancelled (a message is shown for a failure).
-  Future<bool> _applyRemovals(String path, List<BrushGeometry> removals) async {
+  Future<bool> _applyRemovals(String path, List<Removal> removals) async {
     if (removals.isEmpty) {
       await _revertToNormalEditSource(path);
       return mounted;

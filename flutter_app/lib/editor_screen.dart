@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'dart:convert' show jsonDecode, jsonEncode, utf8;
 import 'dart:io' show Directory, File, Platform, Process;
 import 'dart:ui' as ui;
@@ -28,6 +29,7 @@ import 'catalog/colorize_cache.dart';
 import 'catalog/colorize_cache_dir.dart';
 import 'catalog/inpaint_cache.dart';
 import 'catalog/inpaint_cache_dir.dart';
+import 'catalog/removal.dart';
 import 'catalog/thumbnail_cache.dart';
 import 'catalog/thumbnail_cache_dir.dart';
 import 'cloud_denoise/cloud_denoise_provider.dart';
@@ -702,6 +704,10 @@ class _EditorScreenState extends State<EditorScreen>
   /// model run in flight.
   bool _removeModeActive = false;
   BrushGeometry _removeStrokes = const BrushGeometry();
+
+  /// How far a removal's coverage is grown past what was painted or
+  /// masked, in percent of the photo's width (Solstice's "Grow").
+  double _removeGrow = 0.5;
   bool _isRunningInpaint = false;
   InpaintProgress? _inpaintProgress;
   InpaintCancellationToken? _inpaintCancellation;
@@ -968,7 +974,10 @@ class _EditorScreenState extends State<EditorScreen>
     onLensCorrectionChangeEnd: _onLensCorrectionChangeEnd,
     onToggleRemoveMode: _toggleRemoveMode,
     onRunRemoval: () => unawaited(_runRemoval()),
-    onUndoRemoval: () => unawaited(_undoLastRemoval()),
+    onRemoveWithMask: (id) => unawaited(_removeWithMask(id)),
+    onToggleRemovalVisible: (i) => unawaited(_toggleRemovalVisible(i)),
+    onDeleteRemoval: (i) => unawaited(_deleteRemoval(i)),
+    onRemoveGrowChanged: _setRemoveGrow,
     onUndoRemoveStroke: _undoRemoveStroke,
     onClearRemoveStrokes: _clearRemoveStrokes,
   );
@@ -5433,11 +5442,10 @@ class _EditorScreenState extends State<EditorScreen>
                                             removeHasStrokes: _removeStrokes
                                                 .strokes
                                                 .isNotEmpty,
-                                            removalCount: selected == null
-                                                ? 0
-                                                : _removalsFor(
-                                                    selected.path,
-                                                  ).length,
+                                            removeGrow: _removeGrow,
+                                            removals: selected == null
+                                                ? const <Removal>[]
+                                                : _removalsFor(selected.path),
                                             removalBusy: _isRunningInpaint,
                                             cropTransform: _cropTransform,
                                             cropAspectRatio: _cropAspectRatio,

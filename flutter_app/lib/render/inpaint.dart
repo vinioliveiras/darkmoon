@@ -52,7 +52,9 @@ const inpaintHoleThreshold = 0.05;
 /// the coverage with a margin of [margin] times the coverage's longer
 /// side (at least [minMargin] px) so it has context to continue, cut
 /// down to the photo where it would overhang, and resampled to
-/// [modelSize]. The answer is resampled back onto the window and mixed
+/// [modelSize]. The margin is Solstice's (1.5 times the hole, never
+/// under 128 px): more surroundings than the hole itself, which is what
+/// the model continues from. The answer is resampled back onto the window and mixed
 /// in by [alpha] itself, so a brush's soft edge fades the fill in rather
 /// than cutting it. Pixels the brush did not reach keep their bytes.
 ///
@@ -68,8 +70,8 @@ Uint8List inpaintRegion(
   required InpaintModel runModel,
   int modelSize = 512,
   double threshold = inpaintHoleThreshold,
-  double margin = 0.5,
-  int minMargin = 32,
+  double margin = 1.5,
+  int minMargin = 128,
 }) {
   final bounds = maskBounds(alpha, width, height, threshold: threshold);
   if (bounds == null) {

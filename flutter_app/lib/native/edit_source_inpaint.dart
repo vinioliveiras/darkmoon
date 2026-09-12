@@ -5,11 +5,11 @@ import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
 import '../catalog/inpaint_cache.dart';
+import '../catalog/removal.dart';
 import '../diagnostics/dev_log.dart';
 import '../native/onnx_runtime.dart';
 import '../raw_files.dart' show isRawFile;
 import '../render/inpaint.dart';
-import '../render/mask.dart';
 import 'common_image.dart';
 import 'edit_source.dart';
 import 'image_utils.dart';
@@ -98,17 +98,17 @@ EditSourcePair _pairFrom(img.Image full, int previewMaxDimension) {
   );
 }
 
-/// Decodes the photo at full resolution and applies every removal in
-/// order, each one a brush mask rasterised at that resolution and filled
-/// by the model from its surroundings (see `inpaint.dart`); the result is
-/// cached as a PNG under the removals' key. Every removal is redone from
-/// the original when the key misses — a few seconds each, and simpler
-/// than caching every prefix.
+/// Decodes the photo at full resolution and applies every visible removal
+/// in order — each one's coverage brought up to that resolution and
+/// filled by the model from its surroundings (see `inpaint.dart`); the
+/// result is cached as a PNG under the removals' key. Every removal is
+/// redone from the original when the key misses — a few seconds each,
+/// and simpler than caching every prefix.
 Future<EditSourcePair?> _decodeAndInpaint(
   String path,
   String cacheDir,
   int previewMaxDimension,
-  List<BrushGeometry> removals,
+  List<Removal> removals,
   bool editEmbeddedJpeg,
   void Function(Object stage) onStage,
 ) async {
@@ -137,45 +137,52 @@ Future<EditSourcePair?> _decodeAndInpaint(
   final width = decoded.width;
   final height = decoded.height;
 
-  final model = OnnxModel.forSpec(lamaInpaintModelSpec);
-  onStage(
-    InpaintModelInfo(model.usingGpu, model.provider.label, model.gpuError),
-  );
-  final size = lamaInpaintModelSpec.inputTileSize;
-  final imageInput = model.inputNames[0];
-  final maskInput = model.inputNames[1];
-  final outputName = model.outputNames.first;
-
+  final visible = [
+    for (final removal in removals)
+      if (removal.visible) removal,
+  ];
   var rgb = decoded.rgbBytes;
-  for (var i = 0; i < removals.length; i++) {
-    final alpha = computeMaskAlpha(
-      MaskLayer(
-        id: 'removal',
-        name: 'removal',
-        type: MaskType.brush,
-        brush: removals[i],
-      ),
-      width,
-      height,
+  if (visible.isNotEmpty) {
+    final model = OnnxModel.forSpec(lamaInpaintModelSpec);
+    onStage(
+      InpaintModelInfo(model.usingGpu, model.provider.label, model.gpuError),
     );
-    rgb = inpaintRegion(
-      rgb,
-      width,
-      height,
-      alpha,
-      modelSize: size,
-      runModel: (imageChw, maskHw) {
-        final outputs = model.runGraph(
-          {
-            imageInput: OnnxTensorData.float32([1, 3, size, size], imageChw),
-            maskInput: OnnxTensorData.float32([1, 1, size, size], maskHw),
-          },
-          [outputName],
-        );
-        return outputs[outputName]!.floats!;
-      },
-    );
-    onStage(InpaintProgress(i + 1, removals.length));
+    final size = lamaInpaintModelSpec.inputTileSize;
+    final imageInput = model.inputNames[0];
+    final maskInput = model.inputNames[1];
+    final outputName = model.outputNames.first;
+
+    for (var i = 0; i < visible.length; i++) {
+      final stored = decodeAlphaPng(visible[i].alphaPng);
+      if (stored == null) {
+        continue;
+      }
+      final alpha = resampleAlpha(
+        stored.alpha,
+        stored.width,
+        stored.height,
+        width,
+        height,
+      );
+      rgb = inpaintRegion(
+        rgb,
+        width,
+        height,
+        alpha,
+        modelSize: size,
+        runModel: (imageChw, maskHw) {
+          final outputs = model.runGraph(
+            {
+              imageInput: OnnxTensorData.float32([1, 3, size, size], imageChw),
+              maskInput: OnnxTensorData.float32([1, 1, size, size], maskHw),
+            },
+            [outputName],
+          );
+          return outputs[outputName]!.floats!;
+        },
+      );
+      onStage(InpaintProgress(i + 1, visible.length));
+    }
   }
 
   final full = img.Image.fromBytes(
@@ -208,7 +215,7 @@ class _InpaintIsolateArgs {
   final String path;
   final String cacheDir;
   final int previewMaxDimension;
-  final List<BrushGeometry> removals;
+  final List<Removal> removals;
   final bool editEmbeddedJpeg;
   final SendPort sendPort;
   final int cancelFlagAddress;
@@ -249,7 +256,7 @@ Future<EditSourcePair?> decodeEditSourcesWithInpaint(
   String path,
   String cacheDir,
   void Function(Object stage) onStage, {
-  required List<BrushGeometry> removals,
+  required List<Removal> removals,
   int previewMaxDimension = defaultPreviewMaxDimension,
   bool editEmbeddedJpeg = false,
   InpaintCancellationToken? cancellationToken,

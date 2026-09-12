@@ -454,9 +454,6 @@ class AppLocalizationsDe extends AppLocalizations {
   String get removeClearStrokes => 'Leeren';
 
   @override
-  String get removeUndoRemoval => 'Letzte Entfernung rückgängig';
-
-  @override
   String get removeDoneButton => 'Fertig';
 
   @override
@@ -473,6 +470,36 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get removeFailedStatus => 'Entfernen fehlgeschlagen';
+
+  @override
+  String removePatchName(int n) {
+    return 'Entfernung $n';
+  }
+
+  @override
+  String get removeGrowLabel => 'Erweitern';
+
+  @override
+  String get removeWithMaskLabel => 'Oder entfernen, was eine Maske abdeckt';
+
+  @override
+  String get removeWithMaskPlaceholder => 'Mit einer Maske entfernen…';
+
+  @override
+  String get removeListTitle => 'Entfernungen';
+
+  @override
+  String get removeVisibleTooltip => 'Angewendet — zum Ausblenden klicken';
+
+  @override
+  String get removeHiddenTooltip => 'Ausgeblendet — zum Anwenden klicken';
+
+  @override
+  String get removeDeleteTooltip => 'Diese Entfernung löschen';
+
+  @override
+  String get removeMaskNotReadyMessage =>
+      'Diese Maske wird noch berechnet. Versuchen Sie es gleich noch einmal.';
 
   @override
   String removeCountLabel(int count) {

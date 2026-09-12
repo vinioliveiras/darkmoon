@@ -3,6 +3,7 @@ import '../catalog/curve_store.dart';
 import '../catalog/mask_store.dart';
 import '../catalog/photo_meta_store.dart';
 import '../catalog/photo_preset_store.dart';
+import '../catalog/removal.dart';
 import '../catalog/sidecar_xmp.dart';
 import '../library/photo_mover.dart' show rekeyUnderFolder;
 import '../render/mask.dart';
@@ -33,10 +34,10 @@ class PhotoEditStore {
   /// Mask stacks per photo — structured data, its own file too.
   Map<String, List<MaskLayer>> masks = {};
 
-  /// Object removals per photo (2026-09-12): the strokes of each, in
-  /// order. An edit like the others, saved and moved with them; not
-  /// mirrored to the sidecar, which has no field for it.
-  Map<String, List<BrushGeometry>> inpaints = {};
+  /// Object removals per photo (2026-09-12), in order. An edit like the
+  /// others, saved and moved with them; not mirrored to the sidecar,
+  /// which has no field for it.
+  Map<String, List<Removal>> inpaints = {};
 
   /// Which preset id was last applied to each photo, so the Presets
   /// panel still marks it as applied after a restart. Purely a UI hint;

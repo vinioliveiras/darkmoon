@@ -448,9 +448,6 @@ class AppLocalizationsPt extends AppLocalizations {
   String get removeClearStrokes => 'Limpar';
 
   @override
-  String get removeUndoRemoval => 'Desfazer última remoção';
-
-  @override
   String get removeDoneButton => 'Concluir';
 
   @override
@@ -467,6 +464,36 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get removeFailedStatus => 'Falha ao remover';
+
+  @override
+  String removePatchName(int n) {
+    return 'Remoção $n';
+  }
+
+  @override
+  String get removeGrowLabel => 'Expandir';
+
+  @override
+  String get removeWithMaskLabel => 'Ou remover o que uma máscara cobre';
+
+  @override
+  String get removeWithMaskPlaceholder => 'Remover com uma máscara…';
+
+  @override
+  String get removeListTitle => 'Remoções';
+
+  @override
+  String get removeVisibleTooltip => 'Aplicada — clique para ocultar';
+
+  @override
+  String get removeHiddenTooltip => 'Oculta — clique para aplicar';
+
+  @override
+  String get removeDeleteTooltip => 'Apagar esta remoção';
+
+  @override
+  String get removeMaskNotReadyMessage =>
+      'Essa máscara ainda está sendo calculada. Tente de novo daqui a pouco.';
 
   @override
   String removeCountLabel(int count) {

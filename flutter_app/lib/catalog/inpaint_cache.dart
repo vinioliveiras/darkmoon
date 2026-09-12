@@ -5,8 +5,7 @@ import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:path/path.dart' as p;
 
-import '../render/mask.dart';
-import 'mask_store.dart';
+import 'removal.dart';
 
 /// Bump when the removal pipeline changes in a way that changes its
 /// output for the same input (another model file, a change to the
@@ -14,14 +13,14 @@ import 'mask_store.dart';
 /// the role `colorizeCacheVersion` plays for that cache.
 const int inpaintCacheVersion = 1;
 
-/// What a photo's removals amount to, as one string: the strokes of every
-/// removal in order. Two photos with the same removals painted share
-/// nothing else in the key, so this only ever tells one removal set from
-/// another for the same file.
-String inpaintRemovalsKey(List<BrushGeometry> removals) {
-  final encoded = jsonEncode([
-    for (final removal in removals) encodeBrushGeometry(removal),
-  ]);
+/// What a photo's removals amount to, as one string: every visible
+/// removal's coverage, in order. Hidden ones are left out, so hiding one
+/// and showing it again lands on the same entry.
+String inpaintRemovalsKey(List<Removal> removals) {
+  final encoded = [
+    for (final removal in removals)
+      if (removal.visible) removal.signature,
+  ].join('|');
   return sha1.convert(utf8.encode(encoded)).toString();
 }
 
