@@ -2236,6 +2236,30 @@ abstract class AppLocalizations {
   /// **'None'**
   String get filmNone;
 
+  /// No description provided for @filmImportTooltip.
+  ///
+  /// In en, this message translates to:
+  /// **'Import LUTs (.cube, Hald CLUT image)'**
+  String get filmImportTooltip;
+
+  /// No description provided for @filmImportDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Import LUTs'**
+  String get filmImportDialogTitle;
+
+  /// No description provided for @filmImportedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Imported 1 LUT} other{Imported {count} LUTs}} into the Film list.'**
+  String filmImportedMessage(int count);
+
+  /// No description provided for @filmImportFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not import {name}: {error}'**
+  String filmImportFailedMessage(String name, String error);
+
   /// No description provided for @sliderFilmAmount.
   ///
   /// In en, this message translates to:

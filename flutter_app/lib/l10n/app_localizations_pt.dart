@@ -1273,6 +1273,28 @@ class AppLocalizationsPt extends AppLocalizations {
   String get filmNone => 'Nenhum';
 
   @override
+  String get filmImportTooltip => 'Importar LUTs (.cube, imagem Hald CLUT)';
+
+  @override
+  String get filmImportDialogTitle => 'Importar LUTs';
+
+  @override
+  String filmImportedMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count LUTs importadas',
+      one: '1 LUT importada',
+    );
+    return '$_temp0 para a lista de filmes.';
+  }
+
+  @override
+  String filmImportFailedMessage(String name, String error) {
+    return 'Não foi possível importar $name: $error';
+  }
+
+  @override
   String get sliderFilmAmount => 'Intensidade do Filme';
 
   @override

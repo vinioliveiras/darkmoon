@@ -150,6 +150,7 @@ part 'editor/state_masks.dart';
 part 'editor/state_inpaint.dart';
 part 'editor/state_export.dart';
 part 'editor/state_negative.dart';
+part 'editor/state_film.dart';
 
 /// Main window: image viewer + toolbar, adjustment panel, and a filmstrip
 /// that lists real RAW files from a chosen folder. Selecting a file decodes
@@ -1036,6 +1037,7 @@ class _EditorScreenState extends State<EditorScreen>
     onToggleGuidedMode: _toggleGuidedMode,
     onLensCorrectionChanged: _onLensCorrectionChanged,
     onLensCorrectionChangeEnd: _onLensCorrectionChangeEnd,
+    onImportFilmLuts: () => unawaited(_importFilmLuts()),
     onToggleRemoveMode: _toggleRemoveMode,
     onRunRemoval: () => unawaited(_runRemoval()),
     onRemoveWithMask: (id) => unawaited(_removeWithMask(id)),
@@ -1255,13 +1257,14 @@ class _EditorScreenState extends State<EditorScreen>
     }
   }
 
-  /// Loads the bundled film tables (assets/film_luts/) into [_filmLuts].
-  /// Not awaited from initState, like every other `_load*`; a photo that
-  /// already carries a `Film` id is re-rendered once they land.
+  /// Loads the bundled film tables (assets/film_luts/) and the user's
+  /// imports into [_filmLuts]. Not awaited from initState, like every
+  /// other `_load*`; a photo that already carries a `Film` id is
+  /// re-rendered once they land.
   Future<void> _loadFilmLuts() async {
     final FilmLutLibrary loaded;
     try {
-      loaded = await FilmLutLibrary.loadBundled();
+      loaded = await FilmLutLibrary.loadBundled(userDir: await _filmUserDir());
     } catch (_) {
       return; // No manifest bundled: the Film section stays empty.
     }

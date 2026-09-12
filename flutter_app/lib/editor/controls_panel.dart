@@ -1841,34 +1841,65 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                     top: 6,
                                     bottom: 14,
                                   ),
-                                  child: StyledDropdown<int>(
-                                    // A film the library does not have
-                                    // (not loaded yet, or an asset gone)
-                                    // shows as None rather than as a blank
-                                    // button; the value itself is kept.
-                                    value:
-                                        widget.films.any(
-                                          (f) =>
-                                              f.id ==
-                                              (values[_filmKey] ?? 0).round(),
-                                        )
-                                        ? (values[_filmKey] ?? 0).round()
-                                        : 0,
-                                    items: [
-                                      StyledDropdownItem(
-                                        value: 0,
-                                        label: l10n.filmNone,
-                                      ),
-                                      for (final film in widget.films)
-                                        StyledDropdownItem(
-                                          value: film.id,
-                                          label: film.label,
+                                  child: Row(
+                                    children: [
+                                      Expanded(
+                                        child: StyledDropdown<int>(
+                                          // A film the library does not
+                                          // have (not loaded yet, or an
+                                          // asset gone) shows as None
+                                          // rather than as a blank button;
+                                          // the value itself is kept.
+                                          value:
+                                              widget.films.any(
+                                                (f) =>
+                                                    f.id ==
+                                                    (values[_filmKey] ?? 0)
+                                                        .round(),
+                                              )
+                                              ? (values[_filmKey] ?? 0).round()
+                                              : 0,
+                                          items: [
+                                            StyledDropdownItem(
+                                              value: 0,
+                                              label: l10n.filmNone,
+                                            ),
+                                            for (final film in widget.films)
+                                              StyledDropdownItem(
+                                                value: film.id,
+                                                label: film.label,
+                                                icon: film.isUser
+                                                    ? CupertinoIcons
+                                                          .person_crop_square
+                                                    : null,
+                                              ),
+                                          ],
+                                          onChanged: (id) {
+                                            onChanged(_filmKey, id.toDouble());
+                                            onChangeEnd(
+                                              _filmKey,
+                                              id.toDouble(),
+                                            );
+                                          },
                                         ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      // The user's own tables (2026-09-13).
+                                      Tooltip(
+                                        message: l10n.filmImportTooltip,
+                                        child: IconButton(
+                                          key: const Key('film-import'),
+                                          visualDensity: VisualDensity.compact,
+                                          iconSize: 17,
+                                          color: DarkmoonColors.textSecondary,
+                                          icon: const Icon(
+                                            CupertinoIcons.tray_arrow_down,
+                                          ),
+                                          onPressed:
+                                              widget.actions.onImportFilmLuts,
+                                        ),
+                                      ),
                                     ],
-                                    onChanged: (id) {
-                                      onChanged(_filmKey, id.toDouble());
-                                      onChangeEnd(_filmKey, id.toDouble());
-                                    },
                                   ),
                                 ),
                                 for (final spec in _filmSliders.skip(1))

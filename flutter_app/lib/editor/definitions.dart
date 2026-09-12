@@ -1101,6 +1101,7 @@ class _ControlsPanelActions {
     required this.onToggleGuidedMode,
     required this.onLensCorrectionChanged,
     required this.onLensCorrectionChangeEnd,
+    required this.onImportFilmLuts,
     required this.onToggleRemoveMode,
     required this.onRunRemoval,
     required this.onRemoveWithMask,
@@ -1264,6 +1265,10 @@ class _ControlsPanelActions {
   final ValueChanged<LensCorrectionParams> onLensCorrectionChanged;
 
   final ValueChanged<LensCorrectionParams> onLensCorrectionChangeEnd;
+
+  /// The FILM section's import button: the user's own .cube / Hald CLUT
+  /// tables, listed after the bundled stocks (see state_film.dart).
+  final VoidCallback onImportFilmLuts;
 }
 
 /// The two tabs at the top of the left column (2026-09-11, user's
