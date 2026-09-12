@@ -270,6 +270,21 @@ const ddcolorModelSpec = OnnxModelSpec(
   scaleFactor: 1,
 );
 
+/// LaMa inpainting (Apache-2.0, advimman/lama; the OpenCV Zoo's ONNX
+/// export, `opencv/inpainting_lama` on Hugging Face), behind object
+/// removal (2026-09-12). Two inputs, `image` 1x3x512x512 in 0..1 and
+/// `mask` 1x1x512x512 with 1 for the hole; one output, 1x3x512x512 in
+/// 0..255 — measured on the file, not assumed. Run through [OnnxModel.runGraph]
+/// like the mask models, since [runTile] knows one input. CPU only: the
+/// network is built on Fourier units, which the DirectML provider has no
+/// kernels for, and a 512 tile takes about two seconds on the CPU.
+const lamaInpaintModelSpec = OnnxModelSpec(
+  fileName: 'inpainting_lama_2025jan.onnx',
+  inputTileSize: 512,
+  scaleFactor: 1,
+  cpuOnly: true,
+);
+
 // The five models behind the AI mask types (`ai_mask_models.dart`). None
 // of them goes through [OnnxModel.runTile]: one takes uint8, one takes six
 // inputs, two have seven outputs, and one returns a rank-3 tensor. They

@@ -29,6 +29,13 @@ Future<File> _maskFile() async {
   return File(p.join(dir.path, 'darkmoon_masks.json'));
 }
 
+/// The brush strokes as the catalog JSON stores them — shared with the
+/// removals store below and the inpaint cache's key.
+List<Map<String, dynamic>> encodeBrushGeometry(BrushGeometry brush) =>
+    _encodeBrush(brush);
+
+BrushGeometry decodeBrushGeometry(List<dynamic>? raw) => _decodeBrush(raw);
+
 BrushGeometry _decodeBrush(List<dynamic>? raw) {
   if (raw == null) {
     return const BrushGeometry();
@@ -271,6 +278,57 @@ Future<void> savePhotoMasks(Map<String, List<MaskLayer>> masks) async {
 /// per-photo edit.
 Future<void> clearPhotoMasks() async {
   final file = await _maskFile();
+  if (await file.exists()) {
+    await file.delete();
+  }
+}
+
+// ---------------------------------------------------------------- removals
+
+/// Object removals (2026-09-12): per photo, the brush strokes of each
+/// removal in the order they were applied. Its own file, in the brush
+/// encoding above; the pixels themselves live in the inpaint cache and
+/// are recomputed from these when that misses.
+Future<File> _inpaintFile() async {
+  final dir = await _maskDir();
+  return File(p.join(dir.path, 'darkmoon_inpaint.json'));
+}
+
+Future<Map<String, List<BrushGeometry>>> loadPhotoInpaints() async {
+  try {
+    final file = await _inpaintFile();
+    final raw = await readJsonObject(file, what: 'inpaint');
+    if (raw == null) {
+      return {};
+    }
+    return {
+      for (final entry in raw.entries)
+        entry.key: [
+          for (final removal in entry.value as List)
+            _decodeBrush(removal as List<dynamic>),
+        ],
+    };
+  } catch (e, st) {
+    DevLog.logError('loadInpaints failed, treating removals as empty', e, st);
+    return {};
+  }
+}
+
+Future<void> savePhotoInpaints(
+  Map<String, List<BrushGeometry>> inpaints,
+) async {
+  final file = await _inpaintFile();
+  await writeJsonFileAtomically(
+    file,
+    jsonEncode({
+      for (final entry in inpaints.entries)
+        entry.key: [for (final removal in entry.value) _encodeBrush(removal)],
+    }),
+  );
+}
+
+Future<void> clearPhotoInpaints() async {
+  final file = await _inpaintFile();
   if (await file.exists()) {
     await file.delete();
   }

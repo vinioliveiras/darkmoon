@@ -25,7 +25,7 @@ with underscores — that is Debian's required convention, not an
 inconsistency to fix.
 
 Each is roughly 1.7 GB (1.2 GB up to v1.10.0, before the five AI-mask
-models). About 99 MB of that is the application; the rest is the twelve
+models). About 99 MB of that is the application; the rest is the thirteen
 ONNX model weights listed in `flutter_app/tool/models.sha256`, which ship
 bundled by decision (2026-09-04). Do not add a runtime downloader without
 being asked. **Every model in the manifest must also be an asset of the
@@ -214,7 +214,7 @@ Do this. Each item on the list has caught something real.
 - [ ] All six assets uploaded, each roughly 1.7 GB
 - [ ] Linux glibc floor still 2.34
 - [ ] Windows smoke test reports a GPU provider
-- [ ] All three workflows logged `models in bundle: 12 (expected 12)` (the
+- [ ] All three workflows logged `models in bundle: 13 (expected 13)` (the
       manifest's line count) and Linux logged `highest GLIBC ... 2.34`
 - [ ] Windows installer installs and uninstalls cleanly, leaving no files
       and no registry entry

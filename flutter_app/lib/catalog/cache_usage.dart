@@ -63,6 +63,7 @@ Map<String, CacheCategory> _rootsIn(String documentsDir) {
     p.join(base, 'ai_enhance_cache'): CacheCategory.aiResults,
     p.join(base, 'ai_mask_cache'): CacheCategory.aiResults,
     p.join(base, 'colorize_cache'): CacheCategory.aiResults,
+    p.join(base, 'inpaint_cache'): CacheCategory.aiResults,
   };
 }
 

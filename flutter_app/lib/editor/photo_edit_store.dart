@@ -33,6 +33,11 @@ class PhotoEditStore {
   /// Mask stacks per photo — structured data, its own file too.
   Map<String, List<MaskLayer>> masks = {};
 
+  /// Object removals per photo (2026-09-12): the strokes of each, in
+  /// order. An edit like the others, saved and moved with them; not
+  /// mirrored to the sidecar, which has no field for it.
+  Map<String, List<BrushGeometry>> inpaints = {};
+
   /// Which preset id was last applied to each photo, so the Presets
   /// panel still marks it as applied after a restart. Purely a UI hint;
   /// the actual edit lives in [values]/[curves]/[masks].
@@ -47,6 +52,7 @@ class PhotoEditStore {
     ...values.keys,
     ...curves.keys,
     ...masks.keys,
+    ...inpaints.keys,
     ...presets.keys,
     ...meta.keys,
   };
@@ -56,9 +62,10 @@ class PhotoEditStore {
   bool contains(String path) =>
       values.containsKey(path) ||
       curves.containsKey(path) ||
-      masks.containsKey(path);
+      masks.containsKey(path) ||
+      inpaints.containsKey(path);
 
-  /// Reads all four stores. Each one that is missing or unreadable comes
+  /// Reads all the stores. Each one that is missing or unreadable comes
   /// back empty (the stores log that themselves).
   Future<void> load() async {
     final loaded = await (
@@ -67,20 +74,23 @@ class PhotoEditStore {
       loadPhotoMasks(),
       loadPhotoPresets(),
       loadPhotoMeta(),
+      loadPhotoInpaints(),
     ).wait;
     values = loaded.$1;
     curves = loaded.$2;
     masks = loaded.$3;
     presets = loaded.$4;
     meta = loaded.$5;
+    inpaints = loaded.$6;
   }
 
-  /// Persists the three edit maps — see `writeJsonFileAtomically` for
-  /// the crash and overlap guarantees.
+  /// Persists the edit maps — see `writeJsonFileAtomically` for the
+  /// crash and overlap guarantees.
   Future<void> saveEdits() async {
     await saveCatalog(values);
     await savePhotoCurves(curves);
     await savePhotoMasks(masks);
+    await savePhotoInpaints(inpaints);
   }
 
   Future<void> savePresets() => savePhotoPresets(presets);
@@ -114,6 +124,7 @@ class PhotoEditStore {
     values = _rekeyed(values, renames);
     curves = _rekeyed(curves, renames);
     masks = _rekeyed(masks, renames);
+    inpaints = _rekeyed(inpaints, renames);
     presets = _rekeyed(presets, renames);
     meta = _rekeyed(meta, renames);
   }
@@ -144,6 +155,7 @@ class PhotoEditStore {
     values.removeWhere((path, _) => test(path));
     curves.removeWhere((path, _) => test(path));
     masks.removeWhere((path, _) => test(path));
+    inpaints.removeWhere((path, _) => test(path));
     presets.removeWhere((path, _) => test(path));
     meta.removeWhere((path, _) => test(path));
   }
@@ -156,9 +168,11 @@ class PhotoEditStore {
     await clearCatalog();
     await clearPhotoCurves();
     await clearPhotoMasks();
+    await clearPhotoInpaints();
     values = {};
     curves = {};
     masks = {};
+    inpaints = {};
   }
 
   /// [path]'s edits as one sidecar document.

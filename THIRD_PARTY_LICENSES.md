@@ -39,6 +39,7 @@ and travels with every release.
 | `Real-ESRGAN_x2plus.onnx` | Real-ESRGAN x2plus | BSD-3-Clause | <https://github.com/xinntao/Real-ESRGAN> |
 | `PMRID.onnx` | PMRID ("Practical Deep Raw Image Denoising on Mobile Devices", ECCV 2020) | Apache-2.0 | <https://github.com/MegEngine/PMRID> |
 | `ddcolor_modelscope.onnx` | DDColor, ModelScope checkpoint (ICCV 2023) | Apache-2.0 | <https://github.com/piddnad/DDColor> |
+| `inpainting_lama_2025jan.onnx` | LaMa inpainting (WACV 2022), OpenCV Zoo ONNX export | Apache-2.0 | <https://github.com/advimman/lama>, <https://huggingface.co/opencv/inpainting_lama> |
 | `sam_vit_b_01ec64_encoder.onnx`, `sam_vit_b_01ec64_decoder.onnx` | Segment Anything, ViT-B | Apache-2.0 | <https://github.com/facebookresearch/segment-anything> |
 | `u2net.onnx` | U-2-Net salient object detection | Apache-2.0 | <https://github.com/xuebinqin/U-2-Net> |
 | `skyseg-u2net.onnx` | Sky segmentation, U-2-Net architecture | Not recorded by this project — the source repository should be checked before relying on these weights beyond this app | <https://github.com/xiongzhu666/Sky-Segmentation-and-Post-processing> |
