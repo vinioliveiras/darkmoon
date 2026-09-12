@@ -58,6 +58,7 @@ class LibraryBody extends StatefulWidget {
     required this.onMovePhotos,
     required this.onCreateFolder,
     required this.onDelete,
+    required this.onConvertNegatives,
     required this.onShowOnDisk,
     required this.onResetEdits,
   });
@@ -122,6 +123,11 @@ class LibraryBody extends StatefulWidget {
   /// Sends photos to the Recycle Bin (after the editor's confirmation);
   /// how many went.
   final Future<int> Function(List<RawFile> files) onDelete;
+
+  /// Convert negative (2026-09-12): opens the conversion dialog for the
+  /// photos the menu was opened on — Solstice's Albums action, a new
+  /// positive file beside each negative, not an edit.
+  final void Function(List<RawFile> files) onConvertNegatives;
   final void Function(RawFile file) onShowOnDisk;
   final void Function(RawFile file) onResetEdits;
 
@@ -543,6 +549,15 @@ class _LibraryBodyState extends State<LibraryBody> {
                 unawaited(_newAlbumWith([for (final f in targets) f.path])),
             child: Text(l10n.libraryNewAlbumFromSelection),
           ),
+        const PopupMenuDivider(),
+        PopupMenuItem(
+          value: () => widget.onConvertNegatives(targets),
+          child: Text(
+            targets.length > 1
+                ? l10n.libraryConvertNegativesAction(targets.length)
+                : l10n.libraryConvertNegativeAction,
+          ),
+        ),
         const PopupMenuDivider(),
         PopupMenuItem(
           value: () {

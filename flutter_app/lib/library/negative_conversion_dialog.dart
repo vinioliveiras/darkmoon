@@ -6,7 +6,6 @@
 // `negative_converter.dart` through `compute`; the dialog only draws.
 
 import 'dart:async';
-import 'dart:typed_data';
 import 'dart:ui' as ui;
 
 import 'package:flutter/foundation.dart';
@@ -102,9 +101,7 @@ class _NegativeConversionDialogState extends State<NegativeConversionDialog> {
     final base = _base;
     if (base == null) return;
     final serial = ++_renderSerial;
-    final params = _comparing
-        ? const NegativeParams(enabled: false)
-        : _params;
+    final params = _comparing ? const NegativeParams(enabled: false) : _params;
     final rgba = await compute(renderNegativePreviewRgba, (
       base: base,
       params: params,
@@ -178,150 +175,156 @@ class _NegativeConversionDialogState extends State<NegativeConversionDialog> {
       ),
       content: SizedBox(
         width: 720,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Preview: hold to see the negative as it is.
-            Expanded(
-              flex: 3,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  GestureDetector(
-                    onTapDown: (_) => _setComparing(true),
-                    onTapUp: (_) => _setComparing(false),
-                    onTapCancel: () => _setComparing(false),
-                    child: Container(
-                      height: 360,
-                      decoration: BoxDecoration(
-                        color: DarkmoonColors.canvas,
-                        borderRadius: BorderRadius.circular(8),
+        child: SingleChildScrollView(
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Preview: hold to see the negative as it is.
+              Expanded(
+                flex: 3,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTapDown: (_) => _setComparing(true),
+                      onTapUp: (_) => _setComparing(false),
+                      onTapCancel: () => _setComparing(false),
+                      // Width-driven, so the dialog fits a small window
+                      // without the preview column overflowing.
+                      child: AspectRatio(
+                        aspectRatio: 3 / 2,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: DarkmoonColors.canvas,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          clipBehavior: Clip.antiAlias,
+                          alignment: Alignment.center,
+                          child: _preview != null
+                              ? AnimatedSwitcher(
+                                  duration: DarkmoonMotion.of(
+                                    context,
+                                    DarkmoonMotion.fast,
+                                  ),
+                                  child: RawImage(
+                                    key: ValueKey(_preview),
+                                    image: _preview,
+                                    fit: BoxFit.contain,
+                                  ),
+                                )
+                              : _previewMissing
+                              ? Text(
+                                  l10n.negativePreviewUnavailable,
+                                  style: muted,
+                                )
+                              : const SizedBox(
+                                  width: 22,
+                                  height: 22,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                        ),
                       ),
-                      clipBehavior: Clip.antiAlias,
-                      alignment: Alignment.center,
-                      child: _preview != null
-                          ? AnimatedSwitcher(
-                              duration: DarkmoonMotion.of(
-                                context,
-                                DarkmoonMotion.fast,
-                              ),
-                              child: RawImage(
-                                key: ValueKey(_preview),
-                                image: _preview,
-                                fit: BoxFit.contain,
-                              ),
-                            )
-                          : _previewMissing
-                          ? Text(l10n.negativePreviewUnavailable, style: muted)
-                          : const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                              ),
-                            ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Text(
-                    _comparing
-                        ? l10n.negativeOriginalLabel
-                        : l10n.negativeCompareHint,
-                    style: muted,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 18),
-            // Controls.
-            Expanded(
-              flex: 2,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(l10n.negativeColorTimingLabel, style: muted),
-                  const SizedBox(height: 6),
-                  SliderRow(
-                    name: l10n.negativeRedLabel,
-                    min: 0.5,
-                    max: 2.0,
-                    value: _params.redWeight,
-                    defaultValue: 1.0,
-                    onChanged: (v) =>
-                        _update(_params.copyWith(redWeight: v)),
-                  ),
-                  SliderRow(
-                    name: l10n.negativeGreenLabel,
-                    min: 0.5,
-                    max: 2.0,
-                    value: _params.greenWeight,
-                    defaultValue: 1.0,
-                    onChanged: (v) =>
-                        _update(_params.copyWith(greenWeight: v)),
-                  ),
-                  SliderRow(
-                    name: l10n.negativeBlueLabel,
-                    min: 0.5,
-                    max: 2.0,
-                    value: _params.blueWeight,
-                    defaultValue: 1.0,
-                    onChanged: (v) =>
-                        _update(_params.copyWith(blueWeight: v)),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(l10n.negativePrintGradeLabel, style: muted),
-                  const SizedBox(height: 6),
-                  SliderRow(
-                    name: l10n.negativeExposureLabel,
-                    min: -2.0,
-                    max: 2.0,
-                    value: _params.exposure,
-                    defaultValue: 0.0,
-                    onChanged: (v) =>
-                        _update(_params.copyWith(exposure: v)),
-                  ),
-                  SliderRow(
-                    name: l10n.negativeContrastLabel,
-                    min: 0.5,
-                    max: 2.5,
-                    value: _params.contrast,
-                    defaultValue: 1.0,
-                    onChanged: (v) =>
-                        _update(_params.copyWith(contrast: v)),
-                  ),
-                  const SizedBox(height: 10),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: busy
-                          ? null
-                          : () =>
-                                _update(const NegativeParams(enabled: true)),
-                      child: Text(l10n.resetTooltip),
-                    ),
-                  ),
-                  if (progress != null) ...[
-                    const SizedBox(height: 8),
-                    LinearProgressIndicator(
-                      value: progress.total == 0
-                          ? null
-                          : progress.done / progress.total,
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      l10n.negativeConvertingProgress(
-                        progress.done,
-                        progress.total,
-                      ),
+                      _comparing
+                          ? l10n.negativeOriginalLabel
+                          : l10n.negativeCompareHint,
                       style: muted,
                     ),
                   ],
-                ],
+                ),
               ),
-            ),
-          ],
+              const SizedBox(width: 18),
+              // Controls.
+              Expanded(
+                flex: 2,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(l10n.negativeColorTimingLabel, style: muted),
+                    const SizedBox(height: 6),
+                    SliderRow(
+                      name: l10n.negativeRedLabel,
+                      min: 0.5,
+                      max: 2.0,
+                      value: _params.redWeight,
+                      defaultValue: 1.0,
+                      onChanged: (v) => _update(_params.copyWith(redWeight: v)),
+                    ),
+                    SliderRow(
+                      name: l10n.negativeGreenLabel,
+                      min: 0.5,
+                      max: 2.0,
+                      value: _params.greenWeight,
+                      defaultValue: 1.0,
+                      onChanged: (v) =>
+                          _update(_params.copyWith(greenWeight: v)),
+                    ),
+                    SliderRow(
+                      name: l10n.negativeBlueLabel,
+                      min: 0.5,
+                      max: 2.0,
+                      value: _params.blueWeight,
+                      defaultValue: 1.0,
+                      onChanged: (v) =>
+                          _update(_params.copyWith(blueWeight: v)),
+                    ),
+                    const SizedBox(height: 12),
+                    Text(l10n.negativePrintGradeLabel, style: muted),
+                    const SizedBox(height: 6),
+                    SliderRow(
+                      name: l10n.negativeExposureLabel,
+                      min: -2.0,
+                      max: 2.0,
+                      value: _params.exposure,
+                      defaultValue: 0.0,
+                      onChanged: (v) => _update(_params.copyWith(exposure: v)),
+                    ),
+                    SliderRow(
+                      name: l10n.negativeContrastLabel,
+                      min: 0.5,
+                      max: 2.5,
+                      value: _params.contrast,
+                      defaultValue: 1.0,
+                      onChanged: (v) => _update(_params.copyWith(contrast: v)),
+                    ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: busy
+                            ? null
+                            : () =>
+                                  _update(const NegativeParams(enabled: true)),
+                        child: Text(l10n.resetTooltip),
+                      ),
+                    ),
+                    if (progress != null) ...[
+                      const SizedBox(height: 8),
+                      LinearProgressIndicator(
+                        value: progress.total == 0
+                            ? null
+                            : progress.done / progress.total,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        l10n.negativeConvertingProgress(
+                          progress.done,
+                          progress.total,
+                        ),
+                        style: muted,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
       actions: [

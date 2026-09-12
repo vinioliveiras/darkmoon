@@ -286,6 +286,114 @@ abstract class AppLocalizations {
   /// **'New album inside this one'**
   String get libraryNewAlbumTooltip;
 
+  /// No description provided for @libraryConvertNegativeAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Convert negative…'**
+  String get libraryConvertNegativeAction;
+
+  /// No description provided for @libraryConvertNegativesAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Convert {count} negatives…'**
+  String libraryConvertNegativesAction(int count);
+
+  /// No description provided for @negativeDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Negative conversion'**
+  String get negativeDialogTitle;
+
+  /// No description provided for @negativeColorTimingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Colour timing'**
+  String get negativeColorTimingLabel;
+
+  /// No description provided for @negativeRedLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Red (cyan)'**
+  String get negativeRedLabel;
+
+  /// No description provided for @negativeGreenLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Green (magenta)'**
+  String get negativeGreenLabel;
+
+  /// No description provided for @negativeBlueLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Blue (yellow)'**
+  String get negativeBlueLabel;
+
+  /// No description provided for @negativePrintGradeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Print grade'**
+  String get negativePrintGradeLabel;
+
+  /// No description provided for @negativeExposureLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Exposure'**
+  String get negativeExposureLabel;
+
+  /// No description provided for @negativeContrastLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Contrast (grade)'**
+  String get negativeContrastLabel;
+
+  /// No description provided for @negativeCompareHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Press and hold the preview to see the original negative.'**
+  String get negativeCompareHint;
+
+  /// No description provided for @negativeOriginalLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Original negative'**
+  String get negativeOriginalLabel;
+
+  /// No description provided for @negativePreviewUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No preview for this photo yet.'**
+  String get negativePreviewUnavailable;
+
+  /// No description provided for @negativeConvertButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Convert & save'**
+  String get negativeConvertButton;
+
+  /// No description provided for @negativeConvertAllButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Convert & save all ({count})'**
+  String negativeConvertAllButton(int count);
+
+  /// No description provided for @negativeConvertingProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Converting {current}/{total}…'**
+  String negativeConvertingProgress(int current, int total);
+
+  /// No description provided for @negativeSavedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Saved 1 positive} other{Saved {count} positives}} beside the originals (_Positive.tiff).'**
+  String negativeSavedMessage(int count);
+
+  /// No description provided for @negativeFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not convert {name}.'**
+  String negativeFailedMessage(String name);
+
   /// No description provided for @libraryMoveToAction.
   ///
   /// In en, this message translates to:

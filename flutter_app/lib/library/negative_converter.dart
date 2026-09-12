@@ -47,7 +47,9 @@ NegativePreviewBase? decodeNegativePreviewBase(
         ? img.copyResize(image, width: args.maxDim)
         : img.copyResize(image, height: args.maxDim);
   }
-  final rgb = image.convert(numChannels: 3).getBytes(order: img.ChannelOrder.rgb);
+  final rgb = image
+      .convert(numChannels: 3)
+      .getBytes(order: img.ChannelOrder.rgb);
   final bytes = Uint8List.fromList(rgb);
   return NegativePreviewBase(
     width: image.width,
@@ -96,7 +98,7 @@ String positivePathFor(String sourcePath) {
 /// Decodes the photo at [args.path] at full resolution (the sensor data
 /// for a RAW, never the embedded JPEG), converts it with [args.params]
 /// against bounds measured on a 1080 px reference, and writes the
-/// 16-bit TIFF. Returns the file written. Throws with a readable message
+/// TIFF. Returns the file written. Throws with a readable message
 /// when the source cannot be decoded.
 String convertNegativeFile(({String path, NegativeParams params}) args) {
   final decoded = decodeSourceImage(
@@ -113,12 +115,19 @@ String convertNegativeFile(({String path, NegativeParams params}) args) {
     decoded.height,
   );
   final samples = convertNegativeRgb16(decoded.rgbBytes, args.params, bounds);
+  // This image package's TIFF encoder writes 8-bit samples whatever the
+  // image's format (checked on 4.9.2: a uint16 image decodes back as
+  // 8-bit), and the source decode is 8-bit anyway, so the curve's 16-bit
+  // output is rounded to bytes here rather than pretending otherwise.
+  final bytes = Uint8List(samples.length);
+  for (var i = 0; i < samples.length; i++) {
+    bytes[i] = math.min(255, (samples[i] + 128) >> 8);
+  }
   final image = img.Image.fromBytes(
     width: decoded.width,
     height: decoded.height,
-    bytes: samples.buffer,
+    bytes: bytes.buffer,
     numChannels: 3,
-    format: img.Format.uint16,
     order: img.ChannelOrder.rgb,
   );
   final out = positivePathFor(args.path);

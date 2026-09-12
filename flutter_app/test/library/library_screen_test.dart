@@ -64,6 +64,7 @@ void main() {
               const MoveOutcome(moved: {}, skipped: []),
           onCreateFolder: (parent, name) async => p.join(parent, name),
           onDelete: (targets) async => 0,
+          onConvertNegatives: (_) {},
           onShowOnDisk: (_) {},
           onResetEdits: (_) {},
         ),

@@ -77,9 +77,24 @@ class NegativeParams {
   /// 0.5..2: the curve's steepness.
   final double contrast;
 
-  /// The sigmoid's constants, shared by the CPU loop and the shader
-  /// uniforms: steepness [k], midpoint [x0], and the [y0]/[scale] that
-  /// pin the curve's ends to 0 and 1.
+  NegativeParams copyWith({
+    bool? enabled,
+    double? redWeight,
+    double? greenWeight,
+    double? blueWeight,
+    double? exposure,
+    double? contrast,
+  }) => NegativeParams(
+    enabled: enabled ?? this.enabled,
+    redWeight: redWeight ?? this.redWeight,
+    greenWeight: greenWeight ?? this.greenWeight,
+    blueWeight: blueWeight ?? this.blueWeight,
+    exposure: exposure ?? this.exposure,
+    contrast: contrast ?? this.contrast,
+  );
+
+  /// The sigmoid's constants — steepness [k], midpoint [x0], and the
+  /// [y0]/[scale] that pin the curve's ends to 0 and 1.
   ({double k, double x0, double y0, double scale}) get curve {
     final k = negativeContrastGain * math.max(contrast, 0.1);
     final x0 = negativeCurveCentre - exposure * negativeExposureShift;

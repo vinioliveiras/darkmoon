@@ -133,6 +133,77 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryNewAlbumTooltip => 'New album inside this one';
 
   @override
+  String get libraryConvertNegativeAction => 'Convert negative…';
+
+  @override
+  String libraryConvertNegativesAction(int count) {
+    return 'Convert $count negatives…';
+  }
+
+  @override
+  String get negativeDialogTitle => 'Negative conversion';
+
+  @override
+  String get negativeColorTimingLabel => 'Colour timing';
+
+  @override
+  String get negativeRedLabel => 'Red (cyan)';
+
+  @override
+  String get negativeGreenLabel => 'Green (magenta)';
+
+  @override
+  String get negativeBlueLabel => 'Blue (yellow)';
+
+  @override
+  String get negativePrintGradeLabel => 'Print grade';
+
+  @override
+  String get negativeExposureLabel => 'Exposure';
+
+  @override
+  String get negativeContrastLabel => 'Contrast (grade)';
+
+  @override
+  String get negativeCompareHint =>
+      'Press and hold the preview to see the original negative.';
+
+  @override
+  String get negativeOriginalLabel => 'Original negative';
+
+  @override
+  String get negativePreviewUnavailable => 'No preview for this photo yet.';
+
+  @override
+  String get negativeConvertButton => 'Convert & save';
+
+  @override
+  String negativeConvertAllButton(int count) {
+    return 'Convert & save all ($count)';
+  }
+
+  @override
+  String negativeConvertingProgress(int current, int total) {
+    return 'Converting $current/$total…';
+  }
+
+  @override
+  String negativeSavedMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Saved $count positives',
+      one: 'Saved 1 positive',
+    );
+    return '$_temp0 beside the originals (_Positive.tiff).';
+  }
+
+  @override
+  String negativeFailedMessage(String name) {
+    return 'Could not convert $name.';
+  }
+
+  @override
   String get libraryMoveToAction => 'Move to album…';
 
   @override
