@@ -7,6 +7,7 @@ import 'package:path_provider/path_provider.dart';
 
 import '../diagnostics/dev_log.dart';
 import 'preset.dart';
+import 'preset_formats.dart';
 import 'preset_xmp.dart';
 
 /// The preset library is a plain folder of `.xmp` files at
@@ -94,9 +95,21 @@ Future<List<Preset>> loadPresets() async {
 
 /// Copies the `.xmp` at [srcPath] into the presets folder unchanged and
 /// returns the parsed preset (or null if it isn't a readable preset).
+///
+/// A preset from another editor (`.lrtemplate`, `.pp3`, `.costyle` — see
+/// `preset_formats.dart`) is read with its own reader and stored as a
+/// darkmoon `.xmp` written from the result, so the library stays one
+/// format whatever came in.
 Future<Preset?> importPresetFromFile(String srcPath) async {
   try {
     final contents = await File(srcPath).readAsString();
+    if (isForeignPresetPath(srcPath)) {
+      return await _storeForeignPreset(
+        contents,
+        srcPath,
+        fallbackName: p.basenameWithoutExtension(srcPath),
+      );
+    }
     // Name the copy after the preset's own `<Name>` when it has one, so the
     // library shows "Filmatic Fuji 2", not "filmatic-fuji-2".
     final parsed = presetFromXmp(
@@ -115,15 +128,65 @@ Future<Preset?> importPresetFromFile(String srcPath) async {
   }
 }
 
-/// Unpacks a Meridian preset `.zip` — every `.xmp` entry is written into
-/// the presets folder (byte-for-byte) and parsed.
+/// True for a file one of `preset_formats.dart`'s readers handles.
+bool isForeignPresetPath(String path) {
+  final lower = path.toLowerCase();
+  return foreignPresetExtensions.any((ext) => lower.endsWith('.$ext'));
+}
+
+/// Reads a foreign preset and writes it into the library as an `.xmp`.
+Future<Preset?> _storeForeignPreset(
+  String contents,
+  String sourceName, {
+  required String fallbackName,
+}) async {
+  final parsed = presetFromForeignFile(
+    sourceName,
+    contents,
+    fallbackName: fallbackName,
+  );
+  if (parsed == null) {
+    return null;
+  }
+  final dir = await presetsDir();
+  final destPath = await _uniquePath(dir, parsed.name);
+  final xmp = xmpFromPreset(parsed);
+  await File(destPath).writeAsString(xmp);
+  final stored = _parsePresetFile(destPath, xmp);
+  // The XMP round trip drops what we could not map; keep that list so
+  // the panel can still say the import was partial.
+  return stored?.copyWith(unsupportedAttributes: parsed.unsupportedAttributes);
+}
+
+/// Unpacks a preset `.zip` (how Meridian exports several at once) or a
+/// Capture One `.costylepack` — every `.xmp` entry is written into the
+/// presets folder (byte-for-byte) and parsed; every foreign-format entry
+/// is converted the way [importPresetFromFile] converts a single file.
 Future<List<Preset>> importPresetsFromZipFile(String zipPath) async {
   final imported = <Preset>[];
   try {
     final dir = await presetsDir();
     final archive = ZipDecoder().decodeBytes(await File(zipPath).readAsBytes());
     for (final entry in archive) {
-      if (!entry.isFile || !entry.name.toLowerCase().endsWith('.xmp')) {
+      if (!entry.isFile) {
+        continue;
+      }
+      if (isForeignPresetPath(entry.name)) {
+        try {
+          final foreign = await _storeForeignPreset(
+            utf8.decode(entry.content as List<int>, allowMalformed: true),
+            entry.name,
+            fallbackName: p.basenameWithoutExtension(entry.name),
+          );
+          if (foreign != null) {
+            imported.add(foreign);
+          }
+        } catch (_) {
+          // One bad entry must not sink the rest of the archive.
+        }
+        continue;
+      }
+      if (!entry.name.toLowerCase().endsWith('.xmp')) {
         continue;
       }
       try {

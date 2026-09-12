@@ -300,7 +300,13 @@ extension _EditorPresets on _EditorScreenState {
     final result = await FilePicker.pickFiles(
       dialogTitle: l10n.presetImportDialogTitle,
       type: FileType.custom,
-      allowedExtensions: ['xmp', 'zip'],
+      allowedExtensions: [
+        'xmp',
+        'zip',
+        // Other editors' presets — see preset_formats.dart.
+        ...foreignPresetExtensions,
+        'costylepack',
+      ],
       allowMultiple: true,
     );
     if (result == null) {
@@ -312,7 +318,8 @@ extension _EditorPresets on _EditorScreenState {
       if (path == null) {
         continue;
       }
-      if (path.toLowerCase().endsWith('.zip')) {
+      final lower = path.toLowerCase();
+      if (lower.endsWith('.zip') || lower.endsWith('.costylepack')) {
         imported.addAll(await importPresetsFromZipFile(path));
         continue;
       }

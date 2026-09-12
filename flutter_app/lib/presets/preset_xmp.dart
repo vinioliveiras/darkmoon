@@ -137,8 +137,16 @@ double _exposureToStops(double ourValue) =>
     ourValue / 100.0 * _exposureStopsAtMax;
 double _stopsToExposure(double stops) => stops / _exposureStopsAtMax * 100.0;
 
+/// Our Exposure slider value for an exposure in stops — the conversion
+/// every reader of a foreign preset needs.
+double exposureFromStops(double stops) => _stopsToExposure(stops);
+
 String _presetIdFromName(String name) =>
     'preset_${DateTime.now().microsecondsSinceEpoch}_${name.hashCode}';
+
+/// A fresh, unique preset id for [name] — the same shape the XMP reader
+/// gives its presets.
+String presetIdFromName(String name) => _presetIdFromName(name);
 
 /// The Camera Raw version string written into exported presets. Meridian
 /// and Camera Raw treat a preset tagged with a plausibly-recent version as
@@ -400,6 +408,14 @@ Map<String, double> valuesFromCrsDescription(XmlElement description) {
     return raw == null ? null : double.tryParse(raw);
   }
 
+  return valuesFromCrsLookup(attr);
+}
+
+/// [valuesFromCrsDescription] for any source of `crs:` settings: [attr]
+/// gives the number stored under an attribute name, or null when the
+/// source does not carry it. Shared with the `.lrtemplate` reader
+/// (`preset_formats.dart`), whose Lua table uses the same names.
+Map<String, double> valuesFromCrsLookup(double? Function(String name) attr) {
   final values = <String, double>{
     for (final (ourKey, crsAttr) in _directMappings)
       if (attr(crsAttr) case final v?) ourKey: v,

@@ -256,7 +256,8 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sidebarPresetsSection => 'PRESETS';
 
   @override
-  String get presetImportTooltip => 'Import presets (.xmp or .zip)';
+  String get presetImportTooltip =>
+      'Import presets (.xmp, .zip, .lrtemplate, .pp3, .costyle)';
 
   @override
   String get presetSaveNewTooltip => 'Save current edits as a preset';

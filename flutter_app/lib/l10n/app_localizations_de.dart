@@ -261,7 +261,8 @@ class AppLocalizationsDe extends AppLocalizations {
   String get sidebarPresetsSection => 'VORGABEN';
 
   @override
-  String get presetImportTooltip => 'Vorgaben importieren (.xmp oder .zip)';
+  String get presetImportTooltip =>
+      'Vorgaben importieren (.xmp, .zip, .lrtemplate, .pp3, .costyle)';
 
   @override
   String get presetSaveNewTooltip =>

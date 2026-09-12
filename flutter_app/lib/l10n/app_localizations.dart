@@ -487,7 +487,7 @@ abstract class AppLocalizations {
   /// No description provided for @presetImportTooltip.
   ///
   /// In en, this message translates to:
-  /// **'Import presets (.xmp or .zip)'**
+  /// **'Import presets (.xmp, .zip, .lrtemplate, .pp3, .costyle)'**
   String get presetImportTooltip;
 
   /// No description provided for @presetSaveNewTooltip.

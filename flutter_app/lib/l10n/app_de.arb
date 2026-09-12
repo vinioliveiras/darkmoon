@@ -69,7 +69,7 @@
   "sidebarRemoveRecentFileTooltip": "Aus zuletzt verwendeten Dateien entfernen",
   "sidebarFolderNotFoundTooltip": "Album nicht gefunden — aus der Liste entfernen",
   "sidebarPresetsSection": "VORGABEN",
-  "presetImportTooltip": "Vorgaben importieren (.xmp oder .zip)",
+  "presetImportTooltip": "Vorgaben importieren (.xmp, .zip, .lrtemplate, .pp3, .costyle)",
   "presetSaveNewTooltip": "Aktuelle Bearbeitung als Vorgabe speichern",
   "presetTypeBadge": "VORGABE",
   "presetEmptyHint": "Noch keine Vorgaben",

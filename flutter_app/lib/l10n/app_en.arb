@@ -76,7 +76,7 @@
   "sidebarRemoveRecentFileTooltip": "Remove from recent files",
   "sidebarFolderNotFoundTooltip": "Album not found — remove it from the list",
   "sidebarPresetsSection": "PRESETS",
-  "presetImportTooltip": "Import presets (.xmp or .zip)",
+  "presetImportTooltip": "Import presets (.xmp, .zip, .lrtemplate, .pp3, .costyle)",
   "presetSaveNewTooltip": "Save current edits as a preset",
   "presetTypeBadge": "PRESET",
   "presetEmptyHint": "No presets yet",
