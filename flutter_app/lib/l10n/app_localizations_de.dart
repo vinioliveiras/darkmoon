@@ -757,6 +757,28 @@ class AppLocalizationsDe extends AppLocalizations {
   String get exportDialogConfirm => 'Exportieren';
 
   @override
+  String get exportFrameLabel => 'Rahmen';
+
+  @override
+  String get exportFrameHint =>
+      'Ein Rand um das Foto in der exportierten Datei';
+
+  @override
+  String get exportFramePaddingLabel => 'Rand';
+
+  @override
+  String get exportFrameRadiusLabel => 'Eckenradius';
+
+  @override
+  String get exportFrameAspectLabel => 'Rahmenformat';
+
+  @override
+  String get exportFrameAspectOriginal => 'Original';
+
+  @override
+  String get exportFrameBackgroundLabel => 'Hintergrund';
+
+  @override
   String get cancelButton => 'Abbrechen';
 
   @override

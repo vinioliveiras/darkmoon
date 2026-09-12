@@ -749,6 +749,28 @@ class AppLocalizationsPt extends AppLocalizations {
   String get exportDialogConfirm => 'Exportar';
 
   @override
+  String get exportFrameLabel => 'Moldura';
+
+  @override
+  String get exportFrameHint =>
+      'Uma borda ao redor da foto no arquivo exportado';
+
+  @override
+  String get exportFramePaddingLabel => 'Borda';
+
+  @override
+  String get exportFrameRadiusLabel => 'Raio dos cantos';
+
+  @override
+  String get exportFrameAspectLabel => 'Formato da moldura';
+
+  @override
+  String get exportFrameAspectOriginal => 'Original';
+
+  @override
+  String get exportFrameBackgroundLabel => 'Fundo';
+
+  @override
   String get cancelButton => 'Cancelar';
 
   @override

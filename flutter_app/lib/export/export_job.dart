@@ -16,6 +16,7 @@ import '../render/render_parallel.dart';
 import '../render/render_params.dart';
 import 'export_format.dart';
 import 'export_metadata.dart';
+import 'frame.dart';
 import 'srgb_icc.dart';
 
 class ExportRequest {
@@ -34,7 +35,12 @@ class ExportRequest {
     this.aiMaskMaps = const {},
     this.editEmbeddedJpeg = false,
     this.captureInfo,
+    this.frame,
   });
+
+  /// A border composed around the rendered photo before encoding — see
+  /// `frame.dart`. Null for a plain export.
+  final FrameOptions? frame;
 
   final String sourcePath;
 
@@ -228,19 +234,24 @@ Future<ExportResult> _exportPhotoInternal(
     for (final t in renderTimings) {
       timings.add('  · $t');
     }
-    final image = img.Image.fromBytes(
+    var image = img.Image.fromBytes(
       width: geometry.width,
       height: geometry.height,
       bytes: rendered.buffer,
       numChannels: 3,
       order: img.ChannelOrder.rgb,
     );
+    final frame = request.frame;
+    if (frame != null) {
+      image = applyFrame(image, frame);
+      mark('frame ${image.width}x${image.height}');
+    }
     // Camera/lens/exposure EXIF: copied from a JPEG source, built from the
     // RAW's metadata otherwise (see export_metadata.dart). JPEG and TIFF
     // encoders write it; PNG has no EXIF in this package.
     image.exif = buildExportExif(
-      width: geometry.width,
-      height: geometry.height,
+      width: image.width,
+      height: image.height,
       sourceExif: readSourceExif(request.sourcePath),
       capture: request.captureInfo,
     );

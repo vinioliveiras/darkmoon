@@ -1366,6 +1366,48 @@ abstract class AppLocalizations {
   /// **'Export'**
   String get exportDialogConfirm;
 
+  /// No description provided for @exportFrameLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Frame'**
+  String get exportFrameLabel;
+
+  /// No description provided for @exportFrameHint.
+  ///
+  /// In en, this message translates to:
+  /// **'A border around the photo in the exported file'**
+  String get exportFrameHint;
+
+  /// No description provided for @exportFramePaddingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Border'**
+  String get exportFramePaddingLabel;
+
+  /// No description provided for @exportFrameRadiusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Corner radius'**
+  String get exportFrameRadiusLabel;
+
+  /// No description provided for @exportFrameAspectLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Frame shape'**
+  String get exportFrameAspectLabel;
+
+  /// No description provided for @exportFrameAspectOriginal.
+  ///
+  /// In en, this message translates to:
+  /// **'Original'**
+  String get exportFrameAspectOriginal;
+
+  /// No description provided for @exportFrameBackgroundLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Background'**
+  String get exportFrameBackgroundLabel;
+
   /// No description provided for @cancelButton.
   ///
   /// In en, this message translates to:

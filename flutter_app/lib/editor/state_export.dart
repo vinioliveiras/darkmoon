@@ -170,6 +170,7 @@ extension _EditorExport on _EditorScreenState {
         quality: options.quality,
         cropTransform: _cropTransform,
         scalePercent: options.scalePercent,
+        frame: options.frame,
         preDecodedRgb: nativeForExport?.rgbBytes,
         preDecodedWidth: nativeForExport?.width,
         preDecodedHeight: nativeForExport?.height,
