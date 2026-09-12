@@ -475,20 +475,14 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
       ),
       contentPadding: dialogScrollContentPadding,
       content: SizedBox(
-        width: 360,
-        // No fixed height: Classic's/Enhance's/Cloud AI's content are very
-        // different lengths (Cloud AI, once a generative provider's
-        // warning banner joins the always-on disclosure, is the tallest —
-        // tall enough to overflow a real dialog on a modest window height,
-        // confirmed by a widget test), and a hard-coded height either
-        // overflows the shorter tabs into a scroll they don't need or
-        // clips the taller one. An IndexedStack (not TabBarView — that
-        // needs a bounded height for its PageView, which is exactly what
-        // we're avoiding) sizes itself to its biggest child; wrapping it in
-        // Flexible+SingleChildScrollView lets the dialog grow to fit
-        // whichever tab is tallest UP TO whatever height AlertDialog
-        // actually has available, scrolling internally instead of
-        // overflowing beyond that.
+        // The Settings dialog's fixed size (2026-09-13, user's request):
+        // the window no longer grows as toggles open their sliders — the
+        // tab's content scrolls inside it instead. An IndexedStack (not
+        // TabBarView — that needs a bounded height for its PageView,
+        // which the scroll view does not give) sizes itself to its
+        // biggest child; the shorter tabs simply do not scroll.
+        width: 420,
+        height: 460,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -514,7 +508,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
               ),
             ),
             const SizedBox(height: 14),
-            Flexible(
+            Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.only(right: kScrollbarGutter),
                 child: IndexedStack(
