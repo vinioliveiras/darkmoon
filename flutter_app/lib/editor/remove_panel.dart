@@ -17,6 +17,11 @@ class _RemoveObjectsPanel extends StatelessWidget {
     required this.brushErase,
     required this.grow,
     required this.hasStrokes,
+    required this.mode,
+    required this.sourcePicking,
+    required this.sourcePicked,
+    required this.prompt,
+    required this.generativeConfigured,
     required this.masks,
     required this.removals,
     required this.busy,
@@ -32,6 +37,14 @@ class _RemoveObjectsPanel extends StatelessWidget {
 
   /// Whether anything is painted and waiting to be removed.
   final bool hasStrokes;
+
+  /// The fill for the next removal and its per-mode state — see
+  /// `catalog/removal.dart`'s RemovalMode.
+  final RemovalMode mode;
+  final bool sourcePicking;
+  final bool sourcePicked;
+  final String prompt;
+  final bool generativeConfigured;
 
   /// The photo's masks, offered as removals.
   final List<MaskLayer> masks;
@@ -136,6 +149,85 @@ class _RemoveObjectsPanel extends StatelessWidget {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        // How the hole is filled. AI is the model; Clone and Heal copy
+        // from a point the user picks (Heal blends the copy into place);
+        // Generative asks the server named in Settings for a prompt.
+        Row(
+          children: [
+            for (final m in RemovalMode.values) ...[
+              if (m != RemovalMode.values.first) const SizedBox(width: 4),
+              Expanded(
+                child: _RemoveModeChip(
+                  label: switch (m) {
+                    RemovalMode.ai => l10n.removeModeAi,
+                    RemovalMode.clone => l10n.removeModeClone,
+                    RemovalMode.heal => l10n.removeModeHeal,
+                    RemovalMode.generative => l10n.removeModeGenerative,
+                  },
+                  selected: mode == m,
+                  onTap: busy ? null : () => actions.onRemoveModeChanged(m),
+                ),
+              ),
+            ],
+          ],
+        ),
+        if (mode == RemovalMode.clone || mode == RemovalMode.heal) ...[
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              SizedBox(
+                height: 30,
+                child: OutlinedButton.icon(
+                  onPressed: busy ? null : actions.onToggleRemoveSourcePick,
+                  style: sourcePicking
+                      ? OutlinedButton.styleFrom(
+                          foregroundColor: DarkmoonColors.accent,
+                          side: const BorderSide(color: DarkmoonColors.accent),
+                        )
+                      : null,
+                  icon: const Icon(CupertinoIcons.scope, size: 14),
+                  label: Text(l10n.removePickSourceButton),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  sourcePicking
+                      ? l10n.removePickSourceHint
+                      : sourcePicked
+                      ? l10n.removeSourcePickedHint
+                      : l10n.removeSourceDefaultHint,
+                  style: muted,
+                ),
+              ),
+            ],
+          ),
+        ],
+        if (mode == RemovalMode.generative) ...[
+          const SizedBox(height: 8),
+          Text(l10n.removePromptLabel, style: muted),
+          const SizedBox(height: 4),
+          TextFormField(
+            key: const Key('remove-prompt'),
+            initialValue: prompt,
+            minLines: 1,
+            maxLines: 3,
+            decoration: InputDecoration(
+              hintText: l10n.removePromptHint,
+              isDense: true,
+            ),
+            style: theme.textTheme.bodyMedium,
+            onChanged: actions.onRemovePromptChanged,
+          ),
+          if (!generativeConfigured) ...[
+            const SizedBox(height: 6),
+            Text(
+              l10n.removeGenerativeNotConfigured,
+              style: muted?.copyWith(color: const Color(0xFFE8A33D)),
+            ),
+          ],
+        ],
         const SizedBox(height: 14),
         // The crop panel's pair: an outlined secondary and a filled
         // primary, side by side, 34 tall.
@@ -157,7 +249,13 @@ class _RemoveObjectsPanel extends StatelessWidget {
               child: SizedBox(
                 height: 34,
                 child: FilledButton(
-                  onPressed: hasStrokes && !busy ? actions.onRunRemoval : null,
+                  onPressed:
+                      hasStrokes &&
+                          !busy &&
+                          (mode != RemovalMode.generative ||
+                              generativeConfigured)
+                      ? actions.onRunRemoval
+                      : null,
                   child: Text(l10n.removeRunButton),
                 ),
               ),
@@ -241,6 +339,54 @@ class _RemoveObjectsPanel extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+}
+
+/// One of the Remove panel's fill choices, styled like the export
+/// dialog's format chips: a flat pill, filled with the accent when
+/// chosen.
+class _RemoveModeChip extends StatelessWidget {
+  const _RemoveModeChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: DarkmoonMotion.of(context, DarkmoonMotion.fast),
+        curve: DarkmoonMotion.enter,
+        height: 28,
+        alignment: Alignment.center,
+        decoration: BoxDecoration(
+          color: selected ? DarkmoonColors.accent : Colors.transparent,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: selected ? DarkmoonColors.accent : DarkmoonColors.border,
+          ),
+        ),
+        child: Text(
+          label,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            fontSize: 11.5,
+            color: selected
+                ? DarkmoonColors.background
+                : (onTap == null
+                      ? DarkmoonColors.textMuted
+                      : DarkmoonColors.textSecondary),
+          ),
+        ),
+      ),
     );
   }
 }

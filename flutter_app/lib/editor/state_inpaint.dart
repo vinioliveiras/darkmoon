@@ -121,12 +121,134 @@ extension _EditorInpaint on _EditorScreenState {
       storedHeight = math.max(1, (height * scale).round());
       alpha = resampleAlpha(alpha, width, height, storedWidth, storedHeight);
     }
+    // Clone/Heal: the source is a picked point, or else a spot one patch
+    // width to the side of the hole (to the left when the right edge is
+    // too close) — both as fractions of the frame, measured from the
+    // hole's centre.
+    var sourceDx = 0.0, sourceDy = 0.0;
+    if (_removeMode == RemovalMode.clone || _removeMode == RemovalMode.heal) {
+      final bounds = maskBounds(alpha, storedWidth, storedHeight);
+      if (bounds != null) {
+        final cx = (bounds.left + bounds.right) / 2 / storedWidth;
+        final cy = (bounds.top + bounds.bottom) / 2 / storedHeight;
+        final holeW = (bounds.right - bounds.left + 1) / storedWidth;
+        final picked = _removeSource;
+        if (picked != null) {
+          sourceDx = picked.x - cx;
+          sourceDy = picked.y - cy;
+        } else {
+          final step = holeW * 1.2 + 0.02;
+          sourceDx = cx + step + holeW / 2 <= 1.0 ? step : -step;
+        }
+      }
+    }
     return Removal(
       name: name,
       width: storedWidth,
       height: storedHeight,
       alphaPng: encodeAlphaPng(alpha, storedWidth, storedHeight),
+      mode: _removeMode,
+      sourceDx: sourceDx,
+      sourceDy: sourceDy,
     );
+  }
+
+  void _setRemoveMode(RemovalMode mode) {
+    _rebuild(() {
+      _removeMode = mode;
+      if (mode != RemovalMode.clone && mode != RemovalMode.heal) {
+        _removeSourcePicking = false;
+      }
+    });
+  }
+
+  void _toggleRemoveSourcePick() {
+    _rebuild(() => _removeSourcePicking = !_removeSourcePicking);
+  }
+
+  /// The photo click that sets the Clone/Heal source (normalised).
+  void _onRemoveSourcePick(double nx, double ny) {
+    _rebuild(() {
+      _removeSource = (x: nx.clamp(0.0, 1.0), y: ny.clamp(0.0, 1.0));
+      _removeSourcePicking = false;
+    });
+  }
+
+  void _setRemovePrompt(String value) {
+    // No rebuild: the field owns its text; the value is read on Remove.
+    _removePrompt = value;
+  }
+
+  /// Runs the Generative fill for [removal]: the live source and the
+  /// hole go to the server named in Settings, and its patch comes back
+  /// inside a generative [Removal] the worker composites like any other.
+  /// Null (after telling the user why) when it could not.
+  Future<Removal?> _paintGenerative(String path, Removal removal) async {
+    final l10n = AppLocalizations.of(context)!;
+    final live = _editSources[path]?.live;
+    final url = _settings.generativeReplaceUrl.trim();
+    if (url.isEmpty) {
+      _notify(
+        detail: l10n.removeGenerativeNotConfigured,
+        status: l10n.removeGenerativeNotConfigured,
+      );
+      return null;
+    }
+    if (live == null) {
+      return null;
+    }
+    _rebuild(() {
+      _isRunningInpaint = true;
+      _inpaintProgress = null;
+    });
+    try {
+      final stored = decodeAlphaPng(removal.alphaPng);
+      if (stored == null) {
+        return null;
+      }
+      final alpha = resampleAlpha(
+        stored.alpha,
+        stored.width,
+        stored.height,
+        live.width,
+        live.height,
+      );
+      final maskPng = encodeAlphaPng(alpha, live.width, live.height);
+      final jpeg = await compute(encodeRgbAsJpeg, (
+        rgb: live.rgbBytes,
+        width: live.width,
+        height: live.height,
+      ));
+      final patch = await requestGenerativeReplace(
+        baseUrl: url,
+        sourceId: generativeSourceId(path),
+        sourceJpeg: jpeg,
+        maskPng: maskPng,
+        prompt: _removePrompt,
+      );
+      return Removal(
+        name: removal.name,
+        width: removal.width,
+        height: removal.height,
+        alphaPng: removal.alphaPng,
+        mode: RemovalMode.generative,
+        patchPng: patch.png,
+        patchLeft: patch.x / live.width,
+        patchTop: patch.y / live.height,
+        patchWidth: patch.width / live.width,
+        patchHeight: patch.height / live.height,
+      );
+    } catch (e) {
+      if (mounted) {
+        final message = l10n.removeGenerativeFailedMessage(e.toString());
+        _notify(detail: message, status: l10n.removeFailedStatus);
+      }
+      return null;
+    } finally {
+      if (mounted) {
+        _rebuild(() => _isRunningInpaint = false);
+      }
+    }
   }
 
   /// Commits the painted strokes as one more removal of the selected
@@ -167,7 +289,13 @@ extension _EditorInpaint on _EditorScreenState {
       );
       return;
     }
-    await _setRemovals(path, previous, [...previous, removal]);
+    final ready = removal.mode == RemovalMode.generative
+        ? await _paintGenerative(path, removal)
+        : removal;
+    if (ready == null || !mounted) {
+      return;
+    }
+    await _setRemovals(path, previous, [...previous, ready]);
   }
 
   Future<void> _toggleRemovalVisible(int index) async {

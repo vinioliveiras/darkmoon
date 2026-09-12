@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:darkmoon/catalog/removal.dart';
@@ -66,5 +67,58 @@ void main() {
     expect(big[30 * 80 + 40], closeTo(1.0, 0.01));
     expect(big[2 * 80 + 2], 0.0);
     expect(identical(resampleAlpha(alpha, w, h, w, h), alpha), isTrue);
+  });
+
+  test('the fill mode and its source or patch survive JSON', () {
+    final alpha = encodeAlphaPng(Float32List(16), 4, 4);
+    final clone = Removal(
+      name: 'c',
+      width: 4,
+      height: 4,
+      alphaPng: alpha,
+      mode: RemovalMode.heal,
+      sourceDx: 0.25,
+      sourceDy: -0.1,
+    );
+    final back = Removal.fromJson(jsonDecode(jsonEncode(clone.toJson())))!;
+    expect(back.mode, RemovalMode.heal);
+    expect(back.sourceDx, 0.25);
+    expect(back.sourceDy, -0.1);
+    final ai = Removal(name: 'a', width: 4, height: 4, alphaPng: alpha);
+    expect(
+      Removal.fromJson(jsonDecode(jsonEncode(ai.toJson())))!.mode,
+      RemovalMode.ai,
+    );
+    // Same coverage, different fill: different result, different key.
+    expect(clone.signature, isNot(ai.signature));
+    expect(
+      clone.copyWith(name: 'x').signature,
+      Removal(
+        name: 'y',
+        width: 4,
+        height: 4,
+        alphaPng: alpha,
+        mode: RemovalMode.heal,
+        sourceDx: 0.25,
+        sourceDy: -0.1,
+      ).signature,
+    );
+    final generative = Removal(
+      name: 'g',
+      width: 4,
+      height: 4,
+      alphaPng: alpha,
+      mode: RemovalMode.generative,
+      patchPng: Uint8List.fromList([1, 2, 3]),
+      patchLeft: 0.1,
+      patchTop: 0.2,
+      patchWidth: 0.3,
+      patchHeight: 0.4,
+    );
+    final g = Removal.fromJson(jsonDecode(jsonEncode(generative.toJson())))!;
+    expect(g.mode, RemovalMode.generative);
+    expect(g.patchPng, [1, 2, 3]);
+    expect(g.patchWidth, 0.3);
+    expect(g.signature, isNot(ai.signature));
   });
 }

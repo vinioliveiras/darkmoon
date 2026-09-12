@@ -503,6 +503,47 @@ class AppLocalizationsDe extends AppLocalizations {
       'Diese Maske wird noch berechnet. Versuchen Sie es gleich noch einmal.';
 
   @override
+  String get removeModeAi => 'KI-Füllung';
+
+  @override
+  String get removeModeClone => 'Klonen';
+
+  @override
+  String get removeModeHeal => 'Reparieren';
+
+  @override
+  String get removeModeGenerative => 'Generativ';
+
+  @override
+  String get removePickSourceButton => 'Quelle wählen';
+
+  @override
+  String get removePickSourceHint =>
+      'Klicken Sie im Foto auf die Stelle, von der kopiert werden soll.';
+
+  @override
+  String get removeSourceDefaultHint =>
+      'Quelle: neben dem Flicken (oder wählen).';
+
+  @override
+  String get removeSourcePickedHint => 'Quelle gesetzt.';
+
+  @override
+  String get removePromptLabel => 'Was stattdessen dort sein soll';
+
+  @override
+  String get removePromptHint => 'z. B. Gras, Himmel, Wand';
+
+  @override
+  String get removeGenerativeNotConfigured =>
+      'Legen Sie zuerst die Adresse des generativen Servers in den Einstellungen (KI) fest.';
+
+  @override
+  String removeGenerativeFailedMessage(String error) {
+    return 'Der generative Server hat keinen Flicken geliefert: $error';
+  }
+
+  @override
   String removeCountLabel(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -983,6 +1024,16 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get settingsCustomDenoiseModelChooseButton => 'Datei wählen…';
+
+  @override
+  String get settingsGenerativeUrlLabel => 'Server für generatives Ersetzen';
+
+  @override
+  String get settingsGenerativeUrlHint =>
+      'Adresse einer Solstice-kompatiblen Inpainting-Middleware (ComfyUI dahinter), genutzt von der generativen Füllung in Objekte entfernen. Nichts ist mitgeliefert: leer lassen, um den Modus aus zu lassen.';
+
+  @override
+  String get settingsGenerativeUrlPlaceholder => 'http://127.0.0.1:8000';
 
   @override
   String get settingsCustomDenoiseModelResetButton => 'Zurücksetzen';

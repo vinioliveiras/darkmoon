@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 import 'dart:typed_data';
 
+import 'package:image/image.dart' as img;
+
 /// Fills a hole: [imageChw] is the window around it as a CHW float tensor
 /// in 0..1, [maskHw] the hole as 1.0 and everything else 0.0, both
 /// `modelSize` square; the answer is the window painted, CHW in 0..255.
@@ -198,4 +200,185 @@ double _sampleChannel(
       data[offset + y1 * width + x0] * (1 - fx) +
       data[offset + y1 * width + x1] * fx;
   return a * (1 - fy) + b * fy;
+}
+
+/// How a [cloneRegion] hole is filled: pixels copied from elsewhere in
+/// the frame ([clone]), or copied and then blended into the hole's own
+/// lighting so the seam disappears ([heal]).
+enum CloneFill { clone, heal }
+
+/// The manual counterpart of [inpaintRegion] — Solstice's Clone and Heal
+/// patches (`generate_manual_cleanup_patch`): every pixel the hole covers
+/// is taken from the same spot shifted by ([offsetX], [offsetY]) pixels.
+///
+/// Clone copies those pixels as they are. Heal keeps the source's
+/// texture but takes the hole's own colour and lighting from its border:
+/// Poisson blending, solved as Solstice does — the boundary holds the
+/// destination-minus-source difference, the interior relaxes toward it
+/// with successive over-relaxation (omega 1.6), and the result is
+/// source + that smooth difference. [iterations] is capped for big holes
+/// so a large patch stays interactive; the seam is still smooth, just
+/// slightly less spread into the middle.
+///
+/// Either way the fill is blended in by the hole's own alpha, so a soft
+/// brush edge stays soft. Returns a new buffer; [rgb] is left alone.
+Uint8List cloneRegion(
+  Uint8List rgb,
+  int width,
+  int height,
+  Float32List alpha, {
+  required int offsetX,
+  required int offsetY,
+  CloneFill fill = CloneFill.clone,
+  double threshold = inpaintHoleThreshold,
+  int iterations = 400,
+}) {
+  final bounds = maskBounds(alpha, width, height, threshold: threshold);
+  if (bounds == null) {
+    return rgb;
+  }
+  final out = Uint8List.fromList(rgb);
+  int srcIndex(int x, int y) {
+    final sx = (x + offsetX).clamp(0, width - 1);
+    final sy = (y + offsetY).clamp(0, height - 1);
+    return (sy * width + sx) * 3;
+  }
+
+  if (fill == CloneFill.clone) {
+    for (var y = bounds.top; y <= bounds.bottom; y++) {
+      for (var x = bounds.left; x <= bounds.right; x++) {
+        final a = alpha[y * width + x];
+        if (a < threshold) continue;
+        final d = (y * width + x) * 3;
+        final s = srcIndex(x, y);
+        for (var c = 0; c < 3; c++) {
+          out[d + c] = (rgb[d + c] + (rgb[s + c] - rgb[d + c]) * a).round();
+        }
+      }
+    }
+    return out;
+  }
+
+  // Heal: the working box is the hole's bounds plus a one-pixel ring.
+  final bw = bounds.right - bounds.left + 3;
+  final bh = bounds.bottom - bounds.top + 3;
+  final region = Uint8List(bw * bh); // 0 outside, 1 hole, 2 boundary
+  for (var y = 0; y < bh; y++) {
+    for (var x = 0; x < bw; x++) {
+      final ix = bounds.left + x - 1, iy = bounds.top + y - 1;
+      if (ix >= 0 &&
+          ix < width &&
+          iy >= 0 &&
+          iy < height &&
+          alpha[iy * width + ix] >= threshold) {
+        region[y * bw + x] = 1;
+      }
+    }
+  }
+  final v = Float32List(bw * bh * 3);
+  final omega = <int>[];
+  // The whole box, ring included: the hole touches its own bounds, so
+  // the boundary cells sit on the ring and a loop that skipped the ring
+  // would leave them at zero and the interior would relax to nothing.
+  for (var y = 0; y < bh; y++) {
+    for (var x = 0; x < bw; x++) {
+      final i = y * bw + x;
+      if (region[i] == 0) {
+        if ((y > 0 && region[i - bw] == 1) ||
+            (y < bh - 1 && region[i + bw] == 1) ||
+            (x > 0 && region[i - 1] == 1) ||
+            (x < bw - 1 && region[i + 1] == 1)) {
+          region[i] = 2;
+          final ix = bounds.left + x - 1, iy = bounds.top + y - 1;
+          final d = (iy * width + ix) * 3;
+          final s = srcIndex(ix, iy);
+          for (var c = 0; c < 3; c++) {
+            v[i * 3 + c] = (rgb[d + c] - rgb[s + c]).toDouble();
+          }
+        }
+      } else if (region[i] == 1) {
+        omega.add(i);
+      }
+    }
+  }
+  // Keep the solve near a hundred million cell updates at most.
+  final steps = math.max(
+    40,
+    math.min(iterations, 100000000 ~/ math.max(omega.length, 1)),
+  );
+  const relax = 1.6;
+  for (var it = 0; it < steps; it++) {
+    for (final i in omega) {
+      for (var c = 0; c < 3; c++) {
+        final k = i * 3 + c;
+        final sum =
+            v[(i - bw) * 3 + c] +
+            v[(i + bw) * 3 + c] +
+            v[(i - 1) * 3 + c] +
+            v[(i + 1) * 3 + c];
+        v[k] = (1.0 - relax) * v[k] + relax * 0.25 * sum;
+      }
+    }
+  }
+  for (final i in omega) {
+    final x = i % bw, y = i ~/ bw;
+    final ix = bounds.left + x - 1, iy = bounds.top + y - 1;
+    final a = alpha[iy * width + ix];
+    final d = (iy * width + ix) * 3;
+    final s = srcIndex(ix, iy);
+    for (var c = 0; c < 3; c++) {
+      final healed = (rgb[s + c] + v[i * 3 + c]).clamp(0.0, 255.0);
+      out[d + c] = (rgb[d + c] + (healed - rgb[d + c]) * a).round();
+    }
+  }
+  return out;
+}
+
+/// Lays a generative server's [patch] over [rgb] inside the hole — the
+/// patch covers the frame rectangle ([left], [top], [patchWidth],
+/// [patchHeight]) given as fractions of the frame, resampled to whatever
+/// resolution this runs at, and blended in by the hole's own alpha so
+/// only the painted area changes. Returns a new buffer.
+Uint8List compositePatch(
+  Uint8List rgb,
+  int width,
+  int height,
+  Float32List alpha,
+  img.Image patch, {
+  required double left,
+  required double top,
+  required double patchWidth,
+  required double patchHeight,
+  double threshold = inpaintHoleThreshold,
+}) {
+  if (patchWidth <= 0 || patchHeight <= 0) {
+    return rgb;
+  }
+  final out = Uint8List.fromList(rgb);
+  final px = left * width, py = top * height;
+  final pw = patchWidth * width, ph = patchHeight * height;
+  final x0 = px.floor().clamp(0, width - 1);
+  final y0 = py.floor().clamp(0, height - 1);
+  final x1 = (px + pw).ceil().clamp(0, width);
+  final y1 = (py + ph).ceil().clamp(0, height);
+  for (var y = y0; y < y1; y++) {
+    for (var x = x0; x < x1; x++) {
+      final a = alpha[y * width + x];
+      if (a < threshold) continue;
+      final u = ((x + 0.5 - px) / pw * patch.width).floor().clamp(
+        0,
+        patch.width - 1,
+      );
+      final v = ((y + 0.5 - py) / ph * patch.height).floor().clamp(
+        0,
+        patch.height - 1,
+      );
+      final p = patch.getPixel(u, v);
+      final d = (y * width + x) * 3;
+      out[d] = (rgb[d] + (p.r - rgb[d]) * a).round();
+      out[d + 1] = (rgb[d + 1] + (p.g - rgb[d + 1]) * a).round();
+      out[d + 2] = (rgb[d + 2] + (p.b - rgb[d + 2]) * a).round();
+    }
+  }
+  return out;
 }

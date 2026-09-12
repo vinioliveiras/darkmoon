@@ -15,6 +15,22 @@ import 'package:image/image.dart' as img;
 /// rasterise a mask from. Stored as a grayscale PNG, capped at
 /// [removalMaxDimension] on the longer side: a few kilobytes in the
 /// catalog for a brush, tens for a segmentation edge.
+/// How a [Removal]'s hole is filled — see `edit_source_inpaint.dart`.
+enum RemovalMode {
+  /// The LaMa model paints what its surroundings suggest.
+  ai,
+
+  /// Pixels copied from [Removal.sourceDx]/[Removal.sourceDy] away.
+  clone,
+
+  /// Copied like [clone], then blended into the hole's own lighting.
+  heal,
+
+  /// A patch a generative server painted for a prompt, stored in
+  /// [Removal.patchPng] and composited back — no model runs locally.
+  generative,
+}
+
 class Removal {
   const Removal({
     required this.name,
@@ -22,7 +38,31 @@ class Removal {
     required this.height,
     required this.alphaPng,
     this.visible = true,
+    this.mode = RemovalMode.ai,
+    this.sourceDx = 0,
+    this.sourceDy = 0,
+    this.patchPng,
+    this.patchLeft = 0,
+    this.patchTop = 0,
+    this.patchWidth = 0,
+    this.patchHeight = 0,
   });
+
+  final RemovalMode mode;
+
+  /// Clone/Heal: where the source sits relative to the hole, as a
+  /// fraction of the frame's width and height (so it survives every
+  /// resolution the removal is applied at).
+  final double sourceDx;
+  final double sourceDy;
+
+  /// Generative: the server's patch as a PNG, and where it goes on the
+  /// frame as fractions of its width and height.
+  final Uint8List? patchPng;
+  final double patchLeft;
+  final double patchTop;
+  final double patchWidth;
+  final double patchHeight;
 
   final String name;
   final int width;
@@ -40,10 +80,32 @@ class Removal {
     height: height,
     alphaPng: alphaPng,
     visible: visible ?? this.visible,
+    mode: mode,
+    sourceDx: sourceDx,
+    sourceDy: sourceDy,
+    patchPng: patchPng,
+    patchLeft: patchLeft,
+    patchTop: patchTop,
+    patchWidth: patchWidth,
+    patchHeight: patchHeight,
   );
 
   /// Tells this coverage from any other, for the result cache's key.
-  String get signature => sha1.convert(alphaPng).toString();
+  /// Identifies the result, so the cache key changes when anything that
+  /// changes the fill does: the coverage, the fill mode, the source
+  /// offset, the generative patch.
+  String get signature {
+    final extra = switch (mode) {
+      RemovalMode.ai => '',
+      RemovalMode.clone || RemovalMode.heal =>
+        '|${mode.name}|${sourceDx.toStringAsFixed(5)}|'
+            '${sourceDy.toStringAsFixed(5)}',
+      RemovalMode.generative =>
+        '|generative|${patchPng == null ? '' : sha1.convert(patchPng!)}|'
+            '$patchLeft|$patchTop|$patchWidth|$patchHeight',
+    };
+    return '${sha1.convert(alphaPng)}$extra';
+  }
 
   Map<String, dynamic> toJson() => {
     'name': name,
@@ -51,6 +113,18 @@ class Removal {
     'width': width,
     'height': height,
     'alpha': base64Encode(alphaPng),
+    if (mode != RemovalMode.ai) 'mode': mode.name,
+    if (mode == RemovalMode.clone || mode == RemovalMode.heal) ...{
+      'sourceDx': sourceDx,
+      'sourceDy': sourceDy,
+    },
+    if (mode == RemovalMode.generative && patchPng != null) ...{
+      'patch': base64Encode(patchPng!),
+      'patchLeft': patchLeft,
+      'patchTop': patchTop,
+      'patchWidth': patchWidth,
+      'patchHeight': patchHeight,
+    },
   };
 
   /// Null for anything that is not a removal record (an older format,
@@ -66,12 +140,27 @@ class Removal {
       return null;
     }
     try {
+      final modeName = raw['mode'] as String?;
+      final patch = raw['patch'] as String?;
       return Removal(
         name: raw['name'] as String? ?? '',
         visible: raw['visible'] as bool? ?? true,
         width: width,
         height: height,
         alphaPng: base64Decode(alpha),
+        mode: modeName == null
+            ? RemovalMode.ai
+            : RemovalMode.values.firstWhere(
+                (m) => m.name == modeName,
+                orElse: () => RemovalMode.ai,
+              ),
+        sourceDx: (raw['sourceDx'] as num?)?.toDouble() ?? 0,
+        sourceDy: (raw['sourceDy'] as num?)?.toDouble() ?? 0,
+        patchPng: patch == null ? null : base64Decode(patch),
+        patchLeft: (raw['patchLeft'] as num?)?.toDouble() ?? 0,
+        patchTop: (raw['patchTop'] as num?)?.toDouble() ?? 0,
+        patchWidth: (raw['patchWidth'] as num?)?.toDouble() ?? 0,
+        patchHeight: (raw['patchHeight'] as num?)?.toDouble() ?? 0,
       );
     } catch (_) {
       return null;

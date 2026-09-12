@@ -922,6 +922,78 @@ abstract class AppLocalizations {
   /// **'That mask is still being computed. Try again in a moment.'**
   String get removeMaskNotReadyMessage;
 
+  /// No description provided for @removeModeAi.
+  ///
+  /// In en, this message translates to:
+  /// **'AI fill'**
+  String get removeModeAi;
+
+  /// No description provided for @removeModeClone.
+  ///
+  /// In en, this message translates to:
+  /// **'Clone'**
+  String get removeModeClone;
+
+  /// No description provided for @removeModeHeal.
+  ///
+  /// In en, this message translates to:
+  /// **'Heal'**
+  String get removeModeHeal;
+
+  /// No description provided for @removeModeGenerative.
+  ///
+  /// In en, this message translates to:
+  /// **'Generative'**
+  String get removeModeGenerative;
+
+  /// No description provided for @removePickSourceButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick source'**
+  String get removePickSourceButton;
+
+  /// No description provided for @removePickSourceHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Click the photo where the patch should copy from.'**
+  String get removePickSourceHint;
+
+  /// No description provided for @removeSourceDefaultHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Source: beside the patch (or pick one).'**
+  String get removeSourceDefaultHint;
+
+  /// No description provided for @removeSourcePickedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Source set.'**
+  String get removeSourcePickedHint;
+
+  /// No description provided for @removePromptLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'What should be there instead'**
+  String get removePromptLabel;
+
+  /// No description provided for @removePromptHint.
+  ///
+  /// In en, this message translates to:
+  /// **'e.g. grass, sky, wall'**
+  String get removePromptHint;
+
+  /// No description provided for @removeGenerativeNotConfigured.
+  ///
+  /// In en, this message translates to:
+  /// **'Set the generative server address in Settings (AI tab) first.'**
+  String get removeGenerativeNotConfigured;
+
+  /// No description provided for @removeGenerativeFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The generative server did not return a patch: {error}'**
+  String removeGenerativeFailedMessage(String error);
+
   /// No description provided for @removeCountLabel.
   ///
   /// In en, this message translates to:
@@ -1749,6 +1821,24 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Choose file…'**
   String get settingsCustomDenoiseModelChooseButton;
+
+  /// No description provided for @settingsGenerativeUrlLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Generative replace server'**
+  String get settingsGenerativeUrlLabel;
+
+  /// No description provided for @settingsGenerativeUrlHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Address of a Solstice-compatible inpainting middleware (ComfyUI behind it), used by the Generative fill of Remove objects. Nothing is bundled: leave empty to keep the mode off.'**
+  String get settingsGenerativeUrlHint;
+
+  /// No description provided for @settingsGenerativeUrlPlaceholder.
+  ///
+  /// In en, this message translates to:
+  /// **'http://127.0.0.1:8000'**
+  String get settingsGenerativeUrlPlaceholder;
 
   /// No description provided for @settingsCustomDenoiseModelResetButton.
   ///

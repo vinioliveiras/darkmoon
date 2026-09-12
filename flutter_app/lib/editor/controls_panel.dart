@@ -38,6 +38,11 @@ class _ControlsPanel extends StatefulWidget {
     required this.removeModeActive,
     required this.removeHasStrokes,
     required this.removeGrow,
+    required this.removeMode,
+    required this.removeSourcePicking,
+    required this.removeSourcePicked,
+    required this.removePrompt,
+    required this.generativeConfigured,
     required this.removals,
     required this.removalBusy,
     required this.cropTransform,
@@ -128,6 +133,16 @@ class _ControlsPanel extends StatefulWidget {
   final bool removeModeActive;
   final bool removeHasStrokes;
   final double removeGrow;
+
+  /// See _ControlsPanelActions.onRemoveModeChanged and friends.
+  final RemovalMode removeMode;
+  final bool removeSourcePicking;
+  final bool removeSourcePicked;
+  final String removePrompt;
+
+  /// Whether Settings names a generative server — the Generative fill is
+  /// offered but cannot run without one.
+  final bool generativeConfigured;
   final List<Removal> removals;
   final bool removalBusy;
   final CropTransformParams cropTransform;
@@ -230,6 +245,11 @@ class _ControlsPanelState extends State<_ControlsPanel>
     brushErase: widget.brushErase,
     grow: widget.removeGrow,
     hasStrokes: widget.removeHasStrokes,
+    mode: widget.removeMode,
+    sourcePicking: widget.removeSourcePicking,
+    sourcePicked: widget.removeSourcePicked,
+    prompt: widget.removePrompt,
+    generativeConfigured: widget.generativeConfigured,
     masks: widget.masks,
     removals: widget.removals,
     busy: widget.removalBusy,

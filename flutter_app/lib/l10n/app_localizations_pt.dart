@@ -497,6 +497,47 @@ class AppLocalizationsPt extends AppLocalizations {
       'Essa máscara ainda está sendo calculada. Tente de novo daqui a pouco.';
 
   @override
+  String get removeModeAi => 'Preenchimento IA';
+
+  @override
+  String get removeModeClone => 'Clonar';
+
+  @override
+  String get removeModeHeal => 'Curar';
+
+  @override
+  String get removeModeGenerative => 'Generativo';
+
+  @override
+  String get removePickSourceButton => 'Escolher origem';
+
+  @override
+  String get removePickSourceHint =>
+      'Clique na foto de onde o remendo deve copiar.';
+
+  @override
+  String get removeSourceDefaultHint =>
+      'Origem: ao lado do remendo (ou escolha uma).';
+
+  @override
+  String get removeSourcePickedHint => 'Origem definida.';
+
+  @override
+  String get removePromptLabel => 'O que deve ficar no lugar';
+
+  @override
+  String get removePromptHint => 'ex.: grama, céu, parede';
+
+  @override
+  String get removeGenerativeNotConfigured =>
+      'Defina o endereço do servidor generativo em Configurações (aba IA) primeiro.';
+
+  @override
+  String removeGenerativeFailedMessage(String error) {
+    return 'O servidor generativo não devolveu um remendo: $error';
+  }
+
+  @override
   String removeCountLabel(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -974,6 +1015,17 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get settingsCustomDenoiseModelChooseButton => 'Escolher arquivo…';
+
+  @override
+  String get settingsGenerativeUrlLabel =>
+      'Servidor de substituição generativa';
+
+  @override
+  String get settingsGenerativeUrlHint =>
+      'Endereço de um middleware de inpainting compatível com o Solstice (ComfyUI por trás), usado pelo preenchimento Generativo do Remover objetos. Nada vem embutido: deixe vazio para manter o modo desligado.';
+
+  @override
+  String get settingsGenerativeUrlPlaceholder => 'http://127.0.0.1:8000';
 
   @override
   String get settingsCustomDenoiseModelResetButton => 'Redefinir';

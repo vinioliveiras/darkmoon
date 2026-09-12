@@ -1136,6 +1136,9 @@ class _ControlsPanelActions {
     required this.onRemoveGrowChanged,
     required this.onUndoRemoveStroke,
     required this.onClearRemoveStrokes,
+    required this.onRemoveModeChanged,
+    required this.onToggleRemoveSourcePick,
+    required this.onRemovePromptChanged,
   });
 
   final void Function(WbMode mode) onWhiteBalanceMode;
@@ -1270,6 +1273,13 @@ class _ControlsPanelActions {
   final ValueChanged<double> onRemoveGrowChanged;
   final VoidCallback onUndoRemoveStroke;
   final VoidCallback onClearRemoveStrokes;
+
+  /// The fill mode of the next removal (AI, Clone, Heal, Generative), the
+  /// Clone/Heal "pick a source point on the photo" toggle, and the
+  /// Generative prompt as it is typed.
+  final ValueChanged<RemovalMode> onRemoveModeChanged;
+  final VoidCallback onToggleRemoveSourcePick;
+  final ValueChanged<String> onRemovePromptChanged;
 
   /// Fires as the Straighten slider is dragged (true) and once it's
   /// released (false) — lets the crop overlay show a denser guide grid

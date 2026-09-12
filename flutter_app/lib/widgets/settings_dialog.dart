@@ -474,6 +474,33 @@ class _SettingsDialogState extends State<SettingsDialog>
               ),
             ],
           ),
+          const SizedBox(height: 18),
+          // Generative Replace: the Remove panel's fourth fill talks to a
+          // Solstice-compatible middleware the user runs — only an
+          // address to give it, nothing bundled.
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.settingsGenerativeUrlLabel, style: _labelStyle),
+              const SizedBox(height: 4),
+              Text(l10n.settingsGenerativeUrlHint, style: _hintStyle),
+              const SizedBox(height: 8),
+              TextFormField(
+                key: const Key('settings-generative-url'),
+                initialValue: _settings.generativeReplaceUrl,
+                decoration: InputDecoration(
+                  hintText: l10n.settingsGenerativeUrlPlaceholder,
+                  isDense: true,
+                ),
+                style: const TextStyle(
+                  fontSize: 12.5,
+                  color: DarkmoonColors.textPrimary,
+                ),
+                onChanged: (v) =>
+                    _update(_settings.copyWith(generativeReplaceUrl: v.trim())),
+              ),
+            ],
+          ),
         ],
       ),
     );

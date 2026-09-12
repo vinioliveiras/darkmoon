@@ -174,17 +174,14 @@ Future<EditSourcePair?> _decodeAndInpaint(
       if (removal.visible) removal,
   ];
   if (visible.isNotEmpty) {
-    final model = OnnxModel.forSpec(lamaInpaintModelSpec);
-    onStage(
-      InpaintModelInfo(model.usingGpu, model.provider.label, model.gpuError),
-    );
+    // The model is only loaded when an AI fill is actually in the list:
+    // a photo of clone and heal patches never pays for it.
+    OnnxModel? model;
     final size = lamaInpaintModelSpec.inputTileSize;
-    final imageInput = model.inputNames[0];
-    final maskInput = model.inputNames[1];
-    final outputName = model.outputNames.first;
 
     for (var i = 0; i < visible.length; i++) {
-      final stored = decodeAlphaPng(visible[i].alphaPng);
+      final removal = visible[i];
+      final stored = decodeAlphaPng(removal.alphaPng);
       if (stored == null) {
         continue;
       }
@@ -195,6 +192,51 @@ Future<EditSourcePair?> _decodeAndInpaint(
         width,
         height,
       );
+      switch (removal.mode) {
+        case RemovalMode.clone || RemovalMode.heal:
+          rgb = cloneRegion(
+            rgb,
+            width,
+            height,
+            alpha,
+            offsetX: (removal.sourceDx * width).round(),
+            offsetY: (removal.sourceDy * height).round(),
+            fill: removal.mode == RemovalMode.heal
+                ? CloneFill.heal
+                : CloneFill.clone,
+          );
+          onStage(InpaintProgress(i + 1, visible.length));
+          continue;
+        case RemovalMode.generative:
+          final patch = removal.patchPng == null
+              ? null
+              : img.decodePng(removal.patchPng!);
+          if (patch != null) {
+            rgb = compositePatch(
+              rgb,
+              width,
+              height,
+              alpha,
+              patch,
+              left: removal.patchLeft,
+              top: removal.patchTop,
+              patchWidth: removal.patchWidth,
+              patchHeight: removal.patchHeight,
+            );
+          }
+          onStage(InpaintProgress(i + 1, visible.length));
+          continue;
+        case RemovalMode.ai:
+          break;
+      }
+      final lama = model ??= () {
+        final m = OnnxModel.forSpec(lamaInpaintModelSpec);
+        onStage(InpaintModelInfo(m.usingGpu, m.provider.label, m.gpuError));
+        return m;
+      }();
+      final imageInput = lama.inputNames[0];
+      final maskInput = lama.inputNames[1];
+      final outputName = lama.outputNames.first;
       rgb = inpaintRegion(
         rgb,
         width,
@@ -202,7 +244,7 @@ Future<EditSourcePair?> _decodeAndInpaint(
         alpha,
         modelSize: size,
         runModel: (imageChw, maskHw) {
-          final outputs = model.runGraph(
+          final outputs = lama.runGraph(
             {
               imageInput: OnnxTensorData.float32([1, 3, size, size], imageChw),
               maskInput: OnnxTensorData.float32([1, 1, size, size], maskHw),

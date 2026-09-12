@@ -113,6 +113,7 @@ class AppSettings {
     this.lastActiveFile,
     this.customDenoiseModelPath,
     this.animationsEnabled = true,
+    this.generativeReplaceUrl = '',
   });
 
   /// 'auto' (follow the system language), 'en', or 'pt'.
@@ -270,6 +271,11 @@ class AppSettings {
   /// slower machine where it reads as lag instead of polish.
   final bool animationsEnabled;
 
+  /// Address of a Solstice-compatible inpainting middleware for the
+  /// Remove panel's Generative fill (see `native/generative_replace.dart`);
+  /// empty = not set, the mode stays unavailable.
+  final String generativeReplaceUrl;
+
   AppSettings copyWith({
     String? language,
     bool? fastPreview,
@@ -291,6 +297,7 @@ class AppSettings {
     String? lastActiveFile,
     String? customDenoiseModelPath,
     bool? animationsEnabled,
+    String? generativeReplaceUrl,
   }) => AppSettings(
     language: language ?? this.language,
     fastPreview: fastPreview ?? this.fastPreview,
@@ -314,6 +321,7 @@ class AppSettings {
     customDenoiseModelPath:
         customDenoiseModelPath ?? this.customDenoiseModelPath,
     animationsEnabled: animationsEnabled ?? this.animationsEnabled,
+    generativeReplaceUrl: generativeReplaceUrl ?? this.generativeReplaceUrl,
   );
 
   /// [path] moved (or added) to the front of [recentFiles], deduplicated
@@ -353,6 +361,7 @@ class AppSettings {
     lastActiveFile: lastActiveFile,
     customDenoiseModelPath: null,
     animationsEnabled: animationsEnabled,
+    generativeReplaceUrl: generativeReplaceUrl,
   );
 
   /// [lastActiveFolder] cleared (same `copyWith`-can't-null limitation as
@@ -386,6 +395,7 @@ class AppSettings {
     lastActiveFile: path,
     customDenoiseModelPath: customDenoiseModelPath,
     animationsEnabled: animationsEnabled,
+    generativeReplaceUrl: generativeReplaceUrl,
   );
 }
 
@@ -452,6 +462,9 @@ Future<AppSettings> loadSettings() async {
           defaults.customDenoiseModelPath,
       animationsEnabled:
           raw['animationsEnabled'] as bool? ?? defaults.animationsEnabled,
+      generativeReplaceUrl:
+          raw['generativeReplaceUrl'] as String? ??
+          defaults.generativeReplaceUrl,
     );
   } catch (e, st) {
     // Every setting the user has ever changed silently reverts to its
@@ -487,6 +500,7 @@ Future<void> saveSettings(AppSettings settings) async {
       'lastActiveFile': settings.lastActiveFile,
       'customDenoiseModelPath': settings.customDenoiseModelPath,
       'animationsEnabled': settings.animationsEnabled,
+      'generativeReplaceUrl': settings.generativeReplaceUrl,
     }),
   );
 }

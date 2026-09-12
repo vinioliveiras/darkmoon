@@ -52,6 +52,7 @@ import 'native/edit_source_ai_enhance.dart';
 import 'native/edit_source_cloud_denoise.dart';
 import 'native/edit_source_colorize.dart';
 import 'native/edit_source_inpaint.dart';
+import 'native/generative_replace.dart';
 import 'native/libraw.dart'
     show
         RawDecodeStage,
@@ -84,6 +85,7 @@ import 'render/histogram.dart';
 import 'render/hsl.dart';
 import 'render/lens_correction.dart';
 import 'render/luminance.dart' show luminanceRgb;
+import 'render/inpaint.dart' show maskBounds;
 import 'render/mask.dart';
 import 'render/negative.dart';
 import 'render/gpu/gpu_capability.dart';
@@ -759,6 +761,14 @@ class _EditorScreenState extends State<EditorScreen>
   /// How far a removal's coverage is grown past what was painted or
   /// masked, in percent of the photo's width (Solstice's "Grow").
   double _removeGrow = 0.5;
+
+  /// The Remove panel's fill for the next removal, the Clone/Heal source
+  /// point the user picked on the photo (null = beside the patch), whether
+  /// the next click on the photo picks it, and the Generative prompt.
+  RemovalMode _removeMode = RemovalMode.ai;
+  ({double x, double y})? _removeSource;
+  bool _removeSourcePicking = false;
+  String _removePrompt = '';
   bool _isRunningInpaint = false;
   InpaintProgress? _inpaintProgress;
   InpaintCancellationToken? _inpaintCancellation;
@@ -1037,6 +1047,9 @@ class _EditorScreenState extends State<EditorScreen>
     onRemoveGrowChanged: _setRemoveGrow,
     onUndoRemoveStroke: _undoRemoveStroke,
     onClearRemoveStrokes: _clearRemoveStrokes,
+    onRemoveModeChanged: _setRemoveMode,
+    onToggleRemoveSourcePick: _toggleRemoveSourcePick,
+    onRemovePromptChanged: _setRemovePrompt,
   );
 
   void _toggleWbEyedropper() =>
@@ -4229,6 +4242,10 @@ class _EditorScreenState extends State<EditorScreen>
   /// The canvas has one eyedropper overlay; this routes its sample to
   /// whichever tool armed it.
   void _onEyedropperSample(double nx, double ny) {
+    if (_removeSourcePicking) {
+      _onRemoveSourcePick(nx, ny);
+      return;
+    }
     if (_profileHueEyedropperActive) {
       unawaited(_sampleProfileHue(nx, ny));
       return;
@@ -5512,7 +5529,8 @@ class _EditorScreenState extends State<EditorScreen>
                                                       _onSampleMaskLuminance,
                                                   wbEyedropperActive:
                                                       (_wbEyedropperActive ||
-                                                          _profileHueEyedropperActive) &&
+                                                          _profileHueEyedropperActive ||
+                                                          _removeSourcePicking) &&
                                                       !_beforeAfterMode,
                                                   onSampleWhiteBalance:
                                                       _onEyedropperSample,
@@ -5648,6 +5666,16 @@ class _EditorScreenState extends State<EditorScreen>
                                                 .strokes
                                                 .isNotEmpty,
                                             removeGrow: _removeGrow,
+                                            removeMode: _removeMode,
+                                            removeSourcePicking:
+                                                _removeSourcePicking,
+                                            removeSourcePicked:
+                                                _removeSource != null,
+                                            removePrompt: _removePrompt,
+                                            generativeConfigured: _settings
+                                                .generativeReplaceUrl
+                                                .trim()
+                                                .isNotEmpty,
                                             removals: selected == null
                                                 ? const <Removal>[]
                                                 : _removalsFor(selected.path),

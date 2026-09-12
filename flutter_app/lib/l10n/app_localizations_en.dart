@@ -496,6 +496,47 @@ class AppLocalizationsEn extends AppLocalizations {
       'That mask is still being computed. Try again in a moment.';
 
   @override
+  String get removeModeAi => 'AI fill';
+
+  @override
+  String get removeModeClone => 'Clone';
+
+  @override
+  String get removeModeHeal => 'Heal';
+
+  @override
+  String get removeModeGenerative => 'Generative';
+
+  @override
+  String get removePickSourceButton => 'Pick source';
+
+  @override
+  String get removePickSourceHint =>
+      'Click the photo where the patch should copy from.';
+
+  @override
+  String get removeSourceDefaultHint =>
+      'Source: beside the patch (or pick one).';
+
+  @override
+  String get removeSourcePickedHint => 'Source set.';
+
+  @override
+  String get removePromptLabel => 'What should be there instead';
+
+  @override
+  String get removePromptHint => 'e.g. grass, sky, wall';
+
+  @override
+  String get removeGenerativeNotConfigured =>
+      'Set the generative server address in Settings (AI tab) first.';
+
+  @override
+  String removeGenerativeFailedMessage(String error) {
+    return 'The generative server did not return a patch: $error';
+  }
+
+  @override
   String removeCountLabel(int count) {
     String _temp0 = intl.Intl.pluralLogic(
       count,
@@ -968,6 +1009,16 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get settingsCustomDenoiseModelChooseButton => 'Choose file…';
+
+  @override
+  String get settingsGenerativeUrlLabel => 'Generative replace server';
+
+  @override
+  String get settingsGenerativeUrlHint =>
+      'Address of a Solstice-compatible inpainting middleware (ComfyUI behind it), used by the Generative fill of Remove objects. Nothing is bundled: leave empty to keep the mode off.';
+
+  @override
+  String get settingsGenerativeUrlPlaceholder => 'http://127.0.0.1:8000';
 
   @override
   String get settingsCustomDenoiseModelResetButton => 'Reset';
