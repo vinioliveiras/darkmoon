@@ -2,7 +2,9 @@ import 'dart:math' as math;
 import 'dart:typed_data';
 
 import '../render/calibration.dart';
-import '../render/color_profile.dart' show colorProfileTonePoints;
+import '../render/color_profile.dart'
+    show colorProfileBins, colorProfileTonePoints;
+import '../render/hsl.dart';
 import '../render/color_space.dart';
 
 import 'package:image/image.dart' as img;
@@ -406,8 +408,10 @@ CameraMatch measureCameraMatch(
   if (aspect < 0.8 || aspect > 1.25) {
     return CameraMatch.none;
   }
+  final cameraRgb = jpeg.getBytes(order: img.ChannelOrder.rgb);
   final ours = _statsOf(rgbBytes);
-  final camera = _statsOf(jpeg.getBytes(order: img.ChannelOrder.rgb));
+  final camera = _statsOf(cameraRgb);
+  final tone = _toneFrom(ours, camera, lumaFloor: lumaFloor);
   return CameraMatch(
     stops: _offsetFrom(
       ours,
@@ -415,8 +419,313 @@ CameraMatch measureCameraMatch(
       limitStops: limitStops,
       lumaFloor: lumaFloor,
     ),
-    tone: _toneFrom(ours, camera, lumaFloor: lumaFloor),
+    tone: tone,
+    color: cameraColorFit(
+      rgbBytes,
+      width,
+      height,
+      cameraRgb,
+      jpeg.width,
+      jpeg.height,
+      tone: tone,
+    ),
   );
+}
+
+// ---------------------------------------------------------------------------
+//  Camera colour match
+// ---------------------------------------------------------------------------
+
+/// The per-hue colour rendering the camera applied and the decode did
+/// not: what a [ColorProfile]'s `hueShift`/`satMul`/`lumMul` slots carry,
+/// one entry per [colorProfileBins] bin.
+class CameraColorFit {
+  const CameraColorFit({
+    required this.hueShift,
+    required this.satMul,
+    required this.lumMul,
+  });
+
+  final List<double> hueShift;
+  final List<double> satMul;
+  final List<double> lumMul;
+
+  Map<String, dynamic> toJson() => {
+    'hue': hueShift,
+    'sat': satMul,
+    'lum': lumMul,
+  };
+
+  static CameraColorFit? fromJson(Object? raw) {
+    if (raw is! Map) {
+      return null;
+    }
+    List<double>? list(Object? v) => v is List && v.length == colorProfileBins
+        ? [for (final x in v) (x as num).toDouble()]
+        : null;
+    final hue = list(raw['hue']);
+    final sat = list(raw['sat']);
+    final lum = list(raw['lum']);
+    if (hue == null || sat == null || lum == null) {
+      return null;
+    }
+    return CameraColorFit(hueShift: hue, satMul: sat, lumMul: lum);
+  }
+}
+
+/// Block means of [rgb] in linear light on a [cols] by [rows] grid, three
+/// doubles per block. Both frames are laid out on the same grid, so block
+/// `(c, r)` of each is the same patch of the scene — the alignment the
+/// per-pixel comparison this file avoids would need, coarse enough not to
+/// mind a crop of a percent or two.
+Float64List _blockMeansLinear(
+  Uint8List rgb,
+  int width,
+  int height,
+  int cols,
+  int rows,
+) {
+  final out = Float64List(cols * rows * 3);
+  final counts = Int32List(cols * rows);
+  final pixels = width * height;
+  final stride = pixels <= 600000 ? 1 : (pixels / 600000).ceil();
+  for (var px = 0; px < pixels; px += stride) {
+    final x = px % width;
+    final y = px ~/ width;
+    final c = (x * cols ~/ width).clamp(0, cols - 1);
+    final r = (y * rows ~/ height).clamp(0, rows - 1);
+    final block = r * cols + c;
+    final i = px * 3;
+    out[block * 3] += srgbToLinear(rgb[i] / 255.0);
+    out[block * 3 + 1] += srgbToLinear(rgb[i + 1] / 255.0);
+    out[block * 3 + 2] += srgbToLinear(rgb[i + 2] / 255.0);
+    counts[block]++;
+  }
+  for (var b = 0; b < cols * rows; b++) {
+    final n = counts[b];
+    if (n > 0) {
+      out[b * 3] /= n;
+      out[b * 3 + 1] /= n;
+      out[b * 3 + 2] /= n;
+    }
+  }
+  return out;
+}
+
+double _smoothstep(double edge0, double edge1, double value) {
+  final t = ((value - edge0) / (edge1 - edge0)).clamp(0.0, 1.0);
+  return t * t * (3.0 - 2.0 * t);
+}
+
+double _lerpTone(List<double> table, double x) {
+  final n = table.length;
+  final f = x.clamp(0.0, 1.0) * (n - 1);
+  final i0 = f.floor().clamp(0, n - 1);
+  final i1 = (i0 + 1).clamp(0, n - 1);
+  return table[i0] + (table[i1] - table[i0]) * (f - i0);
+}
+
+/// Fits the camera's per-hue colour rendering: how much more (or less)
+/// saturated, brighter and rotated each hue is in the camera's JPEG than
+/// in the decode after [tone] — the tone curve fitted alongside — has
+/// matched its brightness. Null when the two frames do not line up
+/// (block brightness correlation under [calCameraColorMinCorrelation]) or
+/// carry no colour to compare.
+///
+/// Measured the way `applyColorProfile` spends it: in linear light, hue
+/// bins of the decode's own hue, the near-grey blocks weighted down by
+/// the same chroma mask, so a fitted multiplier lands on the same pixels
+/// it was measured on. Bins with too little colour borrow from their
+/// neighbours; the table is smoothed and clamped (see the `calCamera*`
+/// bounds) so a bin seen on a handful of blocks stays mild.
+CameraColorFit? cameraColorFit(
+  Uint8List rgbBytes,
+  int width,
+  int height,
+  Uint8List cameraRgb,
+  int cameraWidth,
+  int cameraHeight, {
+  List<double>? tone,
+  int cols = 48,
+  int rows = 32,
+  double minCorrelation = calCameraColorMinCorrelation,
+}) {
+  if (width <= 0 || height <= 0 || cameraWidth <= 0 || cameraHeight <= 0) {
+    return null;
+  }
+  final ours = _blockMeansLinear(rgbBytes, width, height, cols, rows);
+  final camera = _blockMeansLinear(
+    cameraRgb,
+    cameraWidth,
+    cameraHeight,
+    cols,
+    rows,
+  );
+  final blocks = cols * rows;
+
+  // Are these the same picture? Block brightness, perceptually encoded,
+  // should track between the two.
+  final ourL = Float64List(blocks);
+  final camL = Float64List(blocks);
+  var meanA = 0.0, meanB = 0.0;
+  for (var b = 0; b < blocks; b++) {
+    ourL[b] = perceptualEncode(
+      0.2126 * ours[b * 3] +
+          0.7152 * ours[b * 3 + 1] +
+          0.0722 * ours[b * 3 + 2],
+    );
+    camL[b] = perceptualEncode(
+      0.2126 * camera[b * 3] +
+          0.7152 * camera[b * 3 + 1] +
+          0.0722 * camera[b * 3 + 2],
+    );
+    meanA += ourL[b];
+    meanB += camL[b];
+  }
+  meanA /= blocks;
+  meanB /= blocks;
+  var cov = 0.0, varA = 0.0, varB = 0.0;
+  for (var b = 0; b < blocks; b++) {
+    final da = ourL[b] - meanA;
+    final db = camL[b] - meanB;
+    cov += da * db;
+    varA += da * da;
+    varB += db * db;
+  }
+  if (varA <= 1e-9 || varB <= 1e-9) {
+    return null;
+  }
+  final correlation = cov / math.sqrt(varA * varB);
+  if (correlation < minCorrelation) {
+    return null;
+  }
+
+  final weight = Float64List(colorProfileBins);
+  final satOurs = Float64List(colorProfileBins);
+  final satCam = Float64List(colorProfileBins);
+  final lumOurs = Float64List(colorProfileBins);
+  final lumCam = Float64List(colorProfileBins);
+  final hueSin = Float64List(colorProfileBins);
+  final hueCos = Float64List(colorProfileBins);
+  const binWidth = 360.0 / colorProfileBins;
+  for (var b = 0; b < blocks; b++) {
+    var r = ours[b * 3], g = ours[b * 3 + 1], bl = ours[b * 3 + 2];
+    final linLuma = math.max(0.2126 * r + 0.7152 * g + 0.0722 * bl, 1e-6);
+    if (tone != null) {
+      final pIn = perceptualEncode(linLuma);
+      final scale =
+          perceptualDecode(_lerpTone(tone, pIn).clamp(0.0, 2.0)) / linLuma;
+      r *= scale;
+      g *= scale;
+      bl *= scale;
+    }
+    final (hue, sat, val) = rgbToHsv(r, g, bl);
+    if (val < 0.02 || val > 0.98) {
+      continue;
+    }
+    final mask = _smoothstep(0.04, 0.18, sat);
+    if (mask < 0.05) {
+      continue;
+    }
+    final cr = camera[b * 3], cg = camera[b * 3 + 1], cb = camera[b * 3 + 2];
+    final (camHue, camSat, camVal) = rgbToHsv(cr, cg, cb);
+    if (camVal < 0.02 || camVal > 0.98) {
+      continue;
+    }
+    final bin = ((hue / binWidth).floor()) % colorProfileBins;
+    final ourLuma = 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+    final camLuma = 0.2126 * cr + 0.7152 * cg + 0.0722 * cb;
+    var dh = camHue - hue;
+    if (dh > 180) dh -= 360;
+    if (dh < -180) dh += 360;
+    weight[bin] += mask;
+    satOurs[bin] += mask * sat;
+    satCam[bin] += mask * camSat;
+    lumOurs[bin] += mask * ourLuma;
+    lumCam[bin] += mask * camLuma;
+    hueSin[bin] += mask * math.sin(dh * math.pi / 180);
+    hueCos[bin] += mask * math.cos(dh * math.pi / 180);
+  }
+  var total = 0.0;
+  for (final w in weight) {
+    total += w;
+  }
+  if (total < 8) {
+    return null;
+  }
+  final satMul = List<double>.filled(colorProfileBins, double.nan);
+  final lumMul = List<double>.filled(colorProfileBins, double.nan);
+  final hueShift = List<double>.filled(colorProfileBins, double.nan);
+  for (var i = 0; i < colorProfileBins; i++) {
+    if (weight[i] < math.max(2.0, total * 0.01) ||
+        satOurs[i] <= 0 ||
+        lumOurs[i] <= 0) {
+      continue;
+    }
+    satMul[i] = satCam[i] / satOurs[i];
+    lumMul[i] = lumCam[i] / lumOurs[i];
+    hueShift[i] = math.atan2(hueSin[i], hueCos[i]) * 180 / math.pi;
+  }
+  _fillGaps(satMul, 1.0);
+  _fillGaps(lumMul, 1.0);
+  _fillGaps(hueShift, 0.0);
+  return CameraColorFit(
+    hueShift: [
+      for (final v in _smoothCircular(hueShift))
+        v.clamp(-calCameraHueShiftLimitDeg, calCameraHueShiftLimitDeg),
+    ],
+    satMul: [
+      for (final v in _smoothCircular(satMul))
+        v.clamp(calCameraSatMulMin, calCameraSatMulMax),
+    ],
+    lumMul: [
+      for (final v in _smoothCircular(lumMul))
+        v.clamp(calCameraLumMulMin, calCameraLumMulMax),
+    ],
+  );
+}
+
+/// A bin with no measurement takes the average of its nearest measured
+/// neighbours on either side, or [identity] when nothing was measured.
+void _fillGaps(List<double> table, double identity) {
+  final n = table.length;
+  final measured = [
+    for (var i = 0; i < n; i++)
+      if (!table[i].isNaN) i,
+  ];
+  if (measured.isEmpty) {
+    for (var i = 0; i < n; i++) {
+      table[i] = identity;
+    }
+    return;
+  }
+  for (var i = 0; i < n; i++) {
+    if (!table[i].isNaN) {
+      continue;
+    }
+    var left = i, right = i;
+    var dl = 0, dr = 0;
+    while (table[left].isNaN) {
+      left = (left - 1 + n) % n;
+      dl++;
+    }
+    while (table[right].isNaN) {
+      right = (right + 1) % n;
+      dr++;
+    }
+    table[i] = (table[left] * dr + table[right] * dl) / (dl + dr);
+  }
+}
+
+/// A three-tap [0.25, 0.5, 0.25] smoothing around the hue circle.
+List<double> _smoothCircular(List<double> table) {
+  final n = table.length;
+  return [
+    for (var i = 0; i < n; i++)
+      0.25 * table[(i - 1 + n) % n] +
+          0.5 * table[i] +
+          0.25 * table[(i + 1) % n],
+  ];
 }
 
 /// The largest brightening, in stops, that [rgbBytes] can take before it
@@ -525,16 +834,23 @@ class EmbeddedPreview {
 /// absent together. They are alternatives, not layers — see
 /// [cameraToneCurve].
 class CameraMatch {
-  const CameraMatch({this.stops, this.tone});
+  const CameraMatch({this.stops, this.tone, this.color});
 
   static const none = CameraMatch();
 
   final double? stops;
   final List<double>? tone;
 
-  bool get isEmpty => stops == null && tone == null;
+  /// The camera's per-hue colour rendering — see [cameraColorFit].
+  final CameraColorFit? color;
 
-  Map<String, dynamic> toJson() => {'stops': stops, 'tone': tone};
+  bool get isEmpty => stops == null && tone == null && color == null;
+
+  Map<String, dynamic> toJson() => {
+    'stops': stops,
+    'tone': tone,
+    'color': color?.toJson(),
+  };
 
   /// Null for anything that is not a match this app wrote — a corrupt or
   /// truncated cache entry reads as "not measured yet" rather than as a
@@ -548,9 +864,17 @@ class CameraMatch {
     if (tone is! List || tone.length != colorProfileTonePoints) {
       return null;
     }
+    // An entry from before the colour fit existed (2026-09-12) reads as
+    // not measured, so the photo is measured again once and the fit
+    // stored with it.
+    if (!raw.containsKey('color')) {
+      return null;
+    }
+    final colorRaw = raw['color'];
     return CameraMatch(
       stops: stops is num ? stops.toDouble() : null,
       tone: [for (final v in tone) (v as num).toDouble()],
+      color: colorRaw == null ? null : CameraColorFit.fromJson(colorRaw),
     );
   }
 }

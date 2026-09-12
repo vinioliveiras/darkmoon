@@ -452,6 +452,25 @@ class _EditorScreenState extends State<EditorScreen>
         : _effectiveParamValues()['ColorProfileAmount'] ?? calBaseContrast;
   }
 
+  /// The camera's per-hue colour rendering for [path], blended toward
+  /// identity by [calCameraColorMatch] — null when the file carried no
+  /// preview to fit against, or the fit refused it.
+  CameraColorFit? _baseColorFitFor(String? path) {
+    if (path == null || calCameraColorMatch <= 0) {
+      return null;
+    }
+    final fit = _editSources[path]?.baseColorFit;
+    if (fit == null || calCameraColorMatch >= 1.0) {
+      return fit;
+    }
+    final k = calCameraColorMatch;
+    return CameraColorFit(
+      hueShift: [for (final v in fit.hueShift) v * k],
+      satMul: [for (final v in fit.satMul) 1.0 + (v - 1.0) * k],
+      lumMul: [for (final v in fit.lumMul) 1.0 + (v - 1.0) * k],
+    );
+  }
+
   /// The camera's own tonality for [path], as a [ColorProfile.tone] curve
   /// — null when the file carried no embedded preview to fit against
   /// (every non-RAW source), or when the match is calibrated off.
@@ -488,17 +507,23 @@ class _EditorScreenState extends State<EditorScreen>
   ColorProfile? _colorProfileFor(String? path) {
     final profile = _effectiveColorProfile;
     final tone = _baseToneCurveFor(path);
-    if (tone == null) {
+    final color = profile == null ? _baseColorFitFor(path) : null;
+    if (tone == null && color == null) {
       return profile;
     }
     if (profile == null) {
+      // The camera's rendering, in the profile's own slots: its tonality
+      // in the tone curve and its per-hue colour in the rest.
       return ColorProfile(
-        tone: tone,
-        hueShift: identityColorProfile.hueShift,
-        satMul: identityColorProfile.satMul,
-        lumMul: identityColorProfile.lumMul,
+        tone: tone ?? identityColorProfile.tone,
+        hueShift: color?.hueShift ?? identityColorProfile.hueShift,
+        satMul: color?.satMul ?? identityColorProfile.satMul,
+        lumMul: color?.lumMul ?? identityColorProfile.lumMul,
         name: 'camera',
       );
+    }
+    if (tone == null) {
+      return profile;
     }
     if (!profile.toneIsIdentity) {
       return profile;

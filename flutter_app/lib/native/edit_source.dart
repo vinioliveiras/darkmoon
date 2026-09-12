@@ -70,10 +70,15 @@ class EditSourcePair {
     required this.live,
     this.baseExposureStops,
     this.baseToneCurve,
+    this.baseColorFit,
   });
 
   final EditSource preview;
   final EditSource live;
+
+  /// The camera's per-hue colour rendering for the file these came from
+  /// (`CameraColorFit`), on the same terms as [baseToneCurve].
+  final CameraColorFit? baseColorFit;
 
   /// [RawImage.baseExposureStops] for the file these came from — null for
   /// anything that carries no camera preview to compare against, which is
@@ -99,6 +104,7 @@ class EditSourcePair {
     live: live,
     baseExposureStops: match.stops,
     baseToneCurve: match.tone,
+    baseColorFit: match.color,
   );
 }
 

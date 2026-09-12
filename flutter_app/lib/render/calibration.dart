@@ -1022,6 +1022,41 @@ const double calDecodeAutoBrightClip = 0.001;
 /// default: 1.0
 const double calCameraToneMatch = 1.0;
 
+/// **Camera colour match** — how much of the camera's per-hue colour
+/// rendering the photo opens with (2026-09-12, user's report that a RAW
+/// opens less saturated than the camera's JPEG).
+///
+/// The tone curve above matches brightness and nothing else; the mean
+/// saturation of the default render was already within 8% of the
+/// camera's on four files (Canon 350D, three X-T5), but per hue the
+/// camera is far from it — a Fuji pushes reds and teals by 30-40% and
+/// pulls yellow-greens back by as much, and a mean hides all of it.
+/// `cameraColorFit` compares the two frames block by block and fits the
+/// per-hue saturation, luminance and hue shift the camera applied; the
+/// fit rides the profile's own hue/sat/lum slots, next to the tone curve.
+/// Only in the default colour mode: Vivid carries its own per-hue table.
+///   ↑ higher = closer to the camera's colour rendering
+///   ↓ lower  = closer to the decode's own colour
+/// default: 1.0
+const double calCameraColorMatch = 1.0;
+
+/// Bounds on what the colour fit may ask for, per hue bin. A camera's
+/// colour rendering is a taste, not a correction, and a bin measured on a
+/// handful of blocks can come back wild; these keep a wrong answer mild.
+/// Set from the four files above: the fits landed within these, and the
+/// side-by-side (render, fitted, camera) read as a clear step toward the
+/// camera without a bin going wild. Widen only with a photo in hand.
+const double calCameraSatMulMin = 0.7;
+const double calCameraSatMulMax = 1.5;
+const double calCameraLumMulMin = 0.8;
+const double calCameraLumMulMax = 1.25;
+const double calCameraHueShiftLimitDeg = 10.0;
+
+/// Below this correlation between the two frames' block brightness the
+/// frames are not the same picture laid out the same way (a different
+/// crop, another orientation), and the colour fit is refused.
+const double calCameraColorMinCorrelation = 0.85;
+
 /// **Base exposure** — mean luma (0-1, gamma-encoded, *not* linear) below
 /// which the comparison is refused.
 ///
