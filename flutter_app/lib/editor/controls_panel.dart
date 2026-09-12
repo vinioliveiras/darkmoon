@@ -1334,6 +1334,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                           _wbSliderFallback(spec.name) ??
                                           spec.defaultValue,
                                       decimals: spec.decimals,
+                                      dragSensitivity: spec.dragSensitivity,
                                       defaultValue:
                                           _wbSliderFallback(spec.name) ??
                                           spec.defaultValue,
@@ -1434,6 +1435,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                           values[spec.name] ??
                                           spec.defaultValue,
                                       decimals: spec.decimals,
+                                      dragSensitivity: spec.dragSensitivity,
                                       defaultValue: spec.defaultValue,
                                       onChanged: (v) => onChanged(spec.name, v),
                                       onChangeEnd: (v) =>
@@ -1789,6 +1791,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                           values[spec.name] ??
                                           spec.defaultValue,
                                       decimals: spec.decimals,
+                                      dragSensitivity: spec.dragSensitivity,
                                       defaultValue: spec.defaultValue,
                                       onChanged: (v) => onChanged(spec.name, v),
                                       onChangeEnd: (v) =>

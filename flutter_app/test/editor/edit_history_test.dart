@@ -1,3 +1,5 @@
+import 'package:darkmoon/catalog/removal.dart';
+import 'dart:typed_data';
 import 'package:darkmoon/editor/edit_history.dart';
 import 'package:darkmoon/render/tone_curve.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -9,6 +11,26 @@ EditSnapshot _snap(double exposure) => EditSnapshot(
 );
 
 void main() {
+  test('a snapshot with other removals is a different snapshot', () {
+    const base = EditSnapshot(
+      paramValues: {},
+      curves: identityPhotoCurves,
+      masks: [],
+    );
+    final withRemoval = EditSnapshot(
+      paramValues: base.paramValues,
+      curves: base.curves,
+      masks: base.masks,
+      inpaints: [
+        Removal(name: 'Removal 1', width: 1, height: 1, alphaPng: Uint8List(0)),
+      ],
+    );
+    expect(base.sameAs(withRemoval), isFalse);
+    final history = EditHistory()..reset(base);
+    expect(history.push(withRemoval), isTrue);
+    expect(history.canUndo, isTrue);
+  });
+
   test('starts empty, reset gives an undo-proof baseline', () {
     final history = EditHistory();
     expect(history.canUndo, isFalse);

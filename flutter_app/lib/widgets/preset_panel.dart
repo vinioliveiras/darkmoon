@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 
 import '../animations_config.dart';
@@ -248,25 +249,41 @@ class _PresetPanelState extends State<PresetPanel> {
               // screen, and a row asks for its thumbnail when it is built.
               // That is what keeps a library of eighty presets from
               // queueing eighty renders the moment the panel opens.
-              : ListView.builder(
-                  padding: const EdgeInsets.only(right: kScrollbarGutter),
-                  itemCount: widget.presets.length,
-                  itemBuilder: (context, index) {
-                    final preset = widget.presets[index];
-                    return _PresetRow(
-                      preset: preset,
-                      enabled: widget.enabled,
-                      applied: widget.isApplied(preset),
-                      selectionMode: _selectionMode,
-                      selected: _selectedIds.contains(preset.id),
-                      thumbnails: widget.thumbnails,
-                      onApply: () => widget.onApply(preset),
-                      onToggleSelected: () => _toggleSelected(preset.id),
-                      onRename: () => widget.onRename(preset),
-                      onExport: () => widget.onExport(preset),
-                      onDelete: () => widget.onDelete(preset),
-                    );
-                  },
+              // Pressing and moving scrolls the list, with a mouse as
+              // much as a finger, and it springs back at either end —
+              // the filmstrip's manners (user's request, 2026-09-12).
+              : ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context).copyWith(
+                    dragDevices: {
+                      PointerDeviceKind.touch,
+                      PointerDeviceKind.mouse,
+                      PointerDeviceKind.trackpad,
+                      PointerDeviceKind.stylus,
+                    },
+                  ),
+                  child: ListView.builder(
+                    physics: const BouncingScrollPhysics(
+                      parent: AlwaysScrollableScrollPhysics(),
+                    ),
+                    padding: const EdgeInsets.only(right: kScrollbarGutter),
+                    itemCount: widget.presets.length,
+                    itemBuilder: (context, index) {
+                      final preset = widget.presets[index];
+                      return _PresetRow(
+                        preset: preset,
+                        enabled: widget.enabled,
+                        applied: widget.isApplied(preset),
+                        selectionMode: _selectionMode,
+                        selected: _selectedIds.contains(preset.id),
+                        thumbnails: widget.thumbnails,
+                        onApply: () => widget.onApply(preset),
+                        onToggleSelected: () => _toggleSelected(preset.id),
+                        onRename: () => widget.onRename(preset),
+                        onExport: () => widget.onExport(preset),
+                        onDelete: () => widget.onDelete(preset),
+                      );
+                    },
+                  ),
                 ),
         ),
       ],

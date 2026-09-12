@@ -202,6 +202,7 @@ class _SliderSpec {
     this.decimals = 0,
     this.gradientColors,
     this.valueSuffix = '',
+    this.dragSensitivity = 1.0,
   });
 
   final String name;
@@ -216,6 +217,9 @@ class _SliderSpec {
 
   /// Appended to the displayed value — e.g. 'K' for Temperature.
   final String valueSuffix;
+
+  /// See [SliderRow.dragSensitivity].
+  final double dragSensitivity;
 }
 
 /// Storage key for a [_sections] category's on/off toggle — stored as a
@@ -612,6 +616,8 @@ Map<String, double> withGlobalEditAmountApplied(Map<String, double> values) {
 // [_sections] any more.
 const _sections = <String, List<_SliderSpec>>{
   'WHITE BALANCE': [
+    // Both drag at a third of the usual speed: the ranges are wide and
+    // the corrections small (see SliderRow.dragSensitivity).
     _SliderSpec(
       'Temperature',
       2000,
@@ -620,6 +626,7 @@ const _sections = <String, List<_SliderSpec>>{
       decimals: 0,
       gradientColors: [Color(0xFF4FA6FF), Color(0xFFFFB454)],
       valueSuffix: 'K',
+      dragSensitivity: 0.35,
     ),
     _SliderSpec(
       'Tint',
@@ -627,6 +634,7 @@ const _sections = <String, List<_SliderSpec>>{
       150,
       0,
       gradientColors: [Color(0xFF3DD16B), Color(0xFFE362D8)],
+      dragSensitivity: 0.35,
     ),
   ],
   'TONE': [

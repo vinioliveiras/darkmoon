@@ -40,6 +40,7 @@ class SliderRow extends StatefulWidget {
     this.labelFontSize = 12.5,
     this.valueFontSize = 11.5,
     this.maxFullRangeDragPixels = _maxFullRangeDragPixels,
+    this.dragSensitivity = 1.0,
   });
 
   final String name;
@@ -79,6 +80,13 @@ class SliderRow extends StatefulWidget {
   /// enough (e.g. Straighten, where a whole-pixel nudge is too coarse
   /// to nail an exact horizon angle).
   final double maxFullRangeDragPixels;
+
+  /// Scales how far a pixel of drag moves the value. Below 1 the slider
+  /// answers more slowly, for a control whose range is wide and whose
+  /// useful moves are small: White Balance spans 2000-50000 K and a
+  /// correction is usually a few hundred (user's request, 2026-09-12).
+  /// Typing a value and the wheel are unaffected.
+  final double dragSensitivity;
 
   @override
   State<SliderRow> createState() => _SliderRowState();
@@ -134,7 +142,8 @@ class _SliderRowState extends State<SliderRow> {
     final precise =
         range / (_referenceTrackWidth * math.pow(10, widget.decimals));
     // ...but never so fine that a full-range drag exceeds the cap.
-    return math.max(precise, range / widget.maxFullRangeDragPixels);
+    return math.max(precise, range / widget.maxFullRangeDragPixels) *
+        widget.dragSensitivity;
   }
 
   @override

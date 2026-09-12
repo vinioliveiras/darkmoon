@@ -4834,11 +4834,38 @@ class _EditorScreenState extends State<EditorScreen>
     _scheduleCatalogSave();
   }
 
-  EditSnapshot get _currentSnapshot => EditSnapshot(
-    paramValues: _paramValues,
-    curves: _currentCurves,
-    masks: _currentMasks,
-  );
+  EditSnapshot get _currentSnapshot {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    return EditSnapshot(
+      paramValues: _paramValues,
+      curves: _currentCurves,
+      masks: _currentMasks,
+      inpaints: selected == null ? const [] : _removalsFor(selected.path),
+    );
+  }
+
+  /// The slider keys whose value decides which pixels the edit source
+  /// holds — the AI pipelines and the removals. A snapshot that differs
+  /// in one of these from the live state needs the source resolved
+  /// again, not only a render.
+  static const _sourcePipelineKeys = [
+    _neuralDenoiseKey,
+    _neuralUpscaleKey,
+    _neuralRawDenoiseKey,
+    _restoreDetailKey,
+    _cloudDenoiseProviderKey,
+    _colorizeKey,
+    _inpaintKey,
+  ];
+
+  static bool _sourceKeysDiffer(Map<String, double> a, Map<String, double> b) {
+    for (final key in _sourcePipelineKeys) {
+      if ((a[key] ?? 0.0) != (b[key] ?? 0.0)) {
+        return true;
+      }
+    }
+    return false;
+  }
 
   /// Starts a fresh history for the photo now showing, with its
   /// just-loaded state as the baseline — called whenever [_paramValues]/
@@ -4852,17 +4879,51 @@ class _EditorScreenState extends State<EditorScreen>
   /// never from a live/dragging callback, so a slider drag collapses into
   /// one undo step instead of one per pixel of mouse movement. See
   /// [EditHistory.push] for the no-op rule.
-  void _pushHistory() => _history.push(_currentSnapshot);
+  void _pushHistory() {
+    // A push changes what Undo and Redo can do; the toolbar reads that at
+    // build, and most pushes come after the rebuild the edit itself
+    // caused — so ask for one more, or the buttons lag an edit behind
+    // (user's report, 2026-09-12).
+    if (_history.push(_currentSnapshot)) {
+      _rebuild(() {});
+    }
+  }
 
   void _applySnapshot(EditSnapshot snapshot) {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    final path = selected?.path;
+    final before = _paramValues;
+    final removalsBefore = path == null
+        ? const <Removal>[]
+        : _removalsFor(path);
     setState(() {
       _paramValues = snapshot.paramValues;
       _currentCurves = snapshot.curves;
       // Undoing past a mask's creation (or redoing past its deletion)
       // returns the panel to the Image layer — see [MaskStack.load].
       _maskStack.load(snapshot.masks);
+      if (path != null) {
+        if (snapshot.inpaints.isEmpty) {
+          _store.inpaints.remove(path);
+        } else {
+          _store.inpaints[path] = snapshot.inpaints;
+        }
+      }
     });
-    _scheduleRender(live: false);
+    // An AI pipeline switched, or a removal added or taken back: the
+    // pixels the render starts from are different ones. Resolve the
+    // source again from the caches the way opening the photo does —
+    // rendering the old source with the restored sliders showed the
+    // photo still enhanced, colourised or filled after an undo (user's
+    // report, 2026-09-12).
+    if (path != null &&
+        (_sourceKeysDiffer(before, snapshot.paramValues) ||
+            !identical(removalsBefore, snapshot.inpaints))) {
+      _editSources.remove(path);
+      unawaited(_loadEditSourceAndRender(path, _folderGeneration));
+    } else {
+      _scheduleRender(live: false);
+    }
     _scheduleCatalogSave();
   }
 

@@ -1,3 +1,4 @@
+import '../catalog/removal.dart';
 import '../render/mask.dart';
 import '../render/tone_curve.dart';
 
@@ -8,11 +9,16 @@ class EditSnapshot {
     required this.paramValues,
     required this.curves,
     required this.masks,
+    this.inpaints = const [],
   });
 
   final Map<String, double> paramValues;
   final PhotoCurves curves;
   final List<MaskLayer> masks;
+
+  /// The object removals applied (2026-09-12): an edit like the others,
+  /// so undoing steps back through them too.
+  final List<Removal> inpaints;
 
   /// Reference equality on the three parts — enough, since every mutation
   /// site in the editor builds a new Map/List/object rather than mutating
@@ -20,7 +26,8 @@ class EditSnapshot {
   bool sameAs(EditSnapshot other) =>
       identical(paramValues, other.paramValues) &&
       identical(curves, other.curves) &&
-      identical(masks, other.masks);
+      identical(masks, other.masks) &&
+      identical(inpaints, other.inpaints);
 }
 
 /// The undo/redo stack for the photo being edited — the editor screen's

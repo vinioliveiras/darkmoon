@@ -279,6 +279,12 @@ class _FilmstripState extends State<_Filmstrip> {
             child: ListView.builder(
               controller: _scrollController,
               scrollDirection: Axis.horizontal,
+              // Springs back past either end instead of stopping dead
+              // (user's request, 2026-09-12) — the stretch says "this is
+              // the end" the way a phone's lists do.
+              physics: const BouncingScrollPhysics(
+                parent: AlwaysScrollableScrollPhysics(),
+              ),
               padding: const EdgeInsets.all(8),
               itemCount: files.length,
               itemBuilder: (context, index) {
