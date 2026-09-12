@@ -94,12 +94,37 @@ void main() {
   );
 
   var redLeft = 0;
+  var white = 0;
+  var holeSum = 0.0;
+  var holeCount = 0;
   for (var y = 200; y < 300; y++) {
     for (var x = 260; x < 370; x++) {
       final i = (y * w + x) * 3;
       if (out[i] > 200 && out[i + 1] < 60) redLeft++;
+      if (out[i] > 245 && out[i + 1] > 245 && out[i + 2] > 245) white++;
+      holeSum += (out[i] + out[i + 1] + out[i + 2]) / 3;
+      holeCount++;
     }
   }
+  // The fill has to look like its surroundings: the mean of a ring just
+  // outside the brush against the mean inside. WebGPU once returned a
+  // flat white patch that passed every other check here.
+  var ringSum = 0.0;
+  var ringCount = 0;
+  for (var y = 170; y < 330; y++) {
+    for (var x = 230; x < 400; x++) {
+      if (y >= 190 && y < 310 && x >= 250 && x < 380) continue;
+      final i = (y * w + x) * 3;
+      ringSum += (out[i] + out[i + 1] + out[i + 2]) / 3;
+      ringCount++;
+    }
+  }
+  final holeMean = holeSum / holeCount;
+  final ringMean = ringSum / ringCount;
+  stdout.writeln(
+    '  hole mean ${holeMean.toStringAsFixed(1)}, ring mean '
+    '${ringMean.toStringAsFixed(1)}, near-white pixels in the hole: $white',
+  );
   var outsideChanged = 0;
   for (var y = 0; y < h; y++) {
     for (var x = 0; x < w; x++) {
@@ -112,10 +137,21 @@ void main() {
       }
     }
   }
+  final dump = Platform.environment['DARKMOON_PROBE_OUT'];
+  if (dump != null) {
+    final header = 'P6 $w $h 255${String.fromCharCode(10)}';
+    File('$dump/smoke_out.ppm').writeAsBytesSync([...header.codeUnits, ...out]);
+    File('$dump/smoke_in.ppm').writeAsBytesSync([...header.codeUnits, ...rgb]);
+  }
   stdout.writeln('  red pixels left in the hole: $redLeft of ${100 * 110}');
   stdout.writeln('  pixels changed outside the brush: $outsideChanged');
   final ok =
-      redLeft < 100 && outsideChanged == 0 && outMax > 1.5 && outMax <= 255.5;
+      redLeft < 100 &&
+      outsideChanged == 0 &&
+      outMax > 1.5 &&
+      outMax <= 255.5 &&
+      white < 100 &&
+      (holeMean - ringMean).abs() < 40;
   stdout.writeln(ok ? '  OK' : '  FAIL');
   OnnxModel.releaseAll();
   exit(ok ? 0 : 1);

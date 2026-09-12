@@ -285,13 +285,23 @@ const ddcolorModelSpec = OnnxModelSpec(
 /// removal (2026-09-12). Two inputs, `image` 1x3x512x512 in 0..1 and
 /// `mask` 1x1x512x512 with 1 for the hole; one output, 1x3x512x512 in
 /// 0..255 — measured on the file, not assumed. Run through [OnnxModel.runGraph]
-/// like the mask models, since [runTile] knows one input. WebGPU or CPU,
-/// never DirectML: see [OnnxModelSpec.avoidDirectMl] for the measurement.
+/// like the mask models, since [runTile] knows one input.
+///
+/// CPU only, and both GPU providers were tried on this graph (2026-09-12):
+/// DirectML creates the session and then dies inside a Fourier unit's
+/// MatMul at run time, which the provider fallback cannot catch; WebGPU
+/// runs it, faster than the CPU (1.2-1.5 s against 2.2-2.6 s per window),
+/// and fills the hole with flat white — the runtime placed the Fourier
+/// nodes back on the CPU and the result that came out was wrong, while
+/// every number about it (range, size) looked right. That white patch is
+/// what a removal showed for the few hours the spec said WebGPU. A GPU
+/// answer has to be looked at, not only timed; the smoke test now checks
+/// the fill against its surroundings.
 const lamaInpaintModelSpec = OnnxModelSpec(
   fileName: 'inpainting_lama_2025jan.onnx',
   inputTileSize: 512,
   scaleFactor: 1,
-  avoidDirectMl: true,
+  cpuOnly: true,
 );
 
 // The five models behind the AI mask types (`ai_mask_models.dart`). None

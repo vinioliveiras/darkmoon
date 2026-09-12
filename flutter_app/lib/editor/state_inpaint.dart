@@ -160,7 +160,10 @@ extension _EditorInpaint on _EditorScreenState {
       l10n.removePatchName(previous.length + 1),
     );
     if (removal == null) {
-      _notify(detail: l10n.removeMaskNotReadyMessage);
+      _notify(
+        detail: l10n.removeMaskNotReadyMessage,
+        status: l10n.removeMaskNotReadyMessage,
+      );
       return;
     }
     await _setRemovals(path, previous, [...previous, removal]);
@@ -226,9 +229,45 @@ extension _EditorInpaint on _EditorScreenState {
     });
   }
 
+  /// The photo's plain preview — before any removal — for the worker to
+  /// apply the removals to at the editor's resolution. The preview cache
+  /// holds it (it is what a photo without a pipeline was cached as); the
+  /// live source is it too while no removal has been applied yet. Null
+  /// when neither is at hand, and the worker decodes the file instead.
+  Future<InpaintPreviewSource?> _plainPreviewFor(String path) async {
+    if (_removalsFor(path).isEmpty || (_paramValues[_inpaintKey] ?? 0) <= 0) {
+      final preview = _editSources[path]?.preview;
+      if (preview != null) {
+        return InpaintPreviewSource(
+          preview.width,
+          preview.height,
+          preview.rgbBytes,
+        );
+      }
+    }
+    final cachedJpeg = await _previewCache?.lookup(path);
+    if (cachedJpeg == null || !mounted) {
+      return null;
+    }
+    final pair = await compute(decodeEditSourcePairFromCachedJpeg, cachedJpeg);
+    final preview = pair?.preview;
+    if (preview == null) {
+      return null;
+    }
+    return InpaintPreviewSource(
+      preview.width,
+      preview.height,
+      preview.rgbBytes,
+    );
+  }
+
   /// Swaps [path]'s edit source for its removals' result — or for the
   /// plain decode when [removals] is empty. False when the run failed or
   /// was cancelled (a message is shown for a failure).
+  ///
+  /// Applied at the preview's resolution when the plain preview is at
+  /// hand (see [_plainPreviewFor]); export computes the full-resolution
+  /// result on its own.
   Future<bool> _applyRemovals(String path, List<Removal> removals) async {
     if (removals.isEmpty) {
       await _revertToNormalEditSource(path);
@@ -241,6 +280,10 @@ extension _EditorInpaint on _EditorScreenState {
     final cancellation = InpaintCancellationToken();
     _inpaintCancellation = cancellation;
     final cacheDir = await resolveInpaintCacheDir();
+    if (!mounted) {
+      return false;
+    }
+    final plain = await _plainPreviewFor(path);
     if (!mounted) {
       return false;
     }
@@ -266,6 +309,7 @@ extension _EditorInpaint on _EditorScreenState {
       previewMaxDimension: _settings.previewResolution,
       editEmbeddedJpeg: _settings.editEmbeddedJpeg,
       cancellationToken: cancellation,
+      preview: plain,
     );
     _inpaintCancellation = null;
     if (!mounted) {
@@ -311,8 +355,36 @@ extension _EditorInpaint on _EditorScreenState {
     final key = inpaintRemovalsKey(removals);
     var png = await lookupInpaintCache(cacheDir, path, removalsKey: key);
     if (png == null) {
-      final ok = await _applyRemovals(path, removals);
-      if (!mounted || !ok) {
+      // The full-resolution result, computed now: the editor only ever
+      // applied the removals to the preview.
+      _rebuild(() {
+        _isRunningInpaint = true;
+        _inpaintProgress = null;
+      });
+      final cancellation = InpaintCancellationToken();
+      _inpaintCancellation = cancellation;
+      final full = await decodeEditSourcesWithInpaint(
+        path,
+        cacheDir,
+        (stage) {
+          if (mounted && stage is InpaintProgress) {
+            _rebuild(() => _inpaintProgress = stage);
+          }
+        },
+        removals: removals,
+        previewMaxDimension: _settings.previewResolution,
+        editEmbeddedJpeg: _settings.editEmbeddedJpeg,
+        cancellationToken: cancellation,
+      );
+      _inpaintCancellation = null;
+      if (!mounted) {
+        return null;
+      }
+      _rebuild(() {
+        _isRunningInpaint = false;
+        _inpaintProgress = null;
+      });
+      if (full == null) {
         return null;
       }
       png = await lookupInpaintCache(cacheDir, path, removalsKey: key);

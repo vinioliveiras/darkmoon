@@ -98,21 +98,43 @@ EditSourcePair _pairFrom(img.Image full, int previewMaxDimension) {
   );
 }
 
-/// Decodes the photo at full resolution and applies every visible removal
-/// in order — each one's coverage brought up to that resolution and
-/// filled by the model from its surroundings (see `inpaint.dart`); the
-/// result is cached as a PNG under the removals' key. Every removal is
-/// redone from the original when the key misses — a few seconds each,
-/// and simpler than caching every prefix.
+/// The plain preview of a photo, handed to the worker so a removal can be
+/// applied at the resolution the editor shows rather than the file's —
+/// seconds instead of half a minute on a large RAW, whose full-resolution
+/// decode alone took 19 s (measured 2026-09-12). Export still gets the
+/// full-resolution result, computed then.
+class InpaintPreviewSource {
+  const InpaintPreviewSource(this.width, this.height, this.rgbBytes);
+
+  final int width;
+  final int height;
+  final Uint8List rgbBytes;
+}
+
+/// The cache key of a preview-resolution result: the removals plus the
+/// preview setting they were rendered under, so a changed setting misses.
+String inpaintPreviewKey(List<Removal> removals, int previewMaxDimension) =>
+    '${inpaintRemovalsKey(removals)}|p$previewMaxDimension';
+
+/// Applies every visible removal in order — each one's coverage brought
+/// to the frame's resolution and filled by the model from its
+/// surroundings (see `inpaint.dart`) — to [preview] when given, else to
+/// the photo decoded at full resolution; the result is cached as a PNG
+/// under the removals' key (the preview one carries the preview
+/// setting). Every removal is redone from the original when the key
+/// misses — a few seconds each, and simpler than caching every prefix.
 Future<EditSourcePair?> _decodeAndInpaint(
   String path,
   String cacheDir,
   int previewMaxDimension,
   List<Removal> removals,
   bool editEmbeddedJpeg,
+  InpaintPreviewSource? preview,
   void Function(Object stage) onStage,
 ) async {
-  final removalsKey = inpaintRemovalsKey(removals);
+  final removalsKey = preview == null
+      ? inpaintRemovalsKey(removals)
+      : inpaintPreviewKey(removals, previewMaxDimension);
   final cachedPng = await lookupInpaintCache(
     cacheDir,
     path,
@@ -123,25 +145,34 @@ Future<EditSourcePair?> _decodeAndInpaint(
     return _pairFrom(cachedImage, previewMaxDimension);
   }
 
-  final decoded = isRawFile(path)
-      ? decodeSourceImage(
-          path,
-          embeddedJpeg: editEmbeddedJpeg,
-          fastPreview: false,
-          onStage: onStage,
-        )
-      : decodeCommonImage(path);
-  if (decoded == null) {
-    return null;
+  final int width;
+  final int height;
+  Uint8List rgb;
+  if (preview != null) {
+    width = preview.width;
+    height = preview.height;
+    rgb = preview.rgbBytes;
+  } else {
+    final decoded = isRawFile(path)
+        ? decodeSourceImage(
+            path,
+            embeddedJpeg: editEmbeddedJpeg,
+            fastPreview: false,
+            onStage: onStage,
+          )
+        : decodeCommonImage(path);
+    if (decoded == null) {
+      return null;
+    }
+    width = decoded.width;
+    height = decoded.height;
+    rgb = decoded.rgbBytes;
   }
-  final width = decoded.width;
-  final height = decoded.height;
 
   final visible = [
     for (final removal in removals)
       if (removal.visible) removal,
   ];
-  var rgb = decoded.rgbBytes;
   if (visible.isNotEmpty) {
     final model = OnnxModel.forSpec(lamaInpaintModelSpec);
     onStage(
@@ -208,6 +239,7 @@ class _InpaintIsolateArgs {
     this.previewMaxDimension,
     this.removals,
     this.editEmbeddedJpeg,
+    this.preview,
     this.sendPort,
     this.cancelFlagAddress,
   );
@@ -217,6 +249,7 @@ class _InpaintIsolateArgs {
   final int previewMaxDimension;
   final List<Removal> removals;
   final bool editEmbeddedJpeg;
+  final InpaintPreviewSource? preview;
   final SendPort sendPort;
   final int cancelFlagAddress;
 }
@@ -231,6 +264,7 @@ void _inpaintIsolateEntry(_InpaintIsolateArgs args) async {
       args.previewMaxDimension,
       args.removals,
       args.editEmbeddedJpeg,
+      args.preview,
       (stage) {
         // Cancel checkpoint: every decode stage, the model-info event and
         // each removal's completion pass through here.
@@ -260,6 +294,7 @@ Future<EditSourcePair?> decodeEditSourcesWithInpaint(
   int previewMaxDimension = defaultPreviewMaxDimension,
   bool editEmbeddedJpeg = false,
   InpaintCancellationToken? cancellationToken,
+  InpaintPreviewSource? preview,
 }) async {
   final receivePort = ReceivePort();
   final exitPort = ReceivePort();
@@ -272,6 +307,7 @@ Future<EditSourcePair?> decodeEditSourcesWithInpaint(
       previewMaxDimension,
       removals,
       editEmbeddedJpeg,
+      preview,
       receivePort.sendPort,
       cancelFlag.address,
     ),

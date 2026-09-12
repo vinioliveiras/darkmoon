@@ -3227,11 +3227,22 @@ class _EditorScreenState extends State<EditorScreen>
         final removals = _removalsFor(path);
         final cacheDir = await resolveInpaintCacheDir();
         if (mounted) {
-          final cachedPng = await lookupInpaintCache(
-            cacheDir,
-            path,
-            removalsKey: inpaintRemovalsKey(removals),
-          );
+          // The preview-resolution result first (what the editor made),
+          // then a full-resolution one an export may have left.
+          final cachedPng =
+              await lookupInpaintCache(
+                cacheDir,
+                path,
+                removalsKey: inpaintPreviewKey(
+                  removals,
+                  _settings.previewResolution,
+                ),
+              ) ??
+              await lookupInpaintCache(
+                cacheDir,
+                path,
+                removalsKey: inpaintRemovalsKey(removals),
+              );
           if (cachedPng != null) {
             sources = await compute(
               decodeCachedInpaintSources,

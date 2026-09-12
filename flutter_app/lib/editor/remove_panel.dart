@@ -136,20 +136,33 @@ class _RemoveObjectsPanel extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 16),
-        ElevatedButton(
-          onPressed: hasStrokes && !busy ? actions.onRunRemoval : null,
-          child: Text(l10n.removeRunButton),
-        ),
-        const SizedBox(height: 6),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: hasStrokes && !busy
-                ? actions.onClearRemoveStrokes
-                : null,
-            child: Text(l10n.removeClearStrokes),
-          ),
+        const SizedBox(height: 14),
+        // The crop panel's pair: an outlined secondary and a filled
+        // primary, side by side, 34 tall.
+        Row(
+          children: [
+            Expanded(
+              child: SizedBox(
+                height: 34,
+                child: OutlinedButton(
+                  onPressed: hasStrokes && !busy
+                      ? actions.onClearRemoveStrokes
+                      : null,
+                  child: Text(l10n.removeClearStrokes),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: SizedBox(
+                height: 34,
+                child: FilledButton(
+                  onPressed: hasStrokes && !busy ? actions.onRunRemoval : null,
+                  child: Text(l10n.removeRunButton),
+                ),
+              ),
+            ),
+          ],
         ),
         if (masks.isNotEmpty) ...[
           const SizedBox(height: 10),
@@ -219,10 +232,10 @@ class _RemoveObjectsPanel extends StatelessWidget {
               ],
             ),
         ],
-        const SizedBox(height: 16),
-        Align(
-          alignment: Alignment.centerRight,
-          child: TextButton(
+        const SizedBox(height: 14),
+        SizedBox(
+          height: 34,
+          child: OutlinedButton(
             onPressed: busy ? null : actions.onToggleRemoveMode,
             child: Text(l10n.removeDoneButton),
           ),
