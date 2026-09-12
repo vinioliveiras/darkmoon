@@ -193,6 +193,7 @@
   "aiDenoiseEnhanceDenoiseLabel": "Denoise",
   "aiDenoiseEnhanceAmountLabel": "Amount",
   "aiDenoiseEnhanceRestoreDetailLabel": "Restore detail",
+  "aiDenoiseEnhanceDetailSharpenLabel": "Sharpen detail",
   "aiDenoiseEnhanceUpscaleLabel": "Upscale 2x",
   "aiDenoiseEnhanceSharpnessLabel": "Sharpness",
   "aiDenoiseEnhanceSharpnessCaption": "Blends in a slower, more detail-synthesizing model — any amount above 0% costs ~3.5 minutes per 24MP photo instead of a few seconds, and can slightly alter (not just sharpen) very small text or detail.",

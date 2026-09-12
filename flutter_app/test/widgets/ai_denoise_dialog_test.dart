@@ -224,6 +224,64 @@ void main() {
       },
     );
 
+    testWidgets(
+      'turning Sharpen detail on (without Denoise or Upscale) defaults '
+      'its Amount slider to 50% and resolves as NeuralEnhanceChoice('
+      'detailSharpen: true)',
+      (tester) async {
+        _useTallSurface(tester);
+        AiDenoiseChoice? result;
+        await tester.pumpWidget(
+          MaterialApp(
+            localizationsDelegates: AppLocalizations.localizationsDelegates,
+            supportedLocales: AppLocalizations.supportedLocales,
+            home: Scaffold(
+              body: Builder(
+                builder: (context) => Center(
+                  child: ElevatedButton(
+                    onPressed: () async {
+                      result = await showDialog<AiDenoiseChoice>(
+                        context: context,
+                        builder: (_) => const AiDenoiseDialog(
+                          initialLevel: null,
+                          neuralDenoise: false,
+                          neuralUpscale: false,
+                        ),
+                      );
+                    },
+                    child: const Text('open'),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.tap(find.text('open'));
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('Enhance'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Sharpen detail'));
+        await tester.pumpAndSettle();
+
+        // Balanced default, per the toggle-always-has-an-amount convention
+        // — unlike Sharpness (which defaults to 0%, a real cost cliff).
+        expect(find.text('50%'), findsOneWidget);
+
+        await tester.tap(find.text('Apply'));
+        await tester.pumpAndSettle();
+
+        expect(result, isA<NeuralEnhanceChoice>());
+        final choice = result as NeuralEnhanceChoice;
+        expect(choice.detailSharpen, isTrue);
+        expect(choice.restoreDetail, isFalse);
+        expect(choice.detailSharpenAmount, 50);
+        expect(choice.denoise, isFalse);
+        expect(choice.upscale, isFalse);
+        expect(choice.active, isTrue);
+      },
+    );
+
     testWidgets('picking a Classic level then applying resolves as '
         'ClassicDenoiseChoice', (tester) async {
       _useTallSurface(tester);

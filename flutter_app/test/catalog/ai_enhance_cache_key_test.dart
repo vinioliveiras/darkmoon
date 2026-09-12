@@ -46,7 +46,9 @@ void main() {
       // reformats the tag (this change reordered its parameters) shows up
       // as a failure rather than as every user's Enhance cache silently
       // going cold.
-      const modeTag = 'd1s100u0q0r0g0a50mdefault';
+      // The `h0b50` pair is the sharpen half of the GaterV3 pair, its own
+      // toggle since 2026-09-12.
+      const modeTag = 'd1s100u0q0r0g0a50h0b50mdefault';
       final raw =
           '$photoPath|${modified.microsecondsSinceEpoch}|1234|'
           '$modeTag|v$aiEnhanceCacheVersion';

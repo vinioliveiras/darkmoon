@@ -34,6 +34,8 @@ extension _EditorAiTools on _EditorScreenState {
     final restoreDetailAmount =
         (_paramValues[_restoreDetailAmountKey] ?? defaultRestoreDetailAmount)
             .round();
+    final neuralDetailSharpen = _detailSharpenOn(_paramValues);
+    final detailSharpenAmount = _detailSharpenAmountOf(_paramValues);
     final cloudProvider = _cloudProviderFromIndex(
       (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
     );
@@ -41,7 +43,8 @@ extension _EditorAiTools on _EditorScreenState {
         neuralDenoise ||
         neuralUpscale ||
         neuralRawDenoise ||
-        neuralRestoreDetail;
+        neuralRestoreDetail ||
+        neuralDetailSharpen;
     final wasAnyPipelineActive =
         wasNeuralActive ||
         cloudProvider != null ||
@@ -62,6 +65,8 @@ extension _EditorAiTools on _EditorScreenState {
         upscaleSharpnessAmount: upscaleSharpnessAmount,
         neuralRestoreDetail: neuralRestoreDetail,
         restoreDetailAmount: restoreDetailAmount,
+        neuralDetailSharpen: neuralDetailSharpen,
+        detailSharpenAmount: detailSharpenAmount,
       ),
     );
     _openingToolbarDialog = false;
@@ -104,11 +109,14 @@ extension _EditorAiTools on _EditorScreenState {
             upscaleSharpnessAmount: final wantUpscaleSharpnessAmount,
             restoreDetail: final wantRestoreDetail,
             restoreDetailAmount: final wantRestoreDetailAmount,
+            detailSharpen: final wantDetailSharpen,
+            detailSharpenAmount: final wantDetailSharpenAmount,
           )
           when wantDenoise ||
               wantUpscale ||
               wantRawDenoise ||
-              wantRestoreDetail:
+              wantRestoreDetail ||
+              wantDetailSharpen:
         _rebuild(() {
           _paramValues = {
             ..._paramValues,
@@ -119,6 +127,8 @@ extension _EditorAiTools on _EditorScreenState {
             _upscaleSharpnessAmountKey: wantUpscaleSharpnessAmount.toDouble(),
             _restoreDetailKey: wantRestoreDetail ? 1.0 : 0.0,
             _restoreDetailAmountKey: wantRestoreDetailAmount.toDouble(),
+            _detailSharpenKey: wantDetailSharpen ? 1.0 : 0.0,
+            _detailSharpenAmountKey: wantDetailSharpenAmount.toDouble(),
             _cloudDenoiseProviderKey: 0.0,
             // _colorizeKey deliberately left alone: Colorize now runs as a
             // pass inside this same pipeline (between denoise and upscale),
@@ -138,6 +148,8 @@ extension _EditorAiTools on _EditorScreenState {
           upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
           restoreDetail: wantRestoreDetail,
           restoreDetailAmount: wantRestoreDetailAmount,
+          detailSharpen: wantDetailSharpen,
+          detailSharpenAmount: wantDetailSharpenAmount,
           colorize: keepColorize,
           colorizeIntensity:
               (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
@@ -156,6 +168,7 @@ extension _EditorAiTools on _EditorScreenState {
             _neuralUpscaleKey: 0.0,
             _neuralRawDenoiseKey: 0.0,
             _restoreDetailKey: 0.0,
+            _detailSharpenKey: 0.0,
           };
         });
         // Colorize may still be on. Reverting to the plain decode would
@@ -279,11 +292,14 @@ extension _EditorAiTools on _EditorScreenState {
     final neuralUpscaleOn = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
     final neuralRawDenoiseOn = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
     final neuralRestoreOn = (_paramValues[_restoreDetailKey] ?? 0.0) > 0;
+    final neuralSharpenOn = _detailSharpenOn(_paramValues);
+    final neuralSharpenAmount = _detailSharpenAmountOf(_paramValues);
     final anyNeuralOn =
         neuralDenoiseOn ||
         neuralUpscaleOn ||
         neuralRawDenoiseOn ||
-        neuralRestoreOn;
+        neuralRestoreOn ||
+        neuralSharpenOn;
 
     if (choice.active) {
       _rebuild(() {
@@ -312,6 +328,8 @@ extension _EditorAiTools on _EditorScreenState {
                   (_paramValues[_restoreDetailAmountKey] ??
                           defaultRestoreDetailAmount)
                       .round(),
+              detailSharpen: neuralSharpenOn,
+              detailSharpenAmount: neuralSharpenAmount,
               colorize: true,
               colorizeIntensity: choice.intensityPercent,
             )
@@ -347,6 +365,8 @@ extension _EditorAiTools on _EditorScreenState {
               (_paramValues[_restoreDetailAmountKey] ??
                       defaultRestoreDetailAmount)
                   .round(),
+          detailSharpen: neuralSharpenOn,
+          detailSharpenAmount: neuralSharpenAmount,
         );
       } else {
         await _revertToNormalEditSource(selected.path);
@@ -482,6 +502,8 @@ extension _EditorAiTools on _EditorScreenState {
     int upscaleSharpnessAmount = 0,
     bool restoreDetail = false,
     int restoreDetailAmount = defaultRestoreDetailAmount,
+    bool detailSharpen = false,
+    int detailSharpenAmount = defaultDetailSharpenAmount,
     // Colorize runs inside this pipeline (between denoise and upscale)
     // rather than as its own pass, so the two can be applied together —
     // see `edit_source_ai_enhance.dart`'s `_decodeAndEnhance`. Colorize on
@@ -554,6 +576,8 @@ extension _EditorAiTools on _EditorScreenState {
       upscaleSharpnessAmount: upscaleSharpnessAmount,
       enableDetailRestore: restoreDetail,
       detailRestoreAmount: restoreDetailAmount,
+      enableDetailSharpen: detailSharpen,
+      detailSharpenAmount: detailSharpenAmount,
       enableColorize: colorize,
       colorizeIntensityPercent: colorizeIntensity,
     );
@@ -570,6 +594,7 @@ extension _EditorAiTools on _EditorScreenState {
           _neuralUpscaleKey: 0.0,
           _neuralRawDenoiseKey: 0.0,
           _restoreDetailKey: 0.0,
+          _detailSharpenKey: 0.0,
           // This run owned the colorize pass too when it was asked for, so
           // a failure has to clear that marker as well — leaving it set
           // would claim a colorized base that was never produced.

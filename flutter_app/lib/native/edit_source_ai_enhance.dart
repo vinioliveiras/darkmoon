@@ -126,6 +126,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
   int upscaleSharpnessAmount,
   bool enableDetailRestore,
   int detailRestoreAmount,
+  bool enableDetailSharpen,
+  int detailSharpenAmount,
   bool enableColorize,
   int colorizeIntensityPercent,
   bool editEmbeddedJpeg,
@@ -146,6 +148,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
     upscaleSharpnessAmount: upscaleSharpnessAmount,
     detailRestore: enableDetailRestore,
     detailRestoreAmount: detailRestoreAmount,
+    detailSharpen: enableDetailSharpen,
+    detailSharpenAmount: detailSharpenAmount,
     colorize: enableColorize,
     colorizeIntensityPercent: colorizeIntensityPercent,
   );
@@ -287,7 +291,7 @@ Future<EditSourcePair?> _decodeAndEnhance(
     final detailRestoreModel = enableDetailRestore
         ? OnnxModel.forSpec(gaterV3RestoreModelSpec)
         : null;
-    final detailSharpenModel = enableDetailRestore
+    final detailSharpenModel = enableDetailSharpen
         ? OnnxModel.forSpec(gaterV3SharpenModelSpec)
         : null;
     if (detailRestoreModel != null) {
@@ -325,7 +329,9 @@ Future<EditSourcePair?> _decodeAndEnhance(
       var workingWidth = decoded.width;
       var workingHeight = decoded.height;
 
-      if (effectiveEnableDenoise || enableDetailRestore) {
+      if (effectiveEnableDenoise ||
+          enableDetailRestore ||
+          enableDetailSharpen) {
         final denoisePass = enhanceImage(
           workingRgb,
           workingWidth,
@@ -339,11 +345,14 @@ Future<EditSourcePair?> _decodeAndEnhance(
           detailRestore: enableDetailRestore
               ? (tile) => detailRestoreModel!.runTile(tile)
               : null,
-          detailSharpen: enableDetailRestore
+          detailSharpen: enableDetailSharpen
               ? (tile) => detailSharpenModel!.runTile(tile)
               : null,
-          detailSpec: enableDetailRestore ? gaterV3RestoreModelSpec : null,
+          detailSpec: (enableDetailRestore || enableDetailSharpen)
+              ? gaterV3RestoreModelSpec
+              : null,
           detailAmount: detailRestoreAmount / 100.0,
+          detailSharpenAmount: detailSharpenAmount / 100.0,
           onProgress: (stage, i, total) =>
               onStage(AiEnhanceProgress(stage, i, total)),
         );
@@ -412,11 +421,14 @@ Future<EditSourcePair?> _decodeAndEnhance(
         detailRestore: enableDetailRestore
             ? (tile) => detailRestoreModel!.runTile(tile)
             : null,
-        detailSharpen: enableDetailRestore
+        detailSharpen: enableDetailSharpen
             ? (tile) => detailSharpenModel!.runTile(tile)
             : null,
-        detailSpec: enableDetailRestore ? gaterV3RestoreModelSpec : null,
+        detailSpec: (enableDetailRestore || enableDetailSharpen)
+            ? gaterV3RestoreModelSpec
+            : null,
         detailAmount: detailRestoreAmount / 100.0,
+        detailSharpenAmount: detailSharpenAmount / 100.0,
         sharpenUpscale: wantSharpen
             ? (tile) => sharpenModel!.runTile(tile)
             : null,
@@ -449,6 +461,8 @@ Future<EditSourcePair?> _decodeAndEnhance(
       upscaleSharpnessAmount: upscaleSharpnessAmount,
       detailRestore: enableDetailRestore,
       detailRestoreAmount: detailRestoreAmount,
+      detailSharpen: enableDetailSharpen,
+      detailSharpenAmount: detailSharpenAmount,
       colorize: enableColorize,
       colorizeIntensityPercent: colorizeIntensityPercent,
     );
@@ -490,6 +504,8 @@ class _AiEnhanceDecodeIsolateArgs {
     this.upscaleSharpnessAmount,
     this.enableDetailRestore,
     this.detailRestoreAmount,
+    this.enableDetailSharpen,
+    this.detailSharpenAmount,
     this.enableColorize,
     this.colorizeIntensityPercent,
     this.editEmbeddedJpeg,
@@ -508,6 +524,8 @@ class _AiEnhanceDecodeIsolateArgs {
   final int upscaleSharpnessAmount;
   final bool enableDetailRestore;
   final int detailRestoreAmount;
+  final bool enableDetailSharpen;
+  final int detailSharpenAmount;
   final bool enableColorize;
   final int colorizeIntensityPercent;
   final bool editEmbeddedJpeg;
@@ -533,6 +551,8 @@ void _aiEnhanceDecodeIsolateEntry(_AiEnhanceDecodeIsolateArgs args) async {
       args.upscaleSharpnessAmount,
       args.enableDetailRestore,
       args.detailRestoreAmount,
+      args.enableDetailSharpen,
+      args.detailSharpenAmount,
       args.enableColorize,
       args.colorizeIntensityPercent,
       args.editEmbeddedJpeg,
@@ -595,6 +615,10 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
   // behind a nonzero amount wouldn't save anything worth the complexity.
   bool enableDetailRestore = false,
   int detailRestoreAmount = 50,
+  // The sharpen half of the GaterV3 pair, its own toggle since
+  // 2026-09-12 (user's request); same "always runs when on" reasoning.
+  bool enableDetailSharpen = false,
+  int detailSharpenAmount = 50,
   // Colorize (DDColor) runs *inside* this pipeline, between the denoise
   // and upscale passes — see _decodeAndEnhance for why that spot. Only
   // used for the combination: colorize on its own still goes through
@@ -620,6 +644,8 @@ Future<EditSourcePair?> decodeEditSourcesWithAiEnhance(
       upscaleSharpnessAmount,
       enableDetailRestore,
       detailRestoreAmount,
+      enableDetailSharpen,
+      detailSharpenAmount,
       enableColorize,
       colorizeIntensityPercent,
       editEmbeddedJpeg,

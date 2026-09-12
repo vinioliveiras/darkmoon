@@ -1138,6 +1138,12 @@ abstract class AppLocalizations {
   /// **'Restore detail'**
   String get aiDenoiseEnhanceRestoreDetailLabel;
 
+  /// No description provided for @aiDenoiseEnhanceDetailSharpenLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Sharpen detail'**
+  String get aiDenoiseEnhanceDetailSharpenLabel;
+
   /// No description provided for @aiDenoiseEnhanceUpscaleLabel.
   ///
   /// In en, this message translates to:

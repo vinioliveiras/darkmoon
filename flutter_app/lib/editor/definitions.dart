@@ -954,6 +954,28 @@ const _restoreDetailKey = 'AiRestoreDetail';
 /// Defaults to [defaultRestoreDetailAmount] when absent.
 const _restoreDetailAmountKey = 'AiRestoreDetailAmount';
 
+/// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.detailSharpen` — the
+/// GaterV3 sharpen pass, its own toggle since 2026-09-12. `> 0` means
+/// active. A photo saved before the split has no such key: its Restore
+/// detail ran both passes, so the key's absence reads as "the same as
+/// Restore detail" — see [_detailSharpenOn] — and the photo keeps its look.
+const _detailSharpenKey = 'AiDetailSharpen';
+
+/// 0-100 blend of the sharpen pass; absent, it follows the restore
+/// amount for the same reason.
+const _detailSharpenAmountKey = 'AiDetailSharpenAmount';
+
+bool _detailSharpenOn(Map<String, double> values) =>
+    values.containsKey(_detailSharpenKey)
+    ? (values[_detailSharpenKey] ?? 0.0) > 0
+    : (values[_restoreDetailKey] ?? 0.0) > 0;
+
+int _detailSharpenAmountOf(Map<String, double> values) =>
+    (values[_detailSharpenAmountKey] ??
+            values[_restoreDetailAmountKey] ??
+            defaultDetailSharpenAmount.toDouble())
+        .round();
+
 /// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.denoiseAmount` — 0-100,
 /// persisted the same way as the two flags above. Defaults to
 /// [defaultNeuralDenoiseAmount] when absent (a photo that predates this

@@ -174,6 +174,7 @@ extension _EditorMasks on _EditorScreenState {
             (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0 ||
             (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0 ||
             (_paramValues[_restoreDetailKey] ?? 0.0) > 0 ||
+            _detailSharpenOn(_paramValues) ||
             (_paramValues[_cloudDenoiseProviderKey] ?? 0.0) > 0 ||
             (_paramValues[_colorizeKey] ?? 0.0) > 0 ||
             (_paramValues[_inpaintKey] ?? 0.0) > 0);

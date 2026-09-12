@@ -44,6 +44,8 @@ String _modeTag(
   String? denoiseModelPath,
   bool detailRestore,
   int detailRestoreAmount,
+  bool detailSharpen,
+  int detailSharpenAmount,
   int upscaleSharpnessAmount,
   bool colorize,
   int colorizeIntensityPercent,
@@ -53,6 +55,7 @@ String _modeTag(
     'q$upscaleSharpnessAmount'
     'r${rawDenoise ? 1 : 0}'
     'g${detailRestore ? 1 : 0}a$detailRestoreAmount'
+    'h${detailSharpen ? 1 : 0}b$detailSharpenAmount'
     'm${denoiseModelPath ?? "default"}'
     '${colorize ? "c1i$colorizeIntensityPercent" : ""}';
 
@@ -71,12 +74,14 @@ String _entryKey(
   int upscaleSharpnessAmount,
   bool detailRestore,
   int detailRestoreAmount,
+  bool detailSharpen,
+  int detailSharpenAmount,
   bool colorize,
   int colorizeIntensityPercent,
 ) {
   final raw =
       '$path|${modified.microsecondsSinceEpoch}|$size|'
-      '${_modeTag(denoise, upscale, rawDenoise, denoiseStrengthPercent, denoiseModelPath, detailRestore, detailRestoreAmount, upscaleSharpnessAmount, colorize, colorizeIntensityPercent)}|v$aiEnhanceCacheVersion';
+      '${_modeTag(denoise, upscale, rawDenoise, denoiseStrengthPercent, denoiseModelPath, detailRestore, detailRestoreAmount, detailSharpen, detailSharpenAmount, upscaleSharpnessAmount, colorize, colorizeIntensityPercent)}|v$aiEnhanceCacheVersion';
   return sha1.convert(utf8.encode(raw)).toString();
 }
 
@@ -96,6 +101,8 @@ String aiEnhanceCacheKeyForTest(
   int upscaleSharpnessAmount = 0,
   bool detailRestore = false,
   int detailRestoreAmount = 50,
+  bool detailSharpen = false,
+  int detailSharpenAmount = 50,
   bool colorize = false,
   int colorizeIntensityPercent = 0,
 }) => _entryKey(
@@ -110,6 +117,8 @@ String aiEnhanceCacheKeyForTest(
   upscaleSharpnessAmount,
   detailRestore,
   detailRestoreAmount,
+  detailSharpen,
+  detailSharpenAmount,
   colorize,
   colorizeIntensityPercent,
 );
@@ -147,6 +156,8 @@ Future<Uint8List?> lookupAiEnhanceCache(
   int upscaleSharpnessAmount = 0,
   bool detailRestore = false,
   int detailRestoreAmount = 50,
+  bool detailSharpen = false,
+  int detailSharpenAmount = 50,
   bool colorize = false,
   int colorizeIntensityPercent = 0,
 }) async {
@@ -167,6 +178,8 @@ Future<Uint8List?> lookupAiEnhanceCache(
           upscaleSharpnessAmount,
           detailRestore,
           detailRestoreAmount,
+          detailSharpen,
+          detailSharpenAmount,
           colorize,
           colorizeIntensityPercent,
         ),
@@ -199,6 +212,8 @@ Future<void> storeAiEnhanceCache(
   int upscaleSharpnessAmount = 0,
   bool detailRestore = false,
   int detailRestoreAmount = 50,
+  bool detailSharpen = false,
+  int detailSharpenAmount = 50,
   bool colorize = false,
   int colorizeIntensityPercent = 0,
 }) async {
@@ -216,6 +231,8 @@ Future<void> storeAiEnhanceCache(
       upscaleSharpnessAmount,
       detailRestore,
       detailRestoreAmount,
+      detailSharpen,
+      detailSharpenAmount,
       colorize,
       colorizeIntensityPercent,
     );

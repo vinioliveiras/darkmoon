@@ -62,6 +62,8 @@ extension _EditorExport on _EditorScreenState {
     final wantRestoreDetailAmount =
         (_paramValues[_restoreDetailAmountKey] ?? defaultRestoreDetailAmount)
             .round();
+    final wantDetailSharpen = _detailSharpenOn(_paramValues);
+    final wantDetailSharpenAmount = _detailSharpenAmountOf(_paramValues);
     final wantCloudProvider = _cloudProviderFromIndex(
       (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
     );
@@ -75,7 +77,11 @@ extension _EditorExport on _EditorScreenState {
     EditSource? nativeForExport;
     final srcSw = Stopwatch()..start();
     try {
-      if (wantDenoise || wantUpscale || wantRawDenoise || wantRestoreDetail) {
+      if (wantDenoise ||
+          wantUpscale ||
+          wantRawDenoise ||
+          wantRestoreDetail ||
+          wantDetailSharpen) {
         // Colorize rides along inside the Enhance pipeline when both are
         // on (it is a pass between denoise and upscale, not a separate
         // base) — the `else if (wantColorize)` branch below is only for
@@ -89,6 +95,8 @@ extension _EditorExport on _EditorScreenState {
           upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
           restoreDetail: wantRestoreDetail,
           restoreDetailAmount: wantRestoreDetailAmount,
+          detailSharpen: wantDetailSharpen,
+          detailSharpenAmount: wantDetailSharpenAmount,
           colorize: wantColorize,
           colorizeIntensity: wantColorizeIntensity,
         );

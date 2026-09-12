@@ -181,6 +181,7 @@
   "aiDenoiseEnhanceDenoiseLabel": "Rauschunterdrückung",
   "aiDenoiseEnhanceAmountLabel": "Stärke",
   "aiDenoiseEnhanceRestoreDetailLabel": "Details wiederherstellen",
+  "aiDenoiseEnhanceDetailSharpenLabel": "Details schärfen",
   "aiDenoiseEnhanceUpscaleLabel": "2x hochskalieren",
   "aiDenoiseEnhanceSharpnessLabel": "Schärfe",
   "aiDenoiseEnhanceSharpnessCaption": "Mischt ein langsameres Modell ein, das mehr Detail rekonstruiert — jeder Wert über 0% kostet ca. 3,5 Minuten pro 24-MP-Foto statt weniger Sekunden und kann sehr kleinen Text oder Details leicht verändern (nicht nur schärfen).",

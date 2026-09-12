@@ -42,6 +42,10 @@ const defaultNeuralDenoiseAmount = 50;
 /// [defaultNeuralDenoiseAmount]'s own doc — it now uses the same 50%.
 const defaultRestoreDetailAmount = 50;
 
+/// Default value for [NeuralEnhanceChoice.detailSharpenAmount] — the same
+/// balanced 50% (2026-09-12, when the GaterV3 pair split into two toggles).
+const defaultDetailSharpenAmount = 50;
+
 String _levelLabel(AppLocalizations l10n, AiDenoiseLevel? level) =>
     switch (level) {
       null => l10n.aiDenoiseLevelOff,
@@ -95,10 +99,20 @@ class NeuralEnhanceChoice extends AiDenoiseChoice {
     this.upscaleSharpnessAmount = 0,
     this.restoreDetail = false,
     this.restoreDetailAmount = defaultRestoreDetailAmount,
+    this.detailSharpen = false,
+    this.detailSharpenAmount = defaultDetailSharpenAmount,
   });
 
   final bool denoise;
   final bool upscale;
+
+  /// GaterV3 sharpen (`gaterV3SharpenModelSpec`), the second half of the
+  /// pair, its own toggle since 2026-09-12: runs after [restoreDetail]'s
+  /// pass when both are on, on its own otherwise.
+  final bool detailSharpen;
+
+  /// 0-100 blend of the sharpen pass. Only meaningful when [detailSharpen].
+  final int detailSharpenAmount;
 
   /// GaterV3 restore-then-sharpen (`gaterV3RestoreModelSpec`/
   /// `gaterV3SharpenModelSpec`) — a same-resolution detail pass,
@@ -146,7 +160,8 @@ class NeuralEnhanceChoice extends AiDenoiseChoice {
   /// matters when unused.
   final int denoiseAmount;
 
-  bool get active => denoise || upscale || rawDenoise || restoreDetail;
+  bool get active =>
+      denoise || upscale || rawDenoise || restoreDetail || detailSharpen;
 }
 
 /// A paid, third-party cloud AI denoise call (the dialog's "Cloud AI" tab)
@@ -195,6 +210,8 @@ class AiDenoiseDialog extends StatefulWidget {
     this.upscaleSharpnessAmount = 0,
     this.neuralRestoreDetail = false,
     this.restoreDetailAmount = defaultRestoreDetailAmount,
+    this.neuralDetailSharpen = false,
+    this.detailSharpenAmount = defaultDetailSharpenAmount,
   });
 
   /// The classical level already applied to the current photo, if any —
@@ -223,6 +240,12 @@ class AiDenoiseDialog extends StatefulWidget {
   /// See [NeuralEnhanceChoice.restoreDetailAmount].
   final int restoreDetailAmount;
 
+  /// See [NeuralEnhanceChoice.detailSharpen].
+  final bool neuralDetailSharpen;
+
+  /// See [NeuralEnhanceChoice.detailSharpenAmount].
+  final int detailSharpenAmount;
+
   /// Whether the current photo is a standard Bayer-CFA RAW file — the raw
   /// denoise toggle is shown disabled (with an explanatory caption) when
   /// this is false, since PMRID can't process X-Trans/Foveon sensors or a
@@ -250,6 +273,8 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
   late int _upscaleSharpnessAmount = widget.upscaleSharpnessAmount;
   late bool _neuralRestoreDetail = widget.neuralRestoreDetail;
   late int _restoreDetailAmount = widget.restoreDetailAmount;
+  late bool _neuralDetailSharpen = widget.neuralDetailSharpen;
+  late int _detailSharpenAmount = widget.detailSharpenAmount;
   late CloudDenoiseProviderKind? _cloudProvider = widget.cloudProvider;
   final _tokenController = TextEditingController();
   bool _obscureToken = true;
@@ -261,7 +286,8 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         : (widget.neuralDenoise ||
               widget.neuralUpscale ||
               widget.neuralRawDenoise ||
-              widget.neuralRestoreDetail)
+              widget.neuralRestoreDetail ||
+              widget.neuralDetailSharpen)
         ? 1
         : 0,
   );
@@ -324,6 +350,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
       _neuralUpscale = false;
       _neuralRawDenoise = false;
       _neuralRestoreDetail = false;
+      _neuralDetailSharpen = false;
       _cloudProvider = null;
     });
   }
@@ -369,6 +396,20 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
     setState(() => _restoreDetailAmount = value);
   }
 
+  void _setNeuralDetailSharpen(bool value) {
+    setState(() {
+      _neuralDetailSharpen = value;
+      if (value) {
+        _level = null;
+        _cloudProvider = null;
+      }
+    });
+  }
+
+  void _setDetailSharpenAmount(int value) {
+    setState(() => _detailSharpenAmount = value);
+  }
+
   void _setNeuralRawDenoise(bool value) {
     setState(() {
       _neuralRawDenoise = value;
@@ -405,7 +446,8 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
     if (_neuralDenoise ||
         _neuralUpscale ||
         _neuralRawDenoise ||
-        _neuralRestoreDetail) {
+        _neuralRestoreDetail ||
+        _neuralDetailSharpen) {
       return NeuralEnhanceChoice(
         denoise: _neuralDenoise,
         upscale: _neuralUpscale,
@@ -414,6 +456,8 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         upscaleSharpnessAmount: _upscaleSharpnessAmount,
         restoreDetail: _neuralRestoreDetail,
         restoreDetailAmount: _restoreDetailAmount,
+        detailSharpen: _neuralDetailSharpen,
+        detailSharpenAmount: _detailSharpenAmount,
       );
     }
     return ClassicDenoiseChoice(_level);
@@ -679,6 +723,50 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
               divisions: 100,
               value: _restoreDetailAmount.toDouble(),
               onChanged: (v) => _setRestoreDetailAmount(v.round()),
+            ),
+          ),
+        ],
+        const SizedBox(height: 4),
+        // The sharpen half of the same pair, its own toggle (user's
+        // request, 2026-09-12): it runs after the restore pass when both
+        // are on, on its own otherwise.
+        _ToggleRow(
+          label: l10n.aiDenoiseEnhanceDetailSharpenLabel,
+          value: _neuralDetailSharpen,
+          onChanged: _setNeuralDetailSharpen,
+        ),
+        if (_neuralDetailSharpen) ...[
+          const SizedBox(height: 2),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.aiDenoiseEnhanceAmountLabel,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: DarkmoonColors.textSecondary,
+                  ),
+                ),
+              ),
+              Text(
+                '$_detailSharpenAmount%',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: DarkmoonColors.textMuted,
+                ),
+              ),
+            ],
+          ),
+          SliderTheme(
+            data: SliderTheme.of(
+              context,
+            ).copyWith(trackShape: const RectangularSliderTrackShape()),
+            child: Slider(
+              min: 0,
+              max: 100,
+              divisions: 100,
+              value: _detailSharpenAmount.toDouble(),
+              onChanged: (v) => _setDetailSharpenAmount(v.round()),
             ),
           ),
         ],

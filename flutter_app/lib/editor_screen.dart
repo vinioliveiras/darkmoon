@@ -3138,8 +3138,14 @@ class _EditorScreenState extends State<EditorScreen>
       final wantRestoreDetailAmount =
           (_paramValues[_restoreDetailAmountKey] ?? defaultRestoreDetailAmount)
               .round();
+      final wantDetailSharpen = _detailSharpenOn(_paramValues);
+      final wantDetailSharpenAmount = _detailSharpenAmountOf(_paramValues);
       final wantAnyEnhance =
-          wantDenoise || wantUpscale || wantRawDenoise || wantRestoreDetail;
+          wantDenoise ||
+          wantUpscale ||
+          wantRawDenoise ||
+          wantRestoreDetail ||
+          wantDetailSharpen;
       // Colorize is a pass *inside* the Enhance pipeline when both are on,
       // so the combination lives under the Enhance cache with colorize
       // folded into its key — not under the colorize cache. Read here
@@ -3163,6 +3169,8 @@ class _EditorScreenState extends State<EditorScreen>
             upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
             detailRestore: wantRestoreDetail,
             detailRestoreAmount: wantRestoreDetailAmount,
+            detailSharpen: wantDetailSharpen,
+            detailSharpenAmount: wantDetailSharpenAmount,
             colorize: wantColorizeWithEnhance,
             colorizeIntensityPercent: wantComboColorizeIntensity,
           );
@@ -3338,6 +3346,7 @@ class _EditorScreenState extends State<EditorScreen>
               _neuralUpscaleKey: 0.0,
               _neuralRawDenoiseKey: 0.0,
               _restoreDetailKey: 0.0,
+              _detailSharpenKey: 0.0,
               _cloudDenoiseProviderKey: 0.0,
               _colorizeKey: 0.0,
               _inpaintKey: 0.0,
@@ -3880,6 +3889,8 @@ class _EditorScreenState extends State<EditorScreen>
     int upscaleSharpnessAmount = 0,
     bool restoreDetail = false,
     int restoreDetailAmount = defaultRestoreDetailAmount,
+    bool detailSharpen = false,
+    int detailSharpenAmount = defaultDetailSharpenAmount,
     bool colorize = false,
     int colorizeIntensity = defaultColorizeIntensity,
   }) async {
@@ -3896,6 +3907,8 @@ class _EditorScreenState extends State<EditorScreen>
       upscaleSharpnessAmount: upscaleSharpnessAmount,
       detailRestore: restoreDetail,
       detailRestoreAmount: restoreDetailAmount,
+      detailSharpen: detailSharpen,
+      detailSharpenAmount: detailSharpenAmount,
       colorize: colorize,
       colorizeIntensityPercent: colorizeIntensity,
     );
@@ -3909,6 +3922,8 @@ class _EditorScreenState extends State<EditorScreen>
         upscaleSharpnessAmount: upscaleSharpnessAmount,
         restoreDetail: restoreDetail,
         restoreDetailAmount: restoreDetailAmount,
+        detailSharpen: detailSharpen,
+        detailSharpenAmount: detailSharpenAmount,
         colorize: colorize,
         colorizeIntensity: colorizeIntensity,
       );
@@ -3926,6 +3941,8 @@ class _EditorScreenState extends State<EditorScreen>
         upscaleSharpnessAmount: upscaleSharpnessAmount,
         detailRestore: restoreDetail,
         detailRestoreAmount: restoreDetailAmount,
+        detailSharpen: detailSharpen,
+        detailSharpenAmount: detailSharpenAmount,
         colorize: colorize,
         colorizeIntensityPercent: colorizeIntensity,
       );
@@ -4853,6 +4870,7 @@ class _EditorScreenState extends State<EditorScreen>
     _neuralUpscaleKey,
     _neuralRawDenoiseKey,
     _restoreDetailKey,
+    _detailSharpenKey,
     _cloudDenoiseProviderKey,
     _colorizeKey,
     _inpaintKey,
@@ -5627,6 +5645,7 @@ class _EditorScreenState extends State<EditorScreen>
                                 (_paramValues[_neuralRawDenoiseKey] ?? 0.0) >
                                     0 ||
                                 (_paramValues[_restoreDetailKey] ?? 0.0) > 0 ||
+                                _detailSharpenOn(_paramValues) ||
                                 (_paramValues[_cloudDenoiseProviderKey] ??
                                         0.0) >
                                     0,

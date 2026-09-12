@@ -91,6 +91,10 @@ AiEnhanceResult enhanceImage(
   Float32List Function(Float32List tile)? detailSharpen,
   OnnxModelSpec? detailSpec,
   double detailAmount = 0.0,
+  // The sharpen half's own blend (2026-09-12): the two GaterV3 passes
+  // were one toggle with one amount; each is its own now, so a photo
+  // can take the restoration without the sharpening, or the other way.
+  double detailSharpenAmount = 0.0,
   // The bundled denoise model is a fixed, blind denoiser — it has no built-in strength
   // knob (unlike e.g. FFDNet-style models that take a noise-level map as
   // an extra input channel), so "how strong" can only be controlled
@@ -134,7 +138,7 @@ AiEnhanceResult enhanceImage(
     denoised = floatRgb;
   }
 
-  if (detailRestore != null && detailSharpen != null && detailSpec != null) {
+  if (detailRestore != null && detailSpec != null) {
     final restored = denoiseTiled(
       denoised,
       width,
@@ -145,8 +149,18 @@ AiEnhanceResult enhanceImage(
       processTile: detailRestore,
       onProgress: (i, total) => onProgress?.call('detail-restore', i, total),
     );
-    final detailed = denoiseTiled(
-      restored,
+    final amount = detailAmount.clamp(0.0, 1.0);
+    // Blended into `restored` itself, which is fresh from the tiler and
+    // read nowhere else — a third full-frame buffer here was pure peak
+    // memory (2026-09-10).
+    for (var i = 0; i < denoised.length; i++) {
+      restored[i] = denoised[i] + (restored[i] - denoised[i]) * amount;
+    }
+    denoised = restored;
+  }
+  if (detailSharpen != null && detailSpec != null) {
+    final sharpened = denoiseTiled(
+      denoised,
       width,
       height,
       inputTileSize: detailSpec.inputTileSize,
@@ -155,14 +169,11 @@ AiEnhanceResult enhanceImage(
       processTile: detailSharpen,
       onProgress: (i, total) => onProgress?.call('detail-sharpen', i, total),
     );
-    final amount = detailAmount.clamp(0.0, 1.0);
-    // Blended into `detailed` itself, which is fresh from the tiler and
-    // read nowhere else — a third full-frame buffer here was pure peak
-    // memory (2026-09-10).
+    final amount = detailSharpenAmount.clamp(0.0, 1.0);
     for (var i = 0; i < denoised.length; i++) {
-      detailed[i] = denoised[i] + (detailed[i] - denoised[i]) * amount;
+      sharpened[i] = denoised[i] + (sharpened[i] - denoised[i]) * amount;
     }
-    denoised = detailed;
+    denoised = sharpened;
   }
 
   var upscaled = enableUpscale
