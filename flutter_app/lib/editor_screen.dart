@@ -97,6 +97,7 @@ import 'render/gpu/render_job_gpu.dart';
 import 'render/render.dart' show RenderStage;
 import 'render/render_job.dart';
 import 'render/crop_transform.dart';
+import 'render/post_enhance.dart';
 import 'render/render_params.dart';
 import 'render/tone_curve.dart';
 import 'render/upright.dart';
@@ -1279,6 +1280,14 @@ class _EditorScreenState extends State<EditorScreen>
       _scheduleRender(live: false);
     }
   }
+
+  /// The neural passes that run on the finished render when the AI
+  /// Denoise dialog's "apply to the edited photo" is on — see
+  /// post_enhance.dart. Null when there is nothing to run there.
+  PostEnhanceSpec? _postEnhanceFor() => postEnhanceSpecFromValues(
+    _paramValues,
+    denoiseModelPath: _settings.customDenoiseModelPath,
+  );
 
   /// The film table [values] point at — null for none, or for a table the
   /// library does not have (not loaded yet, or an asset gone).
@@ -3188,7 +3197,11 @@ class _EditorScreenState extends State<EditorScreen>
       // _paramValues still claims Enhance is active (the same class of
       // bug that made export ignore Enhance entirely — see
       // _loadEnhancedNativeSource's doc).
-      final wantDenoise = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
+      // With "apply to the edited photo" on, the same-resolution passes
+      // run on the render instead (post_enhance.dart) and the source
+      // pipeline only keeps what must see the untouched source.
+      final sourcePasses = sourceNeuralPassesFor(_paramValues);
+      final wantDenoise = sourcePasses.denoise;
       final wantUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
       final wantRawDenoise = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
       final wantDenoiseAmount =
@@ -3196,11 +3209,11 @@ class _EditorScreenState extends State<EditorScreen>
               .round();
       final wantUpscaleSharpnessAmount =
           (_paramValues[_upscaleSharpnessAmountKey] ?? 0.0).round();
-      final wantRestoreDetail = (_paramValues[_restoreDetailKey] ?? 0.0) > 0;
+      final wantRestoreDetail = sourcePasses.restoreDetail;
       final wantRestoreDetailAmount =
           (_paramValues[_restoreDetailAmountKey] ?? defaultRestoreDetailAmount)
               .round();
-      final wantDetailSharpen = _detailSharpenOn(_paramValues);
+      final wantDetailSharpen = sourcePasses.detailSharpen;
       final wantDetailSharpenAmount = _detailSharpenAmountOf(_paramValues);
       final wantAnyEnhance =
           wantDenoise ||
@@ -3749,6 +3762,10 @@ class _EditorScreenState extends State<EditorScreen>
           )
         : _cropTransform;
     final metadata = _metadata[path];
+    // "Apply to the edited photo": the neural passes on the finished
+    // render, settled frames only — a drag frame is thrown away too fast
+    // to be worth seconds of inference.
+    final postEnhance = live ? null : _postEnhanceFor();
     RenderJob buildJob(EditSource src) => RenderJob(
       source: src,
       params: RenderParams.fromValues(
@@ -3775,6 +3792,7 @@ class _EditorScreenState extends State<EditorScreen>
       cancelFlagAddress: live || onStage != null
           ? null
           : _renderCancel?.address,
+      postEnhance: postEnhance,
     );
 
     // Phase 1 — the quick render: the tiny `live` buffer while dragging,
@@ -3789,10 +3807,13 @@ class _EditorScreenState extends State<EditorScreen>
     final quickSource = (live || _cropOverlayActive)
         ? sources.live
         : sources.preview;
+    // The post pass is CPU inference over the finished pixels, so a job
+    // carrying one renders on the CPU too rather than reading the GPU's
+    // frame back just to hand it over.
     final firstResult = await _runRenderJob(
       buildJob(quickSource),
       onStage: onStage,
-      allowGpu: !live,
+      allowGpu: !live && postEnhance == null,
     );
     if (!mounted || requestId != _renderRequestId) {
       return;

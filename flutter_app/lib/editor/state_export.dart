@@ -66,7 +66,11 @@ extension _EditorExport on _EditorScreenState {
     // If AI Enhance is active for this photo, that "native source" must
     // be the enhanced buffer, not a plain RAW decode — see
     // _loadEnhancedNativeSource's doc for the bug this fixes.
-    final wantDenoise = (_paramValues[_neuralDenoiseKey] ?? 0.0) > 0;
+    // Same gating as _loadEditSourceAndRender: with "apply to the edited
+    // photo" on, Denoise / Restore detail / Detail sharpen run on the
+    // render (ExportRequest.postEnhance below), not on the source.
+    final sourcePasses = sourceNeuralPassesFor(_paramValues);
+    final wantDenoise = sourcePasses.denoise;
     final wantUpscale = (_paramValues[_neuralUpscaleKey] ?? 0.0) > 0;
     final wantRawDenoise = (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0;
     final wantDenoiseAmount =
@@ -74,11 +78,11 @@ extension _EditorExport on _EditorScreenState {
             .round();
     final wantUpscaleSharpnessAmount =
         (_paramValues[_upscaleSharpnessAmountKey] ?? 0.0).round();
-    final wantRestoreDetail = (_paramValues[_restoreDetailKey] ?? 0.0) > 0;
+    final wantRestoreDetail = sourcePasses.restoreDetail;
     final wantRestoreDetailAmount =
         (_paramValues[_restoreDetailAmountKey] ?? defaultRestoreDetailAmount)
             .round();
-    final wantDetailSharpen = _detailSharpenOn(_paramValues);
+    final wantDetailSharpen = sourcePasses.detailSharpen;
     final wantDetailSharpenAmount = _detailSharpenAmountOf(_paramValues);
     final wantCloudProvider = _cloudProviderFromIndex(
       (_paramValues[_cloudDenoiseProviderKey] ?? 0.0).round(),
@@ -189,6 +193,7 @@ extension _EditorExport on _EditorScreenState {
                 nativeForExport?.height ?? metadata?.height,
               ),
         frame: options.frame,
+        postEnhance: _postEnhanceFor(),
         preDecodedRgb: nativeForExport?.rgbBytes,
         preDecodedWidth: nativeForExport?.width,
         preDecodedHeight: nativeForExport?.height,

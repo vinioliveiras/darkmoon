@@ -813,6 +813,13 @@ class AppLocalizationsEn extends AppLocalizations {
   String get aiDenoiseEnhanceDenoiseLabel => 'Denoise';
 
   @override
+  String get aiDenoiseEnhanceAfterEditsLabel => 'Apply to the edited photo';
+
+  @override
+  String get aiDenoiseEnhanceAfterEditsHint =>
+      'Denoise, Restore detail and Detail sharpen run on the photo with your edits applied, in the preview and the export, instead of on the untouched source. Slower: they run again after every edit.';
+
+  @override
   String get aiDenoiseEnhanceAmountLabel => 'Amount';
 
   @override

@@ -11,6 +11,7 @@ import 'crop_transform.dart';
 import 'histogram.dart';
 import 'lens_correction.dart';
 import 'mask.dart';
+import 'post_enhance.dart';
 import 'render.dart';
 import 'render_parallel.dart';
 import 'render_params.dart';
@@ -36,7 +37,13 @@ class RenderJob {
     this.apertureFNumber = 0,
     this.aiMaskMaps = const {},
     this.cancelFlagAddress,
+    this.postEnhance,
   });
+
+  /// Neural passes to run on the finished render — the AI Denoise
+  /// dialog's "apply to the edited photo" (see post_enhance.dart). Null
+  /// for the usual render. The caller leaves it null on live drag frames.
+  final PostEnhanceSpec? postEnhance;
 
   final EditSource source;
   final RenderParams params;
@@ -322,12 +329,20 @@ Future<RenderResult> renderJobToJpeg(
     // is the one phase the serial paths above can still skip.
     throw const IsolateCancelled();
   }
+  var output = rendered;
+  final post = job.postEnhance;
+  if (post != null) {
+    output = applyPostEnhance(output, geometry.width, geometry.height, post);
+    if (cancel?.isSet ?? false) {
+      throw const IsolateCancelled();
+    }
+  }
   onStage?.call(RenderStage.encoding);
   // Already inside a `compute()` isolate (or the dedicated progress
   // isolate) by the time this runs, so both the widening and the sidecar
   // happen here directly — it's the GPU path that has to hand
   // [computeRenderSidecar] to `compute()` itself.
-  final previewRgba = rgbToRgba(rendered);
+  final previewRgba = rgbToRgba(output);
   final sidecar = computeRenderSidecar(
     RenderEncodeRequest(
       rgbaBytes: previewRgba,

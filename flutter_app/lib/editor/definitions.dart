@@ -989,6 +989,12 @@ const _detailSharpenKey = 'AiDetailSharpen';
 /// amount for the same reason.
 const _detailSharpenAmountKey = 'AiDetailSharpenAmount';
 
+/// See `AiDenoiseDialog`'s `NeuralEnhanceChoice.afterEdits` (2026-09-13):
+/// `> 0` moves Denoise, Restore detail and Detail sharpen from the
+/// decoded source to the finished render — see `render/post_enhance.dart`
+/// for the gating both the preview and the export read.
+const _neuralAfterEditsKey = aiNeuralAfterEditsKey;
+
 bool _detailSharpenOn(Map<String, double> values) =>
     values.containsKey(_detailSharpenKey)
     ? (values[_detailSharpenKey] ?? 0.0) > 0

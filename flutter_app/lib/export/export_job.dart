@@ -17,6 +17,7 @@ import '../render/render_params.dart';
 import 'export_format.dart';
 import 'export_metadata.dart';
 import 'frame.dart';
+import '../render/post_enhance.dart';
 import 'srgb_icc.dart';
 
 class ExportRequest {
@@ -36,7 +37,13 @@ class ExportRequest {
     this.editEmbeddedJpeg = false,
     this.captureInfo,
     this.frame,
+    this.postEnhance,
   });
+
+  /// Neural passes to run on the finished render, before the frame and
+  /// the encode — the AI Denoise dialog's "apply to the edited photo"
+  /// (see post_enhance.dart). Null for the usual export.
+  final PostEnhanceSpec? postEnhance;
 
   /// A border composed around the rendered photo before encoding — see
   /// `frame.dart`. Null for a plain export.
@@ -234,10 +241,21 @@ Future<ExportResult> _exportPhotoInternal(
     for (final t in renderTimings) {
       timings.add('  · $t');
     }
+    var finalRgb = rendered;
+    final post = request.postEnhance;
+    if (post != null) {
+      finalRgb = applyPostEnhance(
+        finalRgb,
+        geometry.width,
+        geometry.height,
+        post,
+      );
+      mark('ai post-pass');
+    }
     var image = img.Image.fromBytes(
       width: geometry.width,
       height: geometry.height,
-      bytes: rendered.buffer,
+      bytes: finalRgb.buffer,
       numChannels: 3,
       order: img.ChannelOrder.rgb,
     );

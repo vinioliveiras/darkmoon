@@ -232,6 +232,8 @@
   "aiDenoiseCloudStageDecoding": "Foto wird dekodiert…",
   "aiDenoiseEnhanceMessage": "Entfernt Rauschen und Filmkorn und verdoppelt die Auflösung mit einem neuronalen Netz — näher an dem, wie die echten Details vor Rauschen und Kompression aussahen. Läuft spürbar langsamer als Klassisch, besonders ohne kompatible GPU.",
   "aiDenoiseEnhanceDenoiseLabel": "Rauschunterdrückung",
+  "aiDenoiseEnhanceAfterEditsLabel": "Auf das bearbeitete Foto anwenden",
+  "aiDenoiseEnhanceAfterEditsHint": "Rauschunterdrückung, Details wiederherstellen und Detailschärfe laufen auf dem Foto mit den Bearbeitungen, in Vorschau und Export, statt auf der unberührten Quelle. Langsamer: sie laufen nach jeder Bearbeitung erneut.",
   "aiDenoiseEnhanceAmountLabel": "Stärke",
   "aiDenoiseEnhanceRestoreDetailLabel": "Details wiederherstellen",
   "aiDenoiseEnhanceDetailSharpenLabel": "Details schärfen",

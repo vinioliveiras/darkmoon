@@ -816,6 +816,13 @@ class AppLocalizationsPt extends AppLocalizations {
   String get aiDenoiseEnhanceDenoiseLabel => 'Denoise';
 
   @override
+  String get aiDenoiseEnhanceAfterEditsLabel => 'Aplicar na foto editada';
+
+  @override
+  String get aiDenoiseEnhanceAfterEditsHint =>
+      'Denoise, Restaurar detalhe e Nitidez de detalhe rodam sobre a foto já com as edições, na prévia e na exportação, em vez de sobre o arquivo original. Mais lento: rodam de novo a cada edição.';
+
+  @override
   String get aiDenoiseEnhanceAmountLabel => 'Intensidade';
 
   @override

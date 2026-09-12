@@ -226,3 +226,30 @@ AiEnhanceResult enhanceImage(
     height: outHeight,
   );
 }
+
+/// Default value for [NeuralEnhanceChoice.denoiseAmount]/the Amount
+/// slider — 100%, the model's full-strength output. Was 50% under the
+/// previous denoise model (NAFNet-SIDD), whose raw output tended to look
+/// over-smoothed/"painted" on real photos; the model swap (2026-08-31,
+/// item 35 follow-up — see `onnx_runtime.dart`'s [denoiseModelSpec] doc)
+/// was specifically chosen for *not* having that problem in testing, and
+/// this briefly defaulted to 100% on that basis. Reverted back to 50%
+/// (2026-09-01, explicit user direction) to follow the same plain "new
+/// toggle, balanced default" convention every other Amount slider in this
+/// dialog uses (see [defaultRestoreDetailAmount]'s doc) rather than stay
+/// the one exception. `editor_screen.dart` uses this same constant as the
+/// fallback for any photo whose `_paramValues` doesn't have an amount
+/// recorded yet (never turned Denoise on before, or predates this
+/// slider) — see its own `_neuralDenoiseAmountKey` doc.
+const defaultNeuralDenoiseAmount = 50;
+
+/// Default value for [NeuralEnhanceChoice.restoreDetailAmount] — 50%, a
+/// balanced starting blend, following the plain "new toggle, balanced
+/// default" convention (2026-08-31, explicit user direction after testing
+/// GaterV3 restore+sharpen — PENDING.md item 35 combo follow-up). See
+/// [defaultNeuralDenoiseAmount]'s own doc — it now uses the same 50%.
+const defaultRestoreDetailAmount = 50;
+
+/// Default value for [NeuralEnhanceChoice.detailSharpenAmount] — the same
+/// balanced 50% (2026-09-12, when the GaterV3 pair split into two toggles).
+const defaultDetailSharpenAmount = 50;

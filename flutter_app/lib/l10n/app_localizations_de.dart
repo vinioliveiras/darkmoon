@@ -825,6 +825,14 @@ class AppLocalizationsDe extends AppLocalizations {
   String get aiDenoiseEnhanceDenoiseLabel => 'Rauschunterdrückung';
 
   @override
+  String get aiDenoiseEnhanceAfterEditsLabel =>
+      'Auf das bearbeitete Foto anwenden';
+
+  @override
+  String get aiDenoiseEnhanceAfterEditsHint =>
+      'Rauschunterdrückung, Details wiederherstellen und Detailschärfe laufen auf dem Foto mit den Bearbeitungen, in Vorschau und Export, statt auf der unberührten Quelle. Langsamer: sie laufen nach jeder Bearbeitung erneut.';
+
+  @override
   String get aiDenoiseEnhanceAmountLabel => 'Stärke';
 
   @override

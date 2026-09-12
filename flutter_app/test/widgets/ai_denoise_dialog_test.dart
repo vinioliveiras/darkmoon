@@ -140,10 +140,12 @@ void main() {
 
         await tester.tap(find.text('Enhance'));
         await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Upscale 2x'));
         await tester.tap(find.text('Upscale 2x'));
         await tester.pumpAndSettle();
         // Only one Slider is visible here (Denoise, hence its own Amount
         // slider, is off) — drag it roughly to its midpoint.
+        await tester.ensureVisible(find.byType(Slider).last);
         await tester.drag(find.byType(Slider), const Offset(200, 0));
         await tester.pumpAndSettle();
         // The Sharpness-active caption only shows once the amount is > 0 —
@@ -204,6 +206,7 @@ void main() {
 
         await tester.tap(find.text('Enhance'));
         await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Restore detail'));
         await tester.tap(find.text('Restore detail'));
         await tester.pumpAndSettle();
 
@@ -261,6 +264,7 @@ void main() {
 
         await tester.tap(find.text('Enhance'));
         await tester.pumpAndSettle();
+        await tester.ensureVisible(find.text('Sharpen detail'));
         await tester.tap(find.text('Sharpen detail'));
         await tester.pumpAndSettle();
 
@@ -358,6 +362,7 @@ void main() {
 
       await tester.tap(find.text('Enhance'));
       await tester.pumpAndSettle();
+      await tester.ensureVisible(find.text('Denoise'));
       await tester.tap(find.text('Denoise'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Apply'));
@@ -367,6 +372,50 @@ void main() {
       final choice = result as NeuralEnhanceChoice;
       expect(choice.denoise, isTrue);
       expect(choice.active, isTrue);
+    });
+
+    testWidgets('the "apply to the edited photo" toggle rides along in the '
+        'choice', (tester) async {
+      _useTallSurface(tester);
+      AiDenoiseChoice? result;
+      await tester.pumpWidget(
+        MaterialApp(
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          home: Scaffold(
+            body: Builder(
+              builder: (context) => Center(
+                child: ElevatedButton(
+                  onPressed: () async {
+                    result = await showDialog<AiDenoiseChoice>(
+                      context: context,
+                      builder: (_) => const AiDenoiseDialog(
+                        initialLevel: null,
+                        neuralDenoise: true,
+                        neuralUpscale: false,
+                      ),
+                    );
+                  },
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.tap(find.text('open'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Apply to the edited photo'), findsOneWidget);
+      await tester.ensureVisible(find.text('Apply to the edited photo'));
+      await tester.tap(find.text('Apply to the edited photo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Apply'));
+      await tester.pumpAndSettle();
+
+      final choice = result as NeuralEnhanceChoice;
+      expect(choice.denoise, isTrue);
+      expect(choice.afterEdits, isTrue);
     });
 
     testWidgets('unchecking the only active Enhance toggle resolves as '
@@ -403,6 +452,7 @@ void main() {
       await tester.pumpAndSettle();
 
       // Opens straight on the Enhance tab since a toggle was preselected.
+      await tester.ensureVisible(find.text('Denoise'));
       await tester.tap(find.text('Denoise'));
       await tester.pumpAndSettle();
       await tester.tap(find.text('Apply'));

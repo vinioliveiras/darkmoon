@@ -8,9 +8,22 @@ import '../cloud_denoise/cloud_denoise_token_store.dart';
 import '../l10n/app_localizations.dart';
 import '../native/onnx_gpu_probe.dart';
 import '../render/ai_denoise.dart';
+import '../render/ai_enhance.dart'
+    show
+        defaultDetailSharpenAmount,
+        defaultNeuralDenoiseAmount,
+        defaultRestoreDetailAmount;
 import '../theme.dart';
 import 'dialog_chrome.dart';
 import 'styled_dropdown.dart';
+
+// The three Enhance amounts' defaults live with enhanceImage now (see
+// render/ai_enhance.dart); re-exported so the dialog's users keep them.
+export '../render/ai_enhance.dart'
+    show
+        defaultDetailSharpenAmount,
+        defaultNeuralDenoiseAmount,
+        defaultRestoreDetailAmount;
 
 /// Sparingly used, not part of the app's usual monochrome palette — a
 /// genuine caution color reads faster than another gray box for the one
@@ -18,33 +31,6 @@ import 'styled_dropdown.dart';
 /// that won't be used, when the whole point of the model choice was
 /// speed).
 const _warningColor = Color(0xFFE8A33D);
-
-/// Default value for [NeuralEnhanceChoice.denoiseAmount]/the Amount
-/// slider — 100%, the model's full-strength output. Was 50% under the
-/// previous denoise model (NAFNet-SIDD), whose raw output tended to look
-/// over-smoothed/"painted" on real photos; the model swap (2026-08-31,
-/// item 35 follow-up — see `onnx_runtime.dart`'s [denoiseModelSpec] doc)
-/// was specifically chosen for *not* having that problem in testing, and
-/// this briefly defaulted to 100% on that basis. Reverted back to 50%
-/// (2026-09-01, explicit user direction) to follow the same plain "new
-/// toggle, balanced default" convention every other Amount slider in this
-/// dialog uses (see [defaultRestoreDetailAmount]'s doc) rather than stay
-/// the one exception. `editor_screen.dart` uses this same constant as the
-/// fallback for any photo whose `_paramValues` doesn't have an amount
-/// recorded yet (never turned Denoise on before, or predates this
-/// slider) — see its own `_neuralDenoiseAmountKey` doc.
-const defaultNeuralDenoiseAmount = 50;
-
-/// Default value for [NeuralEnhanceChoice.restoreDetailAmount] — 50%, a
-/// balanced starting blend, following the plain "new toggle, balanced
-/// default" convention (2026-08-31, explicit user direction after testing
-/// GaterV3 restore+sharpen — PENDING.md item 35 combo follow-up). See
-/// [defaultNeuralDenoiseAmount]'s own doc — it now uses the same 50%.
-const defaultRestoreDetailAmount = 50;
-
-/// Default value for [NeuralEnhanceChoice.detailSharpenAmount] — the same
-/// balanced 50% (2026-09-12, when the GaterV3 pair split into two toggles).
-const defaultDetailSharpenAmount = 50;
 
 String _levelLabel(AppLocalizations l10n, AiDenoiseLevel? level) =>
     switch (level) {
@@ -101,10 +87,16 @@ class NeuralEnhanceChoice extends AiDenoiseChoice {
     this.restoreDetailAmount = defaultRestoreDetailAmount,
     this.detailSharpen = false,
     this.detailSharpenAmount = defaultDetailSharpenAmount,
+    this.afterEdits = false,
   });
 
   final bool denoise;
   final bool upscale;
+
+  /// "Apply to the edited photo" (2026-09-13): [denoise], [restoreDetail]
+  /// and [detailSharpen] run on the finished render — preview and export
+  /// — instead of on the untouched source. See `render/post_enhance.dart`.
+  final bool afterEdits;
 
   /// GaterV3 sharpen (`gaterV3SharpenModelSpec`), the second half of the
   /// pair, its own toggle since 2026-09-12: runs after [restoreDetail]'s
@@ -212,7 +204,11 @@ class AiDenoiseDialog extends StatefulWidget {
     this.restoreDetailAmount = defaultRestoreDetailAmount,
     this.neuralDetailSharpen = false,
     this.detailSharpenAmount = defaultDetailSharpenAmount,
+    this.neuralAfterEdits = false,
   });
+
+  /// See [NeuralEnhanceChoice.afterEdits].
+  final bool neuralAfterEdits;
 
   /// The classical level already applied to the current photo, if any —
   /// preselected so reopening the dialog shows what's active rather than
@@ -275,6 +271,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
   late int _restoreDetailAmount = widget.restoreDetailAmount;
   late bool _neuralDetailSharpen = widget.neuralDetailSharpen;
   late int _detailSharpenAmount = widget.detailSharpenAmount;
+  late bool _afterEdits = widget.neuralAfterEdits;
   late CloudDenoiseProviderKind? _cloudProvider = widget.cloudProvider;
   final _tokenController = TextEditingController();
   bool _obscureToken = true;
@@ -458,6 +455,7 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
         restoreDetailAmount: _restoreDetailAmount,
         detailSharpen: _neuralDetailSharpen,
         detailSharpenAmount: _detailSharpenAmount,
+        afterEdits: _afterEdits,
       );
     }
     return ClassicDenoiseChoice(_level);
@@ -672,6 +670,26 @@ class _AiDenoiseDialogState extends State<AiDenoiseDialog>
             ),
           ),
         ],
+        const SizedBox(height: 4),
+        // Where the same-resolution passes run (2026-09-13, user's
+        // request): on the untouched source, as always, or on the photo
+        // with its edits applied — preview and export alike.
+        _ToggleRow(
+          label: l10n.aiDenoiseEnhanceAfterEditsLabel,
+          value: _afterEdits,
+          onChanged: (v) => setState(() => _afterEdits = v),
+        ),
+        Padding(
+          padding: const EdgeInsets.only(top: 2, bottom: 6),
+          child: Text(
+            l10n.aiDenoiseEnhanceAfterEditsHint,
+            style: const TextStyle(
+              fontSize: 11,
+              color: DarkmoonColors.textMuted,
+              height: 1.35,
+            ),
+          ),
+        ),
         const SizedBox(height: 4),
         // GaterV3 restore+sharpen — independent of Upscale (unlike the
         // Sharpness slider below, this stays same-resolution), found

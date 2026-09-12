@@ -256,6 +256,8 @@
   "aiDenoiseCloudStageDecoding": "Decoding photo…",
   "aiDenoiseEnhanceMessage": "Denoise, remove film grain, and double the resolution using a neural network — closer to what the shot's real detail looked like before noise and compression. Runs noticeably slower than Classic, especially without a compatible GPU.",
   "aiDenoiseEnhanceDenoiseLabel": "Denoise",
+  "aiDenoiseEnhanceAfterEditsLabel": "Apply to the edited photo",
+  "aiDenoiseEnhanceAfterEditsHint": "Denoise, Restore detail and Detail sharpen run on the photo with your edits applied, in the preview and the export, instead of on the untouched source. Slower: they run again after every edit.",
   "aiDenoiseEnhanceAmountLabel": "Amount",
   "aiDenoiseEnhanceRestoreDetailLabel": "Restore detail",
   "aiDenoiseEnhanceDetailSharpenLabel": "Sharpen detail",

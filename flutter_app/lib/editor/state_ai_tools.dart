@@ -67,6 +67,7 @@ extension _EditorAiTools on _EditorScreenState {
         restoreDetailAmount: restoreDetailAmount,
         neuralDetailSharpen: neuralDetailSharpen,
         detailSharpenAmount: detailSharpenAmount,
+        neuralAfterEdits: neuralAfterEditsOn(_paramValues),
       ),
     );
     _openingToolbarDialog = false;
@@ -111,6 +112,7 @@ extension _EditorAiTools on _EditorScreenState {
             restoreDetailAmount: final wantRestoreDetailAmount,
             detailSharpen: final wantDetailSharpen,
             detailSharpenAmount: final wantDetailSharpenAmount,
+            afterEdits: final wantAfterEdits,
           )
           when wantDenoise ||
               wantUpscale ||
@@ -129,6 +131,7 @@ extension _EditorAiTools on _EditorScreenState {
             _restoreDetailAmountKey: wantRestoreDetailAmount.toDouble(),
             _detailSharpenKey: wantDetailSharpen ? 1.0 : 0.0,
             _detailSharpenAmountKey: wantDetailSharpenAmount.toDouble(),
+            _neuralAfterEditsKey: wantAfterEdits ? 1.0 : 0.0,
             _cloudDenoiseProviderKey: 0.0,
             // _colorizeKey deliberately left alone: Colorize now runs as a
             // pass inside this same pipeline (between denoise and upscale),
@@ -139,24 +142,46 @@ extension _EditorAiTools on _EditorScreenState {
           };
         });
         final keepColorize = (_paramValues[_colorizeKey] ?? 0.0) > 0;
-        final ok = await _runNeuralEnhance(
-          selected.path,
-          denoise: wantDenoise,
-          upscale: wantUpscale,
-          denoiseAmount: wantDenoiseAmount,
-          rawDenoise: wantRawDenoise,
-          upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
-          restoreDetail: wantRestoreDetail,
-          restoreDetailAmount: wantRestoreDetailAmount,
-          detailSharpen: wantDetailSharpen,
-          detailSharpenAmount: wantDetailSharpenAmount,
-          colorize: keepColorize,
-          colorizeIntensity:
-              (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
-                  .round(),
-        );
-        if (!mounted || !ok) {
-          return;
+        final colorizeIntensity =
+            (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
+                .round();
+        // With "apply to the edited photo" on, Denoise / Restore detail /
+        // Detail sharpen leave the source pipeline for the render's end
+        // (post_enhance.dart, picked up by _renderPreview and the export);
+        // only the passes that must see the untouched source run here.
+        final source = sourceNeuralPassesFor(_paramValues);
+        if (source.denoise ||
+            wantUpscale ||
+            wantRawDenoise ||
+            source.restoreDetail ||
+            source.detailSharpen) {
+          final ok = await _runNeuralEnhance(
+            selected.path,
+            denoise: source.denoise,
+            upscale: wantUpscale,
+            denoiseAmount: wantDenoiseAmount,
+            rawDenoise: wantRawDenoise,
+            upscaleSharpnessAmount: wantUpscaleSharpnessAmount,
+            restoreDetail: source.restoreDetail,
+            restoreDetailAmount: wantRestoreDetailAmount,
+            detailSharpen: source.detailSharpen,
+            detailSharpenAmount: wantDetailSharpenAmount,
+            colorize: keepColorize,
+            colorizeIntensity: colorizeIntensity,
+          );
+          if (!mounted || !ok) {
+            return;
+          }
+        } else if (keepColorize) {
+          // Nothing left for the source pipeline but Colorize.
+          await _runColorize(
+            selected.path,
+            intensityPercent: colorizeIntensity,
+          );
+          if (!mounted) return;
+        } else if (wasAnyPipelineActive) {
+          await _revertToNormalEditSource(selected.path);
+          if (!mounted) return;
         }
         await _applyAiDenoiseChoiceAndRender(selected.path);
       case NeuralEnhanceChoice():

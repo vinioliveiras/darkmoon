@@ -1444,6 +1444,18 @@ abstract class AppLocalizations {
   /// **'Denoise'**
   String get aiDenoiseEnhanceDenoiseLabel;
 
+  /// No description provided for @aiDenoiseEnhanceAfterEditsLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Apply to the edited photo'**
+  String get aiDenoiseEnhanceAfterEditsLabel;
+
+  /// No description provided for @aiDenoiseEnhanceAfterEditsHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Denoise, Restore detail and Detail sharpen run on the photo with your edits applied, in the preview and the export, instead of on the untouched source. Slower: they run again after every edit.'**
+  String get aiDenoiseEnhanceAfterEditsHint;
+
   /// No description provided for @aiDenoiseEnhanceAmountLabel.
   ///
   /// In en, this message translates to:
