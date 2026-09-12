@@ -982,6 +982,8 @@ class _EditorScreenState extends State<EditorScreen>
     onColorRangeToleranceChangeEnd: _onColorRangeToleranceChangeEnd,
     onColorRangeFeatherChanged: _onColorRangeFeatherChanged,
     onColorRangeFeatherChangeEnd: _onColorRangeFeatherChangeEnd,
+    onLinearFeatherChanged: _onLinearFeatherChanged,
+    onLinearFeatherChangeEnd: _onLinearFeatherChangeEnd,
     onDepthGeometryChanged: _onDepthGeometryChanged,
     onDepthGeometryChangeEnd: _onDepthGeometryChangeEnd,
     onLuminanceToleranceChanged: _onLuminanceToleranceChanged,

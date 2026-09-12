@@ -382,6 +382,7 @@
   "maskColorRange": "Color Range",
   "colorRangeToleranceLabel": "Tolerance",
   "colorRangeFeatherLabel": "Feather",
+  "linearFeatherLabel": "Feather",
   "colorRangeHint": "Tap the image to pick a color",
   "maskWholeImage": "Whole Image",
   "maskLuminance": "Luminance Range",

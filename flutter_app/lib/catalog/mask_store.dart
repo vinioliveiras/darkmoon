@@ -133,6 +133,8 @@ MaskLayer decodeMaskLayer(Map<String, dynamic> raw) {
             startY: (linearRaw['startY'] as num).toDouble(),
             endX: (linearRaw['endX'] as num).toDouble(),
             endY: (linearRaw['endY'] as num).toDouble(),
+            // Absent before 2026-09-12: the whole span, as it rendered.
+            feather: (linearRaw['feather'] as num?)?.toDouble() ?? 100,
           ),
     radial: radialRaw == null
         ? const RadialGradientGeometry()
@@ -200,6 +202,7 @@ Map<String, dynamic> encodeMaskLayer(MaskLayer mask) => {
     'startY': mask.linear.startY,
     'endX': mask.linear.endX,
     'endY': mask.linear.endY,
+    'feather': mask.linear.feather,
   },
   'radial': {
     'centerX': mask.radial.centerX,

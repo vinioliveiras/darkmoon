@@ -2176,6 +2176,12 @@ abstract class AppLocalizations {
   /// **'Feather'**
   String get colorRangeFeatherLabel;
 
+  /// No description provided for @linearFeatherLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Feather'**
+  String get linearFeatherLabel;
+
   /// No description provided for @colorRangeHint.
   ///
   /// In en, this message translates to:

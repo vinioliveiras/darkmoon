@@ -357,6 +357,7 @@
   "maskColorRange": "Farbbereich",
   "colorRangeToleranceLabel": "Toleranz",
   "colorRangeFeatherLabel": "Weichzeichnen",
+  "linearFeatherLabel": "Weichzeichnen",
   "colorRangeHint": "Auf das Bild tippen, um eine Farbe auszuwählen",
   "maskWholeImage": "Ganzes Bild",
   "maskLuminance": "Leuchtdichtebereich",

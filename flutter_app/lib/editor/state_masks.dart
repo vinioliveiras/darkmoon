@@ -333,6 +333,26 @@ extension _EditorMasks on _EditorScreenState {
     _scheduleCatalogSave();
   }
 
+  void _onLinearFeatherChanged(double value) {
+    if (!_isAdjustingMaskValue) {
+      _rebuild(() => _isAdjustingMaskValue = true);
+    }
+    _updateActiveMask(
+      (m) => m.copyWith(linear: m.linear.copyWith(feather: value)),
+    );
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onLinearFeatherChangeEnd(double value) {
+    _rebuild(() => _isAdjustingMaskValue = false);
+    _updateActiveMask(
+      (m) => m.copyWith(linear: m.linear.copyWith(feather: value)),
+    );
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
   void _onColorRangeToleranceChanged(double value) {
     if (!_isAdjustingMaskValue) {
       _rebuild(() => _isAdjustingMaskValue = true);

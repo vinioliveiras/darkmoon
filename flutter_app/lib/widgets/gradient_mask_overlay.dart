@@ -259,6 +259,7 @@ class _GradientMaskOverlayState extends State<GradientMaskOverlay> {
                         mask.linear.endY,
                         imageRect,
                       ),
+                      feather: mask.linear.feather,
                       shadeAlpha: widget.overlayOpacity,
                       scale: _s,
                     )
@@ -297,12 +298,16 @@ class _LinearHandlesPainter extends CustomPainter {
   const _LinearHandlesPainter({
     required this.start,
     required this.end,
+    required this.feather,
     required this.shadeAlpha,
     required this.scale,
   });
 
   final Offset start;
   final Offset end;
+
+  /// See `LinearGradientGeometry.feather`: the fade's share of the span.
+  final double feather;
   final double shadeAlpha;
 
   /// Zoom factor — chrome (line/tick/handle widths) is drawn at `1 / scale`
@@ -316,11 +321,21 @@ class _LinearHandlesPainter extends CustomPainter {
     // clamped tiling matches the mask's own alpha formula exactly (full
     // strength up to `start`, fading to zero by `end`, flat beyond both),
     // so what's shaded here is exactly what the render pipeline applies.
+    // The fade sits centred on the midpoint and takes `feather` of the
+    // span — the same formula the mask rasterises with.
+    final f = (feather / 100.0).clamp(0.02, 1.0);
     final shaderPaint = Paint()
-      ..shader = ui.Gradient.linear(start, end, [
-        DarkmoonColors.accent.withValues(alpha: shadeAlpha),
-        DarkmoonColors.accent.withValues(alpha: 0),
-      ]);
+      ..shader = ui.Gradient.linear(
+        start,
+        end,
+        [
+          DarkmoonColors.accent.withValues(alpha: shadeAlpha),
+          DarkmoonColors.accent.withValues(alpha: shadeAlpha),
+          DarkmoonColors.accent.withValues(alpha: 0),
+          DarkmoonColors.accent.withValues(alpha: 0),
+        ],
+        [0.0, 0.5 - f / 2, 0.5 + f / 2, 1.0],
+      );
     canvas.drawRect(Offset.zero & size, shaderPaint);
 
     canvas.drawLine(
@@ -350,6 +365,7 @@ class _LinearHandlesPainter extends CustomPainter {
   bool shouldRepaint(covariant _LinearHandlesPainter oldDelegate) =>
       oldDelegate.start != start ||
       oldDelegate.end != end ||
+      oldDelegate.feather != feather ||
       oldDelegate.shadeAlpha != shadeAlpha ||
       oldDelegate.scale != scale;
 }

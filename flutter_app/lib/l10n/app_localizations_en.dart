@@ -1213,6 +1213,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get colorRangeFeatherLabel => 'Feather';
 
   @override
+  String get linearFeatherLabel => 'Feather';
+
+  @override
   String get colorRangeHint => 'Tap the image to pick a color';
 
   @override

@@ -1233,6 +1233,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get colorRangeFeatherLabel => 'Weichzeichnen';
 
   @override
+  String get linearFeatherLabel => 'Weichzeichnen';
+
+  @override
   String get colorRangeHint => 'Auf das Bild tippen, um eine Farbe auszuwählen';
 
   @override

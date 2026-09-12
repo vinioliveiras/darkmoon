@@ -16,6 +16,7 @@ class LinearGradientGeometry {
     this.startY = 0.25,
     this.endX = 0.5,
     this.endY = 0.75,
+    this.feather = 100,
   });
 
   final double startX;
@@ -23,16 +24,27 @@ class LinearGradientGeometry {
   final double endX;
   final double endY;
 
+  /// How much of the start-to-end span the fade takes, in percent,
+  /// centred on the midpoint (user's request, 2026-09-12): at 100 the
+  /// fade runs the whole way from [startX],[startY] to [endX],[endY], the
+  /// way it always did; at 20 it is a band a fifth as wide around the
+  /// middle, and the rest of the span is full or nothing. The midpoint
+  /// is always half strength, so the lines the handles show keep meaning
+  /// "full by here" and "gone by here" for the widest fade.
+  final double feather;
+
   LinearGradientGeometry copyWith({
     double? startX,
     double? startY,
     double? endX,
     double? endY,
+    double? feather,
   }) => LinearGradientGeometry(
     startX: startX ?? this.startX,
     startY: startY ?? this.startY,
     endX: endX ?? this.endX,
     endY: endY ?? this.endY,
+    feather: feather ?? this.feather,
   );
 }
 
@@ -567,6 +579,10 @@ void _computeLinearAlpha(
   final dx = g.endX - g.startX;
   final dy = g.endY - g.startY;
   final lenSq = dx * dx + dy * dy;
+  // The fade's width as a fraction of the span, never quite zero: a hard
+  // edge is a step no pixel grid can place, and a sliver of fade keeps it
+  // from shimmering.
+  final f = (g.feather / 100.0).clamp(0.02, 1.0);
   var p = 0;
   for (var y = 0; y < height; y++) {
     final ny = (y + 0.5) / height;
@@ -575,7 +591,7 @@ void _computeLinearAlpha(
       final t = lenSq <= 0
           ? 0.0
           : ((nx - g.startX) * dx + (ny - g.startY) * dy) / lenSq;
-      alpha[p] = (1.0 - t).clamp(0.0, 1.0);
+      alpha[p] = (0.5 - (t - 0.5) / f).clamp(0.0, 1.0);
     }
   }
 }

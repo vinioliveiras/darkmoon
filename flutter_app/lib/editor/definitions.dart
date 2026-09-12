@@ -1018,6 +1018,8 @@ class _ControlsPanelActions {
     required this.onColorRangeToleranceChangeEnd,
     required this.onColorRangeFeatherChanged,
     required this.onColorRangeFeatherChangeEnd,
+    required this.onLinearFeatherChanged,
+    required this.onLinearFeatherChangeEnd,
     required this.onDepthGeometryChanged,
     required this.onDepthGeometryChangeEnd,
     required this.onLuminanceToleranceChanged,
@@ -1124,6 +1126,11 @@ class _ControlsPanelActions {
   final ValueChanged<double> onColorRangeFeatherChanged;
 
   final ValueChanged<double> onColorRangeFeatherChangeEnd;
+
+  /// The linear gradient's fade width — see `LinearGradientGeometry.feather`.
+  final ValueChanged<double> onLinearFeatherChanged;
+
+  final ValueChanged<double> onLinearFeatherChangeEnd;
 
   /// Both take the whole rewritten [DepthGeometry] — see
   /// `_EditorScreenState._onDepthGeometryChanged`.

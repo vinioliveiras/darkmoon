@@ -358,6 +358,7 @@
   "maskColorRange": "Faixa de Cor",
   "colorRangeToleranceLabel": "Tolerância",
   "colorRangeFeatherLabel": "Suavização",
+  "linearFeatherLabel": "Suavização",
   "colorRangeHint": "Toque na imagem para escolher uma cor",
   "maskWholeImage": "Imagem Inteira",
   "maskLuminance": "Faixa de Luminância",

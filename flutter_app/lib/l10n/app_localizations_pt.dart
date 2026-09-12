@@ -1220,6 +1220,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get colorRangeFeatherLabel => 'Suavização';
 
   @override
+  String get linearFeatherLabel => 'Suavização';
+
+  @override
   String get colorRangeHint => 'Toque na imagem para escolher uma cor';
 
   @override

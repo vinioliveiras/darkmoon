@@ -501,6 +501,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
     final isFlowActive = activeMask?.type == MaskType.flow;
     final isColorRangeActive = activeMask?.type == MaskType.colorRange;
     final isLuminanceActive = activeMask?.type == MaskType.luminance;
+    final isLinearActive = activeMask?.type == MaskType.linearGradient;
     final isAiMaskActive =
         activeMask != null && aiMaskTypes.contains(activeMask.type);
     final l10n = AppLocalizations.of(context)!;
@@ -601,6 +602,22 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 onChangeEnd: widget.actions.onBrushFlowChanged,
               ),
             ),
+        ],
+        if (isLinearActive) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SliderRow(
+              name: l10n.linearFeatherLabel,
+              min: 0,
+              max: 100,
+              value: activeMask!.linear.feather,
+              decimals: 0,
+              defaultValue: 100,
+              onChanged: widget.actions.onLinearFeatherChanged,
+              onChangeEnd: widget.actions.onLinearFeatherChangeEnd,
+            ),
+          ),
         ],
         if (isColorRangeActive) ...[
           const SizedBox(height: 8),
