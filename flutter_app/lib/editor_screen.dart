@@ -4473,21 +4473,34 @@ class _EditorScreenState extends State<EditorScreen>
         _cameraColorAmount,
         _baseContrastFor(path),
         source?.width ?? 0,
+        // A thumbnail is the preset *as applied* (see
+        // _presetPreviewValues), so the photo's global Amount, profile
+        // mode and section toggles all change every one of them.
+        _paramValues[_globalEditAmountKey] ?? 100.0,
+        _paramValues[colorProfileModeKey] ?? 0.0,
+        for (final entry in _paramValues.entries)
+          if (entry.key.startsWith('_categoryEnabled_'))
+            '${entry.key}=${entry.value}',
       ].join('|'),
       source: source,
-      paramsFor: (preset) => RenderParams.fromValues(
-        preset.values,
-        curves: preset.curves,
-        asShotKelvin: path == null ? wbDefaultKelvin : _asShotFor(path).kelvin,
-        asShotTint: path == null ? wbDefaultTint : _asShotFor(path).tint,
-        // Or every thumbnail would be a stop away from the render it is
-        // supposed to be previewing.
-        baseExposureStops: _baseExposureFor(path),
-        baseContrast: _baseContrastFor(path),
-        colorProfile: profile,
-        cameraColorHasFit: _cameraColorFitAvailable(path),
-        filmLut: _filmLutFor(preset.values),
-      ),
+      paramsFor: (preset) {
+        final values = _presetPreviewValues(preset, path);
+        return RenderParams.fromValues(
+          values,
+          curves: _presetPreviewCurves(preset, values),
+          asShotKelvin: path == null
+              ? wbDefaultKelvin
+              : _asShotFor(path).kelvin,
+          asShotTint: path == null ? wbDefaultTint : _asShotFor(path).tint,
+          // Or every thumbnail would be a stop away from the render it is
+          // supposed to be previewing.
+          baseExposureStops: _baseExposureFor(path),
+          baseContrast: _baseContrastFor(path),
+          colorProfile: profile,
+          cameraColorHasFit: _cameraColorFitAvailable(path),
+          filmLut: _filmLutFor(preset.values),
+        );
+      },
     );
   }
 

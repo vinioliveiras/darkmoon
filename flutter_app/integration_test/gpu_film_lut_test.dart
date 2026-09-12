@@ -92,6 +92,18 @@ void main() {
     );
   });
 
+  testWidgets('film at 200% (extrapolated, clamped) matches the CPU', (
+    tester,
+  ) async {
+    // Twice the move doubles the 8-bit quantisation gap too: measured
+    // mean 0.93, max 9 against 0.71 / 6 at 100% (2026-09-13).
+    await expectMatchesCpu(
+      RenderParams(filmLut: lut, filmAmount: 2.0),
+      'film 200%',
+      maxTolerance: 13,
+    );
+  });
+
   testWidgets('film at half amount matches the CPU', (tester) async {
     await expectMatchesCpu(
       RenderParams(filmLut: lut, filmAmount: 0.5),

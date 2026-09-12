@@ -71,6 +71,11 @@ void main() {
     final none = Float32List.fromList([255, 0, 0]);
     applyFilmLut(none, lut, 0.0);
     expect(none, [255, 0, 0]);
+    // 200%: twice the move, clamped per channel.
+    final twice = Float32List.fromList([200, 40, 100]);
+    applyFilmLut(twice, lut, 2.0);
+    expect(twice[0], closeTo((200 + (100 - 200) * 2).clamp(0, 255), 1));
+    expect(twice[2], closeTo(255, 1));
   });
 
   test('packed image round-trips the table', () {

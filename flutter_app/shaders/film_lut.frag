@@ -15,7 +15,7 @@
 // corners applyFilmLut reads, weighted the same way.
 
 uniform vec2 uSize;
-uniform float uAmount; // 0..1
+uniform float uAmount; // 0..2, extrapolated past 1
 uniform float uLutSize; // entries per axis (filmLutSize)
 uniform sampler2D uSource;
 uniform sampler2D uLut;
@@ -55,5 +55,5 @@ void main() {
   vec3 c1 = mix(c01, c11, t.g);
   vec3 looked = mix(c0, c1, t.b);
 
-  fragColor = vec4(mix(src.rgb, looked, uAmount), src.a);
+  fragColor = vec4(clamp(mix(src.rgb, looked, uAmount), 0.0, 1.0), src.a);
 }

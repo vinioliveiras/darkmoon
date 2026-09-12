@@ -288,10 +288,11 @@ class FilmLut {
 }
 
 /// Applies [lut] to the packed RGB 0..255 [buffer] in place, blending the
-/// result over the input by [amount] (0..1). The GPU counterpart is
+/// result over the input by [amount] (0..2: past 1 the table's move is
+/// extrapolated and each channel clamped). The GPU counterpart is
 /// `shaders/film_lut.frag`; keep the two identical.
 void applyFilmLut(Float32List buffer, FilmLut lut, double amount) {
-  final a = amount.clamp(0.0, 1.0);
+  final a = amount.clamp(0.0, 2.0);
   if (a <= 0) return;
   final out = Float32List(3);
   for (var i = 0; i < buffer.length; i += 3) {
@@ -302,8 +303,13 @@ void applyFilmLut(Float32List buffer, FilmLut lut, double amount) {
       out,
       0,
     );
-    buffer[i] = buffer[i] + (out[0] * 255.0 - buffer[i]) * a;
-    buffer[i + 1] = buffer[i + 1] + (out[1] * 255.0 - buffer[i + 1]) * a;
-    buffer[i + 2] = buffer[i + 2] + (out[2] * 255.0 - buffer[i + 2]) * a;
+    buffer[i] = (buffer[i] + (out[0] * 255.0 - buffer[i]) * a).clamp(
+      0.0,
+      255.0,
+    );
+    buffer[i + 1] = (buffer[i + 1] + (out[1] * 255.0 - buffer[i + 1]) * a)
+        .clamp(0.0, 255.0);
+    buffer[i + 2] = (buffer[i + 2] + (out[2] * 255.0 - buffer[i + 2]) * a)
+        .clamp(0.0, 255.0);
   }
 }

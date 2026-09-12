@@ -38,64 +38,7 @@ extension _EditorPresets on _EditorScreenState {
     if (_selectedIndex == null) {
       return;
     }
-    // Only the continuous slider keys get overridden by the preset.
-    // Everything else in the flat map — the per-section enable toggles
-    // (_categoryEnabled_*), the White Balance mode, preserve-brightness,
-    // [_globalEditAmountKey] itself — is a discrete/independent flag the
-    // preset doesn't touch unless it explicitly sets it.
-    final defaults = _defaultParamValues();
-    final sliderKeys = defaults.keys.toSet()
-      ..remove('Temperature')
-      ..remove('Tint')
-      // Amount is a separate, persistent setting (see
-      // withGlobalEditAmountApplied) — applying a preset never resets it.
-      ..remove(_globalEditAmountKey)
-      // Same reasoning as Amount, real bug fixed 2026-09-01: an XMP-derived
-      // preset never carries this key (it's darkmoon-specific), so the
-      // generic "preset doesn't specify it -> use the flat _SliderSpec
-      // default (20)" fallback below was resetting Contrast to 20 on
-      // every preset apply regardless of which ColorProfileMode was
-      // active — wrong for Vivid (baseline 0). Handled explicitly below
-      // instead, against the *current* mode's own baseline.
-      ..remove('ColorProfileAmount');
-    final newValues = <String, double>{..._paramValues};
-    for (final key in sliderKeys) {
-      newValues[key] = preset.values[key] ?? defaults[key] ?? 0;
-    }
-    newValues['ColorProfileAmount'] =
-        preset.values['ColorProfileAmount'] ??
-        colorProfileModeOf(_paramValues).contrastBaseline;
-    for (final entry in preset.values.entries) {
-      if (!sliderKeys.contains(entry.key) &&
-          entry.key != 'Temperature' &&
-          entry.key != 'Tint') {
-        newValues[entry.key] = entry.value;
-      }
-    }
-    // White Balance:
-    //  - preset defines a real WB -> apply it (mode Custom, or the
-    //    preset's own mode if it stored one);
-    //  - preset defines none      -> reset to the photo's As Shot.
-    // "Defines a real WB" ignores a bare 5500/0 with no mode key: that's
-    // the old fixed neutral every pre-feature preset carries incidentally,
-    // not an intended white-balance edit.
-    final asShot = _asShotFor(_files[_selectedIndex!].path);
-    final presetTemp = preset.values['Temperature'];
-    final presetTint = preset.values['Tint'];
-    final presetMode = preset.values[_wbModeKey];
-    final presetDefinesWb =
-        (presetTemp != null && presetTemp != wbDefaultKelvin) ||
-        (presetTint != null && presetTint != wbDefaultTint) ||
-        (presetMode != null && presetMode != WbMode.asShot.index.toDouble());
-    if (presetDefinesWb) {
-      newValues['Temperature'] = presetTemp ?? asShot.kelvin;
-      newValues['Tint'] = presetTint ?? asShot.tint;
-      newValues[_wbModeKey] = presetMode ?? WbMode.custom.index.toDouble();
-    } else {
-      newValues['Temperature'] = asShot.kelvin;
-      newValues['Tint'] = asShot.tint;
-      newValues[_wbModeKey] = WbMode.asShot.index.toDouble();
-    }
+    final newValues = _valuesWithPreset(preset, _files[_selectedIndex!].path);
     // A preset that carries masks replaces the stack, as Meridian does;
     // one without leaves the photo's own masks alone. Meridian's are
     // converted for this photo's aspect (see preset_masks.dart); ours are
@@ -151,6 +94,109 @@ extension _EditorPresets on _EditorScreenState {
     // Preset.unsupportedAttributes / preset_xmp.dart) are silently
     // ignored — no user-facing warning. The gap is tracked in the repo's
     // PENDING.md; the goal is full preset compatibility.
+  }
+
+  /// The flat values [_applyPreset] leaves for [preset] on the photo at
+  /// [path], starting from the current [_paramValues].
+  Map<String, double> _valuesWithPreset(Preset preset, String path) {
+    // Only the continuous slider keys get overridden by the preset.
+    // Everything else in the flat map — the per-section enable toggles
+    // (_categoryEnabled_*), the White Balance mode, preserve-brightness,
+    // [_globalEditAmountKey] itself — is a discrete/independent flag the
+    // preset doesn't touch unless it explicitly sets it.
+    final defaults = _defaultParamValues();
+    final sliderKeys = defaults.keys.toSet()
+      ..remove('Temperature')
+      ..remove('Tint')
+      // Amount is a separate, persistent setting (see
+      // withGlobalEditAmountApplied) — applying a preset never resets it.
+      ..remove(_globalEditAmountKey)
+      // Same reasoning as Amount, real bug fixed 2026-09-01: an XMP-derived
+      // preset never carries this key (it's darkmoon-specific), so the
+      // generic "preset doesn't specify it -> use the flat _SliderSpec
+      // default (20)" fallback below was resetting Contrast to 20 on
+      // every preset apply regardless of which ColorProfileMode was
+      // active — wrong for Vivid (baseline 0). Handled explicitly below
+      // instead, against the *current* mode's own baseline.
+      ..remove('ColorProfileAmount');
+    final newValues = <String, double>{..._paramValues};
+    for (final key in sliderKeys) {
+      newValues[key] = preset.values[key] ?? defaults[key] ?? 0;
+    }
+    newValues['ColorProfileAmount'] =
+        preset.values['ColorProfileAmount'] ??
+        colorProfileModeOf(_paramValues).contrastBaseline;
+    for (final entry in preset.values.entries) {
+      if (!sliderKeys.contains(entry.key) &&
+          entry.key != 'Temperature' &&
+          entry.key != 'Tint') {
+        newValues[entry.key] = entry.value;
+      }
+    }
+    // White Balance:
+    //  - preset defines a real WB -> apply it (mode Custom, or the
+    //    preset's own mode if it stored one);
+    //  - preset defines none      -> reset to the photo's As Shot.
+    // "Defines a real WB" ignores a bare 5500/0 with no mode key: that's
+    // the old fixed neutral every pre-feature preset carries incidentally,
+    // not an intended white-balance edit.
+    final asShot = _asShotFor(path);
+    final presetTemp = preset.values['Temperature'];
+    final presetTint = preset.values['Tint'];
+    final presetMode = preset.values[_wbModeKey];
+    final presetDefinesWb =
+        (presetTemp != null && presetTemp != wbDefaultKelvin) ||
+        (presetTint != null && presetTint != wbDefaultTint) ||
+        (presetMode != null && presetMode != WbMode.asShot.index.toDouble());
+    if (presetDefinesWb) {
+      newValues['Temperature'] = presetTemp ?? asShot.kelvin;
+      newValues['Tint'] = presetTint ?? asShot.tint;
+      newValues[_wbModeKey] = presetMode ?? WbMode.custom.index.toDouble();
+    } else {
+      newValues['Temperature'] = asShot.kelvin;
+      newValues['Tint'] = asShot.tint;
+      newValues[_wbModeKey] = WbMode.asShot.index.toDouble();
+    }
+    return newValues;
+  }
+
+  /// The slider values a thumbnail of [preset] renders with: exactly what
+  /// [_applyPreset] would leave in [_paramValues] for the selected photo,
+  /// put through the same category and global-Amount steps as
+  /// [_effectiveParamValues]. Until 2026-09-13 the thumbnails rendered
+  /// the preset's raw values, and since the global Amount compresses every
+  /// slider except White Balance (calGlobalAmountCompression, 0.3x in the
+  /// dampened profile modes) a preset whose look mixed a cool white
+  /// balance with strong red midtone grading showed red in its thumbnail
+  /// and came out blue once applied — the user's "Cinematic Vini" report.
+  Map<String, double> _presetPreviewValues(Preset preset, String? path) {
+    final base = path == null
+        ? <String, double>{..._defaultParamValues(), ...preset.values}
+        : _valuesWithPreset(preset, path);
+    final asShot = path == null
+        ? (kelvin: wbDefaultKelvin, tint: wbDefaultTint)
+        : _asShotFor(path);
+    return withGlobalEditAmountApplied(
+      _withCategoriesApplied(
+        base,
+        asShotKelvin: asShot.kelvin,
+        asShotTint: asShot.tint,
+      ),
+    );
+  }
+
+  /// [preset]'s curves as the thumbnail renders them — blended toward
+  /// identity by the global Amount the way [_effectiveCurves] does.
+  PhotoCurves _presetPreviewCurves(Preset preset, Map<String, double> values) {
+    final amount = values[_globalEditAmountKey] ?? 100.0;
+    final compression = colorProfileModeOf(values).dampened
+        ? calGlobalAmountCompression
+        : 1.0;
+    return lerpPhotoCurves(
+      identityPhotoCurves,
+      _withCurveCategoriesApplied(preset.curves, values),
+      amount / 100.0 * compression,
+    );
   }
 
   /// Whether [preset] is the one currently applied to the selected photo.

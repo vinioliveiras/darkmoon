@@ -737,7 +737,9 @@ const _filmKey = 'Film';
 const _filmAmountKey = 'FilmAmount';
 const _filmSliders = [
   _SliderSpec(_filmKey, 0, 100000, 0),
-  _SliderSpec(_filmAmountKey, 0, 100, defaultFilmAmount),
+  // Up to 200%: past 100 the table's move is extrapolated, a stronger
+  // version of the look (user's request, 2026-09-13).
+  _SliderSpec(_filmAmountKey, 0, 200, defaultFilmAmount),
 ];
 
 /// Meridian's parametric Tone Curve — four region sliders plus the three

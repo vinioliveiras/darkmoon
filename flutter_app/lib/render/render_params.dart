@@ -78,7 +78,7 @@ class RenderParams {
       filmLut: filmLut,
       filmAmount: ((values['FilmAmount'] ?? defaultFilmAmount) / 100).clamp(
         0.0,
-        1.0,
+        2.0,
       ),
       temperature: values['Temperature'] ?? asShotKelvin,
       tint: values['Tint'] ?? asShotTint,
@@ -196,8 +196,9 @@ class RenderParams {
   /// slider's id — the id itself never reaches here, only the table.
   final FilmLut? filmLut;
 
-  /// 0..1 blend of [filmLut] over the untouched image — the Film section's
-  /// Amount slider. Ignored when [filmLut] is null.
+  /// 0..2 blend of [filmLut] over the untouched image — the Film section's
+  /// Amount slider; above 1 the table's move is extrapolated (a stronger
+  /// look, clamped per channel). Ignored when [filmLut] is null.
   final double filmAmount;
 
   /// Multiplier applied to every neighbourhood-based radius/sigma —
