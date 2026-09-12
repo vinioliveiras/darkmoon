@@ -1414,6 +1414,9 @@ class AppLocalizationsDe extends AppLocalizations {
   String get sliderDehaze => 'Dunst entfernen';
 
   @override
+  String get sliderCameraColor => 'Kamerafarbe';
+
+  @override
   String get sliderVibrance => 'Dynamik';
 
   @override

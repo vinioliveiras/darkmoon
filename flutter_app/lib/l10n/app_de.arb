@@ -416,6 +416,7 @@
   "sliderTexture": "Textur",
   "sliderClarity": "Klarheit",
   "sliderDehaze": "Dunst entfernen",
+  "sliderCameraColor": "Kamerafarbe",
   "sliderVibrance": "Dynamik",
   "sliderSaturation": "Sättigung",
   "sliderSharpenAmount": "Schärfen",

@@ -1391,6 +1391,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sliderDehaze => 'Dehaze';
 
   @override
+  String get sliderCameraColor => 'Camera Color';
+
+  @override
   String get sliderVibrance => 'Vibrance';
 
   @override

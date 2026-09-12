@@ -1400,6 +1400,9 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sliderDehaze => 'Remoção de Neblina';
 
   @override
+  String get sliderCameraColor => 'Cor da câmera';
+
+  @override
   String get sliderVibrance => 'Vibração';
 
   @override

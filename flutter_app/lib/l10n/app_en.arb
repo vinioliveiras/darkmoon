@@ -441,6 +441,7 @@
   "sliderTexture": "Texture",
   "sliderClarity": "Clarity",
   "sliderDehaze": "Dehaze",
+  "sliderCameraColor": "Camera Color",
   "sliderVibrance": "Vibrance",
   "sliderSaturation": "Saturation",
   "sliderSharpenAmount": "Sharpening",

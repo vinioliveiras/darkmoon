@@ -39,6 +39,7 @@ class RenderParams {
     this.dehaze = 0,
     this.vibrance = 0,
     this.saturation = 0,
+    this.saturationBoost = 0,
     this.curves = identityPhotoCurves,
     this.parametricCurve = identityParametricCurve,
     this.colorMixer = const ColorMixerValues(),
@@ -66,6 +67,7 @@ class RenderParams {
     ColorProfile? colorProfile,
     double colorProfileStrength = 1.0,
     double renderScale = 1.0,
+    bool cameraColorHasFit = false,
   }) {
     const defaults = RenderParams();
     return RenderParams(
@@ -102,6 +104,11 @@ class RenderParams {
       dehaze: values['Dehaze'] ?? defaults.dehaze,
       vibrance: values['Vibrance'] ?? defaults.vibrance,
       saturation: values['Saturation'] ?? defaults.saturation,
+      // With a fit the slider rides the profile (the editor blends it in
+      // before these params are built); without one it is a lift here.
+      saturationBoost: cameraColorHasFit
+          ? 0
+          : ((values['CameraColor'] ?? 0) / 100).clamp(0.0, 1.0),
       curves: curves ?? defaults.curves,
       parametricCurve: ParametricCurve.fromValues(values),
       colorMixer: ColorMixerValues.fromValues(values),
@@ -156,6 +163,13 @@ class RenderParams {
   final double dehaze;
   final double vibrance;
   final double saturation;
+
+  /// 0..1: the Camera Color slider on a file with no camera fit to blend
+  /// — spent as a saturation lift of [calCameraColorBoost] at 1, inside
+  /// the Saturation stage. 0 when the photo carries a fit, which the
+  /// slider blends into the colour profile instead (see
+  /// [RenderParams.fromValues]'s `cameraColorHasFit`).
+  final double saturationBoost;
   final PhotoCurves curves;
 
   /// Meridian's parametric Tone Curve (region sliders). Applied just
@@ -216,6 +230,7 @@ class RenderParams {
     dehaze: dehaze,
     vibrance: vibrance,
     saturation: saturation,
+    saturationBoost: saturationBoost,
     curves: curves,
     parametricCurve: parametricCurve,
     colorMixer: colorMixer,

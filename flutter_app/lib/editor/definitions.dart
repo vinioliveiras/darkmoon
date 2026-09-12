@@ -38,6 +38,8 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderClarity;
     case 'Dehaze':
       return l10n.sliderDehaze;
+    case 'CameraColor':
+      return l10n.sliderCameraColor;
     case 'Vibrance':
       return l10n.sliderVibrance;
     case 'Saturation':
@@ -639,6 +641,12 @@ const _sections = <String, List<_SliderSpec>>{
     _SliderSpec('Texture', -100, 100, 0),
     _SliderSpec('Clarity', -100, 100, 0),
     _SliderSpec('Dehaze', -100, 100, 0),
+    // Camera Color (2026-09-12): on a RAW, how much of the camera's own
+    // per-hue colour rendering (fitted from its embedded JPEG) the photo
+    // takes; on any other file, a plain saturation lift. 0 by default —
+    // the user asked for the recovery to be a choice, not the opening
+    // look.
+    _SliderSpec('CameraColor', 0, 100, 0),
     _SliderSpec(
       'Vibrance',
       -100,

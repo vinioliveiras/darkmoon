@@ -570,7 +570,11 @@ Future<ui.Image> _runPostDehaze(
   shader.setFloat(i++, width.toDouble());
   shader.setFloat(i++, height.toDouble());
   shader.setFloat(i++, params.vibrance / 100.0);
-  shader.setFloat(i++, 1.0 + params.saturation / 100.0 * calSaturationStrength);
+  shader.setFloat(
+    i++,
+    (1.0 + params.saturation / 100.0 * calSaturationStrength) *
+        (1.0 + params.saturationBoost * calCameraColorBoost),
+  );
   shader.setFloat(i++, calVibranceStrength);
   shader.setFloat(i++, calVibranceSkinDampen);
   shader.setFloat(i++, vignetteStrength);

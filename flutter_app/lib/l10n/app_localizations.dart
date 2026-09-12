@@ -2530,6 +2530,12 @@ abstract class AppLocalizations {
   /// **'Dehaze'**
   String get sliderDehaze;
 
+  /// No description provided for @sliderCameraColor.
+  ///
+  /// In en, this message translates to:
+  /// **'Camera Color'**
+  String get sliderCameraColor;
+
   /// No description provided for @sliderVibrance.
   ///
   /// In en, this message translates to:

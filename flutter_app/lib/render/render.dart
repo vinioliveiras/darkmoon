@@ -535,7 +535,12 @@ void applyGlobalPointOps(
   sw?.reset();
   // Saturation before Vibrance, matching Solstice's apply_creative_color:
   // Vibrance's saturation/hue masks read the already-saturated color.
-  _applySaturation(buffer, pixelCount, params.saturation);
+  _applySaturation(
+    buffer,
+    pixelCount,
+    params.saturation,
+    boost: params.saturationBoost,
+  );
   mark('saturation');
   _applyVibrance(buffer, pixelCount, params.vibrance);
   mark('vibrance');
@@ -936,11 +941,18 @@ double _smoothstep(double edge0, double edge1, double value) {
 /// construction) rather than Solstice's linear-light luminance mix. Runs
 /// before Vibrance (see the call order in [applyGlobalAdjustmentSteps])
 /// so Vibrance's masks read the already-saturated color, not the original.
-void _applySaturation(Float32List img, int pixelCount, double amount) {
-  if (amount == 0) {
+void _applySaturation(
+  Float32List img,
+  int pixelCount,
+  double amount, {
+  double boost = 0,
+}) {
+  final factor =
+      (1.0 + amount / 100.0 * calSaturationStrength) *
+      (1.0 + boost * calCameraColorBoost);
+  if (factor == 1.0) {
     return;
   }
-  final factor = 1.0 + amount / 100.0 * calSaturationStrength;
   for (var p = 0; p < pixelCount; p++) {
     final i = p * 3;
     final r = img[i] / 255.0;

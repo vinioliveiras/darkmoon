@@ -452,18 +452,32 @@ class _EditorScreenState extends State<EditorScreen>
         : _effectiveParamValues()['ColorProfileAmount'] ?? calBaseContrast;
   }
 
+  /// Whether [path] carries a camera colour fit for the Camera Color
+  /// slider to blend in; without one the slider lifts saturation instead
+  /// (see `RenderParams.saturationBoost`).
+  bool _cameraColorFitAvailable(String? path) =>
+      path != null && _editSources[path]?.baseColorFit != null;
+
+  /// The Camera Color slider as a 0..1 blend, Amount applied.
+  double get _cameraColorAmount =>
+      ((_effectiveParamValues()['CameraColor'] ?? 0) / 100).clamp(0.0, 1.0);
+
   /// The camera's per-hue colour rendering for [path], blended toward
-  /// identity by [calCameraColorMatch] — null when the file carried no
-  /// preview to fit against, or the fit refused it.
+  /// identity by the Camera Color slider times [calCameraColorMatch] —
+  /// null when the file carried no preview to fit against, the fit
+  /// refused it, or the slider sits at 0.
   CameraColorFit? _baseColorFitFor(String? path) {
-    if (path == null || calCameraColorMatch <= 0) {
+    if (path == null) {
       return null;
     }
     final fit = _editSources[path]?.baseColorFit;
-    if (fit == null || calCameraColorMatch >= 1.0) {
+    final k = (_cameraColorAmount * calCameraColorMatch).clamp(0.0, 1.0);
+    if (fit == null || k <= 0) {
+      return null;
+    }
+    if (k >= 1.0) {
       return fit;
     }
-    final k = calCameraColorMatch;
     return CameraColorFit(
       hueShift: [for (final v in fit.hueShift) v * k],
       satMul: [for (final v in fit.satMul) 1.0 + (v - 1.0) * k],
@@ -3671,6 +3685,7 @@ class _EditorScreenState extends State<EditorScreen>
         baseContrast: _baseContrastFor(path),
         colorProfile: _colorProfileFor(path),
         colorProfileStrength: _effectiveColorProfileStrength,
+        cameraColorHasFit: _cameraColorFitAvailable(path),
       ),
       masks: _effectiveMasks,
       aiMaskMaps: _aiMaskMaps,
@@ -4373,6 +4388,8 @@ class _EditorScreenState extends State<EditorScreen>
         // per photo, so the profile's name no longer identifies it.
         profile?.tone.first ?? 0,
         profile?.tone.last ?? 0,
+        // The camera fit rides the profile by the slider's amount.
+        _cameraColorAmount,
         _baseContrastFor(path),
         source?.width ?? 0,
       ].join('|'),
@@ -4387,6 +4404,7 @@ class _EditorScreenState extends State<EditorScreen>
         baseExposureStops: _baseExposureFor(path),
         baseContrast: _baseContrastFor(path),
         colorProfile: profile,
+        cameraColorHasFit: _cameraColorFitAvailable(path),
       ),
     );
   }

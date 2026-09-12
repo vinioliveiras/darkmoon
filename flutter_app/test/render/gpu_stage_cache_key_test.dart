@@ -80,6 +80,7 @@ final Map<String, RenderParams> _afterDehaze = {
   'whites': const RenderParams(whites: 15),
   'blacks': const RenderParams(blacks: -15),
   'vibrance': const RenderParams(vibrance: 20),
+  'saturationBoost': const RenderParams(saturationBoost: 0.5),
   'saturation': const RenderParams(saturation: 20),
   'curves': RenderParams(
     curves: PhotoCurves(
@@ -163,7 +164,7 @@ void main() {
   test('every RenderParams field is classified above', () {
     // RenderParams has no reflection; the field count is pinned by hand so
     // a new field trips this test and sends its author to gpu_stage_cache.
-    const fieldsInRenderParams = 28;
+    const fieldsInRenderParams = 29;
     final classified =
         _beforeAiDenoise.length +
         _betweenBoundaries.length +

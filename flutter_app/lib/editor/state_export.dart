@@ -147,6 +147,7 @@ extension _EditorExport on _EditorScreenState {
           baseContrast: _baseContrastFor(selected.path),
           colorProfile: _colorProfileFor(selected.path),
           colorProfileStrength: _effectiveColorProfileStrength,
+          cameraColorHasFit: _cameraColorFitAvailable(selected.path),
         ),
         masks: _effectiveMasks,
         // The same maps the preview was rendered with, so an AI mask

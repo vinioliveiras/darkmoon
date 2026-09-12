@@ -94,6 +94,7 @@ const Map<String, double> calGlobalAmountCompressionOverrides = {
   // where Shadows moved 10.4. At 0.6 it moves about 3.5.
   'Highlights': 0.5,
   'Whites': 0.5,
+  'CameraColor': 1.0,
   'Vibrance': 1.0,
   'Saturation': 0.8,
   'Dehaze': 0.4,
@@ -1035,10 +1036,22 @@ const double calCameraToneMatch = 1.0;
 /// per-hue saturation, luminance and hue shift the camera applied; the
 /// fit rides the profile's own hue/sat/lum slots, next to the tone curve.
 /// Only in the default colour mode: Vivid carries its own per-hue table.
-///   ↑ higher = closer to the camera's colour rendering
-///   ↓ lower  = closer to the decode's own colour
+/// Since the same day it is the Camera Color slider's ceiling rather than
+/// the opening look: the slider (0-100, default 0) blends the fit in, and
+/// this scales what 100 means.
+///   ↑ higher = closer to the camera's colour rendering at 100
+///   ↓ lower  = closer to the decode's own colour at 100
 /// default: 1.0
 const double calCameraColorMatch = 1.0;
+
+/// **Camera Color on a file without a fit** (a JPEG, a PNG, a RAW whose
+/// preview could not be matched): the slider lifts saturation instead,
+/// by this much at 100 — a multiplier on HSV saturation, the same place
+/// the Saturation slider works.
+///   ↑ higher = a stronger lift at 100
+///   ↓ lower  = a gentler one
+/// default: 0.35
+const double calCameraColorBoost = 0.35;
 
 /// Bounds on what the colour fit may ask for, per hue bin. A camera's
 /// colour rendering is a taste, not a correction, and a bin measured on a

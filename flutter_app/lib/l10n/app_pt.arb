@@ -417,6 +417,7 @@
   "sliderTexture": "Textura",
   "sliderClarity": "Claridade",
   "sliderDehaze": "Remoção de Neblina",
+  "sliderCameraColor": "Cor da câmera",
   "sliderVibrance": "Vibração",
   "sliderSaturation": "Saturação",
   "sliderSharpenAmount": "Nitidez",
