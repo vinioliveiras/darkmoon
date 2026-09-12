@@ -27,26 +27,6 @@ bool FlutterWindow::OnCreate() {
   RegisterPlugins(flutter_controller_->engine());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
-  window_channel_ =
-      std::make_unique<flutter::MethodChannel<flutter::EncodableValue>>(
-          flutter_controller_->engine()->messenger(), "darkmoon/window",
-          &flutter::StandardMethodCodec::GetInstance());
-  window_channel_->SetMethodCallHandler(
-      [this](const flutter::MethodCall<flutter::EncodableValue>& call,
-             std::unique_ptr<flutter::MethodResult<flutter::EncodableValue>>
-                 result) {
-        if (call.method_name() == "maximize") {
-          // Restore the standard title bar/close button/resize border
-          // before maximizing — see win32_window.cpp's SetFrameless,
-          // which the window starts with disabled for the splash.
-          SetFrameless(false);
-          ShowWindow(GetHandle(), SW_SHOWMAXIMIZED);
-          result->Success();
-        } else {
-          result->NotImplemented();
-        }
-      });
-
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
     this->Show();
   });
@@ -71,13 +51,6 @@ LRESULT
 FlutterWindow::MessageHandler(HWND hwnd, UINT const message,
                               WPARAM const wparam,
                               LPARAM const lparam) noexcept {
-  // WM_GETICON is answered in Win32Window::MessageHandler so the title-bar
-  // glyph survives the splash's frameless round-trip. Flutter's engine
-  // intercepts this message and can return null, so it must not see it.
-  if (message == WM_GETICON) {
-    return Win32Window::MessageHandler(hwnd, message, wparam, lparam);
-  }
-
   // Give Flutter, including plugins, an opportunity to handle window messages.
   if (flutter_controller_) {
     std::optional<LRESULT> result =

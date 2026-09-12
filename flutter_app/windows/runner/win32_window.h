@@ -34,12 +34,7 @@ class Win32Window {
   // consistent size this function will scale the inputted width and height as
   // as appropriate for the default monitor. The window is invisible until
   // |Show| is called. Returns true if the window was created successfully.
-  //
-  // The window starts frameless (see SetFrameless) with |corner_radius|
-  // (logical pixels, scaled the same way |size| is) rounding its actual
-  // window shape — 0 (the default) leaves it a plain rectangle.
-  bool Create(const std::wstring& title, const Point& origin, const Size& size,
-              int corner_radius = 0);
+  bool Create(const std::wstring& title, const Point& origin, const Size& size);
 
   // Show the current window. Returns true if the window was successfully shown.
   bool Show();
@@ -59,25 +54,6 @@ class Win32Window {
 
   // Return a RECT representing the bounds of the current client area.
   RECT GetClientArea();
-
-  // Adds or removes the title bar, system menu, resize border and min/
-  // max/close buttons, *and* (via WM_NCCALCSIZE in MessageHandler) the
-  // thin sizing-border DWM still reserves around a top-level window even
-  // once WS_CAPTION/WS_THICKFRAME are gone — without also handling
-  // WM_NCCALCSIZE, that border survives and shows up as a stray 1px edge
-  // around the splash. Used to show the launch splash (see
-  // widgets/splash_screen.dart, which draws its own card/shadow) without a
-  // mismatched native frame wrapped around it, then restored once the
-  // splash is dismissed — see flutter_window.cpp's "darkmoon/window"
-  // channel.
-  //
-  // While going frameless, |corner_radius| (physical pixels, 0 for a
-  // plain rectangle) also clips the actual window shape via SetWindowRgn
-  // — the window's own visible bounds become the rounded card
-  // widgets/splash_screen.dart draws, rather than a plain rectangle the
-  // card floats inside of. Going framed again always clears the region
-  // back to a plain rectangle, regardless of |corner_radius|.
-  void SetFrameless(bool frameless, int corner_radius = 0);
 
  protected:
   // Processes and route salient window messages for mouse handling,
@@ -115,12 +91,6 @@ class Win32Window {
   static void UpdateTheme(HWND const window);
 
   bool quit_on_close_ = false;
-
-  // True between a SetFrameless(true) and the matching SetFrameless(false)
-  // — read by MessageHandler's WM_NCCALCSIZE case, which needs to know
-  // whether to claim the whole window as client area (frameless) or fall
-  // back to DefWindowProc's normal caption/border sizing (framed).
-  bool frameless_ = false;
 
   // window handle for top level window.
   HWND window_handle_ = nullptr;

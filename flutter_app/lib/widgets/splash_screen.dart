@@ -6,19 +6,20 @@ import 'about_dialog.dart' show darkmoonAppVersion;
 
 /// Card size, matching real Meridian's splash proportions (a small
 /// floating panel, not a full-screen takeover) — see the reference
-/// screenshot this was built from.
-const double _cardWidth = 720;
-const double _cardHeight = 420;
+/// screenshot this was built from. main.dart opens the window at exactly
+/// this size, so the window *is* the card.
+const double splashCardWidth = 720;
+const double splashCardHeight = 420;
 const double _photoWidth = 340;
 
 /// Meridian-style launch screen — a small dark card (same palette as the
 /// rest of Darkmoon's dialogs, fitting for an app named "Darkmoon" rather
 /// than copying Meridian's white one), split into a left text/branding
-/// column and a right featured photo. The native window itself starts
-/// small and centered (see windows/runner/main.cpp) so the real desktop
-/// is visible around it, the same way Meridian's own launch screen
-/// works — this widget only fills that small window, not the whole
-/// screen. Shown for a fixed minimum duration (see `main.dart`'s
+/// column and a right featured photo. The window itself opens small and
+/// centred (see main.dart's `_openWindowAsSplashCard`, window_manager on
+/// every desktop platform) so the real desktop is visible around it, the
+/// same way Meridian's own launch screen works — this widget only fills
+/// that small window, not the whole screen. Shown for a fixed minimum duration (see `main.dart`'s
 /// `_splashMinDuration`) while [EditorScreen] loads underneath (settings,
 /// catalog, thumbnail/preview caches, the last-active folder, and a
 /// background preview-cache warm-up), so that work gets a head start
@@ -43,13 +44,13 @@ class SplashScreen extends StatelessWidget {
           borderRadius: BorderRadius.circular(10),
           clipBehavior: Clip.antiAlias,
           child: SizedBox(
-            width: _cardWidth,
-            height: _cardHeight,
+            width: splashCardWidth,
+            height: splashCardHeight,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 SizedBox(
-                  width: _cardWidth - _photoWidth,
+                  width: splashCardWidth - _photoWidth,
                   child: Padding(
                     padding: const EdgeInsets.fromLTRB(28, 28, 24, 20),
                     child: Column(

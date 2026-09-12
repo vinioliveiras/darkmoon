@@ -3,8 +3,8 @@ import 'dart:io' show Platform;
 import 'dart:ui' show PlatformDispatcher;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
+import 'package:window_manager/window_manager.dart';
 
 import 'diagnostics/dev_log.dart';
 import 'diagnostics/native_stderr_redirect.dart';
@@ -46,39 +46,63 @@ Future<void> _initDevLog() async {
   };
 }
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await _openWindowAsSplashCard();
   unawaited(_initDevLog());
   runApp(const DarkmoonApp());
 }
 
-/// Talks to `FlutterWindow`'s method-call handler in windows/runner/
-/// flutter_window.cpp — the window starts small, centered, and frameless
-/// (see windows/runner/main.cpp and win32_window.cpp's `SetFrameless`) so
-/// the real desktop is visible around the splash card with no mismatched
-/// native title bar/close button wrapped around it, like Meridian's own
-/// launch screen. This is what restores the normal window frame and grows
-/// it to maximized once the splash goes away. Windows-only: the window
-/// choreography this exists for is specific to how windows/runner/main.cpp
-/// creates the window, so this channel has no handler (and isn't called)
-/// on any other platform.
-const _windowChannel = MethodChannel('darkmoon/window');
+bool get _hasDesktopWindow =>
+    Platform.isWindows || Platform.isMacOS || Platform.isLinux;
 
-Future<void> _maximizeNativeWindow() async {
-  if (!Platform.isWindows) {
+/// The launch choreography, all from Dart (2026-09-13, user's request —
+/// it used to be Win32 code in windows/runner, which every other platform
+/// would have needed its own copy of; the runners are stock now). The
+/// window opens *as* the splash card: frameless, card-sized, centred, so
+/// the real desktop shows around it like Meridian's own launch screen.
+/// [_growWindowToEditor] gives it a normal frame and maximizes it once
+/// the splash is over. window_manager does the same on Windows, macOS
+/// and Linux; anything that fails here just leaves a normal window.
+Future<void> _openWindowAsSplashCard() async {
+  if (!_hasDesktopWindow) {
     return;
   }
   try {
-    await _windowChannel.invokeMethod<void>('maximize');
-  } on PlatformException {
-    // Best-effort — worst case the window just stays at its small,
-    // splash-sized dimensions instead of growing to fill the screen.
-  } on MissingPluginException {
-    // No native handler registered for this channel — always true under
-    // `flutter test`'s widget-test harness (there's no real Windows
-    // runner backing it), and Platform.isWindows above is still true
-    // there since it reflects the *host* OS, not "is a real app window
-    // running". Same best-effort fallback as the PlatformException case.
+    await windowManager.ensureInitialized();
+    final options = WindowOptions(
+      size: const Size(splashCardWidth, splashCardHeight),
+      center: true,
+      title: 'darkmoon',
+      titleBarStyle: TitleBarStyle.hidden,
+      windowButtonVisibility: false,
+      backgroundColor: DarkmoonColors.dialogBackground,
+    );
+    await windowManager.waitUntilReadyToShow(options, () async {
+      await windowManager.setAsFrameless();
+      await windowManager.show();
+      await windowManager.focus();
+    });
+  } catch (_) {
+    // No window plugin (a test), or a platform that refused: the window
+    // simply opens the way the runner made it.
+  }
+}
+
+/// The second half of [_openWindowAsSplashCard]: the standard title bar
+/// and buttons back, then maximized.
+Future<void> _growWindowToEditor() async {
+  if (!_hasDesktopWindow) {
+    return;
+  }
+  try {
+    await windowManager.setTitleBarStyle(TitleBarStyle.normal);
+    await windowManager.setResizable(true);
+    await windowManager.maximize();
+  } catch (_) {
+    // Best effort — worst case the window stays at its splash size, and
+    // the user maximizes it. Always the case under `flutter test`, where
+    // no plugin backs the call.
   }
 }
 
@@ -125,7 +149,7 @@ class _DarkmoonAppState extends State<DarkmoonApp> {
     unawaited(_loadLanguage());
     unawaited(
       Future.delayed(_splashMinDuration, () async {
-        await _maximizeNativeWindow();
+        await _growWindowToEditor();
         if (mounted) {
           setState(() => _showSplash = false);
         }

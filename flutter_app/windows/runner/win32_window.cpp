@@ -88,12 +88,7 @@ WindowClassRegistrar* WindowClassRegistrar::instance_ = nullptr;
 
 const wchar_t* WindowClassRegistrar::GetWindowClass() {
   if (!class_registered_) {
-    // WNDCLASSEX (not WNDCLASS) so hIconSm can be set — that's the glyph
-    // Windows paints next to the title text. WNDCLASS only has hIcon, which
-    // is the large Alt+Tab icon; without hIconSm the title bar falls back
-    // to a generic application icon (or nothing, after a frameless round-trip).
-    WNDCLASSEX window_class{};
-    window_class.cbSize = sizeof(WNDCLASSEX);
+    WNDCLASS window_class{};
     window_class.hCursor = LoadCursor(nullptr, IDC_ARROW);
     window_class.lpszClassName = kWindowClassName;
     window_class.style = CS_HREDRAW | CS_VREDRAW;
@@ -102,14 +97,10 @@ const wchar_t* WindowClassRegistrar::GetWindowClass() {
     window_class.hInstance = GetModuleHandle(nullptr);
     window_class.hIcon =
         LoadIcon(window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON));
-    window_class.hIconSm = static_cast<HICON>(LoadImage(
-        window_class.hInstance, MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
-        GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON),
-        LR_DEFAULTCOLOR));
     window_class.hbrBackground = 0;
     window_class.lpszMenuName = nullptr;
     window_class.lpfnWndProc = Win32Window::WndProc;
-    RegisterClassEx(&window_class);
+    RegisterClass(&window_class);
     class_registered_ = true;
   }
   return kWindowClassName;
@@ -131,8 +122,7 @@ Win32Window::~Win32Window() {
 
 bool Win32Window::Create(const std::wstring& title,
                          const Point& origin,
-                         const Size& size,
-                         int corner_radius) {
+                         const Size& size) {
   Destroy();
 
   const wchar_t* window_class =
@@ -154,21 +144,12 @@ bool Win32Window::Create(const std::wstring& title,
     return false;
   }
 
-  // Starts frameless — see SetFrameless's own comment. Restored by
-  // FlutterWindow's "darkmoon/window" channel once the splash goes away.
-  SetFrameless(true, Scale(corner_radius, scale_factor));
-
   UpdateTheme(window);
 
   return OnCreate();
 }
 
 bool Win32Window::Show() {
-  // Shown at its small, splash-card-sized creation dimensions (see
-  // main.cpp) — not maximized here, so the real desktop is visible around
-  // the splash card the way Meridian's own launch screen shows it.
-  // FlutterWindow's "darkmoon/window" channel maximizes it once the splash
-  // timer in main.dart finishes — see flutter_window.cpp.
   return ShowWindow(window_handle_, SW_SHOWNORMAL);
 }
 
@@ -235,39 +216,6 @@ Win32Window::MessageHandler(HWND hwnd,
     case WM_DWMCOLORIZATIONCOLORCHANGED:
       UpdateTheme(hwnd);
       return 0;
-
-    case WM_NCCALCSIZE:
-      // Without WS_CAPTION/WS_THICKFRAME, DefWindowProc's own WM_NCCALCSIZE
-      // handling still reserves a few pixels of "sizing border" around the
-      // window — invisible as far as the style bits go, but still painted
-      // by DWM as a thin edge. Claiming the entire window rect as client
-      // area (returning 0 rather than falling through to DefWindowProc)
-      // removes that border for as long as the window is frameless; once
-      // framed again, this falls through so the real title bar/border get
-      // their normal sizing back.
-      if (frameless_) {
-        return 0;
-      }
-      break;
-
-    case WM_GETICON:
-      // Flutter's engine intercepts WM_GETICON and can return null after the
-      // splash's frameless round-trip, which is exactly how the title-bar
-      // glyph next to "darkmoon" disappears. Answer it here (and, for the
-      // FlutterWindow subclass, *before* the engine sees the message — see
-      // flutter_window.cpp) so the caption always has the app icon.
-      {
-        const bool small_icon = (wparam == ICON_SMALL || wparam == ICON_SMALL2);
-        HICON icon = static_cast<HICON>(LoadImage(
-            GetModuleHandle(nullptr), MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
-            GetSystemMetrics(small_icon ? SM_CXSMICON : SM_CXICON),
-            GetSystemMetrics(small_icon ? SM_CYSMICON : SM_CYICON),
-            LR_DEFAULTCOLOR | LR_SHARED));
-        if (icon) {
-          return reinterpret_cast<LRESULT>(icon);
-        }
-      }
-      break;
   }
 
   return DefWindowProc(window_handle_, message, wparam, lparam);
@@ -313,72 +261,6 @@ HWND Win32Window::GetHandle() {
 
 void Win32Window::SetQuitOnClose(bool quit_on_close) {
   quit_on_close_ = quit_on_close;
-}
-
-void Win32Window::SetFrameless(bool frameless, int corner_radius) {
-  if (!window_handle_) {
-    return;
-  }
-  frameless_ = frameless;
-
-  // SetWindowRgn disables DWM composition of the non-client area. If we
-  // restore WS_CAPTION / fire SWP_FRAMECHANGED while a region is still
-  // attached, DWM never paints the title-bar icon (or paints a blank
-  // caption). Clear the region *before* restoring the frame; apply a new
-  // rounded region only *after* the frameless style is in place.
-  if (!frameless) {
-    SetWindowRgn(window_handle_, nullptr, TRUE);
-  }
-
-  LONG_PTR style = GetWindowLongPtr(window_handle_, GWL_STYLE);
-  constexpr LONG_PTR kFrameStyles = WS_CAPTION | WS_THICKFRAME |
-                                    WS_MINIMIZEBOX | WS_MAXIMIZEBOX |
-                                    WS_SYSMENU;
-  style = frameless ? (style & ~kFrameStyles) : (style | kFrameStyles);
-  SetWindowLongPtr(window_handle_, GWL_STYLE, style);
-  // SWP_FRAMECHANGED forces the non-client area to actually repaint with
-  // the new style — SetWindowLongPtr alone only changes the style bits,
-  // not what's on screen.
-  SetWindowPos(window_handle_, nullptr, 0, 0, 0, 0,
-              SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
-
-  if (frameless && corner_radius > 0) {
-    RECT rect;
-    GetWindowRect(window_handle_, &rect);
-    // CreateRoundRectRgn's right/bottom are exclusive, so a region built
-    // from the window's exact width/height would leave a 1px sliver
-    // clipped off the right and bottom edges — padding by 1 covers it.
-    // SetWindowRgn takes ownership of the region handle; it must not be
-    // deleted here.
-    HRGN region = CreateRoundRectRgn(0, 0, rect.right - rect.left + 1,
-                                     rect.bottom - rect.top + 1,
-                                     corner_radius, corner_radius);
-    SetWindowRgn(window_handle_, region, TRUE);
-  }
-
-  // When restoring the standard frame, explicitly set both the small
-  // title-bar icon and the large Alt+Tab icon. Stripping WS_CAPTION (for
-  // the splash) and putting it back does not re-query the class icon —
-  // WM_SETICON is what actually paints the glyph next to the window title.
-  if (!frameless) {
-    HINSTANCE instance = GetModuleHandle(nullptr);
-    HICON small_icon = static_cast<HICON>(LoadImage(
-        instance, MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
-        GetSystemMetrics(SM_CXSMICON), GetSystemMetrics(SM_CYSMICON),
-        LR_DEFAULTCOLOR | LR_SHARED));
-    HICON big_icon = static_cast<HICON>(LoadImage(
-        instance, MAKEINTRESOURCE(IDI_APP_ICON), IMAGE_ICON,
-        GetSystemMetrics(SM_CXICON), GetSystemMetrics(SM_CYICON),
-        LR_DEFAULTCOLOR | LR_SHARED));
-    if (small_icon) {
-      SendMessage(window_handle_, WM_SETICON, ICON_SMALL,
-                  reinterpret_cast<LPARAM>(small_icon));
-    }
-    if (big_icon) {
-      SendMessage(window_handle_, WM_SETICON, ICON_BIG,
-                  reinterpret_cast<LPARAM>(big_icon));
-    }
-  }
 }
 
 bool Win32Window::OnCreate() {
