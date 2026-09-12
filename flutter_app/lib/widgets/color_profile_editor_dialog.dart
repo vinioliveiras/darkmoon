@@ -654,31 +654,6 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
             baseContrast: _contrast,
           ),
         ],
-        // Reset sits under what it resets, the previews, rather than
-        // among the controls of one tab (user's call, 2026-09-11).
-        const SizedBox(height: 12),
-        Text(
-          l10n.colorProfileEditorResetHint,
-          style: Theme.of(
-            context,
-          ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
-        ),
-        const SizedBox(height: 4),
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton(
-            onPressed: () {
-              setState(() {
-                _tonePoints = List<CurvePoint>.of(identityToneCurve);
-                _hueShift = List<double>.of(identityColorProfile.hueShift);
-                _satMul = List<double>.of(identityColorProfile.satMul);
-                _lumMul = List<double>.of(identityColorProfile.lumMul);
-              });
-              _settled();
-            },
-            child: Text(l10n.colorProfileEditorReset),
-          ),
-        ),
       ],
     );
   }
@@ -775,20 +750,45 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
           ],
         ),
       ),
+      // Reset shares the row with Cancel and Save, at the left (user's
+      // call, 2026-09-12): under the previews it pushed the column into
+      // a scroll on an ordinary window. Its explanation is the tooltip.
+      actionsAlignment: MainAxisAlignment.spaceBetween,
       actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: Text(l10n.cancelButton),
+        Tooltip(
+          message: l10n.colorProfileEditorResetHint,
+          child: TextButton(
+            onPressed: () {
+              setState(() {
+                _tonePoints = List<CurvePoint>.of(identityToneCurve);
+                _hueShift = List<double>.of(identityColorProfile.hueShift);
+                _satMul = List<double>.of(identityColorProfile.satMul);
+                _lumMul = List<double>.of(identityColorProfile.lumMul);
+              });
+              _settled();
+            },
+            child: Text(l10n.colorProfileEditorReset),
+          ),
         ),
-        TextButton(
-          // A profile with no name would be saved as "profile.json" and be
-          // impossible to tell apart from the next one.
-          onPressed: name.isEmpty
-              ? null
-              : () => Navigator.of(
-                  context,
-                ).pop(ColorProfileEditorResult.saved(_draft)),
-          child: Text(l10n.presetSaveLabel),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: Text(l10n.cancelButton),
+            ),
+            const SizedBox(width: 8),
+            TextButton(
+              // A profile with no name would be saved as "profile.json"
+              // and be impossible to tell apart from the next one.
+              onPressed: name.isEmpty
+                  ? null
+                  : () => Navigator.of(
+                      context,
+                    ).pop(ColorProfileEditorResult.saved(_draft)),
+              child: Text(l10n.presetSaveLabel),
+            ),
+          ],
         ),
       ],
     );
