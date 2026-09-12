@@ -1978,6 +1978,30 @@ abstract class AppLocalizations {
   /// **'EFFECTS'**
   String get sectionEffects;
 
+  /// No description provided for @sectionFilm.
+  ///
+  /// In en, this message translates to:
+  /// **'FILM'**
+  String get sectionFilm;
+
+  /// No description provided for @filmNone.
+  ///
+  /// In en, this message translates to:
+  /// **'None'**
+  String get filmNone;
+
+  /// No description provided for @sliderFilmAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Film Amount'**
+  String get sliderFilmAmount;
+
+  /// No description provided for @colorizeFilmLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Film look'**
+  String get colorizeFilmLabel;
+
   /// No description provided for @gradeRangeMidtones.
   ///
   /// In en, this message translates to:

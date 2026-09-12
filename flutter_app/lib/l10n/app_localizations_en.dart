@@ -1110,6 +1110,18 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sectionEffects => 'EFFECTS';
 
   @override
+  String get sectionFilm => 'FILM';
+
+  @override
+  String get filmNone => 'None';
+
+  @override
+  String get sliderFilmAmount => 'Film Amount';
+
+  @override
+  String get colorizeFilmLabel => 'Film look';
+
+  @override
   String get gradeRangeMidtones => 'Midtones';
 
   @override

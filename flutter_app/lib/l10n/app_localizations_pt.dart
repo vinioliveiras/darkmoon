@@ -1117,6 +1117,18 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sectionEffects => 'EFEITOS';
 
   @override
+  String get sectionFilm => 'FILME';
+
+  @override
+  String get filmNone => 'Nenhum';
+
+  @override
+  String get sliderFilmAmount => 'Intensidade do Filme';
+
+  @override
+  String get colorizeFilmLabel => 'Look de filme';
+
+  @override
   String get gradeRangeMidtones => 'Meios-tons';
 
   @override

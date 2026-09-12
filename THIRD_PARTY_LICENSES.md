@@ -24,6 +24,7 @@ spec, which is the place to update first when a model changes.
 | Component | Licence | Source |
 |---|---|---|
 | Lens correction profile database (`assets/lens_profiles/`) | CC BY-SA 3.0 | Lensfun, <https://lensfun.github.io> — see `flutter_app/assets/lens_profiles/LICENSE.txt` |
+| Film look tables (`assets/film_luts/`) | CC BY-SA 4.0 | RawTherapee Film Simulation Collection by Pat David, Pavlov Dmitry and Michael Ezra, <https://rawtherapee.com/shared/HaldCLUT.zip>, resampled to 33³ by `flutter_app/tool/build_film_luts.dart` — see `flutter_app/assets/film_luts/README.txt`. Film names identify the stock each table approximates and are used for that purpose only; no affiliation with or endorsement by the trademark owners |
 
 ## ONNX models (`models/` in every bundle)
 

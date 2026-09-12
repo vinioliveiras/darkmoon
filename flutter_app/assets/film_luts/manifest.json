@@ -1,0 +1,110 @@
+{
+  "source": "RawTherapee Film Simulation Collection (Pat David, Pavlov Dmitry, Michael Ezra), CC BY-SA 4.0, resampled to 33^3",
+  "films": [
+    {
+      "id": 1,
+      "file": "film_01.png",
+      "name": "Portra 160",
+      "brand": "Kodak",
+      "kind": "negative"
+    },
+    {
+      "id": 2,
+      "file": "film_02.png",
+      "name": "Portra 400",
+      "brand": "Kodak",
+      "kind": "negative"
+    },
+    {
+      "id": 3,
+      "file": "film_03.png",
+      "name": "Portra 800",
+      "brand": "Kodak",
+      "kind": "negative"
+    },
+    {
+      "id": 4,
+      "file": "film_04.png",
+      "name": "Ektar 100",
+      "brand": "Kodak",
+      "kind": "negative"
+    },
+    {
+      "id": 5,
+      "file": "film_05.png",
+      "name": "Kodachrome 64",
+      "brand": "Kodak",
+      "kind": "slide"
+    },
+    {
+      "id": 6,
+      "file": "film_06.png",
+      "name": "Ektachrome 100 VS",
+      "brand": "Kodak",
+      "kind": "slide"
+    },
+    {
+      "id": 7,
+      "file": "film_07.png",
+      "name": "Velvia 50",
+      "brand": "Fuji",
+      "kind": "slide"
+    },
+    {
+      "id": 8,
+      "file": "film_08.png",
+      "name": "Provia 100F",
+      "brand": "Fuji",
+      "kind": "slide"
+    },
+    {
+      "id": 9,
+      "file": "film_09.png",
+      "name": "Astia 100F",
+      "brand": "Fuji",
+      "kind": "slide"
+    },
+    {
+      "id": 10,
+      "file": "film_10.png",
+      "name": "Superia 200",
+      "brand": "Fuji",
+      "kind": "negative"
+    },
+    {
+      "id": 11,
+      "file": "film_11.png",
+      "name": "Superia 400",
+      "brand": "Fuji",
+      "kind": "negative"
+    },
+    {
+      "id": 12,
+      "file": "film_12.png",
+      "name": "Vista 200",
+      "brand": "Agfa",
+      "kind": "negative"
+    },
+    {
+      "id": 13,
+      "file": "film_13.png",
+      "name": "690",
+      "brand": "Polaroid",
+      "kind": "instant"
+    },
+    {
+      "id": 14,
+      "file": "film_14.png",
+      "name": "Tri-X 400",
+      "brand": "Kodak",
+      "kind": "bw"
+    },
+    {
+      "id": 15,
+      "file": "film_15.png",
+      "name": "HP5 Plus 400",
+      "brand": "Ilford",
+      "kind": "bw"
+    }
+  ]
+}

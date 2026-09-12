@@ -5,6 +5,7 @@ import 'package:darkmoon/render/color_grading.dart';
 import 'package:darkmoon/render/color_mixer.dart';
 import 'package:darkmoon/render/color_profile.dart';
 import 'package:darkmoon/render/gpu/gpu_stage_cache.dart';
+import 'package:darkmoon/render/film_lut.dart';
 import 'package:darkmoon/render/grain.dart';
 import 'package:darkmoon/render/render_params.dart';
 import 'package:darkmoon/render/sharpen.dart';
@@ -100,6 +101,8 @@ final Map<String, RenderParams> _afterDehaze = {
   ),
   'vignette': const RenderParams(vignette: VignetteParams(amount: -30)),
   'grain': const RenderParams(grain: GrainParams(amount: 30)),
+  'filmLut': RenderParams(filmLut: FilmLut.identity(3)),
+  'filmAmount': const RenderParams(filmAmount: 0.8),
 };
 
 void main() {
@@ -164,7 +167,7 @@ void main() {
   test('every RenderParams field is classified above', () {
     // RenderParams has no reflection; the field count is pinned by hand so
     // a new field trips this test and sends its author to gpu_stage_cache.
-    const fieldsInRenderParams = 29;
+    const fieldsInRenderParams = 31;
     final classified =
         _beforeAiDenoise.length +
         _betweenBoundaries.length +

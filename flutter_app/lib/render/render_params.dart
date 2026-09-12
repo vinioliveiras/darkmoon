@@ -3,6 +3,7 @@ import 'calibration.dart';
 import 'color_grading.dart';
 import 'color_mixer.dart';
 import 'color_profile.dart';
+import 'film_lut.dart';
 import 'grain.dart';
 import 'sharpen.dart';
 import 'tone_curve.dart';
@@ -48,6 +49,8 @@ class RenderParams {
     this.sharpen = const SharpenParams(),
     this.vignette = const VignetteParams(),
     this.grain = const GrainParams(),
+    this.filmLut,
+    this.filmAmount = 0.5,
     this.renderScale = 1.0,
   });
 
@@ -68,9 +71,15 @@ class RenderParams {
     double colorProfileStrength = 1.0,
     double renderScale = 1.0,
     bool cameraColorHasFit = false,
+    FilmLut? filmLut,
   }) {
     const defaults = RenderParams();
     return RenderParams(
+      filmLut: filmLut,
+      filmAmount: ((values['FilmAmount'] ?? defaultFilmAmount) / 100).clamp(
+        0.0,
+        1.0,
+      ),
       temperature: values['Temperature'] ?? asShotKelvin,
       tint: values['Tint'] ?? asShotTint,
       asShotKelvin: asShotKelvin,
@@ -182,6 +191,15 @@ class RenderParams {
   final VignetteParams vignette;
   final GrainParams grain;
 
+  /// The "Film" look-up table (see `film_lut.dart`), applied last on both
+  /// paths; null for no film. Resolved by the editor from the `Film`
+  /// slider's id — the id itself never reaches here, only the table.
+  final FilmLut? filmLut;
+
+  /// 0..1 blend of [filmLut] over the untouched image — the Film section's
+  /// Amount slider. Ignored when [filmLut] is null.
+  final double filmAmount;
+
   /// Multiplier applied to every neighbourhood-based radius/sigma —
   /// `frameLongEdge / calRadiusReferenceLongEdge`.
   ///
@@ -239,6 +257,8 @@ class RenderParams {
     sharpen: sharpen,
     vignette: vignette,
     grain: grain,
+    filmLut: filmLut,
+    filmAmount: filmAmount,
     renderScale: scale,
   );
 

@@ -10,6 +10,7 @@ import 'color_mixer.dart';
 import 'color_profile.dart';
 import 'color_space.dart';
 import 'dehaze.dart';
+import 'film_lut.dart';
 import 'grain.dart';
 import 'hsl.dart';
 import 'local_contrast.dart';
@@ -565,6 +566,15 @@ void applyGlobalPointOps(
     fullHeight: fullHeight,
   );
   mark('grain');
+  // Film is the last thing either path does — a look-up table expects the
+  // finished, display-referred image (curves, grading, vignette and grain
+  // included), which is also where Solstice applies its LUTs. The GPU
+  // counterpart is the film_lut.frag pass at the end of renderImageGpu.
+  final film = params.filmLut;
+  if (film != null && params.filmAmount > 0) {
+    applyFilmLut(buffer, film, params.filmAmount);
+    mark('film');
+  }
 }
 
 Uint8List _toUint8(Float32List buffer) {

@@ -6,6 +6,7 @@ import 'dart:ui' as ui;
 import '../blur.dart' show scaledNoiseRadius;
 import '../calibration.dart';
 import '../color_grading.dart';
+import '../film_lut.dart';
 import '../render.dart' show needsTonalBlur;
 import '../render_params.dart';
 import '../tone_curve.dart';
@@ -367,9 +368,49 @@ Future<ui.Image> renderImageGpu(
   final afterTone = chain.add(
     await _runPostDenoise(afterDehaze, lut, tonalBlur, width, height, params),
   );
-  final result = await _runPostDehaze(afterTone, width, height, params);
+  final film = params.filmLut;
+  if (film == null || params.filmAmount <= 0) {
+    final result = await _runPostDehaze(afterTone, width, height, params);
+    chain.disposeAllExcept();
+    return result;
+  }
+  // Film last, exactly where render.dart's applyGlobalPointOps applies
+  // it on the CPU (after Grain). Its own pass rather than a sampler on
+  // post_dehaze.frag so a render with no film pays nothing for it.
+  final beforeFilm = chain.add(
+    await _runPostDehaze(afterTone, width, height, params),
+  );
+  final filmTexture = chain.add(await _buildFilmLutImage(film));
+  final result = await GpuPass.run(
+    'shaders/film_lut.frag',
+    floats: [
+      width.toDouble(),
+      height.toDouble(),
+      params.filmAmount,
+      film.size.toDouble(),
+    ],
+    samplers: [beforeFilm, filmTexture],
+    outputWidth: width,
+    outputHeight: height,
+  );
   chain.disposeAllExcept();
   return result;
+}
+
+/// The film table as the `size*size` x `size` RGBA texture
+/// `film_lut.frag` samples — `FilmLut.packedRgba`'s layout, uploaded as
+/// is. Built per render like the curve LUT; ~140 KB for the bundled 33^3
+/// tables, well under what a pass costs.
+Future<ui.Image> _buildFilmLutImage(FilmLut lut) {
+  final completer = Completer<ui.Image>();
+  ui.decodeImageFromPixels(
+    lut.packedRgba(),
+    lut.size * lut.size,
+    lut.size,
+    ui.PixelFormat.rgba8888,
+    completer.complete,
+  );
+  return completer.future;
 }
 
 Future<ui.Image> _runPreDenoise(

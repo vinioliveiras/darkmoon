@@ -269,8 +269,12 @@ extension _EditorAiTools on _EditorScreenState {
     // click in that window stacked a second dialog on top).
     final choice = await showAnimatedDialog<ColorizeChoice>(
       context: context,
-      builder: (_) =>
-          ColorizeDialog(active: active, intensityPercent: intensity),
+      builder: (_) => ColorizeDialog(
+        active: active,
+        intensityPercent: intensity,
+        films: _filmLuts?.entries ?? const [],
+        filmId: (_paramValues[_filmKey] ?? 0).round(),
+      ),
     );
     _openingToolbarDialog = false;
     if (choice == null || !mounted) {
@@ -309,6 +313,11 @@ extension _EditorAiTools on _EditorScreenState {
           _colorizeIntensityKey: choice.intensityPercent.toDouble(),
           _cloudDenoiseProviderKey: 0.0,
           'AiDenoiseLevel': 0.0,
+          // The film look picked in the dialog is the Film section's own
+          // value: DDColor runs once, the table is applied by the render,
+          // so changing film later costs nothing.
+          _filmKey: choice.filmId.toDouble(),
+          if (choice.filmId > 0) _categoryEnabledKey('FILM'): 1.0,
         };
       });
       final ok = anyNeuralOn

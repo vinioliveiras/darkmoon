@@ -202,6 +202,17 @@ void main() {
     }
   });
 
+  test('the Film id is never scaled, its Amount is', () {
+    // Film holds a table id: scaling 7 toward 0 would pick another film.
+    final scaled = withGlobalEditAmountApplied({
+      amountKey: 0.0,
+      'Film': 7.0,
+      'FilmAmount': 90.0,
+    });
+    expect(scaled['Film'], 7.0);
+    expect(scaled['FilmAmount'], 50.0);
+  });
+
   test('Temperature and Tint are never scaled', () {
     // They are not 0-centred deltas, so scaling them toward a default
     // would fight the as-shot-relative white balance model.

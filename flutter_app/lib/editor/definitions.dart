@@ -40,6 +40,8 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderDehaze;
     case 'CameraColor':
       return l10n.sliderCameraColor;
+    case 'FilmAmount':
+      return l10n.sliderFilmAmount;
     case 'Vibrance':
       return l10n.sliderVibrance;
     case 'Saturation':
@@ -286,6 +288,9 @@ Map<String, double> _withCategoriesApplied(
     for (final spec in _grainSliders) {
       overrides[spec.name] = spec.defaultValue;
     }
+  }
+  if (disabled('FILM')) {
+    overrides[_filmKey] = 0.0;
   }
   if (disabled('COLOR MIXER')) {
     for (final channel in _mixerChannels) {
@@ -580,6 +585,8 @@ Map<String, double> withGlobalEditAmountApplied(Map<String, double> values) {
     ..remove('Temperature')
     ..remove('Tint')
     ..remove(_globalEditAmountKey)
+    // An id, not a quantity — see _filmSliders.
+    ..remove(_filmKey)
     // The Colour Mixer and Colour Grading build their keys at runtime, so
     // they are not in [_defaultParamValues] and this loop simply never
     // reached them — the Amount slider did nothing at all to either, and a
@@ -719,6 +726,20 @@ const _grainSliders = [
   _SliderSpec('GrainRoughness', 0, 100, 50),
 ];
 
+/// The Film section (2026-09-12) — a 3D look-up table applied last, see
+/// `lib/render/film_lut.dart`. [_filmKey] holds the bundled table's
+/// manifest id (0 = none): an *id*, not an amount, which is why
+/// [withGlobalEditAmountApplied] leaves it alone — scaling id 2 toward 0
+/// would select a different film. [_filmAmountKey] is the blend, at the
+/// house-rule 50% default. Global-only, like Vignette and Grain: a mask
+/// layer renders over the already-filmed base.
+const _filmKey = 'Film';
+const _filmAmountKey = 'FilmAmount';
+const _filmSliders = [
+  _SliderSpec(_filmKey, 0, 100000, 0),
+  _SliderSpec(_filmAmountKey, 0, 100, defaultFilmAmount),
+];
+
 /// Meridian's parametric Tone Curve — four region sliders plus the three
 /// split points that set where each region ends. Lives under the Tone
 /// Curve editor; toggled off with the TONE CURVE section switch. Split
@@ -750,6 +771,7 @@ Map<String, double> _defaultParamValues() {
     for (final spec in _colorProfileSliders) spec.name: spec.defaultValue,
     for (final spec in _vignetteSliders) spec.name: spec.defaultValue,
     for (final spec in _grainSliders) spec.name: spec.defaultValue,
+    for (final spec in _filmSliders) spec.name: spec.defaultValue,
     for (final spec in _parametricCurveSliders) spec.name: spec.defaultValue,
     // Lens Correction is also global-only (see RenderJob.lensCorrection's
     // doc comment) and lives outside [_sections] for the same reason as

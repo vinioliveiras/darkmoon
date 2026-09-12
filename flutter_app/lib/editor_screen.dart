@@ -75,6 +75,8 @@ import 'render/ai_enhance_job.dart'
         AiEnhanceProgress,
         CustomDenoiseModelFallback;
 import 'render/color_profile.dart';
+import 'render/film_lut.dart';
+import 'render/film_lut_library.dart';
 import 'render/histogram.dart';
 import 'render/hsl.dart';
 import 'render/lens_correction.dart';
@@ -381,6 +383,10 @@ class _EditorScreenState extends State<EditorScreen>
   /// — one entry per mode with a non-null [ColorProfileMode.profileAsset]
   /// once loading finishes. Missing entry = no correction for that mode.
   final Map<ColorProfileMode, ColorProfile> _colorProfiles = {};
+
+  /// The bundled film tables (see `film_lut_library.dart`), null until
+  /// [_loadFilmLuts] lands.
+  FilmLutLibrary? _filmLuts;
 
   /// [_colorProfiles]'s entry for the currently-active [ColorProfileMode],
   /// but only when that mode actually wants one
@@ -1175,6 +1181,7 @@ class _EditorScreenState extends State<EditorScreen>
     unawaited(_loadCameraMatchCache());
     unawaited(_loadCacheRoot());
     unawaited(_loadLensProfiles());
+    unawaited(_loadFilmLuts());
     unawaited(cleanupStalePreviewCacheVersions());
     if (_colorProfileEnabled) {
       unawaited(_loadColorProfile());
@@ -1228,6 +1235,35 @@ class _EditorScreenState extends State<EditorScreen>
     if (_selectedIndex != null && _customProfileMissing == false) {
       _scheduleRender(live: false);
     }
+  }
+
+  /// Loads the bundled film tables (assets/film_luts/) into [_filmLuts].
+  /// Not awaited from initState, like every other `_load*`; a photo that
+  /// already carries a `Film` id is re-rendered once they land.
+  Future<void> _loadFilmLuts() async {
+    final FilmLutLibrary loaded;
+    try {
+      loaded = await FilmLutLibrary.loadBundled();
+    } catch (_) {
+      return; // No manifest bundled: the Film section stays empty.
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() => _filmLuts = loaded);
+    if (_selectedIndex != null && (_paramValues[_filmKey] ?? 0) > 0) {
+      _scheduleRender(live: false);
+    }
+  }
+
+  /// The film table [values] point at — null for none, or for a table the
+  /// library does not have (not loaded yet, or an asset gone).
+  FilmLut? _filmLutFor(Map<String, double> values) {
+    final id = (values[_filmKey] ?? 0).round();
+    if (id <= 0) {
+      return null;
+    }
+    return _filmLuts?.byId(id);
   }
 
   Future<void> _loadColorProfile() async {
@@ -3699,6 +3735,7 @@ class _EditorScreenState extends State<EditorScreen>
         colorProfile: _colorProfileFor(path),
         colorProfileStrength: _effectiveColorProfileStrength,
         cameraColorHasFit: _cameraColorFitAvailable(path),
+        filmLut: _filmLutFor(_effectiveParamValues()),
       ),
       masks: _effectiveMasks,
       aiMaskMaps: _aiMaskMaps,
@@ -4426,6 +4463,7 @@ class _EditorScreenState extends State<EditorScreen>
         baseContrast: _baseContrastFor(path),
         colorProfile: profile,
         cameraColorHasFit: _cameraColorFitAvailable(path),
+        filmLut: _filmLutFor(preset.values),
       ),
     );
   }
@@ -5591,6 +5629,8 @@ class _EditorScreenState extends State<EditorScreen>
                                             guidedModeActive: _guidedModeActive,
                                             lensCorrection: _lensCorrection,
                                             lensProfiles: _lensProfiles,
+                                            films:
+                                                _filmLuts?.entries ?? const [],
                                             resolvedLensProfile:
                                                 selected == null
                                                 ? null

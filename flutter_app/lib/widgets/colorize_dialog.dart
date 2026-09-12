@@ -5,8 +5,10 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../native/onnx_gpu_probe.dart' show probeColorizeGpuSupport;
+import '../render/film_lut_library.dart';
 import '../theme.dart';
 import 'dialog_chrome.dart';
+import 'styled_dropdown.dart';
 
 /// Default value for [ColorizeChoice.intensityPercent] — 100%, the
 /// model's raw prediction. Unlike the "new toggle, balanced 50% default"
@@ -26,10 +28,15 @@ class ColorizeChoice {
   const ColorizeChoice({
     required this.active,
     this.intensityPercent = defaultColorizeIntensity,
+    this.filmId = 0,
   });
 
   final bool active;
   final int intensityPercent;
+
+  /// The film look to apply on top (a `FilmLutLibrary` id, 0 = none) —
+  /// written to the Film section's value, not run by colorize itself.
+  final int filmId;
 }
 
 /// Colorize (item 37, DDColor) confirm dialog — deliberately not folded
@@ -50,6 +57,8 @@ class ColorizeDialog extends StatefulWidget {
     super.key,
     required this.active,
     this.intensityPercent = defaultColorizeIntensity,
+    this.films = const [],
+    this.filmId = 0,
   });
 
   /// Whether colorize is already applied to the current photo — same
@@ -57,12 +66,20 @@ class ColorizeDialog extends StatefulWidget {
   final bool active;
   final int intensityPercent;
 
+  /// The bundled film looks offered in the dialog's dropdown, and the one
+  /// the photo currently has (0 = none).
+  final List<FilmLutEntry> films;
+  final int filmId;
+
   @override
   State<ColorizeDialog> createState() => _ColorizeDialogState();
 }
 
 class _ColorizeDialogState extends State<ColorizeDialog> {
   late int _intensity = widget.intensityPercent;
+  late int _filmId = widget.films.any((f) => f.id == widget.filmId)
+      ? widget.filmId
+      : 0;
 
   /// null while the probe hasn't resolved yet — same convention as
   /// `AiDenoiseDialog`'s own `_gpuAvailable`. Probed here in `initState`,
@@ -176,6 +193,26 @@ class _ColorizeDialogState extends State<ColorizeDialog> {
                 onChanged: (v) => setState(() => _intensity = v.round()),
               ),
             ),
+            if (widget.films.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                l10n.colorizeFilmLabel,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: DarkmoonColors.textSecondary,
+                ),
+              ),
+              const SizedBox(height: 6),
+              StyledDropdown<int>(
+                value: _filmId,
+                items: [
+                  StyledDropdownItem(value: 0, label: l10n.filmNone),
+                  for (final film in widget.films)
+                    StyledDropdownItem(value: film.id, label: film.label),
+                ],
+                onChanged: (v) => setState(() => _filmId = v),
+              ),
+            ],
             if (widget.active) ...[
               const SizedBox(height: 4),
               TextButton(
@@ -194,9 +231,13 @@ class _ColorizeDialogState extends State<ColorizeDialog> {
           child: Text(l10n.cancelButton),
         ),
         FilledButton(
-          onPressed: () => Navigator.of(
-            context,
-          ).pop(ColorizeChoice(active: true, intensityPercent: _intensity)),
+          onPressed: () => Navigator.of(context).pop(
+            ColorizeChoice(
+              active: true,
+              intensityPercent: _intensity,
+              filmId: _filmId,
+            ),
+          ),
           child: Text(l10n.aiDenoiseApplyButton),
         ),
       ],

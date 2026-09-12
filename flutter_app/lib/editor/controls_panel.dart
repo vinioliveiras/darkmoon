@@ -45,6 +45,7 @@ class _ControlsPanel extends StatefulWidget {
     required this.guidedModeActive,
     required this.lensCorrection,
     required this.lensProfiles,
+    required this.films,
     required this.resolvedLensProfile,
     required this.wbEyedropperActive,
   });
@@ -136,6 +137,9 @@ class _ControlsPanel extends StatefulWidget {
   final bool guidedModeActive;
 
   final LensCorrectionParams lensCorrection;
+
+  /// The bundled film tables, manifest order, for the Film dropdown.
+  final List<FilmLutEntry> films;
   final List<LensProfile> lensProfiles;
 
   /// The profile actually in effect for the selected photo right now --
@@ -1781,6 +1785,73 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                   ..._vignetteSliders,
                                   ..._grainSliders,
                                 ])
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: SliderRow(
+                                      name: _sliderLabel(l10n, spec.name),
+                                      min: spec.min,
+                                      max: spec.max,
+                                      value:
+                                          values[spec.name] ??
+                                          spec.defaultValue,
+                                      decimals: spec.decimals,
+                                      dragSensitivity: spec.dragSensitivity,
+                                      defaultValue: spec.defaultValue,
+                                      onChanged: (v) => onChanged(spec.name, v),
+                                      onChangeEnd: (v) =>
+                                          onChangeEnd(spec.name, v),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          if (_inTab(_ControlsTab.effects))
+                            ..._section(
+                              'FILM',
+                              label: l10n.sectionFilm,
+                              enabled:
+                                  (values[_categoryEnabledKey('FILM')] ?? 1) !=
+                                  0,
+                              onEnabledChanged: (v) => _toggleCategoryEnabled(
+                                _categoryEnabledKey('FILM'),
+                                v,
+                              ),
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: 6,
+                                    bottom: 14,
+                                  ),
+                                  child: StyledDropdown<int>(
+                                    // A film the library does not have
+                                    // (not loaded yet, or an asset gone)
+                                    // shows as None rather than as a blank
+                                    // button; the value itself is kept.
+                                    value:
+                                        widget.films.any(
+                                          (f) =>
+                                              f.id ==
+                                              (values[_filmKey] ?? 0).round(),
+                                        )
+                                        ? (values[_filmKey] ?? 0).round()
+                                        : 0,
+                                    items: [
+                                      StyledDropdownItem(
+                                        value: 0,
+                                        label: l10n.filmNone,
+                                      ),
+                                      for (final film in widget.films)
+                                        StyledDropdownItem(
+                                          value: film.id,
+                                          label: film.label,
+                                        ),
+                                    ],
+                                    onChanged: (id) {
+                                      onChanged(_filmKey, id.toDouble());
+                                      onChangeEnd(_filmKey, id.toDouble());
+                                    },
+                                  ),
+                                ),
+                                for (final spec in _filmSliders.skip(1))
                                   Padding(
                                     padding: const EdgeInsets.only(bottom: 12),
                                     child: SliderRow(
