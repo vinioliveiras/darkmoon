@@ -2,67 +2,74 @@
   "source": "RawTherapee Film Simulation Collection (Pat David, Pavlov Dmitry, Michael Ezra), CC BY-SA 4.0, resampled to 33^3",
   "films": [
     {
-      "id": 1,
-      "file": "film_01.png",
-      "name": "Portra 160",
-      "brand": "Kodak",
+      "id": 37,
+      "file": "film_37.png",
+      "name": "Ultra Color 100",
+      "brand": "Agfa",
       "kind": "negative"
     },
     {
-      "id": 2,
-      "file": "film_02.png",
-      "name": "Portra 400",
-      "brand": "Kodak",
+      "id": 12,
+      "file": "film_12.png",
+      "name": "Vista 200",
+      "brand": "Agfa",
       "kind": "negative"
     },
     {
-      "id": 3,
-      "file": "film_03.png",
-      "name": "Portra 800",
-      "brand": "Kodak",
-      "kind": "negative"
-    },
-    {
-      "id": 4,
-      "file": "film_04.png",
-      "name": "Ektar 100",
-      "brand": "Kodak",
-      "kind": "negative"
-    },
-    {
-      "id": 5,
-      "file": "film_05.png",
-      "name": "Kodachrome 64",
-      "brand": "Kodak",
+      "id": 36,
+      "file": "film_36.png",
+      "name": "Precisa 100",
+      "brand": "Agfa",
       "kind": "slide"
     },
     {
-      "id": 6,
-      "file": "film_06.png",
-      "name": "Ektachrome 100 VS",
-      "brand": "Kodak",
-      "kind": "slide"
+      "id": 54,
+      "file": "film_54.png",
+      "name": "APX 100",
+      "brand": "Agfa",
+      "kind": "bw"
     },
     {
-      "id": 7,
-      "file": "film_07.png",
-      "name": "Velvia 50",
+      "id": 55,
+      "file": "film_55.png",
+      "name": "APX 25",
+      "brand": "Agfa",
+      "kind": "bw"
+    },
+    {
+      "id": 29,
+      "file": "film_29.png",
+      "name": "Pro 160C",
       "brand": "Fuji",
-      "kind": "slide"
+      "kind": "negative"
     },
     {
-      "id": 8,
-      "file": "film_08.png",
-      "name": "Provia 100F",
+      "id": 30,
+      "file": "film_30.png",
+      "name": "Pro 400H",
       "brand": "Fuji",
-      "kind": "slide"
+      "kind": "negative"
     },
     {
-      "id": 9,
-      "file": "film_09.png",
-      "name": "Astia 100F",
+      "id": 31,
+      "file": "film_31.png",
+      "name": "Pro 800Z",
       "brand": "Fuji",
-      "kind": "slide"
+      "kind": "negative"
+    },
+    {
+      "id": 24,
+      "file": "film_24.png",
+      "name": "Superia 100",
+      "brand": "Fuji",
+      "kind": "negative"
+    },
+    {
+      "id": 26,
+      "file": "film_26.png",
+      "name": "Superia 1600",
+      "brand": "Fuji",
+      "kind": "negative"
     },
     {
       "id": 10,
@@ -79,18 +86,256 @@
       "kind": "negative"
     },
     {
-      "id": 12,
-      "file": "film_12.png",
-      "name": "Vista 200",
-      "brand": "Agfa",
+      "id": 25,
+      "file": "film_25.png",
+      "name": "Superia 800",
+      "brand": "Fuji",
       "kind": "negative"
     },
     {
-      "id": 13,
-      "file": "film_13.png",
-      "name": "690",
-      "brand": "Polaroid",
+      "id": 28,
+      "file": "film_28.png",
+      "name": "Superia Reala 100",
+      "brand": "Fuji",
+      "kind": "negative"
+    },
+    {
+      "id": 27,
+      "file": "film_27.png",
+      "name": "Superia X-Tra 800",
+      "brand": "Fuji",
+      "kind": "negative"
+    },
+    {
+      "id": 9,
+      "file": "film_09.png",
+      "name": "Astia 100F",
+      "brand": "Fuji",
+      "kind": "slide"
+    },
+    {
+      "id": 8,
+      "file": "film_08.png",
+      "name": "Provia 100F",
+      "brand": "Fuji",
+      "kind": "slide"
+    },
+    {
+      "id": 34,
+      "file": "film_34.png",
+      "name": "Provia 400X",
+      "brand": "Fuji",
+      "kind": "slide"
+    },
+    {
+      "id": 32,
+      "file": "film_32.png",
+      "name": "Sensia 100",
+      "brand": "Fuji",
+      "kind": "slide"
+    },
+    {
+      "id": 33,
+      "file": "film_33.png",
+      "name": "Velvia 100",
+      "brand": "Fuji",
+      "kind": "slide"
+    },
+    {
+      "id": 7,
+      "file": "film_07.png",
+      "name": "Velvia 50",
+      "brand": "Fuji",
+      "kind": "slide"
+    },
+    {
+      "id": 35,
+      "file": "film_35.png",
+      "name": "FP-100C",
+      "brand": "Fuji",
       "kind": "instant"
+    },
+    {
+      "id": 53,
+      "file": "film_53.png",
+      "name": "Neopan 1600",
+      "brand": "Fuji",
+      "kind": "bw"
+    },
+    {
+      "id": 52,
+      "file": "film_52.png",
+      "name": "Neopan Acros 100",
+      "brand": "Fuji",
+      "kind": "bw"
+    },
+    {
+      "id": 43,
+      "file": "film_43.png",
+      "name": "Delta 100",
+      "brand": "Ilford",
+      "kind": "bw"
+    },
+    {
+      "id": 45,
+      "file": "film_45.png",
+      "name": "Delta 3200",
+      "brand": "Ilford",
+      "kind": "bw"
+    },
+    {
+      "id": 44,
+      "file": "film_44.png",
+      "name": "Delta 400",
+      "brand": "Ilford",
+      "kind": "bw"
+    },
+    {
+      "id": 46,
+      "file": "film_46.png",
+      "name": "FP4 Plus 125",
+      "brand": "Ilford",
+      "kind": "bw"
+    },
+    {
+      "id": 15,
+      "file": "film_15.png",
+      "name": "HP5 Plus 400",
+      "brand": "Ilford",
+      "kind": "bw"
+    },
+    {
+      "id": 47,
+      "file": "film_47.png",
+      "name": "Pan F Plus 50",
+      "brand": "Ilford",
+      "kind": "bw"
+    },
+    {
+      "id": 48,
+      "file": "film_48.png",
+      "name": "XP2 Super",
+      "brand": "Ilford",
+      "kind": "bw"
+    },
+    {
+      "id": 4,
+      "file": "film_04.png",
+      "name": "Ektar 100",
+      "brand": "Kodak",
+      "kind": "negative"
+    },
+    {
+      "id": 1,
+      "file": "film_01.png",
+      "name": "Portra 160",
+      "brand": "Kodak",
+      "kind": "negative"
+    },
+    {
+      "id": 2,
+      "file": "film_02.png",
+      "name": "Portra 400",
+      "brand": "Kodak",
+      "kind": "negative"
+    },
+    {
+      "id": 16,
+      "file": "film_16.png",
+      "name": "Portra 400 NC",
+      "brand": "Kodak",
+      "kind": "negative"
+    },
+    {
+      "id": 18,
+      "file": "film_18.png",
+      "name": "Portra 400 UC",
+      "brand": "Kodak",
+      "kind": "negative"
+    },
+    {
+      "id": 17,
+      "file": "film_17.png",
+      "name": "Portra 400 VC",
+      "brand": "Kodak",
+      "kind": "negative"
+    },
+    {
+      "id": 3,
+      "file": "film_03.png",
+      "name": "Portra 800",
+      "brand": "Kodak",
+      "kind": "negative"
+    },
+    {
+      "id": 6,
+      "file": "film_06.png",
+      "name": "Ektachrome 100 VS",
+      "brand": "Kodak",
+      "kind": "slide"
+    },
+    {
+      "id": 19,
+      "file": "film_19.png",
+      "name": "Ektachrome E100 GX",
+      "brand": "Kodak",
+      "kind": "slide"
+    },
+    {
+      "id": 20,
+      "file": "film_20.png",
+      "name": "Elite Chrome 200",
+      "brand": "Kodak",
+      "kind": "slide"
+    },
+    {
+      "id": 21,
+      "file": "film_21.png",
+      "name": "Elite Chrome 400",
+      "brand": "Kodak",
+      "kind": "slide"
+    },
+    {
+      "id": 23,
+      "file": "film_23.png",
+      "name": "Kodachrome 200",
+      "brand": "Kodak",
+      "kind": "slide"
+    },
+    {
+      "id": 22,
+      "file": "film_22.png",
+      "name": "Kodachrome 25",
+      "brand": "Kodak",
+      "kind": "slide"
+    },
+    {
+      "id": 5,
+      "file": "film_05.png",
+      "name": "Kodachrome 64",
+      "brand": "Kodak",
+      "kind": "slide"
+    },
+    {
+      "id": 49,
+      "file": "film_49.png",
+      "name": "T-Max 100",
+      "brand": "Kodak",
+      "kind": "bw"
+    },
+    {
+      "id": 51,
+      "file": "film_51.png",
+      "name": "T-Max 3200",
+      "brand": "Kodak",
+      "kind": "bw"
+    },
+    {
+      "id": 50,
+      "file": "film_50.png",
+      "name": "T-Max 400",
+      "brand": "Kodak",
+      "kind": "bw"
     },
     {
       "id": 14,
@@ -100,10 +345,59 @@
       "kind": "bw"
     },
     {
-      "id": 15,
-      "file": "film_15.png",
-      "name": "HP5 Plus 400",
-      "brand": "Ilford",
+      "id": 39,
+      "file": "film_39.png",
+      "name": "Redscale 100",
+      "brand": "Lomography",
+      "kind": "negative"
+    },
+    {
+      "id": 38,
+      "file": "film_38.png",
+      "name": "X-Pro Slide 200",
+      "brand": "Lomography",
+      "kind": "slide"
+    },
+    {
+      "id": 40,
+      "file": "film_40.png",
+      "name": "669",
+      "brand": "Polaroid",
+      "kind": "instant"
+    },
+    {
+      "id": 13,
+      "file": "film_13.png",
+      "name": "690",
+      "brand": "Polaroid",
+      "kind": "instant"
+    },
+    {
+      "id": 42,
+      "file": "film_42.png",
+      "name": "PX-680",
+      "brand": "Polaroid",
+      "kind": "instant"
+    },
+    {
+      "id": 41,
+      "file": "film_41.png",
+      "name": "PX-70",
+      "brand": "Polaroid",
+      "kind": "instant"
+    },
+    {
+      "id": 57,
+      "file": "film_57.png",
+      "name": "665",
+      "brand": "Polaroid",
+      "kind": "bw"
+    },
+    {
+      "id": 56,
+      "file": "film_56.png",
+      "name": "Retro 80s",
+      "brand": "Rollei",
       "kind": "bw"
     }
   ]

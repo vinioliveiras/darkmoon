@@ -105,6 +105,242 @@ const _stocks = [
     'Ilford',
     'bw',
   ),
+  // 16-57 added 2026-09-13 (more of the popular stocks). Still one
+  // normal-exposure table per stock; ids append-only as above.
+  _Stock(
+    16,
+    'Color/Kodak/Kodak Portra 400 NC 2.png',
+    'Portra 400 NC',
+    'Kodak',
+    'negative',
+  ),
+  _Stock(
+    17,
+    'Color/Kodak/Kodak Portra 400 VC 2.png',
+    'Portra 400 VC',
+    'Kodak',
+    'negative',
+  ),
+  _Stock(
+    18,
+    'Color/Kodak/Kodak Portra 400 UC 2.png',
+    'Portra 400 UC',
+    'Kodak',
+    'negative',
+  ),
+  _Stock(
+    19,
+    'Color/Kodak/Kodak E-100 GX Ektachrome 100.png',
+    'Ektachrome E100 GX',
+    'Kodak',
+    'slide',
+  ),
+  _Stock(
+    20,
+    'Color/Kodak/Kodak Elite Chrome 200.png',
+    'Elite Chrome 200',
+    'Kodak',
+    'slide',
+  ),
+  _Stock(
+    21,
+    'Color/Kodak/Kodak Elite Chrome 400.png',
+    'Elite Chrome 400',
+    'Kodak',
+    'slide',
+  ),
+  _Stock(
+    22,
+    'Color/Kodak/Kodak Kodachrome 25.png',
+    'Kodachrome 25',
+    'Kodak',
+    'slide',
+  ),
+  _Stock(
+    23,
+    'Color/Kodak/Kodak Kodachrome 200.png',
+    'Kodachrome 200',
+    'Kodak',
+    'slide',
+  ),
+  _Stock(
+    24,
+    'Color/Fuji/Fuji Superia 100 2.png',
+    'Superia 100',
+    'Fuji',
+    'negative',
+  ),
+  _Stock(
+    25,
+    'Color/Fuji/Fuji Superia 800 2.png',
+    'Superia 800',
+    'Fuji',
+    'negative',
+  ),
+  _Stock(
+    26,
+    'Color/Fuji/Fuji Superia 1600 2.png',
+    'Superia 1600',
+    'Fuji',
+    'negative',
+  ),
+  _Stock(
+    27,
+    'Color/Fuji/Fuji Superia X-Tra 800.png',
+    'Superia X-Tra 800',
+    'Fuji',
+    'negative',
+  ),
+  _Stock(
+    28,
+    'Color/Fuji/Fuji Superia Reala 100.png',
+    'Superia Reala 100',
+    'Fuji',
+    'negative',
+  ),
+  _Stock(29, 'Color/Fuji/Fuji 160C 2.png', 'Pro 160C', 'Fuji', 'negative'),
+  _Stock(30, 'Color/Fuji/Fuji 400H 2.png', 'Pro 400H', 'Fuji', 'negative'),
+  _Stock(31, 'Color/Fuji/Fuji 800Z 2.png', 'Pro 800Z', 'Fuji', 'negative'),
+  _Stock(32, 'Color/Fuji/Fuji Sensia 100.png', 'Sensia 100', 'Fuji', 'slide'),
+  _Stock(
+    33,
+    'Color/Fuji/Fuji Velvia 100 Generic.png',
+    'Velvia 100',
+    'Fuji',
+    'slide',
+  ),
+  _Stock(34, 'Color/Fuji/Fuji Provia 400X.png', 'Provia 400X', 'Fuji', 'slide'),
+  _Stock(35, 'Color/Fuji/Fuji FP-100c 3.png', 'FP-100C', 'Fuji', 'instant'),
+  _Stock(36, 'Color/Agfa/Agfa Precisa 100.png', 'Precisa 100', 'Agfa', 'slide'),
+  _Stock(
+    37,
+    'Color/Agfa/Agfa Ultra Color 100.png',
+    'Ultra Color 100',
+    'Agfa',
+    'negative',
+  ),
+  _Stock(
+    38,
+    'Color/Lomography/Lomography X-Pro Slide 200.png',
+    'X-Pro Slide 200',
+    'Lomography',
+    'slide',
+  ),
+  _Stock(
+    39,
+    'Color/Lomography/Lomography Redscale 100.png',
+    'Redscale 100',
+    'Lomography',
+    'negative',
+  ),
+  _Stock(40, 'Color/Polaroid/Polaroid 669 3.png', '669', 'Polaroid', 'instant'),
+  _Stock(
+    41,
+    'Color/Polaroid/Polaroid PX-70 3.png',
+    'PX-70',
+    'Polaroid',
+    'instant',
+  ),
+  _Stock(
+    42,
+    'Color/Polaroid/Polaroid PX-680 3.png',
+    'PX-680',
+    'Polaroid',
+    'instant',
+  ),
+  _Stock(
+    43,
+    'Black-and-White/Ilford/Ilford Delta 100.png',
+    'Delta 100',
+    'Ilford',
+    'bw',
+  ),
+  _Stock(
+    44,
+    'Black-and-White/Ilford/Ilford Delta 400.png',
+    'Delta 400',
+    'Ilford',
+    'bw',
+  ),
+  _Stock(
+    45,
+    'Black-and-White/Ilford/Ilford Delta 3200 2.png',
+    'Delta 3200',
+    'Ilford',
+    'bw',
+  ),
+  _Stock(
+    46,
+    'Black-and-White/Ilford/Ilford FP4 Plus 125.png',
+    'FP4 Plus 125',
+    'Ilford',
+    'bw',
+  ),
+  _Stock(
+    47,
+    'Black-and-White/Ilford/Ilford Pan F Plus 50.png',
+    'Pan F Plus 50',
+    'Ilford',
+    'bw',
+  ),
+  _Stock(
+    48,
+    'Black-and-White/Ilford/Ilford XP2.png',
+    'XP2 Super',
+    'Ilford',
+    'bw',
+  ),
+  _Stock(
+    49,
+    'Black-and-White/Kodak/Kodak T-Max 100.png',
+    'T-Max 100',
+    'Kodak',
+    'bw',
+  ),
+  _Stock(
+    50,
+    'Black-and-White/Kodak/Kodak T-Max 400.png',
+    'T-Max 400',
+    'Kodak',
+    'bw',
+  ),
+  _Stock(
+    51,
+    'Black-and-White/Kodak/Kodak TMAX 3200 2.png',
+    'T-Max 3200',
+    'Kodak',
+    'bw',
+  ),
+  _Stock(
+    52,
+    'Black-and-White/Fuji/Fuji Neopan Acros 100.png',
+    'Neopan Acros 100',
+    'Fuji',
+    'bw',
+  ),
+  _Stock(
+    53,
+    'Black-and-White/Fuji/Fuji Neopan 1600 2.png',
+    'Neopan 1600',
+    'Fuji',
+    'bw',
+  ),
+  _Stock(54, 'Black-and-White/Agfa/Agfa APX 100.png', 'APX 100', 'Agfa', 'bw'),
+  _Stock(55, 'Black-and-White/Agfa/Agfa APX 25.png', 'APX 25', 'Agfa', 'bw'),
+  _Stock(
+    56,
+    'Black-and-White/Rollei/Rollei Retro 80s.png',
+    'Retro 80s',
+    'Rollei',
+    'bw',
+  ),
+  _Stock(
+    57,
+    'Black-and-White/Polaroid/Polaroid 665 3.png',
+    '665',
+    'Polaroid',
+    'bw',
+  ),
 ];
 
 void main(List<String> args) {
@@ -140,6 +376,18 @@ void main(List<String> args) {
       '${png.length ~/ 1024} KB',
     );
   }
+  // The dropdown shows manifest order: brand, then kind, then name — the
+  // ids stay whatever they are.
+  const kindOrder = ['negative', 'slide', 'instant', 'bw'];
+  manifest.sort((a, b) {
+    final brand = (a['brand'] as String).compareTo(b['brand'] as String);
+    if (brand != 0) return brand;
+    final kind = kindOrder
+        .indexOf(a['kind'] as String)
+        .compareTo(kindOrder.indexOf(b['kind'] as String));
+    if (kind != 0) return kind;
+    return (a['name'] as String).compareTo(b['name'] as String);
+  });
   File(p.join(outDir, 'manifest.json')).writeAsStringSync(
     const JsonEncoder.withIndent('  ').convert({
       'source':
