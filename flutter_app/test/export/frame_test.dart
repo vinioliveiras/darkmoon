@@ -27,14 +27,18 @@ void main() {
     final tall = frameSizeFor(
       600,
       400,
-      const FrameOptions(paddingPercent: 0, aspect: FrameAspect.portrait4x5),
+      const FrameOptions(
+        paddingPercent: 0,
+        aspect: FrameAspect.ratio5x4,
+        portrait: true,
+      ),
     );
     expect(tall.width, 600);
     expect(tall.height, 750);
     final wide = frameSizeFor(
       400,
       600,
-      const FrameOptions(paddingPercent: 0, aspect: FrameAspect.widescreen16x9),
+      const FrameOptions(paddingPercent: 0, aspect: FrameAspect.ratio16x9),
     );
     expect(wide.height, 600);
     expect(wide.width, closeTo(600 * 16 / 9, 1));

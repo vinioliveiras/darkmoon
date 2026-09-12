@@ -34,7 +34,23 @@ extension _EditorExport on _EditorScreenState {
     if (destPath == null || !mounted) {
       return;
     }
+    await _exportSelected(selected, destPath, options);
+  }
 
+  /// Exports [selected] — which must be the selected photo, since the
+  /// render reads the editor's live values — to [destPath] with
+  /// [options]. [longEdge], when given, replaces `options.scalePercent`
+  /// with whatever percentage puts the photo's long edge at that many
+  /// pixels (never above 100). Null when cancelled; the result otherwise,
+  /// after the usual notification.
+  Future<ExportResult?> _exportSelected(
+    RawFile selected,
+    String destPath,
+    ExportOptions options, {
+    int? longEdge,
+  }) async {
+    final l10n = AppLocalizations.of(context)!;
+    final metadata = _metadata[selected.path];
     _rebuild(() {
       _exporting = true;
       _exportCancellation = ExportCancellationToken();
@@ -138,7 +154,7 @@ extension _EditorExport on _EditorScreenState {
         _exporting = false;
         _exportStage = null;
       });
-      return;
+      return null;
     }
 
     final result = await exportPhotoWithProgress(
@@ -165,7 +181,13 @@ extension _EditorExport on _EditorScreenState {
         format: options.format,
         quality: options.quality,
         cropTransform: _cropTransform,
-        scalePercent: options.scalePercent,
+        scalePercent: longEdge == null
+            ? options.scalePercent
+            : _scalePercentForLongEdge(
+                longEdge,
+                nativeForExport?.width ?? metadata?.width,
+                nativeForExport?.height ?? metadata?.height,
+              ),
         frame: options.frame,
         preDecodedRgb: nativeForExport?.rgbBytes,
         preDecodedWidth: nativeForExport?.width,
@@ -184,7 +206,7 @@ extension _EditorExport on _EditorScreenState {
     final wasCancelled = result.error == 'Export cancelled';
     _exportCancellation = null;
     if (!mounted) {
-      return;
+      return null;
     }
     _rebuild(() {
       _exporting = false;
@@ -208,5 +230,20 @@ extension _EditorExport on _EditorScreenState {
             : l10n.exportFailedStatus,
       );
     }
+    return wasCancelled ? null : result;
+  }
+
+  /// The export percentage that puts a [width] x [height] photo's long
+  /// edge at [longEdge] pixels; null (full size) when the size is unknown
+  /// or the photo is already smaller.
+  int? _scalePercentForLongEdge(int longEdge, int? width, int? height) {
+    if (width == null || height == null || width <= 0 || height <= 0) {
+      return null;
+    }
+    final long = math.max(width, height);
+    if (long <= longEdge) {
+      return null;
+    }
+    return (longEdge / long * 100).ceil().clamp(1, 100);
   }
 }

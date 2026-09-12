@@ -292,6 +292,138 @@ abstract class AppLocalizations {
   /// **'Convert negative…'**
   String get libraryConvertNegativeAction;
 
+  /// No description provided for @libraryFrameImageAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Frame image…'**
+  String get libraryFrameImageAction;
+
+  /// No description provided for @libraryFrameImagesAction.
+  ///
+  /// In en, this message translates to:
+  /// **'Frame {count} images…'**
+  String libraryFrameImagesAction(int count);
+
+  /// No description provided for @frameDialogTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Frame image'**
+  String get frameDialogTitle;
+
+  /// No description provided for @framePreviewHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Preview of the first photo; the file is rendered at full size with its edits.'**
+  String get framePreviewHint;
+
+  /// No description provided for @framePreviewUnavailable.
+  ///
+  /// In en, this message translates to:
+  /// **'No preview for this photo yet.'**
+  String get framePreviewUnavailable;
+
+  /// No description provided for @frameAspectLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Aspect ratio'**
+  String get frameAspectLabel;
+
+  /// No description provided for @frameAspectOriginal.
+  ///
+  /// In en, this message translates to:
+  /// **'Original'**
+  String get frameAspectOriginal;
+
+  /// No description provided for @frameOrientationLandscape.
+  ///
+  /// In en, this message translates to:
+  /// **'Landscape'**
+  String get frameOrientationLandscape;
+
+  /// No description provided for @frameOrientationPortrait.
+  ///
+  /// In en, this message translates to:
+  /// **'Portrait'**
+  String get frameOrientationPortrait;
+
+  /// No description provided for @frameSpacingLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Spacing'**
+  String get frameSpacingLabel;
+
+  /// No description provided for @frameRadiusLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Corner radius'**
+  String get frameRadiusLabel;
+
+  /// No description provided for @frameBackgroundLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Background'**
+  String get frameBackgroundLabel;
+
+  /// No description provided for @frameBackgroundHexHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Hex, e.g. F4F1EA'**
+  String get frameBackgroundHexHint;
+
+  /// No description provided for @frameSizeLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Long edge'**
+  String get frameSizeLabel;
+
+  /// No description provided for @frameSizeOriginal.
+  ///
+  /// In en, this message translates to:
+  /// **'Original size'**
+  String get frameSizeOriginal;
+
+  /// No description provided for @frameSizePixels.
+  ///
+  /// In en, this message translates to:
+  /// **'{pixels} px'**
+  String frameSizePixels(int pixels);
+
+  /// No description provided for @frameFormatLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Format'**
+  String get frameFormatLabel;
+
+  /// No description provided for @frameSaveButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Save framed image'**
+  String get frameSaveButton;
+
+  /// No description provided for @frameSaveAllButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Save all framed ({count})'**
+  String frameSaveAllButton(int count);
+
+  /// No description provided for @frameSavingProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Saving {current}/{total}…'**
+  String frameSavingProgress(int current, int total);
+
+  /// No description provided for @frameSavedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Saved 1 framed image} other{Saved {count} framed images}} beside the originals (_Framed).'**
+  String frameSavedMessage(int count);
+
+  /// No description provided for @frameFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Could not frame {name}.'**
+  String frameFailedMessage(String name);
+
   /// No description provided for @libraryConvertNegativesAction.
   ///
   /// In en, this message translates to:
@@ -1551,48 +1683,6 @@ abstract class AppLocalizations {
   /// In en, this message translates to:
   /// **'Export'**
   String get exportDialogConfirm;
-
-  /// No description provided for @exportFrameLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Frame'**
-  String get exportFrameLabel;
-
-  /// No description provided for @exportFrameHint.
-  ///
-  /// In en, this message translates to:
-  /// **'A border around the photo in the exported file'**
-  String get exportFrameHint;
-
-  /// No description provided for @exportFramePaddingLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Border'**
-  String get exportFramePaddingLabel;
-
-  /// No description provided for @exportFrameRadiusLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Corner radius'**
-  String get exportFrameRadiusLabel;
-
-  /// No description provided for @exportFrameAspectLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Frame shape'**
-  String get exportFrameAspectLabel;
-
-  /// No description provided for @exportFrameAspectOriginal.
-  ///
-  /// In en, this message translates to:
-  /// **'Original'**
-  String get exportFrameAspectOriginal;
-
-  /// No description provided for @exportFrameBackgroundLabel.
-  ///
-  /// In en, this message translates to:
-  /// **'Background'**
-  String get exportFrameBackgroundLabel;
 
   /// No description provided for @cancelButton.
   ///

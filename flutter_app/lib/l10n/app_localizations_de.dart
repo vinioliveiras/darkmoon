@@ -139,6 +139,92 @@ class AppLocalizationsDe extends AppLocalizations {
   String get libraryConvertNegativeAction => 'Negativ umkehren…';
 
   @override
+  String get libraryFrameImageAction => 'Bild rahmen…';
+
+  @override
+  String libraryFrameImagesAction(int count) {
+    return '$count Bilder rahmen…';
+  }
+
+  @override
+  String get frameDialogTitle => 'Bildrahmen';
+
+  @override
+  String get framePreviewHint =>
+      'Vorschau des ersten Fotos; die Datei wird in voller Größe mit den Bearbeitungen gerendert.';
+
+  @override
+  String get framePreviewUnavailable =>
+      'Für dieses Foto gibt es noch keine Vorschau.';
+
+  @override
+  String get frameAspectLabel => 'Seitenverhältnis';
+
+  @override
+  String get frameAspectOriginal => 'Original';
+
+  @override
+  String get frameOrientationLandscape => 'Querformat';
+
+  @override
+  String get frameOrientationPortrait => 'Hochformat';
+
+  @override
+  String get frameSpacingLabel => 'Abstand';
+
+  @override
+  String get frameRadiusLabel => 'Eckenradius';
+
+  @override
+  String get frameBackgroundLabel => 'Hintergrund';
+
+  @override
+  String get frameBackgroundHexHint => 'Hex, z. B. F4F1EA';
+
+  @override
+  String get frameSizeLabel => 'Lange Kante';
+
+  @override
+  String get frameSizeOriginal => 'Originalgröße';
+
+  @override
+  String frameSizePixels(int pixels) {
+    return '$pixels px';
+  }
+
+  @override
+  String get frameFormatLabel => 'Format';
+
+  @override
+  String get frameSaveButton => 'Gerahmt speichern';
+
+  @override
+  String frameSaveAllButton(int count) {
+    return 'Alle gerahmt speichern ($count)';
+  }
+
+  @override
+  String frameSavingProgress(int current, int total) {
+    return 'Speichern $current/$total…';
+  }
+
+  @override
+  String frameSavedMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count gerahmte Bilder',
+      one: '1 gerahmtes Bild',
+    );
+    return '$_temp0 neben den Originalen gespeichert (_Framed).';
+  }
+
+  @override
+  String frameFailedMessage(String name) {
+    return '$name konnte nicht gerahmt werden.';
+  }
+
+  @override
   String libraryConvertNegativesAction(int count) {
     return '$count Negative umkehren…';
   }
@@ -871,28 +957,6 @@ class AppLocalizationsDe extends AppLocalizations {
 
   @override
   String get exportDialogConfirm => 'Exportieren';
-
-  @override
-  String get exportFrameLabel => 'Rahmen';
-
-  @override
-  String get exportFrameHint =>
-      'Ein Rand um das Foto in der exportierten Datei';
-
-  @override
-  String get exportFramePaddingLabel => 'Rand';
-
-  @override
-  String get exportFrameRadiusLabel => 'Eckenradius';
-
-  @override
-  String get exportFrameAspectLabel => 'Rahmenformat';
-
-  @override
-  String get exportFrameAspectOriginal => 'Original';
-
-  @override
-  String get exportFrameBackgroundLabel => 'Hintergrund';
 
   @override
   String get cancelButton => 'Abbrechen';

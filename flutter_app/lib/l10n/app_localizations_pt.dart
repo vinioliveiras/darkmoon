@@ -138,6 +138,91 @@ class AppLocalizationsPt extends AppLocalizations {
   String get libraryConvertNegativeAction => 'Converter negativo…';
 
   @override
+  String get libraryFrameImageAction => 'Emoldurar imagem…';
+
+  @override
+  String libraryFrameImagesAction(int count) {
+    return 'Emoldurar $count imagens…';
+  }
+
+  @override
+  String get frameDialogTitle => 'Moldura';
+
+  @override
+  String get framePreviewHint =>
+      'Prévia da primeira foto; o arquivo é gerado em tamanho real com as edições.';
+
+  @override
+  String get framePreviewUnavailable => 'Ainda não há prévia para esta foto.';
+
+  @override
+  String get frameAspectLabel => 'Proporção';
+
+  @override
+  String get frameAspectOriginal => 'Original';
+
+  @override
+  String get frameOrientationLandscape => 'Paisagem';
+
+  @override
+  String get frameOrientationPortrait => 'Retrato';
+
+  @override
+  String get frameSpacingLabel => 'Espaçamento';
+
+  @override
+  String get frameRadiusLabel => 'Raio dos cantos';
+
+  @override
+  String get frameBackgroundLabel => 'Fundo';
+
+  @override
+  String get frameBackgroundHexHint => 'Hex, ex.: F4F1EA';
+
+  @override
+  String get frameSizeLabel => 'Lado maior';
+
+  @override
+  String get frameSizeOriginal => 'Tamanho original';
+
+  @override
+  String frameSizePixels(int pixels) {
+    return '$pixels px';
+  }
+
+  @override
+  String get frameFormatLabel => 'Formato';
+
+  @override
+  String get frameSaveButton => 'Salvar com moldura';
+
+  @override
+  String frameSaveAllButton(int count) {
+    return 'Salvar todas com moldura ($count)';
+  }
+
+  @override
+  String frameSavingProgress(int current, int total) {
+    return 'Salvando $current/$total…';
+  }
+
+  @override
+  String frameSavedMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count imagens com moldura salvas',
+      one: '1 imagem com moldura salva',
+    );
+    return '$_temp0 ao lado dos originais (_Framed).';
+  }
+
+  @override
+  String frameFailedMessage(String name) {
+    return 'Não foi possível emoldurar $name.';
+  }
+
+  @override
   String libraryConvertNegativesAction(int count) {
     return 'Converter $count negativos…';
   }
@@ -863,28 +948,6 @@ class AppLocalizationsPt extends AppLocalizations {
 
   @override
   String get exportDialogConfirm => 'Exportar';
-
-  @override
-  String get exportFrameLabel => 'Moldura';
-
-  @override
-  String get exportFrameHint =>
-      'Uma borda ao redor da foto no arquivo exportado';
-
-  @override
-  String get exportFramePaddingLabel => 'Borda';
-
-  @override
-  String get exportFrameRadiusLabel => 'Raio dos cantos';
-
-  @override
-  String get exportFrameAspectLabel => 'Formato da moldura';
-
-  @override
-  String get exportFrameAspectOriginal => 'Original';
-
-  @override
-  String get exportFrameBackgroundLabel => 'Fundo';
 
   @override
   String get cancelButton => 'Cancelar';

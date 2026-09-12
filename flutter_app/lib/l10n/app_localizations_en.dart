@@ -136,6 +136,91 @@ class AppLocalizationsEn extends AppLocalizations {
   String get libraryConvertNegativeAction => 'Convert negative…';
 
   @override
+  String get libraryFrameImageAction => 'Frame image…';
+
+  @override
+  String libraryFrameImagesAction(int count) {
+    return 'Frame $count images…';
+  }
+
+  @override
+  String get frameDialogTitle => 'Frame image';
+
+  @override
+  String get framePreviewHint =>
+      'Preview of the first photo; the file is rendered at full size with its edits.';
+
+  @override
+  String get framePreviewUnavailable => 'No preview for this photo yet.';
+
+  @override
+  String get frameAspectLabel => 'Aspect ratio';
+
+  @override
+  String get frameAspectOriginal => 'Original';
+
+  @override
+  String get frameOrientationLandscape => 'Landscape';
+
+  @override
+  String get frameOrientationPortrait => 'Portrait';
+
+  @override
+  String get frameSpacingLabel => 'Spacing';
+
+  @override
+  String get frameRadiusLabel => 'Corner radius';
+
+  @override
+  String get frameBackgroundLabel => 'Background';
+
+  @override
+  String get frameBackgroundHexHint => 'Hex, e.g. F4F1EA';
+
+  @override
+  String get frameSizeLabel => 'Long edge';
+
+  @override
+  String get frameSizeOriginal => 'Original size';
+
+  @override
+  String frameSizePixels(int pixels) {
+    return '$pixels px';
+  }
+
+  @override
+  String get frameFormatLabel => 'Format';
+
+  @override
+  String get frameSaveButton => 'Save framed image';
+
+  @override
+  String frameSaveAllButton(int count) {
+    return 'Save all framed ($count)';
+  }
+
+  @override
+  String frameSavingProgress(int current, int total) {
+    return 'Saving $current/$total…';
+  }
+
+  @override
+  String frameSavedMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Saved $count framed images',
+      one: 'Saved 1 framed image',
+    );
+    return '$_temp0 beside the originals (_Framed).';
+  }
+
+  @override
+  String frameFailedMessage(String name) {
+    return 'Could not frame $name.';
+  }
+
+  @override
   String libraryConvertNegativesAction(int count) {
     return 'Convert $count negatives…';
   }
@@ -858,28 +943,6 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get exportDialogConfirm => 'Export';
-
-  @override
-  String get exportFrameLabel => 'Frame';
-
-  @override
-  String get exportFrameHint =>
-      'A border around the photo in the exported file';
-
-  @override
-  String get exportFramePaddingLabel => 'Border';
-
-  @override
-  String get exportFrameRadiusLabel => 'Corner radius';
-
-  @override
-  String get exportFrameAspectLabel => 'Frame shape';
-
-  @override
-  String get exportFrameAspectOriginal => 'Original';
-
-  @override
-  String get exportFrameBackgroundLabel => 'Background';
 
   @override
   String get cancelButton => 'Cancel';

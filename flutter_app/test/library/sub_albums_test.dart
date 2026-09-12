@@ -62,6 +62,7 @@ void main() {
         onCreateFolder: (parent, name) async => null,
         onDelete: (_) async => 0,
         onConvertNegatives: (_) {},
+        onFrameImages: (_) {},
         onShowOnDisk: (_) {},
         onResetEdits: (_) {},
       ),

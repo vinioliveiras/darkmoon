@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../export/export_format.dart';
-import '../export/frame.dart';
+import '../export/frame.dart' show FrameOptions;
 import '../l10n/app_localizations.dart';
 import '../theme.dart';
 import 'dialog_chrome.dart';
@@ -17,7 +17,8 @@ class ExportOptions {
   final ExportFormat format;
   final int quality;
 
-  /// The Frame section, when it is switched on — see `frame.dart`.
+  /// A frame to compose in (the Albums "Frame image" action, see
+  /// `frame.dart`); the export dialog itself never sets one.
   final FrameOptions? frame;
 
   /// Set when "Rapid export" is on — passed straight through to
@@ -76,26 +77,6 @@ class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
   bool _rapid = true;
 
   int _rapidScalePercent = defaultRapidExportScalePercent;
-  bool _frameOn = false;
-  FrameOptions _frame = const FrameOptions();
-
-  /// The background swatches offered for a frame: paper white, black,
-  /// and two greys. ARGB.
-  static const _frameBackgrounds = [
-    0xFFFFFFFF,
-    0xFF000000,
-    0xFF2A2A2A,
-    0xFFE6E2DA,
-  ];
-
-  ({int width, int height})? _framedSize() {
-    final w = widget.nativeWidth, h = widget.nativeHeight;
-    if (w == null || h == null) return null;
-    final scale = _rapid ? _rapidScalePercent / 100 : 1.0;
-    final size = frameSizeFor((w * scale).round(), (h * scale).round(), _frame);
-    return (width: size.width, height: size.height);
-  }
-
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -239,113 +220,6 @@ class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
                   ),
                 ),
               ),
-              const SizedBox(height: 4),
-              const Divider(),
-              // Frame Image — Solstice's one-picture collage: a border, a
-              // corner radius, a background and an outer aspect, composed
-              // into the file at export.
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(l10n.exportFrameLabel),
-                subtitle: Text(l10n.exportFrameHint),
-                value: _frameOn,
-                onChanged: (v) => setState(() => _frameOn = v),
-              ),
-              if (_frameOn) ...[
-                _FrameSlider(
-                  label: l10n.exportFramePaddingLabel,
-                  value: _frame.paddingPercent,
-                  max: 50,
-                  onChanged: (v) => setState(
-                    () => _frame = _frame.copyWith(paddingPercent: v),
-                  ),
-                ),
-                _FrameSlider(
-                  label: l10n.exportFrameRadiusLabel,
-                  value: _frame.radiusPercent,
-                  max: 50,
-                  onChanged: (v) => setState(
-                    () => _frame = _frame.copyWith(radiusPercent: v),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  l10n.exportFrameAspectLabel,
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 6,
-                  runSpacing: 6,
-                  children: [
-                    for (final aspect in FrameAspect.values)
-                      _FormatChip(
-                        label: switch (aspect) {
-                          FrameAspect.original =>
-                            l10n.exportFrameAspectOriginal,
-                          FrameAspect.square => '1:1',
-                          FrameAspect.portrait4x5 => '4:5',
-                          FrameAspect.landscape3x2 => '3:2',
-                          FrameAspect.widescreen16x9 => '16:9',
-                        },
-                        selected: _frame.aspect == aspect,
-                        onTap: () => setState(
-                          () => _frame = _frame.copyWith(aspect: aspect),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  l10n.exportFrameBackgroundLabel,
-                  style: Theme.of(context).textTheme.labelSmall,
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    for (final argb in _frameBackgrounds) ...[
-                      GestureDetector(
-                        onTap: () => setState(
-                          () => _frame = _frame.copyWith(background: argb),
-                        ),
-                        child: Container(
-                          key: Key('frame-bg-${argb.toRadixString(16)}'),
-                          width: 26,
-                          height: 26,
-                          decoration: BoxDecoration(
-                            color: Color(argb),
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(
-                              color: _frame.background == argb
-                                  ? DarkmoonColors.accent
-                                  : DarkmoonColors.border,
-                              width: _frame.background == argb ? 2 : 1,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                    ],
-                  ],
-                ),
-                if (_framedSize() case final size?)
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        l10n.exportRapidScaleResultLabel(
-                          size.width,
-                          size.height,
-                        ),
-                        style: const TextStyle(
-                          color: DarkmoonColors.textMuted,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
             ],
           ),
         ),
@@ -362,65 +236,10 @@ class _ExportOptionsDialogState extends State<ExportOptionsDialog> {
                     format: ExportFormat.jpeg,
                     quality: rapidExportQuality,
                     scalePercent: _rapidScalePercent,
-                    frame: _frameOn ? _frame : null,
                   )
-                : ExportOptions(
-                    format: _format,
-                    quality: _quality,
-                    frame: _frameOn ? _frame : null,
-                  ),
+                : ExportOptions(format: _format, quality: _quality),
           ),
           child: Text(l10n.exportDialogConfirm),
-        ),
-      ],
-    );
-  }
-}
-
-/// One labelled 0..[max] percent slider of the Frame section.
-class _FrameSlider extends StatelessWidget {
-  const _FrameSlider({
-    required this.label,
-    required this.value,
-    required this.max,
-    required this.onChanged,
-  });
-
-  final String label;
-  final int value;
-  final int max;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          children: [
-            Expanded(
-              child: Text(label, style: Theme.of(context).textTheme.bodyMedium),
-            ),
-            Text(
-              '$value%',
-              style: const TextStyle(
-                color: DarkmoonColors.textMuted,
-                fontSize: 11.5,
-              ),
-            ),
-          ],
-        ),
-        SliderTheme(
-          data: SliderTheme.of(
-            context,
-          ).copyWith(trackShape: const RectangularSliderTrackShape()),
-          child: Slider(
-            min: 0,
-            max: max.toDouble(),
-            divisions: max,
-            value: value.toDouble(),
-            onChanged: (v) => onChanged(v.round()),
-          ),
         ),
       ],
     );

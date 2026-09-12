@@ -3,24 +3,39 @@
 // a background colour, a gap around the picture, rounded corners and a
 // choice of outer aspect ratio. Export-time only, on the CPU like the
 // rest of the export: the frame is part of the file, not of the edit.
+// Since 2026-09-13 it is the Albums right-click "Frame image" action
+// (library/frame_image_dialog.dart) rather than an export-dialog
+// section, saving `<name>_Framed` beside the original like Solstice.
 
 import 'dart:math' as math;
 
 import 'package:image/image.dart' as img;
 
-/// The outer shape of the framed image.
+/// The outer shape of the framed image — Solstice's ratio presets, each
+/// in landscape; [FrameOptions.portrait] turns one on its side.
 enum FrameAspect {
   /// The photo's own ratio plus the border on every side.
   original(null),
   square(1.0),
-  portrait4x5(4 / 5),
-  landscape3x2(3 / 2),
-  widescreen16x9(16 / 9);
+  ratio5x4(5 / 4),
+  ratio4x3(4 / 3),
+  ratio3x2(3 / 2),
+  ratio16x9(16 / 9);
 
   const FrameAspect(this.ratio);
 
-  /// width / height, null for [original].
+  /// width / height in landscape, null for [original].
   final double? ratio;
+
+  /// The preset's label, `5:4` and so on; empty for [original].
+  String get label => switch (this) {
+    original => '',
+    square => '1:1',
+    ratio5x4 => '5:4',
+    ratio4x3 => '4:3',
+    ratio3x2 => '3:2',
+    ratio16x9 => '16:9',
+  };
 }
 
 class FrameOptions {
@@ -29,6 +44,7 @@ class FrameOptions {
     this.radiusPercent = 0,
     this.background = 0xFFFFFFFF,
     this.aspect = FrameAspect.original,
+    this.portrait = false,
   });
 
   /// The border, as a percentage of the photo's long edge (0..50). A
@@ -48,16 +64,28 @@ class FrameOptions {
 
   final FrameAspect aspect;
 
+  /// [aspect] turned on its side (a 3:2 frame becomes 2:3). Ignored for
+  /// [FrameAspect.original] and [FrameAspect.square].
+  final bool portrait;
+
+  /// width / height of the frame, null for the photo's own.
+  double? get ratio {
+    final r = aspect.ratio;
+    return r == null || !portrait ? r : 1 / r;
+  }
+
   FrameOptions copyWith({
     int? paddingPercent,
     int? radiusPercent,
     int? background,
     FrameAspect? aspect,
+    bool? portrait,
   }) => FrameOptions(
     paddingPercent: paddingPercent ?? this.paddingPercent,
     radiusPercent: radiusPercent ?? this.radiusPercent,
     background: background ?? this.background,
     aspect: aspect ?? this.aspect,
+    portrait: portrait ?? this.portrait,
   );
 }
 
@@ -72,7 +100,7 @@ class FrameOptions {
       .round();
   var outW = width + 2 * padding;
   var outH = height + 2 * padding;
-  final ratio = options.aspect.ratio;
+  final ratio = options.ratio;
   if (ratio != null) {
     // Grow whichever side is short of the ratio; never shrink, so the
     // border is at least the padding on every side.

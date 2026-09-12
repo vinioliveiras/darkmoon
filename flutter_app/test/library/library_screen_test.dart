@@ -65,6 +65,7 @@ void main() {
           onCreateFolder: (parent, name) async => p.join(parent, name),
           onDelete: (targets) async => 0,
           onConvertNegatives: (_) {},
+          onFrameImages: (_) {},
           onShowOnDisk: (_) {},
           onResetEdits: (_) {},
         ),

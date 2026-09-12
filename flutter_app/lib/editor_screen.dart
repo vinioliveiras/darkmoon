@@ -43,6 +43,8 @@ import 'export/export_job.dart';
 import 'export/export_metadata.dart';
 import 'l10n/app_localizations.dart';
 import 'library/library_screen.dart';
+import 'library/frame_image_dialog.dart';
+import 'library/frame_preview.dart';
 import 'library/negative_conversion_dialog.dart';
 import 'library/negative_converter.dart';
 import 'library/photo_mover.dart';
@@ -151,6 +153,7 @@ part 'editor/state_inpaint.dart';
 part 'editor/state_export.dart';
 part 'editor/state_negative.dart';
 part 'editor/state_film.dart';
+part 'editor/state_frame.dart';
 
 /// Main window: image viewer + toolbar, adjustment panel, and a filmstrip
 /// that lists real RAW files from a chosen folder. Selecting a file decodes
@@ -1954,6 +1957,7 @@ class _EditorScreenState extends State<EditorScreen>
       },
       onDelete: _deleteFiles,
       onConvertNegatives: (files) => unawaited(_convertNegatives(files)),
+      onFrameImages: (files) => unawaited(_frameImages(files)),
       onShowOnDisk: (file) => unawaited(_revealInExplorer(file)),
       onResetEdits: (file) => unawaited(_resetAllEditsFor(file)),
     );

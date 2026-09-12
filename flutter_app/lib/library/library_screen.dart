@@ -59,6 +59,7 @@ class LibraryBody extends StatefulWidget {
     required this.onCreateFolder,
     required this.onDelete,
     required this.onConvertNegatives,
+    required this.onFrameImages,
     required this.onShowOnDisk,
     required this.onResetEdits,
   });
@@ -128,6 +129,11 @@ class LibraryBody extends StatefulWidget {
   /// photos the menu was opened on — Solstice's Albums action, a new
   /// positive file beside each negative, not an edit.
   final void Function(List<RawFile> files) onConvertNegatives;
+
+  /// Frame image (2026-09-13): opens the frame dialog for the photos the
+  /// menu was opened on — Solstice's Albums action, a `_Framed` file
+  /// beside each photo with the edits and the border composed in.
+  final void Function(List<RawFile> files) onFrameImages;
   final void Function(RawFile file) onShowOnDisk;
   final void Function(RawFile file) onResetEdits;
 
@@ -556,6 +562,14 @@ class _LibraryBodyState extends State<LibraryBody> {
             targets.length > 1
                 ? l10n.libraryConvertNegativesAction(targets.length)
                 : l10n.libraryConvertNegativeAction,
+          ),
+        ),
+        PopupMenuItem(
+          value: () => widget.onFrameImages(targets),
+          child: Text(
+            targets.length > 1
+                ? l10n.libraryFrameImagesAction(targets.length)
+                : l10n.libraryFrameImageAction,
           ),
         ),
         const PopupMenuDivider(),
