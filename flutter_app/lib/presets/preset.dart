@@ -1,4 +1,6 @@
+import '../render/mask.dart';
 import '../render/tone_curve.dart';
+import 'preset_masks.dart';
 
 /// A named, reusable bundle of develop settings — the same shape as one
 /// photo's edits (slider values + curves), just not tied to a specific
@@ -13,7 +15,19 @@ class Preset {
     this.curves = identityPhotoCurves,
     this.unsupportedAttributes = const [],
     this.sourcePath,
+    this.masks = const [],
+    this.meridianMasks = const [],
   });
+
+  /// The mask stack a darkmoon preset carries (`darkmoon:Masks`), in our
+  /// own geometry — applied as is.
+  final List<MaskLayer> masks;
+
+  /// A Meridian preset's masked corrections, kept in their own terms
+  /// until the preset is applied to a photo — see `preset_masks.dart`.
+  final List<MeridianCorrection> meridianMasks;
+
+  bool get hasMasks => masks.isNotEmpty || meridianMasks.isNotEmpty;
 
   final String id;
   final String name;
@@ -41,6 +55,8 @@ class Preset {
     PhotoCurves? curves,
     List<String>? unsupportedAttributes,
     String? sourcePath,
+    List<MaskLayer>? masks,
+    List<MeridianCorrection>? meridianMasks,
   }) => Preset(
     id: id ?? this.id,
     name: name ?? this.name,
@@ -48,5 +64,7 @@ class Preset {
     curves: curves ?? this.curves,
     unsupportedAttributes: unsupportedAttributes ?? this.unsupportedAttributes,
     sourcePath: sourcePath ?? this.sourcePath,
+    masks: masks ?? this.masks,
+    meridianMasks: meridianMasks ?? this.meridianMasks,
   );
 }

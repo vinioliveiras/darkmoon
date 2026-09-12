@@ -96,10 +96,53 @@ extension _EditorPresets on _EditorScreenState {
       newValues['Tint'] = asShot.tint;
       newValues[_wbModeKey] = WbMode.asShot.index.toDouble();
     }
+    // A preset that carries masks replaces the stack, as Meridian does;
+    // one without leaves the photo's own masks alone. Meridian's are
+    // converted for this photo's aspect (see preset_masks.dart); ours are
+    // re-minted so two applies never share an id.
+    List<MaskLayer>? presetMasks;
+    if (preset.hasMasks) {
+      final path = _files[_selectedIndex!].path;
+      final source = _editSources[path]?.live;
+      final aspect = source == null || source.height == 0
+          ? 1.5
+          : source.width / source.height;
+      var serial = 0;
+      String newId() =>
+          'mask_${DateTime.now().microsecondsSinceEpoch}_${serial++}';
+      presetMasks = [
+        for (final mask in preset.masks)
+          MaskLayer(
+            id: newId(),
+            name: mask.name,
+            type: mask.type,
+            linear: mask.linear,
+            radial: mask.radial,
+            brush: mask.brush,
+            colorRange: mask.colorRange,
+            luminance: mask.luminance,
+            subject: mask.subject,
+            depth: mask.depth,
+            enabled: mask.enabled,
+            inverted: mask.inverted,
+            opacity: mask.opacity,
+            values: mask.values,
+            curves: mask.curves,
+          ),
+        ...maskLayersForImage(
+          preset.meridianMasks,
+          aspect: aspect,
+          newId: newId,
+        ),
+      ];
+    }
     _rebuild(() {
       _paramValues = newValues;
       _currentCurves = preset.curves;
       _appliedPresetId = preset.id;
+      if (presetMasks != null) {
+        _currentMasks = presetMasks;
+      }
     });
     _pushHistory();
     _scheduleRender(live: false);
@@ -140,6 +183,10 @@ extension _EditorPresets on _EditorScreenState {
       // photos.
       values: _catalogParams(),
       curves: _currentCurves,
+      // The mask stack goes with the preset (in our own geometry, so it
+      // fits photos of the same shape best), the way Meridian's presets
+      // can carry masks.
+      masks: _currentMasks,
     );
     final saved = await savePresetToFile(draft);
     if (!mounted) {

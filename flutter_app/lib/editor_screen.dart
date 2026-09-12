@@ -61,6 +61,7 @@ import 'native/libraw.dart'
 import 'native/thumbnail_loader.dart';
 import 'presets/preset.dart';
 import 'presets/preset_formats.dart';
+import 'presets/preset_masks.dart';
 import 'presets/preset_thumbnails.dart';
 import 'presets/preset_store.dart';
 import 'presets/preset_xmp.dart';

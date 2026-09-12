@@ -1,7 +1,13 @@
+import 'dart:convert';
+
 import 'package:xml/xml.dart';
 
+import '../catalog/mask_store.dart' show decodeMaskLayer, encodeMaskLayer;
+import '../catalog/sidecar_xmp.dart' show darkmoonNamespace;
+import '../render/mask.dart';
 import '../render/tone_curve.dart';
 import 'preset.dart';
+import 'preset_masks.dart';
 
 /// Reads/writes Meridian-compatible `.xmp` Develop Preset files —
 /// specifically the `crs:` (Camera Raw Settings) attributes that have a
@@ -282,6 +288,17 @@ String xmpFromPreset(Preset preset) {
               // in "User Presets".
               _writeLangAlt(builder, 'crs:Group', 'darkmoon');
               writeCrsCurves(builder, preset.curves);
+              // The mask stack rides in our own namespace, the same JSON
+              // the photo sidecar writes; Meridian ignores it.
+              if (preset.masks.isNotEmpty) {
+                builder.element(
+                  'darkmoon:Masks',
+                  namespaces: {darkmoonNamespace: 'darkmoon'},
+                  nest: jsonEncode([
+                    for (final mask in preset.masks) encodeMaskLayer(mask),
+                  ]),
+                );
+              }
             },
           );
         },
@@ -367,12 +384,36 @@ Preset? presetFromXmp(String xmlSource, {required String fallbackName}) {
           .firstOrNull ??
       fallbackName;
 
+  // Masks: our own stack when the preset is darkmoon's, Meridian's
+  // corrections otherwise (a file can only have come from one of them).
+  var masks = const <MaskLayer>[];
+  final ownMasks = description
+      .findElements('Masks', namespace: darkmoonNamespace)
+      .firstOrNull
+      ?.innerText;
+  if (ownMasks != null && ownMasks.trim().isNotEmpty) {
+    try {
+      masks = [
+        for (final raw in jsonDecode(ownMasks) as List)
+          decodeMaskLayer(raw as Map<String, dynamic>),
+      ];
+    } catch (_) {
+      // An unreadable stack drops the masks, not the preset.
+    }
+  }
+  final meridianMasks = parseMeridianCorrections(description);
+
   return Preset(
     id: _presetIdFromName(name),
     name: name,
     values: values,
     curves: curvesFromCrsDescription(description),
-    unsupportedAttributes: _unsupportedAttributes(description),
+    unsupportedAttributes: [
+      ..._unsupportedAttributes(description),
+      ...unsupportedMaskParts(meridianMasks),
+    ],
+    masks: masks,
+    meridianMasks: meridianMasks,
   );
 }
 
