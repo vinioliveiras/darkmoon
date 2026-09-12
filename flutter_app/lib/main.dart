@@ -156,6 +156,18 @@ class _DarkmoonAppState extends State<DarkmoonApp> {
       locale: _locale,
       localizationsDelegates: AppLocalizations.localizationsDelegates,
       supportedLocales: AppLocalizations.supportedLocales,
+      // No semantics tree at all (2026-09-12). Whenever a UI Automation
+      // client is around — Chrome Remote Desktop's host, the touch
+      // keyboard, a screen reader — the Windows engine of this Flutter
+      // version dies inside AccessibilityBridge::CreateRemoveReparentedNodes
+      // Update a few seconds after the splash (symbolised from the crash
+      // dumps with the engine's PDB), reproduced on releases back to
+      // v1.14.0. Blocking WM_GETOBJECT in the runner was not enough: the
+      // bridge still came up. An empty tree gives it nothing to reparent.
+      // The cost is that assistive technology sees a blank window until
+      // the engine is fixed; see PENDING.md for the follow-up.
+      builder: (context, child) =>
+          ExcludeSemantics(child: child ?? const SizedBox.shrink()),
       home: Stack(
         children: [
           // Mounted immediately (not lazily, once the splash goes away) so
