@@ -2176,6 +2176,18 @@ abstract class AppLocalizations {
   /// **'Feather'**
   String get colorRangeFeatherLabel;
 
+  /// No description provided for @aiMaskFeatherLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Feather'**
+  String get aiMaskFeatherLabel;
+
+  /// No description provided for @radialFeatherLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Feather'**
+  String get radialFeatherLabel;
+
   /// No description provided for @linearFeatherLabel.
   ///
   /// In en, this message translates to:

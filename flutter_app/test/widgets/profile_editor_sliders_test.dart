@@ -59,30 +59,6 @@ void main() {
       .firstWhere((row) => row.name == name)
       .value;
 
-  testWidgets('dragging the strength slider moves it', (tester) async {
-    await pumpDialog(tester);
-    final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-
-    final track = find.descendant(
-      of: find.ancestor(
-        of: find.text(l10n.presetAmountLabel),
-        matching: find.byType(SliderRow),
-      ),
-      matching: find.byKey(const Key('sliderRowTrack')),
-    );
-    expect(track, findsOneWidget);
-
-    final before = valueOf(tester, l10n.presetAmountLabel);
-    await tester.drag(track, const Offset(60, 0));
-    await tester.pumpAndSettle();
-
-    expect(
-      valueOf(tester, l10n.presetAmountLabel),
-      greaterThan(before),
-      reason: 'a drag to the right has to raise the value',
-    );
-  });
-
   testWidgets('dragging the contrast slider moves it', (tester) async {
     await pumpDialog(tester);
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
@@ -105,7 +81,9 @@ void main() {
     );
   });
 
-  testWidgets('both sliders fit on screen with the curve', (tester) async {
+  testWidgets('the contrast slider fits on screen with the curve', (
+    tester,
+  ) async {
     // Not a nicety: they are the thing the curve is judged against, so a
     // curve you have to scroll away from to reach them defeats having put
     // them here. The second one sat on the dialog's bottom edge until the
@@ -113,10 +91,7 @@ void main() {
     await pumpDialog(tester);
     final l10n = await AppLocalizations.delegate.load(const Locale('en'));
     final dialog = tester.getRect(find.byType(AlertDialog));
-    for (final name in [
-      l10n.presetAmountLabel,
-      l10n.sliderColorProfileAmount,
-    ]) {
+    for (final name in [l10n.sliderColorProfileAmount]) {
       final row = tester.getRect(
         find.ancestor(of: find.text(name), matching: find.byType(SliderRow)),
       );
@@ -139,7 +114,7 @@ void main() {
 
     final track = find.descendant(
       of: find.ancestor(
-        of: find.text(l10n.presetAmountLabel),
+        of: find.text(l10n.sliderColorProfileAmount),
         matching: find.byType(SliderRow),
       ),
       matching: find.byKey(const Key('sliderRowTrack')),
@@ -148,7 +123,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.text(l10n.presetAmountLabel),
+      find.text(l10n.sliderColorProfileAmount),
       findsOneWidget,
       reason: 'still on the tone tab — the drag belonged to the slider',
     );

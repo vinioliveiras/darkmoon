@@ -185,12 +185,19 @@ class SubjectGeometry {
     this.startY = 0.35,
     this.endX = 0.65,
     this.endY = 0.65,
+    this.feather = 0,
   });
 
   final double startX;
   final double startY;
   final double endX;
   final double endY;
+
+  /// How soft the segmentation's edge is, 0..100 (user's request,
+  /// 2026-09-12): the model's map is blurred by up to
+  /// [aiMaskFeatherMaxFraction] of the frame's width at 100. Shared by
+  /// Subject, Sky and Foreground, whose masks all carry this geometry.
+  final double feather;
 
   /// True when the user clicked rather than dragged — see the class doc.
   bool get isPoint =>
@@ -201,11 +208,13 @@ class SubjectGeometry {
     double? startY,
     double? endX,
     double? endY,
+    double? feather,
   }) => SubjectGeometry(
     startX: startX ?? this.startX,
     startY: startY ?? this.startY,
     endX: endX ?? this.endX,
     endY: endY ?? this.endY,
+    feather: feather ?? this.feather,
   );
 }
 
@@ -533,7 +542,7 @@ Float32List computeMaskAlpha(
     case MaskType.sky:
     case MaskType.foreground:
       if (aiMap != null) {
-        _computeSegmentAlpha(alpha, width, height, aiMap);
+        _computeSegmentAlpha(alpha, width, height, aiMap, mask.subject.feather);
       }
     case MaskType.depth:
       if (aiMap != null) {
@@ -789,14 +798,82 @@ Float32List _sampleAiMap(AiMaskMap map, int width, int height) {
 /// pixels before it ever gets here — which is why there is no tolerance or
 /// feather knob to apply on top: there is no threshold being taken that a
 /// user could usefully move.
+/// The blur an AI mask's feather reaches at 100, as a fraction of the
+/// frame's width.
+const double aiMaskFeatherMaxFraction = 0.04;
+
 void _computeSegmentAlpha(
   Float32List alpha,
   int width,
   int height,
   AiMaskMap map,
+  double feather,
 ) {
   final sampled = _sampleAiMap(map, width, height);
   alpha.setAll(0, sampled);
+  final radius =
+      (feather.clamp(0.0, 100.0) / 100 * aiMaskFeatherMaxFraction * width)
+          .round();
+  if (radius > 0) {
+    blurAlpha(alpha, width, height, radius);
+  }
+}
+
+/// Softens [alpha] in place: a box blur of [radius] run twice, once per
+/// axis each time, which is close to a Gaussian and costs the same
+/// whatever the radius (a running sum per row and column).
+void blurAlpha(Float32List alpha, int width, int height, int radius) {
+  if (radius <= 0) {
+    return;
+  }
+  final tmp = Float32List(alpha.length);
+  for (var pass = 0; pass < 2; pass++) {
+    // Rows.
+    for (var y = 0; y < height; y++) {
+      final row = y * width;
+      var sum = 0.0;
+      var count = 0;
+      for (var x = 0; x <= radius && x < width; x++) {
+        sum += alpha[row + x];
+        count++;
+      }
+      for (var x = 0; x < width; x++) {
+        tmp[row + x] = sum / count;
+        final add = x + radius + 1;
+        if (add < width) {
+          sum += alpha[row + add];
+          count++;
+        }
+        final drop = x - radius;
+        if (drop >= 0) {
+          sum -= alpha[row + drop];
+          count--;
+        }
+      }
+    }
+    // Columns.
+    for (var x = 0; x < width; x++) {
+      var sum = 0.0;
+      var count = 0;
+      for (var y = 0; y <= radius && y < height; y++) {
+        sum += tmp[y * width + x];
+        count++;
+      }
+      for (var y = 0; y < height; y++) {
+        alpha[y * width + x] = sum / count;
+        final add = y + radius + 1;
+        if (add < height) {
+          sum += tmp[add * width + x];
+          count++;
+        }
+        final drop = y - radius;
+        if (drop >= 0) {
+          sum -= tmp[drop * width + x];
+          count--;
+        }
+      }
+    }
+  }
 }
 
 /// Depth: a band-pass over the depth map, full strength inside

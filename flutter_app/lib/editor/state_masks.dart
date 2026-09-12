@@ -333,6 +333,46 @@ extension _EditorMasks on _EditorScreenState {
     _scheduleCatalogSave();
   }
 
+  void _onRadialFeatherChanged(double value) {
+    if (!_isAdjustingMaskValue) {
+      _rebuild(() => _isAdjustingMaskValue = true);
+    }
+    _updateActiveMask(
+      (m) => m.copyWith(radial: m.radial.copyWith(feather: value / 100)),
+    );
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onRadialFeatherChangeEnd(double value) {
+    _rebuild(() => _isAdjustingMaskValue = false);
+    _updateActiveMask(
+      (m) => m.copyWith(radial: m.radial.copyWith(feather: value / 100)),
+    );
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
+  void _onAiMaskFeatherChanged(double value) {
+    if (!_isAdjustingMaskValue) {
+      _rebuild(() => _isAdjustingMaskValue = true);
+    }
+    _updateActiveMask(
+      (m) => m.copyWith(subject: m.subject.copyWith(feather: value)),
+    );
+    _scheduleRender(live: _settings.fastPreview);
+  }
+
+  void _onAiMaskFeatherChangeEnd(double value) {
+    _rebuild(() => _isAdjustingMaskValue = false);
+    _updateActiveMask(
+      (m) => m.copyWith(subject: m.subject.copyWith(feather: value)),
+    );
+    _pushHistory();
+    _scheduleRender(live: false);
+    _scheduleCatalogSave();
+  }
+
   void _onLinearFeatherChanged(double value) {
     if (!_isAdjustingMaskValue) {
       _rebuild(() => _isAdjustingMaskValue = true);

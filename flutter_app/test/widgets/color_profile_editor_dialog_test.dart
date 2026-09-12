@@ -264,60 +264,8 @@ void main() {
   });
 
   group('eyedropper round trip', () {
-    /// The dialog has to close for a colour to be picked — a modal barrier
-    /// sits over the photo — so the work in progress leaves with it. If it
-    /// did not, arming the eyedropper would silently discard everything
-    /// the user had built.
-    testWidgets('arming carries the work out with it', (tester) async {
-      ColorProfileEditorResult? popped;
-      await tester.pumpWidget(
-        MaterialApp(
-          localizationsDelegates: AppLocalizations.localizationsDelegates,
-          supportedLocales: AppLocalizations.supportedLocales,
-          home: Builder(
-            builder: (context) => TextButton(
-              onPressed: () async {
-                popped = await showDialog<ColorProfileEditorResult>(
-                  context: context,
-                  builder: (_) => ColorProfileEditorDialog(
-                    initial: identity(),
-                    existingNames: const {},
-                    onDraftChanged: (_) {},
-                    onDraftSettled: (_) {},
-                  ),
-                );
-              },
-              child: const Text('open'),
-            ),
-          ),
-        ),
-      );
-      await tester.tap(find.text('open'));
-      await tester.pumpAndSettle();
-
-      final l10n = await AppLocalizations.delegate.load(const Locale('en'));
-      await tester.tap(find.text(l10n.colorProfileEditorTabColor));
-      await tester.pumpAndSettle();
-
-      // Build something first, so "carries the work" means anything.
-      final hueSliders = find.byWidgetPredicate(
-        (w) => w is SliderRow && w.name == l10n.colorProfileEditorHue,
-      );
-      tester.widget<SliderRow>(hueSliders.first).onChanged(20);
-      await tester.pump();
-
-      await tester.tap(find.byIcon(Icons.colorize));
-      await tester.pumpAndSettle();
-
-      expect(popped, isNotNull);
-      expect(popped!.pickHue, isTrue);
-      expect(
-        popped!.profile.hueShift[0],
-        20,
-        reason: 'the edit made before arming must survive the round trip',
-      );
-    });
-
+    // The dialog's own eyedropper went on 2026-09-12 (user's call); the
+    // toolbar's eyedropper still opens it on a sampled hue, below.
     testWidgets('a sampled hue opens on Colour and marks its range', (
       tester,
     ) async {

@@ -1233,6 +1233,12 @@ class AppLocalizationsDe extends AppLocalizations {
   String get colorRangeFeatherLabel => 'Weichzeichnen';
 
   @override
+  String get aiMaskFeatherLabel => 'Weichzeichnen';
+
+  @override
+  String get radialFeatherLabel => 'Weichzeichnen';
+
+  @override
   String get linearFeatherLabel => 'Weichzeichnen';
 
   @override

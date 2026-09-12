@@ -1213,6 +1213,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get colorRangeFeatherLabel => 'Feather';
 
   @override
+  String get aiMaskFeatherLabel => 'Feather';
+
+  @override
+  String get radialFeatherLabel => 'Feather';
+
+  @override
   String get linearFeatherLabel => 'Feather';
 
   @override

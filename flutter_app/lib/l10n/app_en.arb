@@ -382,6 +382,8 @@
   "maskColorRange": "Color Range",
   "colorRangeToleranceLabel": "Tolerance",
   "colorRangeFeatherLabel": "Feather",
+  "aiMaskFeatherLabel": "Feather",
+  "radialFeatherLabel": "Feather",
   "linearFeatherLabel": "Feather",
   "colorRangeHint": "Tap the image to pick a color",
   "maskWholeImage": "Whole Image",

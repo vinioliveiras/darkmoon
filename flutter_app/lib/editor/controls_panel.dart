@@ -502,6 +502,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
     final isColorRangeActive = activeMask?.type == MaskType.colorRange;
     final isLuminanceActive = activeMask?.type == MaskType.luminance;
     final isLinearActive = activeMask?.type == MaskType.linearGradient;
+    final isRadialActive = activeMask?.type == MaskType.radialGradient;
     final isAiMaskActive =
         activeMask != null && aiMaskTypes.contains(activeMask.type);
     final l10n = AppLocalizations.of(context)!;
@@ -616,6 +617,22 @@ class _ControlsPanelState extends State<_ControlsPanel>
               defaultValue: 100,
               onChanged: widget.actions.onLinearFeatherChanged,
               onChangeEnd: widget.actions.onLinearFeatherChangeEnd,
+            ),
+          ),
+        ],
+        if (isRadialActive) ...[
+          const SizedBox(height: 8),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SliderRow(
+              name: l10n.radialFeatherLabel,
+              min: 0,
+              max: 100,
+              value: activeMask!.radial.feather * 100,
+              decimals: 0,
+              defaultValue: 50,
+              onChanged: widget.actions.onRadialFeatherChanged,
+              onChangeEnd: widget.actions.onRadialFeatherChangeEnd,
             ),
           ),
         ],
@@ -777,6 +794,22 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 fontSize: 11,
               ),
             ),
+          if (activeMask.type != MaskType.depth) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: SliderRow(
+                name: l10n.aiMaskFeatherLabel,
+                min: 0,
+                max: 100,
+                value: activeMask.subject.feather,
+                decimals: 0,
+                defaultValue: 0,
+                onChanged: widget.actions.onAiMaskFeatherChanged,
+                onChangeEnd: widget.actions.onAiMaskFeatherChangeEnd,
+              ),
+            ),
+          ],
           if (activeMask.type == MaskType.depth) ...[
             const SizedBox(height: 8),
             Padding(

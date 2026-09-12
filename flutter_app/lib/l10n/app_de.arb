@@ -357,6 +357,8 @@
   "maskColorRange": "Farbbereich",
   "colorRangeToleranceLabel": "Toleranz",
   "colorRangeFeatherLabel": "Weichzeichnen",
+  "aiMaskFeatherLabel": "Weichzeichnen",
+  "radialFeatherLabel": "Weichzeichnen",
   "linearFeatherLabel": "Weichzeichnen",
   "colorRangeHint": "Auf das Bild tippen, um eine Farbe auszuwählen",
   "maskWholeImage": "Ganzes Bild",

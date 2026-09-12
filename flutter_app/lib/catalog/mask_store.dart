@@ -173,6 +173,7 @@ MaskLayer decodeMaskLayer(Map<String, dynamic> raw) {
             startY: (subjectRaw['startY'] as num).toDouble(),
             endX: (subjectRaw['endX'] as num).toDouble(),
             endY: (subjectRaw['endY'] as num).toDouble(),
+            feather: (subjectRaw['feather'] as num?)?.toDouble() ?? 0,
           ),
     depth: depthRaw == null
         ? const DepthGeometry()
@@ -232,6 +233,7 @@ Map<String, dynamic> encodeMaskLayer(MaskLayer mask) => {
     'startY': mask.subject.startY,
     'endX': mask.subject.endX,
     'endY': mask.subject.endY,
+    'feather': mask.subject.feather,
   },
   'depth': {
     'near': mask.depth.near,

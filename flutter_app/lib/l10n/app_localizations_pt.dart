@@ -1220,6 +1220,12 @@ class AppLocalizationsPt extends AppLocalizations {
   String get colorRangeFeatherLabel => 'Suavização';
 
   @override
+  String get aiMaskFeatherLabel => 'Suavização';
+
+  @override
+  String get radialFeatherLabel => 'Suavização';
+
+  @override
   String get linearFeatherLabel => 'Suavização';
 
   @override

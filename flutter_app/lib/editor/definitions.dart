@@ -1028,6 +1028,10 @@ class _ControlsPanelActions {
     required this.onColorRangeFeatherChangeEnd,
     required this.onLinearFeatherChanged,
     required this.onLinearFeatherChangeEnd,
+    required this.onRadialFeatherChanged,
+    required this.onRadialFeatherChangeEnd,
+    required this.onAiMaskFeatherChanged,
+    required this.onAiMaskFeatherChangeEnd,
     required this.onDepthGeometryChanged,
     required this.onDepthGeometryChangeEnd,
     required this.onLuminanceToleranceChanged,
@@ -1139,6 +1143,16 @@ class _ControlsPanelActions {
   final ValueChanged<double> onLinearFeatherChanged;
 
   final ValueChanged<double> onLinearFeatherChangeEnd;
+
+  /// The radial gradient's feather, 0..100 — see `RadialGradientGeometry.feather`.
+  final ValueChanged<double> onRadialFeatherChanged;
+
+  final ValueChanged<double> onRadialFeatherChangeEnd;
+
+  /// Subject/Sky/Foreground edge softness — see `SubjectGeometry.feather`.
+  final ValueChanged<double> onAiMaskFeatherChanged;
+
+  final ValueChanged<double> onAiMaskFeatherChangeEnd;
 
   /// Both take the whole rewritten [DepthGeometry] — see
   /// `_EditorScreenState._onDepthGeometryChanged`.

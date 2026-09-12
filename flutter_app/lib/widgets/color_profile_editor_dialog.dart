@@ -145,7 +145,7 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
   /// rather than values pushed back to the editor: they must move as soon
   /// as they are dragged, and a value living in the editor could not,
   /// since this dialog's route does not rebuild when the editor does.
-  late double _strength = widget.strength ?? 100.0;
+  late final double _strength = widget.strength ?? 100.0;
   late double _contrast = widget.contrast ?? calBaseContrast;
   late final TabController _tabController = TabController(
     length: 2,
@@ -330,20 +330,9 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
             ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
           ),
           const SizedBox(height: 10),
-          Padding(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: SliderRow(
-              name: l10n.presetAmountLabel,
-              min: 0,
-              max: 200,
-              value: _strength,
-              decimals: 0,
-              valueSuffix: '%',
-              defaultValue: 100,
-              onChanged: (v) => setState(() => _strength = v),
-              onChangeEnd: (v) => setState(() => _strength = v),
-            ),
-          ),
+          // The strength slider that sat here went on 2026-09-12 (user's
+          // call): the previews show the profile at the photo's own
+          // strength, which is a setting of the photo, not of the profile.
           SliderRow(
             name: l10n.sliderColorProfileAmount,
             min: 0,
@@ -440,20 +429,9 @@ class _ColorProfileEditorDialogState extends State<ColorProfileEditorDialog>
               ).textTheme.labelSmall?.copyWith(color: DarkmoonColors.textMuted),
             ),
           ),
-          Tooltip(
-            message: l10n.colorProfileEyedropper,
-            child: IconButton(
-              iconSize: 16,
-              splashRadius: 16,
-              color: DarkmoonColors.textSecondary,
-              icon: const Icon(Icons.colorize),
-              // Closes the dialog carrying the work — see
-              // ColorProfileEditorResult for why it cannot stay open.
-              onPressed: () => Navigator.of(
-                context,
-              ).pop(ColorProfileEditorResult.pickHue(_draft)),
-            ),
-          ),
+          // The eyedropper that sat here went on 2026-09-12 (user's
+          // call); the toolbar's own eyedropper still opens this dialog
+          // on a sampled hue.
           TextButton(
             onPressed: () => setState(() => _advanced = !_advanced),
             child: Text(
