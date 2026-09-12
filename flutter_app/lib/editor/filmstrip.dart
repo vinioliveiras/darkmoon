@@ -127,8 +127,8 @@ class _FilmstripState extends State<_Filmstrip> {
     if (animated && (rough - position.pixels).abs() > 1) {
       _scrollController.animateTo(
         rough,
-        duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
+        duration: DarkmoonMotion.of(context, DarkmoonMotion.base),
+        curve: DarkmoonMotion.enter,
       );
     } else {
       _scrollController.jumpTo(rough);
@@ -143,9 +143,9 @@ class _FilmstripState extends State<_Filmstrip> {
           ctx,
           alignment: 0.5,
           duration: animated
-              ? const Duration(milliseconds: 160)
+              ? DarkmoonMotion.of(ctx, DarkmoonMotion.fast)
               : Duration.zero,
-          curve: Curves.easeOut,
+          curve: DarkmoonMotion.enter,
         );
       }
     });
@@ -293,108 +293,122 @@ class _FilmstripState extends State<_Filmstrip> {
                 final thumbnail = thumbnails[file.path];
                 final edited = widget.isEdited(file.path);
                 final meta = widget.metaOf(file.path);
-                return Padding(
-                  padding: const EdgeInsets.only(right: 6),
-                  // Held, then dragged onto the sidebar's folders: the
-                  // photo moves there on disk (2026-09-11).
-                  child: LongPressDraggable<List<String>>(
-                    data: [file.path],
-                    delay: const Duration(milliseconds: 300),
-                    dragAnchorStrategy: pointerDragAnchorStrategy,
-                    feedback: _FilmstripDragFeedback(thumbnail: thumbnail),
-                    child: GestureDetector(
-                      onTap: () => onSelect(index),
-                      onSecondaryTapUp: (details) => _showContextMenu(
-                        context,
-                        details.globalPosition,
-                        file,
-                      ),
-                      child: Container(
-                        key: isSelected ? _selectedItemKey : null,
-                        width: 104,
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: isSelected
-                              ? DarkmoonColors.accent.withValues(alpha: 0.28)
-                              : Colors.transparent,
-                          borderRadius: BorderRadius.circular(8),
+                return HoverBuilder(
+                  builder: (context, hovered, _) => Padding(
+                    padding: const EdgeInsets.only(right: 6),
+                    // Held, then dragged onto the sidebar's folders: the
+                    // photo moves there on disk (2026-09-11).
+                    child: LongPressDraggable<List<String>>(
+                      data: [file.path],
+                      delay: const Duration(milliseconds: 300),
+                      dragAnchorStrategy: pointerDragAnchorStrategy,
+                      feedback: _FilmstripDragFeedback(thumbnail: thumbnail),
+                      child: GestureDetector(
+                        onTap: () => onSelect(index),
+                        onSecondaryTapUp: (details) => _showContextMenu(
+                          context,
+                          details.globalPosition,
+                          file,
                         ),
-                        child: Column(
-                          children: [
-                            Expanded(
-                              child: ClipRRect(
-                                borderRadius: BorderRadius.circular(6),
-                                child: Stack(
-                                  children: [
-                                    Container(
-                                      width: double.infinity,
-                                      height: double.infinity,
-                                      // A step lighter than the filmstrip's own
-                                      // canvas background — using canvas here
-                                      // too (tried first) made the thumbnail
-                                      // card invisible against the strip.
-                                      color: DarkmoonColors.dropdownBackground,
-                                      alignment: Alignment.center,
-                                      child: thumbnail == null
-                                          ? const SizedBox(
-                                              width: 18,
-                                              height: 18,
-                                              child: CircularProgressIndicator(
-                                                strokeWidth: 2,
-                                                color: DarkmoonColors.textMuted,
+                        // The selection tint moves from tile to tile and
+                        // a hovered tile lifts a little, both at `fast`.
+                        child: AnimatedContainer(
+                          duration: DarkmoonMotion.of(
+                            context,
+                            DarkmoonMotion.fast,
+                          ),
+                          curve: DarkmoonMotion.enter,
+                          key: isSelected ? _selectedItemKey : null,
+                          width: 104,
+                          padding: const EdgeInsets.all(4),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? DarkmoonColors.accent.withValues(alpha: 0.28)
+                                : hovered
+                                ? DarkmoonColors.accent.withValues(alpha: 0.10)
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Column(
+                            children: [
+                              Expanded(
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(6),
+                                  child: Stack(
+                                    children: [
+                                      Container(
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                        // A step lighter than the filmstrip's own
+                                        // canvas background — using canvas here
+                                        // too (tried first) made the thumbnail
+                                        // card invisible against the strip.
+                                        color:
+                                            DarkmoonColors.dropdownBackground,
+                                        alignment: Alignment.center,
+                                        child: thumbnail == null
+                                            ? const SizedBox(
+                                                width: 18,
+                                                height: 18,
+                                                child:
+                                                    CircularProgressIndicator(
+                                                      strokeWidth: 2,
+                                                      color: DarkmoonColors
+                                                          .textMuted,
+                                                    ),
+                                              )
+                                            : Image.memory(
+                                                thumbnail,
+                                                fit: BoxFit.cover,
+                                                gaplessPlayback: true,
                                               ),
-                                            )
-                                          : Image.memory(
-                                              thumbnail,
-                                              fit: BoxFit.cover,
-                                              gaplessPlayback: true,
-                                            ),
-                                    ),
-                                    Positioned(
-                                      left: 3,
-                                      top: 3,
-                                      child: _FileTypeBadge(
-                                        label: file.typeLabel,
-                                        isRaw: file.isRaw,
                                       ),
-                                    ),
-                                    if (edited)
-                                      const Positioned(
-                                        right: 3,
-                                        top: 3,
-                                        child: _EditedBadge(),
-                                      ),
-                                    if (meta != null && meta.rating > 0)
                                       Positioned(
                                         left: 3,
-                                        bottom: 4,
-                                        child: RatingStars(meta.rating),
-                                      ),
-                                    if (meta != null && meta.label.isNotEmpty)
-                                      Positioned(
-                                        left: 0,
-                                        right: 0,
-                                        bottom: 0,
-                                        child: Container(
-                                          height: 3,
-                                          color: photoLabelColor(meta.label),
+                                        top: 3,
+                                        child: _FileTypeBadge(
+                                          label: file.typeLabel,
+                                          isRaw: file.isRaw,
                                         ),
                                       ),
-                                  ],
+                                      if (edited)
+                                        const Positioned(
+                                          right: 3,
+                                          top: 3,
+                                          child: _EditedBadge(),
+                                        ),
+                                      if (meta != null && meta.rating > 0)
+                                        Positioned(
+                                          left: 3,
+                                          bottom: 4,
+                                          child: RatingStars(meta.rating),
+                                        ),
+                                      if (meta != null && meta.label.isNotEmpty)
+                                        Positioned(
+                                          left: 0,
+                                          right: 0,
+                                          bottom: 0,
+                                          child: Container(
+                                            height: 3,
+                                            color: photoLabelColor(meta.label),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              file.name,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: const TextStyle(
-                                color: DarkmoonColors.textSecondary,
-                                fontSize: 10,
+                              const SizedBox(height: 3),
+                              Text(
+                                file.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  color: DarkmoonColors.textSecondary,
+                                  fontSize: 10,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     ),

@@ -188,10 +188,7 @@ class _ImageArea extends StatelessWidget {
       builder: (context) => FadingPreviewImage(
         frame: frame,
         fadeGeneration: previewFadeGeneration,
-        duration: AnimationsConfig.duration(
-          context,
-          const Duration(milliseconds: 220),
-        ),
+        duration: DarkmoonMotion.of(context, DarkmoonMotion.slow),
       ),
     );
   }
@@ -794,7 +791,9 @@ class _LoadingOverlay extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final progress = info.progress;
-    return Positioned.fill(
+    // Not Positioned.fill any more: the editor wraps this in a fade and
+    // supplies the Positioned itself (see _overlayInfo's call site).
+    return SizedBox.expand(
       child: Container(
         color: Colors.black.withValues(alpha: 0.55),
         alignment: Alignment.center,

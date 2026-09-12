@@ -3,6 +3,7 @@ import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 
 import '../animations_config.dart';
+import '../motion.dart';
 import '../l10n/app_localizations.dart';
 import '../presets/preset.dart';
 import '../presets/preset_thumbnails.dart';
@@ -11,8 +12,8 @@ import '../theme.dart';
 /// How long entering or leaving selection mode takes. Matches the folder
 /// tree's expand/collapse, which is the other place in this sidebar where
 /// a control grows out of nothing.
-const _selectionModeDuration = Duration(milliseconds: 180);
-const _selectionModeCurve = Curves.easeOutCubic;
+const _selectionModeDuration = DarkmoonMotion.base;
+const _selectionModeCurve = DarkmoonMotion.enter;
 
 /// Meridian-style Presets panel — sits below the folder tree in the same
 /// left sidebar. Save the current photo's edits as a new preset, click a
@@ -450,164 +451,185 @@ class _PresetRowState extends State<_PresetRow> {
     // read as a picture rather than as part of the row above it.
     return Padding(
       padding: const EdgeInsets.fromLTRB(8, 3, 8, 3),
-      child: Material(
-        color: selected
-            ? DarkmoonColors.panel
-            : (applied
-                  ? DarkmoonColors.accent.withValues(alpha: 0.12)
-                  : DarkmoonColors.sectionCardBackground),
-        borderRadius: BorderRadius.circular(10),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: selectionMode ? onToggleSelected : (enabled ? onApply : null),
-          child: Padding(
-            padding: EdgeInsets.fromLTRB(
-              showThumbnail ? 8 : 12,
-              showThumbnail ? 8 : 6,
-              4,
-              showThumbnail ? 8 : 6,
-            ),
-            child: Row(
-              children: [
-                // Only in selection mode: outside it the thumbnail is what
-                // identifies the row, so a leading glyph beside a picture
-                // of the preset is just clutter. It slides the row's
-                // contents aside as it grows rather than appearing under
-                // them, which is what makes entering the mode read as one
-                // movement across the whole list.
-                _CollapsibleSlot(
-                  visible: selectionMode,
-                  gap: 0,
-                  child: Padding(
-                    padding: const EdgeInsets.only(right: 8),
-                    child: Icon(
-                      selected
-                          ? CupertinoIcons.checkmark_circle_fill
-                          : CupertinoIcons.circle,
+      // The card's fill sits under a transparent Material so the ink
+      // still shows, and it animates between plain, hovered, applied and
+      // selected at `fast` instead of flipping.
+      child: HoverBuilder(
+        builder: (context, hovered, child) => AnimatedContainer(
+          duration: DarkmoonMotion.of(context, DarkmoonMotion.fast),
+          curve: DarkmoonMotion.enter,
+          decoration: BoxDecoration(
+            color: selected
+                ? DarkmoonColors.panel
+                : applied
+                ? DarkmoonColors.accent.withValues(alpha: 0.12)
+                : hovered
+                ? Color.alphaBlend(
+                    Colors.white.withValues(alpha: 0.03),
+                    DarkmoonColors.sectionCardBackground,
+                  )
+                : DarkmoonColors.sectionCardBackground,
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: child,
+        ),
+        child: Material(
+          color: Colors.transparent,
+          borderRadius: BorderRadius.circular(10),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: selectionMode
+                ? onToggleSelected
+                : (enabled ? onApply : null),
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                showThumbnail ? 8 : 12,
+                showThumbnail ? 8 : 6,
+                4,
+                showThumbnail ? 8 : 6,
+              ),
+              child: Row(
+                children: [
+                  // Only in selection mode: outside it the thumbnail is what
+                  // identifies the row, so a leading glyph beside a picture
+                  // of the preset is just clutter. It slides the row's
+                  // contents aside as it grows rather than appearing under
+                  // them, which is what makes entering the mode read as one
+                  // movement across the whole list.
+                  _CollapsibleSlot(
+                    visible: selectionMode,
+                    gap: 0,
+                    child: Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: Icon(
+                        selected
+                            ? CupertinoIcons.checkmark_circle_fill
+                            : CupertinoIcons.circle,
+                        size: 14,
+                        color: selected
+                            ? DarkmoonColors.accent
+                            : DarkmoonColors.textMuted,
+                      ),
+                    ),
+                  ),
+                  if (showThumbnail)
+                    _PresetThumbnail(
+                      store: widget.thumbnails!,
+                      presetId: preset.id,
+                    )
+                  else if (!selectionMode)
+                    // With previews off the row still needs something to
+                    // anchor its left edge.
+                    Icon(
+                      CupertinoIcons.film,
                       size: 14,
-                      color: selected
+                      color: applied
                           ? DarkmoonColors.accent
                           : DarkmoonColors.textMuted,
                     ),
-                  ),
-                ),
-                if (showThumbnail)
-                  _PresetThumbnail(
-                    store: widget.thumbnails!,
-                    presetId: preset.id,
-                  )
-                else if (!selectionMode)
-                  // With previews off the row still needs something to
-                  // anchor its left edge.
-                  Icon(
-                    CupertinoIcons.film,
-                    size: 14,
-                    color: applied
-                        ? DarkmoonColors.accent
-                        : DarkmoonColors.textMuted,
-                  ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        preset.name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          color: applied
-                              ? DarkmoonColors.accent
-                              : DarkmoonColors.textPrimary,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 13,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Row(
-                        children: [
-                          Icon(
-                            CupertinoIcons.film,
-                            size: 10,
-                            color: DarkmoonColors.textMuted,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          preset.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: applied
+                                ? DarkmoonColors.accent
+                                : DarkmoonColors.textPrimary,
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
                           ),
-                          const SizedBox(width: 4),
-                          Text(
-                            l10n.presetTypeBadge,
-                            style: const TextStyle(
+                        ),
+                        const SizedBox(height: 3),
+                        Row(
+                          children: [
+                            Icon(
+                              CupertinoIcons.film,
+                              size: 10,
                               color: DarkmoonColors.textMuted,
-                              fontSize: 9,
-                              fontWeight: FontWeight.w600,
-                              letterSpacing: 1.1,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              l10n.presetTypeBadge,
+                              style: const TextStyle(
+                                color: DarkmoonColors.textMuted,
+                                fontSize: 9,
+                                fontWeight: FontWeight.w600,
+                                letterSpacing: 1.1,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  // Fixed-width trailing slot in *both* modes — an empty box
+                  // in selection mode instead of just dropping the menu
+                  // button, so switching modes doesn't reflow the name column
+                  // and make the list look like it jumped.
+                  SizedBox(
+                    width: 26,
+                    height: 26,
+                    // Fades rather than vanishing, so the row's right edge
+                    // settles at the same moment its left edge does.
+                    child: AnimatedOpacity(
+                      duration: AnimationsConfig.duration(
+                        context,
+                        _selectionModeDuration,
+                      ),
+                      curve: _selectionModeCurve,
+                      opacity: selectionMode ? 0.0 : 1.0,
+                      child: IgnorePointer(
+                        ignoring: selectionMode,
+                        child: PopupMenuButton<VoidCallback>(
+                          // Uses `child` rather than `icon` — `icon` wraps in
+                          // an IconButton, which inherits the app's global
+                          // IconButtonTheme (a bordered, filled rounded-square
+                          // background meant for standalone toolbar buttons).
+                          // That reads as a distracting box around a menu
+                          // trigger that's supposed to sit quietly at the end
+                          // of a list row, so this stays a bare icon with no
+                          // persistent background.
+                          // Zero, with the gutter applied outside this
+                          // button — see _HeaderIconButton. Inside, it is
+                          // part of the hover area and pulls the highlight
+                          // off the glyph.
+                          padding: EdgeInsets.zero,
+                          onSelected: (action) => action(),
+                          itemBuilder: (context) => [
+                            PopupMenuItem(
+                              value: onRename,
+                              child: Text(l10n.presetRenameLabel),
+                            ),
+                            PopupMenuItem(
+                              value: onExport,
+                              child: Text(l10n.presetExportLabel),
+                            ),
+                            PopupMenuItem(
+                              value: onDelete,
+                              child: Text(l10n.presetDeleteLabel),
+                            ),
+                          ],
+                          child: const Padding(
+                            padding: EdgeInsets.all(6),
+                            child: Icon(
+                              CupertinoIcons.ellipsis,
+                              size: 14,
+                              color: DarkmoonColors.textMuted,
                             ),
                           ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                // Fixed-width trailing slot in *both* modes — an empty box
-                // in selection mode instead of just dropping the menu
-                // button, so switching modes doesn't reflow the name column
-                // and make the list look like it jumped.
-                SizedBox(
-                  width: 26,
-                  height: 26,
-                  // Fades rather than vanishing, so the row's right edge
-                  // settles at the same moment its left edge does.
-                  child: AnimatedOpacity(
-                    duration: AnimationsConfig.duration(
-                      context,
-                      _selectionModeDuration,
-                    ),
-                    curve: _selectionModeCurve,
-                    opacity: selectionMode ? 0.0 : 1.0,
-                    child: IgnorePointer(
-                      ignoring: selectionMode,
-                      child: PopupMenuButton<VoidCallback>(
-                        // Uses `child` rather than `icon` — `icon` wraps in
-                        // an IconButton, which inherits the app's global
-                        // IconButtonTheme (a bordered, filled rounded-square
-                        // background meant for standalone toolbar buttons).
-                        // That reads as a distracting box around a menu
-                        // trigger that's supposed to sit quietly at the end
-                        // of a list row, so this stays a bare icon with no
-                        // persistent background.
-                        // Zero, with the gutter applied outside this
-                        // button — see _HeaderIconButton. Inside, it is
-                        // part of the hover area and pulls the highlight
-                        // off the glyph.
-                        padding: EdgeInsets.zero,
-                        onSelected: (action) => action(),
-                        itemBuilder: (context) => [
-                          PopupMenuItem(
-                            value: onRename,
-                            child: Text(l10n.presetRenameLabel),
-                          ),
-                          PopupMenuItem(
-                            value: onExport,
-                            child: Text(l10n.presetExportLabel),
-                          ),
-                          PopupMenuItem(
-                            value: onDelete,
-                            child: Text(l10n.presetDeleteLabel),
-                          ),
-                        ],
-                        child: const Padding(
-                          padding: EdgeInsets.all(6),
-                          child: Icon(
-                            CupertinoIcons.ellipsis,
-                            size: 14,
-                            color: DarkmoonColors.textMuted,
-                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),

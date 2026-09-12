@@ -471,14 +471,23 @@ class _ToolbarSegment extends StatelessWidget {
         : (onTap == null
               ? DarkmoonColors.textMuted
               : DarkmoonColors.textSecondary);
-    final content = Container(
+    // The fill animates between plain, hovered and selected (the motion
+    // standard's `fast`), so a toggle reads as a state settling rather
+    // than a colour flipping.
+    Widget content(bool hovered) => AnimatedContainer(
+      duration: DarkmoonMotion.of(context, DarkmoonMotion.fast),
+      curve: DarkmoonMotion.enter,
       width: width,
       height: double.infinity,
       alignment: Alignment.center,
       padding: padded
           ? const EdgeInsets.symmetric(horizontal: 7)
           : EdgeInsets.zero,
-      color: selected ? DarkmoonColors.accent : Colors.transparent,
+      color: selected
+          ? DarkmoonColors.accent
+          : hovered
+          ? Colors.white.withValues(alpha: 0.06)
+          : Colors.transparent,
       child: icon != null
           ? Icon(icon, size: iconSize, color: foreground)
           : Text(
@@ -489,13 +498,13 @@ class _ToolbarSegment extends StatelessWidget {
             ),
     );
     final tappable = onTap == null
-        ? content
-        : MouseRegion(
+        ? content(false)
+        : HoverBuilder(
             cursor: SystemMouseCursors.click,
-            child: GestureDetector(
+            builder: (context, hovered, _) => GestureDetector(
               onTap: onTap,
               behavior: HitTestBehavior.opaque,
-              child: content,
+              child: content(hovered),
             ),
           );
     final result = tooltip == null

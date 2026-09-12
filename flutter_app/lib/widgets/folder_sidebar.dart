@@ -5,7 +5,7 @@ import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 
-import '../animations_config.dart';
+import '../motion.dart';
 import '../l10n/app_localizations.dart';
 import '../theme.dart';
 
@@ -621,11 +621,8 @@ class _FolderNodeState extends State<_FolderNode> {
                   : _missing
                   ? null
                   : AnimatedRotation(
-                      duration: AnimationsConfig.duration(
-                        context,
-                        const Duration(milliseconds: 160),
-                      ),
-                      curve: Curves.easeOutCubic,
+                      duration: DarkmoonMotion.of(context, DarkmoonMotion.fast),
+                      curve: DarkmoonMotion.enter,
                       // chevron_right rotated a quarter turn *is*
                       // chevron_down, so one icon smoothly rotates
                       // between the two states instead of an instant
@@ -801,19 +798,16 @@ class _AnimatedFolderExpand extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final duration = AnimationsConfig.duration(
-      context,
-      const Duration(milliseconds: 180),
-    );
+    final duration = DarkmoonMotion.of(context, DarkmoonMotion.base);
     return ClipRect(
       child: AnimatedAlign(
         duration: duration,
-        curve: Curves.easeOutCubic,
+        curve: DarkmoonMotion.enter,
         alignment: Alignment.topCenter,
         heightFactor: expanded ? 1.0 : 0.0,
         child: AnimatedOpacity(
           duration: duration,
-          curve: Curves.easeOutCubic,
+          curve: DarkmoonMotion.enter,
           opacity: expanded ? 1.0 : 0.0,
           child: child,
         ),

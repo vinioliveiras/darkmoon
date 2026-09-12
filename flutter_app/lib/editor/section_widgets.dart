@@ -91,12 +91,17 @@ class _SectionHeader extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                 ],
-                Icon(
-                  collapsed
-                      ? CupertinoIcons.chevron_right
-                      : CupertinoIcons.chevron_down,
-                  size: 13,
-                  color: DarkmoonColors.textMuted,
+                AnimatedRotation(
+                  duration: DarkmoonMotion.of(context, DarkmoonMotion.fast),
+                  curve: DarkmoonMotion.enter,
+                  // chevron_right turned a quarter turn is chevron_down,
+                  // so one icon turns instead of two swapping.
+                  turns: collapsed ? 0 : 0.25,
+                  child: const Icon(
+                    CupertinoIcons.chevron_right,
+                    size: 13,
+                    color: DarkmoonColors.textMuted,
+                  ),
                 ),
               ],
             ),
@@ -144,10 +149,7 @@ class _SectionCardState extends State<_SectionCard> {
   @override
   Widget build(BuildContext context) {
     return AnimatedContainer(
-      duration: AnimationsConfig.duration(
-        context,
-        const Duration(milliseconds: 120),
-      ),
+      duration: DarkmoonMotion.of(context, DarkmoonMotion.fast),
       margin: const EdgeInsets.only(top: 10),
       // Real bug (2026-09-01, user report): the old fromLTRB(10, 0, 10, 4)
       // read as visibly uneven — the header used to carry its own extra
@@ -206,7 +208,7 @@ class _CollapsibleSection extends StatelessWidget {
   final bool collapsed;
   final Widget child;
 
-  static const _duration = Duration(milliseconds: 160);
+  static const _duration = DarkmoonMotion.base;
 
   @override
   Widget build(BuildContext context) {
@@ -214,12 +216,12 @@ class _CollapsibleSection extends StatelessWidget {
     return ClipRect(
       child: AnimatedAlign(
         duration: duration,
-        curve: Curves.easeOutCubic,
+        curve: DarkmoonMotion.enter,
         alignment: Alignment.topCenter,
         heightFactor: collapsed ? 0.0 : 1.0,
         child: AnimatedOpacity(
           duration: duration,
-          curve: Curves.easeOutCubic,
+          curve: DarkmoonMotion.enter,
           opacity: collapsed ? 0.0 : 1.0,
           child: child,
         ),

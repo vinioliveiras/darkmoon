@@ -15,6 +15,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
 import 'animations_config.dart';
+import 'motion.dart';
 import 'catalog/cache_usage.dart';
 import 'catalog/ai_mask_cache_dir.dart';
 import 'catalog/native_source_cache.dart';
@@ -613,10 +614,7 @@ class _EditorScreenState extends State<EditorScreen>
   /// zoom-in button) just restarts the animation from the matrix that's
   /// currently on screen, not the previous target.
   void _animateViewMatrixTo(Matrix4 target) {
-    final duration = AnimationsConfig.duration(
-      context,
-      const Duration(milliseconds: 220),
-    );
+    final duration = DarkmoonMotion.of(context, DarkmoonMotion.slow);
     if (duration == Duration.zero) {
       _viewController.value = target;
       return;
@@ -1167,13 +1165,15 @@ class _EditorScreenState extends State<EditorScreen>
     super.initState();
     _zoomAnimController = AnimationController(vsync: this);
     _zoomAnimCurve =
-        CurvedAnimation(parent: _zoomAnimController, curve: Curves.easeOutCubic)
-          ..addListener(() {
-            final tween = _zoomAnimTween;
-            if (tween != null) {
-              _viewController.value = tween.evaluate(_zoomAnimCurve);
-            }
-          });
+        CurvedAnimation(
+          parent: _zoomAnimController,
+          curve: DarkmoonMotion.enter,
+        )..addListener(() {
+          final tween = _zoomAnimTween;
+          if (tween != null) {
+            _viewController.value = tween.evaluate(_zoomAnimCurve);
+          }
+        });
     unawaited(_loadEditStore());
     unawaited(_loadPresetsState());
     unawaited(_loadSettings());
@@ -5311,12 +5311,12 @@ class _EditorScreenState extends State<EditorScreen>
                                   child: Container(
                                     color: DarkmoonColors.panel,
                                     child: AnimatedSwitcher(
-                                      duration: AnimationsConfig.duration(
+                                      duration: DarkmoonMotion.of(
                                         context,
-                                        const Duration(milliseconds: 240),
+                                        DarkmoonMotion.slow,
                                       ),
-                                      switchInCurve: Curves.easeOutCubic,
-                                      switchOutCurve: Curves.easeInCubic,
+                                      switchInCurve: DarkmoonMotion.enter,
+                                      switchOutCurve: DarkmoonMotion.exit,
                                       transitionBuilder: _modeTransition,
                                       // Both halves fill the same box, so
                                       // the panel above never moves while
@@ -5383,12 +5383,12 @@ class _EditorScreenState extends State<EditorScreen>
                           ),
                           Expanded(
                             child: AnimatedSwitcher(
-                              duration: AnimationsConfig.duration(
+                              duration: DarkmoonMotion.of(
                                 context,
-                                const Duration(milliseconds: 240),
+                                DarkmoonMotion.slow,
                               ),
-                              switchInCurve: Curves.easeOutCubic,
-                              switchOutCurve: Curves.easeInCubic,
+                              switchInCurve: DarkmoonMotion.enter,
+                              switchOutCurve: DarkmoonMotion.exit,
                               transitionBuilder: _modeTransition,
                               child: _libraryMode
                                   ? KeyedSubtree(
@@ -5650,10 +5650,7 @@ class _EditorScreenState extends State<EditorScreen>
                     // when Albums opens, and rise back for the editor.
                     CollapseDown(
                       shown: !_libraryMode,
-                      duration: AnimationsConfig.duration(
-                        context,
-                        const Duration(milliseconds: 240),
-                      ),
+                      duration: DarkmoonMotion.of(context, DarkmoonMotion.slow),
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -5738,13 +5735,27 @@ class _EditorScreenState extends State<EditorScreen>
                 Builder(
                   builder: (context) {
                     final info = _overlayInfo(context, selected);
-                    return info == null || _loadingOverlayHidden
-                        ? const SizedBox.shrink()
-                        : _LoadingOverlay(
-                            info: info,
-                            onCancel: _cancelLoading,
-                            onHide: _hideLoadingOverlay,
-                          );
+                    // Fades in and out rather than popping: a scrim
+                    // that appears in one frame is the most abrupt thing
+                    // on the screen. Positioned.fill stays out here — it
+                    // has to be the Stack's direct child.
+                    return Positioned.fill(
+                      child: AnimatedSwitcher(
+                        duration: DarkmoonMotion.of(
+                          context,
+                          DarkmoonMotion.base,
+                        ),
+                        switchInCurve: DarkmoonMotion.enter,
+                        switchOutCurve: DarkmoonMotion.exit,
+                        child: info == null || _loadingOverlayHidden
+                            ? const SizedBox.shrink()
+                            : _LoadingOverlay(
+                                info: info,
+                                onCancel: _cancelLoading,
+                                onHide: _hideLoadingOverlay,
+                              ),
+                      ),
+                    );
                   },
                 ),
               ],

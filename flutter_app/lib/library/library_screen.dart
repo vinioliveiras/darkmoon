@@ -10,6 +10,7 @@ import '../catalog/jpeg_size.dart';
 import '../catalog/photo_meta_store.dart';
 import '../l10n/app_localizations.dart';
 import '../raw_files.dart';
+import '../motion.dart';
 import '../theme.dart';
 import '../widgets/glass_input_border.dart';
 import '../widgets/photo_meta_widgets.dart';
@@ -957,9 +958,14 @@ class _LibraryBodyState extends State<LibraryBody> {
               fit: StackFit.passthrough,
               children: [
                 tile,
-                if (candidates.isNotEmpty)
-                  Positioned.fill(
-                    child: IgnorePointer(
+                // Always in the tree, faded in while a drag hovers: a
+                // drop target that blinks on is easy to miss.
+                Positioned.fill(
+                  child: IgnorePointer(
+                    child: AnimatedOpacity(
+                      duration: DarkmoonMotion.of(context, DarkmoonMotion.fast),
+                      curve: DarkmoonMotion.enter,
+                      opacity: candidates.isNotEmpty ? 1 : 0,
                       child: DecoratedBox(
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(6),
@@ -972,6 +978,7 @@ class _LibraryBodyState extends State<LibraryBody> {
                       ),
                     ),
                   ),
+                ),
               ],
             ),
           ),
@@ -1098,7 +1105,9 @@ class _AlbumTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: Container(
+              child: AnimatedContainer(
+                duration: DarkmoonMotion.of(context, DarkmoonMotion.fast),
+                curve: DarkmoonMotion.enter,
                 decoration: BoxDecoration(
                   color: DarkmoonColors.canvas,
                   borderRadius: BorderRadius.circular(6),
@@ -1195,7 +1204,9 @@ class _LibraryTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: Container(
+              child: AnimatedContainer(
+                duration: DarkmoonMotion.of(context, DarkmoonMotion.fast),
+                curve: DarkmoonMotion.enter,
                 decoration: BoxDecoration(
                   color: DarkmoonColors.canvas,
                   borderRadius: BorderRadius.circular(6),

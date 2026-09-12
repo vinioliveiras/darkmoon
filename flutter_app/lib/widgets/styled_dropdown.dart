@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart' show CupertinoIcons;
 import 'package:flutter/material.dart';
 
+import '../motion.dart';
 import '../theme.dart';
 import 'glass_input_border.dart';
 
@@ -132,8 +133,8 @@ class _StyledDropdownState<T> extends State<StyledDropdown<T>>
     super.initState();
     _animController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 140),
-      reverseDuration: const Duration(milliseconds: 110),
+      duration: DarkmoonMotion.fast,
+      reverseDuration: DarkmoonMotion.fast,
     );
   }
 
@@ -567,13 +568,16 @@ class _MenuReveal extends StatelessWidget {
   Widget build(BuildContext context) {
     final eased = CurvedAnimation(
       parent: animation,
-      curve: Curves.easeOutCubic,
-      reverseCurve: Curves.easeInCubic,
+      curve: DarkmoonMotion.enter,
+      reverseCurve: DarkmoonMotion.exit,
     );
     return FadeTransition(
       opacity: eased,
       child: ScaleTransition(
-        scale: Tween<double>(begin: 0.94, end: 1).animate(eased),
+        scale: Tween<double>(
+          begin: DarkmoonMotion.popScale,
+          end: 1,
+        ).animate(eased),
         alignment: alignment,
         child: child,
       ),

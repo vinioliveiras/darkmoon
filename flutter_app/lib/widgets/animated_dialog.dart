@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../motion.dart';
+
 /// Drop-in replacement for [showDialog] that gives the modal an OS-like
 /// entrance and exit instead of Material's abrupt fade: a quick fade
 /// combined with a scale-up centered on the dialog's own middle, easing
@@ -27,19 +29,22 @@ Future<T?> showAnimatedDialog<T>({
     barrierDismissible: barrierDismissible,
     barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
     barrierColor: barrierColor,
-    transitionDuration: const Duration(milliseconds: 170),
+    transitionDuration: DarkmoonMotion.base,
     pageBuilder: (context, animation, secondaryAnimation) =>
         Builder(builder: builder),
     transitionBuilder: (context, animation, secondaryAnimation, child) {
       final eased = CurvedAnimation(
         parent: animation,
-        curve: Curves.easeOutCubic,
-        reverseCurve: Curves.easeInCubic,
+        curve: DarkmoonMotion.enter,
+        reverseCurve: DarkmoonMotion.exit,
       );
       return FadeTransition(
         opacity: eased,
         child: ScaleTransition(
-          scale: Tween<double>(begin: 0.94, end: 1).animate(eased),
+          scale: Tween<double>(
+            begin: DarkmoonMotion.popScale,
+            end: 1,
+          ).animate(eased),
           child: child,
         ),
       );

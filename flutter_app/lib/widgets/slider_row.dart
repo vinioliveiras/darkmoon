@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../motion.dart';
 import '../theme.dart';
 
 /// A single adjustment control: a name/value header above a slider. The
@@ -321,11 +322,21 @@ class _SliderRowState extends State<SliderRow> {
                       ? const RectangularSliderTrackShape()
                       : _GradientSliderTrackShape(widget.trackColors!),
                 ),
-                child: Slider(
-                  min: widget.min,
-                  max: widget.max,
-                  value: displayValue,
-                  onChanged: (_) {},
+                // The thumb glides to a value set from outside (a reset,
+                // a preset, undo) and follows the pointer instantly while
+                // dragging or typing.
+                child: TweenAnimationBuilder<double>(
+                  tween: Tween<double>(end: displayValue),
+                  duration: _dragValue != null || _editing
+                      ? Duration.zero
+                      : DarkmoonMotion.of(context, DarkmoonMotion.fast),
+                  curve: DarkmoonMotion.enter,
+                  builder: (context, animated, _) => Slider(
+                    min: widget.min,
+                    max: widget.max,
+                    value: animated.clamp(widget.min, widget.max),
+                    onChanged: (_) {},
+                  ),
                 ),
               ),
             ),

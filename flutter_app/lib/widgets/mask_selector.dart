@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../l10n/app_localizations.dart';
 import '../render/mask.dart';
+import '../motion.dart';
 import '../theme.dart';
 import 'slider_row.dart';
 import 'styled_dropdown.dart';
@@ -328,33 +329,40 @@ class _MaskToggleChip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: value
-          ? DarkmoonColors.accent.withValues(alpha: 0.22)
-          : Colors.transparent,
-      borderRadius: BorderRadius.circular(6),
-      child: InkWell(
+    // Fill and border animate between the two states (`fast`); the
+    // Material stays transparent above them so the ink still shows.
+    return AnimatedContainer(
+      duration: DarkmoonMotion.of(context, DarkmoonMotion.fast),
+      curve: DarkmoonMotion.enter,
+      height: 30,
+      decoration: BoxDecoration(
+        color: value
+            ? DarkmoonColors.accent.withValues(alpha: 0.22)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(6),
-        onTap: onTap,
-        child: Container(
-          height: 30,
-          padding: const EdgeInsets.symmetric(horizontal: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(6),
-            border: Border.all(
-              color: value ? DarkmoonColors.accent : DarkmoonColors.border,
-            ),
-          ),
-          alignment: Alignment.center,
-          child: Text(
-            label,
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: TextStyle(
-              color: value
-                  ? DarkmoonColors.accent
-                  : DarkmoonColors.textSecondary,
-              fontSize: 11,
+        border: Border.all(
+          color: value ? DarkmoonColors.accent : DarkmoonColors.border,
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(6),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(6),
+          onTap: onTap,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            alignment: Alignment.center,
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: value
+                    ? DarkmoonColors.accent
+                    : DarkmoonColors.textSecondary,
+                fontSize: 11,
+              ),
             ),
           ),
         ),
