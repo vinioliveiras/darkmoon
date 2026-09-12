@@ -4,6 +4,7 @@ import 'color_grading.dart';
 import 'color_mixer.dart';
 import 'color_profile.dart';
 import 'film_lut.dart';
+import 'replace_color.dart';
 import 'grain.dart';
 import 'sharpen.dart';
 import 'tone_curve.dart';
@@ -51,6 +52,7 @@ class RenderParams {
     this.grain = const GrainParams(),
     this.filmLut,
     this.filmAmount = 0.5,
+    this.replaceColor = const ReplaceColorParams(),
     this.renderScale = 1.0,
   });
 
@@ -122,6 +124,7 @@ class RenderParams {
       parametricCurve: ParametricCurve.fromValues(values),
       colorMixer: ColorMixerValues.fromValues(values),
       colorGrading: ColorGradingValues.fromValues(values),
+      replaceColor: ReplaceColorParams.fromValues(values),
       aiDenoise: AiDenoiseParams.fromValues(values),
       sharpen: SharpenParams.fromValues(values),
       vignette: VignetteParams.fromValues(values),
@@ -201,6 +204,10 @@ class RenderParams {
   /// look, clamped per channel). Ignored when [filmLut] is null.
   final double filmAmount;
 
+  /// Replace color (see `replace_color.dart`): the very last global stage
+  /// on both paths, after Film. Identity until a colour has been picked.
+  final ReplaceColorParams replaceColor;
+
   /// Multiplier applied to every neighbourhood-based radius/sigma —
   /// `frameLongEdge / calRadiusReferenceLongEdge`.
   ///
@@ -260,6 +267,7 @@ class RenderParams {
     grain: grain,
     filmLut: filmLut,
     filmAmount: filmAmount,
+    replaceColor: replaceColor,
     renderScale: scale,
   );
 

@@ -99,6 +99,7 @@ import 'render/render_job.dart';
 import 'render/crop_transform.dart';
 import 'render/post_enhance.dart';
 import 'render/render_params.dart';
+import 'render/replace_color.dart';
 import 'render/tone_curve.dart';
 import 'render/upright.dart';
 import 'render/upright_auto.dart';
@@ -155,6 +156,7 @@ part 'editor/state_export.dart';
 part 'editor/state_negative.dart';
 part 'editor/state_film.dart';
 part 'editor/state_frame.dart';
+part 'editor/state_replace_color.dart';
 
 /// Main window: image viewer + toolbar, adjustment panel, and a filmstrip
 /// that lists real RAW files from a chosen folder. Selecting a file decodes
@@ -770,6 +772,9 @@ class _EditorScreenState extends State<EditorScreen>
   RemovalMode _removeMode = RemovalMode.ai;
   ({double x, double y})? _removeSource;
   bool _removeSourcePicking = false;
+
+  /// Replace color's eyedropper is armed — see state_replace_color.dart.
+  bool _replaceColorPicking = false;
   String _removePrompt = '';
   bool _isRunningInpaint = false;
   InpaintProgress? _inpaintProgress;
@@ -1052,6 +1057,7 @@ class _EditorScreenState extends State<EditorScreen>
     onClearRemoveStrokes: _clearRemoveStrokes,
     onRemoveModeChanged: _setRemoveMode,
     onToggleRemoveSourcePick: _toggleRemoveSourcePick,
+    onToggleReplaceColorPick: _toggleReplaceColorPick,
     onRemovePromptChanged: _setRemovePrompt,
   );
 
@@ -4253,6 +4259,10 @@ class _EditorScreenState extends State<EditorScreen>
       _onRemoveSourcePick(nx, ny);
       return;
     }
+    if (_replaceColorPicking) {
+      unawaited(_onReplaceColorPick(nx, ny));
+      return;
+    }
     if (_profileHueEyedropperActive) {
       unawaited(_sampleProfileHue(nx, ny));
       return;
@@ -5582,7 +5592,8 @@ class _EditorScreenState extends State<EditorScreen>
                                                   wbEyedropperActive:
                                                       (_wbEyedropperActive ||
                                                           _profileHueEyedropperActive ||
-                                                          _removeSourcePicking) &&
+                                                          _removeSourcePicking ||
+                                                          _replaceColorPicking) &&
                                                       !_beforeAfterMode,
                                                   onSampleWhiteBalance:
                                                       _onEyedropperSample,
@@ -5721,6 +5732,8 @@ class _EditorScreenState extends State<EditorScreen>
                                             removeMode: _removeMode,
                                             removeSourcePicking:
                                                 _removeSourcePicking,
+                                            replaceColorPicking:
+                                                _replaceColorPicking,
                                             removeSourcePicked:
                                                 _removeSource != null,
                                             removePrompt: _removePrompt,

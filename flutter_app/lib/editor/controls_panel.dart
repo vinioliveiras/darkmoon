@@ -40,6 +40,7 @@ class _ControlsPanel extends StatefulWidget {
     required this.removeGrow,
     required this.removeMode,
     required this.removeSourcePicking,
+    required this.replaceColorPicking,
     required this.removeSourcePicked,
     required this.removePrompt,
     required this.generativeConfigured,
@@ -137,6 +138,9 @@ class _ControlsPanel extends StatefulWidget {
   /// See _ControlsPanelActions.onRemoveModeChanged and friends.
   final RemovalMode removeMode;
   final bool removeSourcePicking;
+
+  /// Replace color's eyedropper is armed (the next canvas click picks).
+  final bool replaceColorPicking;
   final bool removeSourcePicked;
   final String removePrompt;
 
@@ -1786,6 +1790,67 @@ class _ControlsPanelState extends State<_ControlsPanel>
                                 ),
                               ],
                             ),
+                          if (_inTab(_ControlsTab.colour))
+                            ..._section(
+                              'REPLACE COLOR',
+                              label: l10n.sectionReplaceColor,
+                              enabled:
+                                  (values[_categoryEnabledKey(
+                                        'REPLACE COLOR',
+                                      )] ??
+                                      1) !=
+                                  0,
+                              onEnabledChanged: (v) => _toggleCategoryEnabled(
+                                _categoryEnabledKey('REPLACE COLOR'),
+                                v,
+                              ),
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.only(
+                                    top: 6,
+                                    bottom: 12,
+                                  ),
+                                  child: _ReplaceColorPickRow(
+                                    picked:
+                                        (values[replaceColorPickedKey] ?? 0) >
+                                        0,
+                                    color: Color.fromARGB(
+                                      255,
+                                      (values[replaceColorRKey] ?? 128)
+                                          .round()
+                                          .clamp(0, 255),
+                                      (values[replaceColorGKey] ?? 128)
+                                          .round()
+                                          .clamp(0, 255),
+                                      (values[replaceColorBKey] ?? 128)
+                                          .round()
+                                          .clamp(0, 255),
+                                    ),
+                                    picking: widget.replaceColorPicking,
+                                    onPick:
+                                        widget.actions.onToggleReplaceColorPick,
+                                  ),
+                                ),
+                                for (final spec in _replaceColorSliders)
+                                  Padding(
+                                    padding: const EdgeInsets.only(bottom: 12),
+                                    child: SliderRow(
+                                      name: _sliderLabel(l10n, spec.name),
+                                      min: spec.min,
+                                      max: spec.max,
+                                      value:
+                                          values[spec.name] ??
+                                          spec.defaultValue,
+                                      decimals: spec.decimals,
+                                      dragSensitivity: spec.dragSensitivity,
+                                      defaultValue: spec.defaultValue,
+                                      onChanged: (v) => onChanged(spec.name, v),
+                                      onChangeEnd: (v) =>
+                                          onChangeEnd(spec.name, v),
+                                    ),
+                                  ),
+                              ],
+                            ),
                           if (_inTab(_ControlsTab.effects))
                             ..._section(
                               'EFFECTS',
@@ -2364,4 +2429,64 @@ String _colorChannelLabel(AppLocalizations l10n, String channel) {
       return l10n.colorChannelBlue;
   }
   throw ArgumentError.value(channel, 'channel');
+}
+
+/// Replace color's picked-colour row: the swatch, what to do next, and
+/// the eyedropper button (lit while it is armed).
+class _ReplaceColorPickRow extends StatelessWidget {
+  const _ReplaceColorPickRow({
+    required this.picked,
+    required this.color,
+    required this.picking,
+    required this.onPick,
+  });
+
+  final bool picked;
+  final Color color;
+  final bool picking;
+  final VoidCallback onPick;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    return Row(
+      children: [
+        Container(
+          key: const Key('replace-color-swatch'),
+          width: 26,
+          height: 26,
+          decoration: BoxDecoration(
+            color: picked ? color : Colors.transparent,
+            borderRadius: BorderRadius.circular(6),
+            border: Border.all(color: DarkmoonColors.border),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(
+            picked ? l10n.replaceColorPickedHint : l10n.replaceColorPickHint,
+            style: const TextStyle(
+              fontSize: 11,
+              color: DarkmoonColors.textMuted,
+              height: 1.3,
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Tooltip(
+          message: l10n.replaceColorPickButton,
+          child: IconButton(
+            key: const Key('replace-color-pick'),
+            visualDensity: VisualDensity.compact,
+            iconSize: 17,
+            color: picking
+                ? DarkmoonColors.accent
+                : DarkmoonColors.textSecondary,
+            icon: const Icon(CupertinoIcons.eyedropper),
+            onPressed: onPick,
+          ),
+        ),
+      ],
+    );
+  }
 }

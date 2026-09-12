@@ -119,6 +119,7 @@ flutter:
     - shaders/color_profile.frag
     - shaders/post_dehaze.frag
     - shaders/film_lut.frag
+    - shaders/replace_color.frag
     - shaders/mask_blend.frag
     - shaders/srgb_to_linear.frag
 

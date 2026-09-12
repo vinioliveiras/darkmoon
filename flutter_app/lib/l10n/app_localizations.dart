@@ -2332,6 +2332,66 @@ abstract class AppLocalizations {
   /// **'FILM'**
   String get sectionFilm;
 
+  /// No description provided for @sectionReplaceColor.
+  ///
+  /// In en, this message translates to:
+  /// **'REPLACE COLOR'**
+  String get sectionReplaceColor;
+
+  /// No description provided for @replaceColorPickButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a colour in the photo'**
+  String get replaceColorPickButton;
+
+  /// No description provided for @replaceColorPickHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Pick a colour in the photo, then move it with the sliders.'**
+  String get replaceColorPickHint;
+
+  /// No description provided for @replaceColorPickedHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Picked colour. Pick again to change it.'**
+  String get replaceColorPickedHint;
+
+  /// No description provided for @sliderReplaceColorTolerance.
+  ///
+  /// In en, this message translates to:
+  /// **'Range'**
+  String get sliderReplaceColorTolerance;
+
+  /// No description provided for @sliderReplaceColorFeather.
+  ///
+  /// In en, this message translates to:
+  /// **'Softness'**
+  String get sliderReplaceColorFeather;
+
+  /// No description provided for @sliderReplaceColorHue.
+  ///
+  /// In en, this message translates to:
+  /// **'Hue'**
+  String get sliderReplaceColorHue;
+
+  /// No description provided for @sliderReplaceColorSaturation.
+  ///
+  /// In en, this message translates to:
+  /// **'Saturation'**
+  String get sliderReplaceColorSaturation;
+
+  /// No description provided for @sliderReplaceColorLuminance.
+  ///
+  /// In en, this message translates to:
+  /// **'Luminance'**
+  String get sliderReplaceColorLuminance;
+
+  /// No description provided for @sliderReplaceColorAmount.
+  ///
+  /// In en, this message translates to:
+  /// **'Amount'**
+  String get sliderReplaceColorAmount;
+
   /// No description provided for @filmNone.
   ///
   /// In en, this message translates to:

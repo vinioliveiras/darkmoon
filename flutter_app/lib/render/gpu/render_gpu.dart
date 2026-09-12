@@ -369,27 +369,53 @@ Future<ui.Image> renderImageGpu(
     await _runPostDenoise(afterDehaze, lut, tonalBlur, width, height, params),
   );
   final film = params.filmLut;
+  final ui.Image afterEffects;
   if (film == null || params.filmAmount <= 0) {
-    final result = await _runPostDehaze(afterTone, width, height, params);
-    chain.disposeAllExcept();
-    return result;
+    afterEffects = await _runPostDehaze(afterTone, width, height, params);
+  } else {
+    // Film after Grain, exactly where render.dart's applyGlobalPointOps
+    // applies it on the CPU. Its own pass rather than a sampler on
+    // post_dehaze.frag so a render with no film pays nothing for it.
+    final beforeFilm = chain.add(
+      await _runPostDehaze(afterTone, width, height, params),
+    );
+    final filmTexture = chain.add(await _buildFilmLutImage(film));
+    afterEffects = await GpuPass.run(
+      'shaders/film_lut.frag',
+      floats: [
+        width.toDouble(),
+        height.toDouble(),
+        params.filmAmount,
+        film.size.toDouble(),
+      ],
+      samplers: [beforeFilm, filmTexture],
+      outputWidth: width,
+      outputHeight: height,
+    );
   }
-  // Film last, exactly where render.dart's applyGlobalPointOps applies
-  // it on the CPU (after Grain). Its own pass rather than a sampler on
-  // post_dehaze.frag so a render with no film pays nothing for it.
-  final beforeFilm = chain.add(
-    await _runPostDehaze(afterTone, width, height, params),
-  );
-  final filmTexture = chain.add(await _buildFilmLutImage(film));
+  final replace = params.replaceColor;
+  if (replace.isIdentity) {
+    chain.disposeAllExcept();
+    return afterEffects;
+  }
+  // Replace color last of all (replace_color.dart), same as the CPU.
+  final beforeReplace = chain.add(afterEffects);
   final result = await GpuPass.run(
-    'shaders/film_lut.frag',
+    'shaders/replace_color.frag',
     floats: [
       width.toDouble(),
       height.toDouble(),
-      params.filmAmount,
-      film.size.toDouble(),
+      replace.r / 255.0,
+      replace.g / 255.0,
+      replace.b / 255.0,
+      replace.coreDistance,
+      replace.featherDistance,
+      replace.hue,
+      1.0 + replace.saturation.clamp(-100.0, 100.0) / 100.0,
+      1.0 + replace.luminance.clamp(-100.0, 100.0) / 100.0,
+      replace.amount.clamp(0.0, 100.0) / 100.0,
     ],
-    samplers: [beforeFilm, filmTexture],
+    samplers: [beforeReplace],
     outputWidth: width,
     outputHeight: height,
   );

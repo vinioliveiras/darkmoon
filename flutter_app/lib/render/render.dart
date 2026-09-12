@@ -11,6 +11,7 @@ import 'color_profile.dart';
 import 'color_space.dart';
 import 'dehaze.dart';
 import 'film_lut.dart';
+import 'replace_color.dart';
 import 'grain.dart';
 import 'hsl.dart';
 import 'local_contrast.dart';
@@ -574,6 +575,12 @@ void applyGlobalPointOps(
   if (film != null && params.filmAmount > 0) {
     applyFilmLut(buffer, film, params.filmAmount);
     mark('film');
+  }
+  // Replace color last of all, so the colour picked off the finished
+  // preview is the colour it compares against.
+  if (!params.replaceColor.isIdentity) {
+    applyReplaceColor(buffer, params.replaceColor);
+    mark('replaceColor');
   }
 }
 

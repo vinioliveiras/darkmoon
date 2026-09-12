@@ -80,6 +80,18 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderParamCurveMidtoneSplit;
     case 'ParamCurveHighlightSplit':
       return l10n.sliderParamCurveHighlightSplit;
+    case replaceColorToleranceKey:
+      return l10n.sliderReplaceColorTolerance;
+    case replaceColorFeatherKey:
+      return l10n.sliderReplaceColorFeather;
+    case replaceColorHueKey:
+      return l10n.sliderReplaceColorHue;
+    case replaceColorSaturationKey:
+      return l10n.sliderReplaceColorSaturation;
+    case replaceColorLuminanceKey:
+      return l10n.sliderReplaceColorLuminance;
+    case replaceColorAmountKey:
+      return l10n.sliderReplaceColorAmount;
     default:
       return key;
   }
@@ -291,6 +303,9 @@ Map<String, double> _withCategoriesApplied(
   }
   if (disabled('FILM')) {
     overrides[_filmKey] = 0.0;
+  }
+  if (disabled('REPLACE COLOR')) {
+    overrides[replaceColorPickedKey] = 0.0;
   }
   if (disabled('COLOR MIXER')) {
     for (final channel in _mixerChannels) {
@@ -587,6 +602,14 @@ Map<String, double> withGlobalEditAmountApplied(Map<String, double> values) {
     ..remove(_globalEditAmountKey)
     // An id, not a quantity — see _filmSliders.
     ..remove(_filmKey)
+    // A picked colour and its reach are not a strength either; only the
+    // hue/saturation/luminance moves and the section's Amount scale.
+    ..remove(replaceColorPickedKey)
+    ..remove(replaceColorRKey)
+    ..remove(replaceColorGKey)
+    ..remove(replaceColorBKey)
+    ..remove(replaceColorToleranceKey)
+    ..remove(replaceColorFeatherKey)
     // The Colour Mixer and Colour Grading build their keys at runtime, so
     // they are not in [_defaultParamValues] and this loop simply never
     // reached them — the Amount slider did nothing at all to either, and a
@@ -746,6 +769,26 @@ const _filmSliders = [
 /// split points that set where each region ends. Lives under the Tone
 /// Curve editor; toggled off with the TONE CURVE section switch. Split
 /// defaults 25/50/75 match Meridian (and Solstice's Curves.tsx).
+/// Replace color (2026-09-13, PENDING 46): the picked colour lives in
+/// three non-slider keys plus a "picked" flag the eyedropper sets; the
+/// sliders are the reach and the move. All keys named in
+/// `render/replace_color.dart`. Outside [_sections] like Film: global
+/// only, never a mask's.
+const _replaceColorSliders = [
+  _SliderSpec(replaceColorToleranceKey, 0, 100, 30),
+  _SliderSpec(replaceColorFeatherKey, 0, 100, 25),
+  _SliderSpec(replaceColorHueKey, -180, 180, 0),
+  _SliderSpec(replaceColorSaturationKey, -100, 100, 0),
+  _SliderSpec(replaceColorLuminanceKey, -100, 100, 0),
+  _SliderSpec(replaceColorAmountKey, 0, 100, 50),
+];
+const _replaceColorPickKeys = {
+  replaceColorPickedKey: 0.0,
+  replaceColorRKey: 128.0,
+  replaceColorGKey: 128.0,
+  replaceColorBKey: 128.0,
+};
+
 const _parametricCurveSliders = [
   _SliderSpec('ParamCurveShadows', -100, 100, 0),
   _SliderSpec('ParamCurveDarks', -100, 100, 0),
@@ -774,6 +817,8 @@ Map<String, double> _defaultParamValues() {
     for (final spec in _vignetteSliders) spec.name: spec.defaultValue,
     for (final spec in _grainSliders) spec.name: spec.defaultValue,
     for (final spec in _filmSliders) spec.name: spec.defaultValue,
+    for (final spec in _replaceColorSliders) spec.name: spec.defaultValue,
+    ..._replaceColorPickKeys,
     for (final spec in _parametricCurveSliders) spec.name: spec.defaultValue,
     // Lens Correction is also global-only (see RenderJob.lensCorrection's
     // doc comment) and lives outside [_sections] for the same reason as
@@ -1118,6 +1163,7 @@ class _ControlsPanelActions {
     required this.onClearRemoveStrokes,
     required this.onRemoveModeChanged,
     required this.onToggleRemoveSourcePick,
+    required this.onToggleReplaceColorPick,
     required this.onRemovePromptChanged,
   });
 
@@ -1259,6 +1305,9 @@ class _ControlsPanelActions {
   /// Generative prompt as it is typed.
   final ValueChanged<RemovalMode> onRemoveModeChanged;
   final VoidCallback onToggleRemoveSourcePick;
+
+  /// Replace color's eyedropper (see state_replace_color.dart).
+  final VoidCallback onToggleReplaceColorPick;
   final ValueChanged<String> onRemovePromptChanged;
 
   /// Fires as the Straighten slider is dragged (true) and once it's

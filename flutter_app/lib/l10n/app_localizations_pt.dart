@@ -1340,6 +1340,38 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sectionFilm => 'FILME';
 
   @override
+  String get sectionReplaceColor => 'SUBSTITUIR COR';
+
+  @override
+  String get replaceColorPickButton => 'Escolher uma cor na foto';
+
+  @override
+  String get replaceColorPickHint =>
+      'Escolha uma cor na foto e mova-a com os controles.';
+
+  @override
+  String get replaceColorPickedHint =>
+      'Cor escolhida. Escolha de novo para trocar.';
+
+  @override
+  String get sliderReplaceColorTolerance => 'Alcance';
+
+  @override
+  String get sliderReplaceColorFeather => 'Suavidade';
+
+  @override
+  String get sliderReplaceColorHue => 'Matiz';
+
+  @override
+  String get sliderReplaceColorSaturation => 'Saturação';
+
+  @override
+  String get sliderReplaceColorLuminance => 'Luminância';
+
+  @override
+  String get sliderReplaceColorAmount => 'Intensidade';
+
+  @override
   String get filmNone => 'Nenhum';
 
   @override
