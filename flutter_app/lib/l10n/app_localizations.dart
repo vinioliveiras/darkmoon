@@ -724,6 +724,12 @@ abstract class AppLocalizations {
   /// **'Drag along an edge that should be perfectly horizontal or vertical — release to level it.'**
   String get cropGuidedHint;
 
+  /// No description provided for @cropConstrainLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Constrain crop'**
+  String get cropConstrainLabel;
+
   /// No description provided for @cropDoneButton.
   ///
   /// In en, this message translates to:

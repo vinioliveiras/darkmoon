@@ -387,6 +387,9 @@ class AppLocalizationsPt extends AppLocalizations {
       'Arraste ao longo de uma borda que deveria ficar perfeitamente horizontal ou vertical — solte para nivelar.';
 
   @override
+  String get cropConstrainLabel => 'Restringir corte';
+
+  @override
   String get cropDoneButton => 'OK';
 
   @override

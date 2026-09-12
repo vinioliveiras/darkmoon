@@ -393,6 +393,9 @@ class AppLocalizationsDe extends AppLocalizations {
       'Ziehe entlang einer Kante, die perfekt horizontal oder vertikal sein sollte — loslassen zum Ausrichten.';
 
   @override
+  String get cropConstrainLabel => 'Beschnitt begrenzen';
+
+  @override
   String get cropDoneButton => 'OK';
 
   @override

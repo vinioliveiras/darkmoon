@@ -120,6 +120,7 @@
   "cropGuidedLabel": "Guided",
   "cropGuidedTooltip": "Draw a line that should be level or plumb",
   "cropGuidedHint": "Drag along an edge that should be perfectly horizontal or vertical — release to level it.",
+  "cropConstrainLabel": "Constrain crop",
   "cropDoneButton": "OK",
   "undoButton": "Undo",
   "redoButton": "Redo",

@@ -4767,15 +4767,48 @@ class _EditorScreenState extends State<EditorScreen>
       CropTransformParams.fromValues(_paramValues);
 
   void _onCropTransformChanged(CropTransformParams params) {
-    setState(() => _paramValues = {..._paramValues, ...params.toValues()});
+    final next = _constrainCropIfOn(params);
+    setState(() => _paramValues = {..._paramValues, ...next.toValues()});
     _scheduleRender(live: _settings.fastPreview);
   }
 
   void _onCropTransformChangeEnd(CropTransformParams params) {
-    setState(() => _paramValues = {..._paramValues, ...params.toValues()});
+    final next = _constrainCropIfOn(params);
+    setState(() => _paramValues = {..._paramValues, ...next.toValues()});
     _pushHistory();
     _scheduleRender(live: false);
     _scheduleCatalogSave();
+  }
+
+  /// Constrain Crop: with the switch on, a transform change snaps the crop
+  /// to the largest rectangle the content still covers (at the fixed
+  /// aspect, if one is chosen), and a crop dragged outside that area is
+  /// pulled back in. A crop that already fits is left as it is.
+  CropTransformParams _constrainCropIfOn(CropTransformParams params) {
+    if (!params.constrain) {
+      return params;
+    }
+    final path = _selectedIndex == null ? null : _files[_selectedIndex!].path;
+    final source = path == null ? null : _editSources[path]?.live;
+    if (source == null) {
+      return params;
+    }
+    final before = _cropTransform;
+    final transformChanged =
+        before.straightenAngle != params.straightenAngle ||
+        before.vertical != params.vertical ||
+        before.horizontal != params.horizontal ||
+        before.aspect != params.aspect ||
+        before.scale != params.scale ||
+        before.rotateQuarterTurns != params.rotateQuarterTurns ||
+        before.constrain != params.constrain;
+    return constrainCrop(
+      params,
+      source.width,
+      source.height,
+      aspect: _cropAspectRatio,
+      snap: transformChanged,
+    );
   }
 
   void _resetCropTransform() {

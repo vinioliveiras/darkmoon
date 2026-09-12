@@ -233,6 +233,33 @@ class _CropTransformPanel extends StatelessWidget {
             onChanged: (v) => onChanged(params.copyWith(scale: v)),
             onChangeEnd: (v) => onChangeEnd(params.copyWith(scale: v)),
           ),
+          const SizedBox(height: 6),
+          // Constrain Crop: keeps the crop inside the transformed content,
+          // like Meridian's checkbox. The editor applies it on every
+          // transform change (see _constrainCropIfOn).
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  l10n.cropConstrainLabel,
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ),
+              SizedBox(
+                width: 34,
+                height: 21,
+                child: FittedBox(
+                  child: Switch(
+                    key: const Key('crop-constrain'),
+                    value: params.constrain,
+                    onChanged: (v) =>
+                        onChangeEnd(params.copyWith(constrain: v)),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 14),
           Row(
             children: [

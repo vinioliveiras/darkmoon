@@ -386,6 +386,9 @@ class AppLocalizationsEn extends AppLocalizations {
       'Drag along an edge that should be perfectly horizontal or vertical — release to level it.';
 
   @override
+  String get cropConstrainLabel => 'Constrain crop';
+
+  @override
   String get cropDoneButton => 'OK';
 
   @override

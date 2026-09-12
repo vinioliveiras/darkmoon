@@ -19,7 +19,16 @@ class CropTransformParams {
     this.cropTop = 0,
     this.cropRight = 1,
     this.cropBottom = 1,
+    this.constrain = false,
   });
+
+  /// Constrain Crop (2026-09-12), Meridian's checkbox of the same name:
+  /// while on, the crop rectangle is kept inside the area the source
+  /// actually covers after straightening and keystoning, so the empty
+  /// corners a transform leaves never reach the export — see
+  /// [constrainCrop]. Not part of [isIdentity]: the switch alone changes
+  /// nothing until a transform gives it corners to cut.
+  final bool constrain;
 
   /// Straighten angle, degrees (-45..45). Rotates the whole frame about
   /// its center before the keystone correction below.
@@ -78,6 +87,7 @@ class CropTransformParams {
     double? cropTop,
     double? cropRight,
     double? cropBottom,
+    bool? constrain,
   }) => CropTransformParams(
     straightenAngle: straightenAngle ?? this.straightenAngle,
     vertical: vertical ?? this.vertical,
@@ -89,6 +99,7 @@ class CropTransformParams {
     cropTop: cropTop ?? this.cropTop,
     cropRight: cropRight ?? this.cropRight,
     cropBottom: cropBottom ?? this.cropBottom,
+    constrain: constrain ?? this.constrain,
   );
 
   /// Builds params from the editor's flat `{sliderName: value}` map, same
@@ -107,6 +118,7 @@ class CropTransformParams {
       cropTop: values['CropTop'] ?? d.cropTop,
       cropRight: values['CropRight'] ?? d.cropRight,
       cropBottom: values['CropBottom'] ?? d.cropBottom,
+      constrain: (values['CropConstrain'] ?? 0) != 0,
     );
   }
 
@@ -121,6 +133,7 @@ class CropTransformParams {
     'CropTop': cropTop,
     'CropRight': cropRight,
     'CropBottom': cropBottom,
+    'CropConstrain': constrain ? 1.0 : 0.0,
   };
 }
 
@@ -206,6 +219,70 @@ GeometryResult applyCropTransform(
   );
   final w = rotated.width.toDouble();
   final h = rotated.height.toDouble();
+  final frame = _frameFor(params, w, h);
+  final cx = frame.cx;
+  final cy = frame.cy;
+  final angleRad = frame.angleRad;
+  final inverse = frame.inverse;
+
+  final cropLeftPx = (params.cropLeft.clamp(0.0, 1.0) * w);
+  final cropTopPx = (params.cropTop.clamp(0.0, 1.0) * h);
+  final cropRightPx = (params.cropRight.clamp(0.0, 1.0) * w);
+  final cropBottomPx = (params.cropBottom.clamp(0.0, 1.0) * h);
+  final outWidth = math.max(1, (cropRightPx - cropLeftPx).round());
+  final outHeight = math.max(1, (cropBottomPx - cropTopPx).round());
+
+  final out = Uint8List(outWidth * outHeight * 3);
+  for (var oy = 0; oy < outHeight; oy++) {
+    final canvasY = cropTopPx + oy + 0.5;
+    for (var ox = 0; ox < outWidth; ox++) {
+      final canvasX = cropLeftPx + ox + 0.5;
+      // canvas (post-keystone) -> straightened-source-space -> original
+      // (pre-rotation) source pixel coordinates.
+      final straightened = inverse.transformPoint(canvasX, canvasY);
+      final original = rotatePoint(
+        straightened[0],
+        straightened[1],
+        cx,
+        cy,
+        -angleRad,
+      );
+      sampleBilinear(
+        rotated.rgbBytes,
+        rotated.width,
+        rotated.height,
+        original[0],
+        original[1],
+        out,
+        (oy * outWidth + ox) * 3,
+      );
+    }
+  }
+
+  return GeometryResult(width: outWidth, height: outHeight, rgbBytes: out);
+}
+
+/// The transform's per-frame constants: the straighten angle and the
+/// keystone+scale homography between straightened-source space and the
+/// canvas, for a [w] x [h] canvas (after quarter turns). Shared by
+/// [applyCropTransform] and [validCanvasQuad] so the two can never
+/// disagree about where the content lands.
+class _TransformFrame {
+  const _TransformFrame({
+    required this.cx,
+    required this.cy,
+    required this.angleRad,
+    required this.forward,
+    required this.inverse,
+  });
+  final double cx;
+  final double cy;
+  final double angleRad;
+  final Matrix3 forward;
+  final Matrix3 inverse;
+}
+
+_TransformFrame _frameFor(CropTransformParams params, double w, double h) {
   final cx = w / 2;
   final cy = h / 2;
   final angleRad = params.straightenAngle * math.pi / 180.0;
@@ -254,40 +331,205 @@ GeometryResult applyCropTransform(
 
   final forward = solveHomography(srcCorners, dstCorners);
   final inverse = forward.invert();
+  return _TransformFrame(
+    cx: cx,
+    cy: cy,
+    angleRad: angleRad,
+    forward: forward,
+    inverse: inverse,
+  );
+}
 
-  final cropLeftPx = (params.cropLeft.clamp(0.0, 1.0) * w);
-  final cropTopPx = (params.cropTop.clamp(0.0, 1.0) * h);
-  final cropRightPx = (params.cropRight.clamp(0.0, 1.0) * w);
-  final cropBottomPx = (params.cropBottom.clamp(0.0, 1.0) * h);
-  final outWidth = math.max(1, (cropRightPx - cropLeftPx).round());
-  final outHeight = math.max(1, (cropBottomPx - cropTopPx).round());
+/// A rectangle in the canvas's normalised 0..1 space, the unit
+/// [CropTransformParams.cropLeft] and friends use.
+typedef NormRect = ({double left, double top, double right, double bottom});
 
-  final out = Uint8List(outWidth * outHeight * 3);
-  for (var oy = 0; oy < outHeight; oy++) {
-    final canvasY = cropTopPx + oy + 0.5;
-    for (var ox = 0; ox < outWidth; ox++) {
-      final canvasX = cropLeftPx + ox + 0.5;
-      // canvas (post-keystone) -> straightened-source-space -> original
-      // (pre-rotation) source pixel coordinates.
-      final straightened = inverse.transformPoint(canvasX, canvasY);
-      final original = rotatePoint(
-        straightened[0],
-        straightened[1],
-        cx,
-        cy,
-        -angleRad,
-      );
-      sampleBilinear(
-        rotated.rgbBytes,
-        rotated.width,
-        rotated.height,
-        original[0],
-        original[1],
-        out,
-        (oy * outWidth + ox) * 3,
-      );
+/// The quadrilateral of the canvas the source still covers after
+/// [params]'s straighten, keystone and scale — normalised to the canvas
+/// (the frame after quarter turns, [width] x [height] being the source's
+/// own size). Everything outside it is the empty corner a transform
+/// leaves behind. Top-left, top-right, bottom-right, bottom-left.
+List<List<double>> validCanvasQuad(
+  CropTransformParams params,
+  int width,
+  int height,
+) {
+  final turned = params.rotateQuarterTurns.isOdd;
+  final w = (turned ? height : width).toDouble();
+  final h = (turned ? width : height).toDouble();
+  final frame = _frameFor(params, w, h);
+  final corners = [
+    [0.0, 0.0],
+    [w, 0.0],
+    [w, h],
+    [0.0, h],
+  ];
+  final out = <List<double>>[];
+  for (final c in corners) {
+    // Source -> straightened space (the sampling loop rotates the other
+    // way, by -angle) -> canvas.
+    final st = rotatePoint(c[0], c[1], frame.cx, frame.cy, frame.angleRad);
+    final pt = frame.forward.transformPoint(st[0], st[1]);
+    out.add([pt[0] / w, pt[1] / h]);
+  }
+  return out;
+}
+
+/// Whether the normalised [rect] lies entirely inside the convex [quad].
+bool rectInsideQuad(NormRect rect, List<List<double>> quad) {
+  const eps = 1e-6;
+  for (final p in [
+    [rect.left, rect.top],
+    [rect.right, rect.top],
+    [rect.right, rect.bottom],
+    [rect.left, rect.bottom],
+  ]) {
+    if (!_pointInConvexQuad(p[0], p[1], quad, eps)) return false;
+  }
+  return true;
+}
+
+bool _pointInConvexQuad(
+  double x,
+  double y,
+  List<List<double>> quad,
+  double eps,
+) {
+  double? sign;
+  for (var i = 0; i < 4; i++) {
+    final a = quad[i], b = quad[(i + 1) % 4];
+    final cross = (b[0] - a[0]) * (y - a[1]) - (b[1] - a[1]) * (x - a[0]);
+    if (cross.abs() <= eps) continue;
+    final sgn = cross.sign;
+    if (sign == null) {
+      sign = sgn;
+    } else if (sgn != sign) {
+      return false;
     }
   }
+  return true;
+}
 
-  return GeometryResult(width: outWidth, height: outHeight, rgbBytes: out);
+/// The horizontal extent of the convex [quad] at height [y], or null when
+/// the line misses it.
+(double, double)? _spanAt(List<List<double>> quad, double y) {
+  double? lo, hi;
+  for (var i = 0; i < 4; i++) {
+    final a = quad[i], b = quad[(i + 1) % 4];
+    final y0 = a[1], y1 = b[1];
+    if (y < math.min(y0, y1) || y > math.max(y0, y1)) continue;
+    if ((y1 - y0).abs() < 1e-12) {
+      // A horizontal edge: both ends count.
+      lo = math.min(lo ?? a[0], math.min(a[0], b[0]));
+      hi = math.max(hi ?? a[0], math.max(a[0], b[0]));
+      continue;
+    }
+    final x = a[0] + (b[0] - a[0]) * (y - y0) / (y1 - y0);
+    lo = math.min(lo ?? x, x);
+    hi = math.max(hi ?? x, x);
+  }
+  return lo == null || hi == null ? null : (lo, hi);
+}
+
+/// The largest axis-aligned rectangle inside the convex [quad]
+/// ([validCanvasQuad]'s), by area — at [aspect] (canvas width / height in
+/// pixels, for a [canvasWidth] x [canvasHeight] canvas) when one is
+/// given. A grid search over the top and bottom edges: for a convex
+/// shape the rectangle between two heights can use whatever width both
+/// heights allow, so each pair is one evaluation.
+NormRect largestInscribedRect(
+  List<List<double>> quad, {
+  double? aspect,
+  int canvasWidth = 3,
+  int canvasHeight = 2,
+  int steps = 160,
+}) {
+  final ys = quad.map((p) => p[1]).toList()..sort();
+  final yMin = math.max(0.0, ys.first), yMax = math.min(1.0, ys.last);
+  NormRect best = (left: 0.0, top: 0.0, right: 0.0, bottom: 0.0);
+  var bestArea = -1.0;
+  // aspect is in pixels; the normalised rect's width/height ratio is
+  // aspect * canvasHeight / canvasWidth.
+  final normAspect = aspect == null
+      ? null
+      : aspect * canvasHeight / canvasWidth;
+  for (var i = 0; i <= steps; i++) {
+    final y1 = yMin + (yMax - yMin) * i / steps;
+    final s1 = _spanAt(quad, y1);
+    if (s1 == null) continue;
+    for (var j = i + 1; j <= steps; j++) {
+      final y2 = yMin + (yMax - yMin) * j / steps;
+      final s2 = _spanAt(quad, y2);
+      if (s2 == null) continue;
+      var left = math.max(0.0, math.max(s1.$1, s2.$1));
+      var right = math.min(1.0, math.min(s1.$2, s2.$2));
+      if (right <= left) continue;
+      var top = y1, bottom = y2;
+      if (normAspect != null) {
+        final availW = right - left, availH = bottom - top;
+        if (availW / availH > normAspect) {
+          final wanted = availH * normAspect;
+          final mid = (left + right) / 2;
+          left = mid - wanted / 2;
+          right = mid + wanted / 2;
+        } else {
+          final wanted = availW / normAspect;
+          final mid = (top + bottom) / 2;
+          top = mid - wanted / 2;
+          bottom = mid + wanted / 2;
+        }
+      }
+      final area = (right - left) * (bottom - top);
+      final candidate = (left: left, top: top, right: right, bottom: bottom);
+      if (area > bestArea && rectInsideQuad(candidate, quad)) {
+        bestArea = area;
+        best = candidate;
+      }
+    }
+  }
+  if (bestArea < 0) {
+    return (left: 0.0, top: 0.0, right: 1.0, bottom: 1.0);
+  }
+  return best;
+}
+
+/// Constrain Crop for a [width] x [height] source: with
+/// [CropTransformParams.constrain] on, the crop becomes the largest
+/// rectangle the content still covers (at [aspect], pixels, when set)
+/// when [snap] is true — a transform just changed — and otherwise only
+/// when the current crop pokes outside the content. Off, [params] come
+/// back untouched.
+CropTransformParams constrainCrop(
+  CropTransformParams params,
+  int width,
+  int height, {
+  double? aspect,
+  required bool snap,
+}) {
+  if (!params.constrain) {
+    return params;
+  }
+  final quad = validCanvasQuad(params, width, height);
+  final NormRect current = (
+    left: params.cropLeft,
+    top: params.cropTop,
+    right: params.cropRight,
+    bottom: params.cropBottom,
+  );
+  if (!snap && rectInsideQuad(current, quad)) {
+    return params;
+  }
+  final turned = params.rotateQuarterTurns.isOdd;
+  final rect = largestInscribedRect(
+    quad,
+    aspect: aspect,
+    canvasWidth: turned ? height : width,
+    canvasHeight: turned ? width : height,
+  );
+  return params.copyWith(
+    cropLeft: rect.left,
+    cropTop: rect.top,
+    cropRight: rect.right,
+    cropBottom: rect.bottom,
+  );
 }
