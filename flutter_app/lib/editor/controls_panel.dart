@@ -35,6 +35,10 @@ class _ControlsPanel extends StatefulWidget {
     required this.aiMaskFailures,
     required this.brushFlow,
     required this.cropOverlayActive,
+    required this.removeModeActive,
+    required this.removeHasStrokes,
+    required this.removalCount,
+    required this.removalBusy,
     required this.cropTransform,
     required this.cropAspectRatio,
     required this.guidedModeActive,
@@ -116,6 +120,13 @@ class _ControlsPanel extends StatefulWidget {
   final Map<String, String> aiMaskFailures;
 
   final bool cropOverlayActive;
+
+  /// Object removal mode takes the panel like crop does — see
+  /// [_RemoveObjectsPanel].
+  final bool removeModeActive;
+  final bool removeHasStrokes;
+  final int removalCount;
+  final bool removalBusy;
   final CropTransformParams cropTransform;
   final double? cropAspectRatio;
 
@@ -206,6 +217,16 @@ class _ControlsPanelState extends State<_ControlsPanel>
     _ControlsTab.colour => CupertinoIcons.circle_grid_hex,
     _ControlsTab.effects => CupertinoIcons.fx,
   };
+
+  Widget _buildRemovePanel() => _RemoveObjectsPanel(
+    brushRadius: widget.brushRadius,
+    brushHardness: widget.brushHardness,
+    brushErase: widget.brushErase,
+    hasStrokes: widget.removeHasStrokes,
+    removalCount: widget.removalCount,
+    busy: widget.removalBusy,
+    actions: widget.actions,
+  );
 
   Widget _buildCropPanel() => _CropTransformPanel(
     params: widget.cropTransform,
@@ -886,7 +907,9 @@ class _ControlsPanelState extends State<_ControlsPanel>
                 // layouts (user's call, 2026-09-11): which mask the
                 // sections apply to has to stay in view while they scroll.
                 // The active mask's own controls follow the layout below.
-                if (!widget.cropOverlayActive)
+                // Not while removing objects: the brush paints a removal
+                // then, not a mask.
+                if (!widget.cropOverlayActive && !widget.removeModeActive)
                   Padding(
                     padding: const EdgeInsets.fromLTRB(
                       _controlsPanelInset,
@@ -916,6 +939,18 @@ class _ControlsPanelState extends State<_ControlsPanel>
                         14,
                       ),
                       child: _buildCropPanel(),
+                    ),
+                  )
+                else if (widget.removeModeActive)
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(
+                        _controlsPanelInset,
+                        0,
+                        _controlsPanelInset,
+                        14,
+                      ),
+                      child: _buildRemovePanel(),
                     ),
                   )
                 else ...[

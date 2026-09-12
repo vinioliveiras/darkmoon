@@ -434,6 +434,58 @@ class AppLocalizationsDe extends AppLocalizations {
   String get colorizeFailedStatus => 'Kolorieren fehlgeschlagen';
 
   @override
+  String get removeButton => 'Objekte entfernen';
+
+  @override
+  String get removeUnavailableMessage =>
+      'Schalten Sie AI Enhance, Cloud AI oder Kolorieren aus, bevor Sie Objekte entfernen.';
+
+  @override
+  String get removePanelTitle => 'Objekte entfernen';
+
+  @override
+  String get removePanelHint =>
+      'Übermalen Sie, was verschwinden soll, und drücken Sie Entfernen. Der Bereich wird aus seiner Umgebung gefüllt.';
+
+  @override
+  String get removeRunButton => 'Entfernen';
+
+  @override
+  String get removeClearStrokes => 'Leeren';
+
+  @override
+  String get removeUndoRemoval => 'Letzte Entfernung rückgängig';
+
+  @override
+  String get removeDoneButton => 'Fertig';
+
+  @override
+  String get removeRunningMessage => 'Wird entfernt…';
+
+  @override
+  String removeRunningProgress(int done, int total) {
+    return 'Wird entfernt… ($done/$total)';
+  }
+
+  @override
+  String get removeFailedMessage =>
+      'Die Entfernung konnte nicht berechnet werden. Die Modelldatei fehlt möglicherweise.';
+
+  @override
+  String get removeFailedStatus => 'Entfernen fehlgeschlagen';
+
+  @override
+  String removeCountLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Entfernungen angewendet',
+      one: '1 Entfernung angewendet',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get colorizeCpuWarning =>
       'Kolorierung läuft auf der CPU (keine kompatible GPU gefunden) — das wird langsamer als gewöhnlich sein.';
 

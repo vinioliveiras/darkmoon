@@ -802,6 +802,84 @@ abstract class AppLocalizations {
   /// **'Colorize failed'**
   String get colorizeFailedStatus;
 
+  /// No description provided for @removeButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove objects'**
+  String get removeButton;
+
+  /// No description provided for @removeUnavailableMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Turn off AI Enhance, Cloud AI or Colorize before removing objects.'**
+  String get removeUnavailableMessage;
+
+  /// No description provided for @removePanelTitle.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove objects'**
+  String get removePanelTitle;
+
+  /// No description provided for @removePanelHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Paint over what should go, then press Remove. The area is filled from its surroundings.'**
+  String get removePanelHint;
+
+  /// No description provided for @removeRunButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Remove'**
+  String get removeRunButton;
+
+  /// No description provided for @removeClearStrokes.
+  ///
+  /// In en, this message translates to:
+  /// **'Clear'**
+  String get removeClearStrokes;
+
+  /// No description provided for @removeUndoRemoval.
+  ///
+  /// In en, this message translates to:
+  /// **'Undo last removal'**
+  String get removeUndoRemoval;
+
+  /// No description provided for @removeDoneButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Done'**
+  String get removeDoneButton;
+
+  /// No description provided for @removeRunningMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'Removing…'**
+  String get removeRunningMessage;
+
+  /// No description provided for @removeRunningProgress.
+  ///
+  /// In en, this message translates to:
+  /// **'Removing… ({done}/{total})'**
+  String removeRunningProgress(int done, int total);
+
+  /// No description provided for @removeFailedMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'The removal could not be computed. The model file may be missing.'**
+  String get removeFailedMessage;
+
+  /// No description provided for @removeFailedStatus.
+  ///
+  /// In en, this message translates to:
+  /// **'Removal failed'**
+  String get removeFailedStatus;
+
+  /// No description provided for @removeCountLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 removal applied} other{{count} removals applied}}'**
+  String removeCountLabel(int count);
+
   /// No description provided for @colorizeCpuWarning.
   ///
   /// In en, this message translates to:

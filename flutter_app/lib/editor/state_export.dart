@@ -69,6 +69,9 @@ extension _EditorExport on _EditorScreenState {
     final wantColorizeIntensity =
         (_paramValues[_colorizeIntensityKey] ?? defaultColorizeIntensity)
             .round();
+    final wantInpaint =
+        (_paramValues[_inpaintKey] ?? 0.0) > 0 &&
+        _removalsFor(selected.path).isNotEmpty;
     EditSource? nativeForExport;
     final srcSw = Stopwatch()..start();
     try {
@@ -99,6 +102,8 @@ extension _EditorExport on _EditorScreenState {
           selected.path,
           intensityPercent: wantColorizeIntensity,
         );
+      } else if (wantInpaint) {
+        nativeForExport = await _loadInpaintedNativeSource(selected.path);
       }
       nativeForExport ??= await _loadNativeSource(
         selected.path,

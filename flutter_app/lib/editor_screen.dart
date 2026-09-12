@@ -26,6 +26,8 @@ import 'catalog/cloud_denoise_cache.dart';
 import 'catalog/cloud_denoise_cache_dir.dart';
 import 'catalog/colorize_cache.dart';
 import 'catalog/colorize_cache_dir.dart';
+import 'catalog/inpaint_cache.dart';
+import 'catalog/inpaint_cache_dir.dart';
 import 'catalog/thumbnail_cache.dart';
 import 'catalog/thumbnail_cache_dir.dart';
 import 'cloud_denoise/cloud_denoise_provider.dart';
@@ -46,6 +48,7 @@ import 'native/isolate_job.dart';
 import 'native/edit_source_ai_enhance.dart';
 import 'native/edit_source_cloud_denoise.dart';
 import 'native/edit_source_colorize.dart';
+import 'native/edit_source_inpaint.dart';
 import 'native/libraw.dart'
     show
         RawDecodeStage,
@@ -122,6 +125,7 @@ part 'editor/definitions.dart';
 part 'editor/image_area.dart';
 part 'editor/viewer_toolbar.dart';
 part 'editor/crop_transform_panel.dart';
+part 'editor/remove_panel.dart';
 part 'editor/section_widgets.dart';
 part 'editor/controls_panel.dart';
 part 'editor/filmstrip.dart';
@@ -132,6 +136,7 @@ part 'editor/state_zoom.dart';
 part 'editor/state_color_profiles.dart';
 part 'editor/state_ai_masks.dart';
 part 'editor/state_masks.dart';
+part 'editor/state_inpaint.dart';
 part 'editor/state_export.dart';
 
 /// Main window: image viewer + toolbar, adjustment panel, and a filmstrip
@@ -692,6 +697,15 @@ class _EditorScreenState extends State<EditorScreen>
   RenderStage? _colorizeRenderStage;
   ColorizeCancellationToken? _colorizeCancellation;
 
+  /// Object removal (2026-09-12, see `state_inpaint.dart`): whether the
+  /// mode is open, the strokes painted for the next removal, and the
+  /// model run in flight.
+  bool _removeModeActive = false;
+  BrushGeometry _removeStrokes = const BrushGeometry();
+  bool _isRunningInpaint = false;
+  InpaintProgress? _inpaintProgress;
+  InpaintCancellationToken? _inpaintCancellation;
+
   /// Guards [_openAiDenoiseDialog]/[_openColorizeDialog] against a rapid
   /// double-tap on their toolbar button stacking two dialogs on top of
   /// each other (2026-09-01, real bug found in testing) — `showDialog`'s
@@ -952,6 +966,11 @@ class _EditorScreenState extends State<EditorScreen>
     onToggleGuidedMode: _toggleGuidedMode,
     onLensCorrectionChanged: _onLensCorrectionChanged,
     onLensCorrectionChangeEnd: _onLensCorrectionChangeEnd,
+    onToggleRemoveMode: _toggleRemoveMode,
+    onRunRemoval: () => unawaited(_runRemoval()),
+    onUndoRemoval: () => unawaited(_undoLastRemoval()),
+    onUndoRemoveStroke: _undoRemoveStroke,
+    onClearRemoveStrokes: _clearRemoveStrokes,
   );
 
   void _toggleWbEyedropper() =>
@@ -2762,6 +2781,7 @@ class _EditorScreenState extends State<EditorScreen>
     _aiEnhanceCancellation?.cancel();
     _cloudDenoiseCancellation?.cancel();
     _colorizeCancellation?.cancel();
+    _inpaintCancellation?.cancel();
     setState(() {
       _loading = false;
       _isDecodingPhoto = false;
@@ -3158,8 +3178,47 @@ class _EditorScreenState extends State<EditorScreen>
           }
         }
       }
+      // Object removals (2026-09-12): their own cache too, and their own
+      // run on a miss — the model is local and a few seconds, so unlike
+      // Cloud AI a revisit may recompute. Exclusive with the others.
+      final wantInpaint =
+          (_paramValues[_inpaintKey] ?? 0.0) > 0 &&
+          _removalsFor(path).isNotEmpty &&
+          !wantAnyEnhance &&
+          wantCloudProvider == null &&
+          !wantColorize;
+      if (wantInpaint && sources == null) {
+        final removals = _removalsFor(path);
+        final cacheDir = await resolveInpaintCacheDir();
+        if (mounted) {
+          final cachedPng = await lookupInpaintCache(
+            cacheDir,
+            path,
+            removalsKey: inpaintRemovalsKey(removals),
+          );
+          if (cachedPng != null) {
+            sources = await compute(
+              decodeCachedInpaintSources,
+              DecodeCachedInpaintArgs(cachedPng, _settings.previewResolution),
+            );
+            fromCache = sources != null;
+          }
+          if (sources == null && mounted) {
+            final ok = await _applyRemovals(path, removals);
+            if (!mounted || generation != _folderGeneration) {
+              return;
+            }
+            if (ok) {
+              sources = _editSources[path];
+            }
+          }
+        }
+      }
       final wantAnyPipeline =
-          wantAnyEnhance || wantCloudProvider != null || wantColorize;
+          wantAnyEnhance ||
+          wantCloudProvider != null ||
+          wantColorize ||
+          wantInpaint;
 
       // Cache lookup/decode happens here in the main isolate/from a
       // compute() call (same split as ThumbnailCacheManager's own usage,
@@ -3216,6 +3275,7 @@ class _EditorScreenState extends State<EditorScreen>
               _restoreDetailKey: 0.0,
               _cloudDenoiseProviderKey: 0.0,
               _colorizeKey: 0.0,
+              _inpaintKey: 0.0,
             };
           });
         }
@@ -4873,6 +4933,15 @@ class _EditorScreenState extends State<EditorScreen>
     if (_isRunningColorize) {
       return _LoadingInfo(message: l10n.colorizeStartingMessage);
     }
+    if (_isRunningInpaint) {
+      final progress = _inpaintProgress;
+      return _LoadingInfo(
+        message: progress == null
+            ? l10n.removeRunningMessage
+            : l10n.removeRunningProgress(progress.done, progress.total),
+        progress: progress == null ? null : progress.done / progress.total,
+      );
+    }
     if (_isDecodingPhoto) {
       final stage = _photoDecodeStage;
       return _LoadingInfo(
@@ -5194,6 +5263,8 @@ class _EditorScreenState extends State<EditorScreen>
                                                       (_beforeAfterMode ||
                                                           selected == null)
                                                       ? null
+                                                      : _removeModeActive
+                                                      ? _removeLayer
                                                       : _activeMask,
                                                   editingSource:
                                                       selected == null
@@ -5201,10 +5272,22 @@ class _EditorScreenState extends State<EditorScreen>
                                                       : _editSources[selected
                                                                 .path]
                                                             ?.preview,
-                                                  onMaskGeometryChanged:
-                                                      _onMaskGeometryChanged,
-                                                  onMaskGeometryChangeEnd:
-                                                      _onMaskGeometryChangeEnd,
+                                                  onMaskGeometryChanged: (mask) =>
+                                                      mask.id == _removeLayerId
+                                                      ? _onRemoveStrokesChanged(
+                                                          mask,
+                                                        )
+                                                      : _onMaskGeometryChanged(
+                                                          mask,
+                                                        ),
+                                                  onMaskGeometryChangeEnd: (mask) =>
+                                                      mask.id == _removeLayerId
+                                                      ? _onRemoveStrokesChanged(
+                                                          mask,
+                                                        )
+                                                      : _onMaskGeometryChangeEnd(
+                                                          mask,
+                                                        ),
                                                   brushRadius: _brushRadius,
                                                   brushHardness: _brushHardness,
                                                   brushErase: _brushErase,
@@ -5346,6 +5429,16 @@ class _EditorScreenState extends State<EditorScreen>
                                             aiMaskFailures: _aiMaskFailures,
                                             cropOverlayActive:
                                                 _cropOverlayActive,
+                                            removeModeActive: _removeModeActive,
+                                            removeHasStrokes: _removeStrokes
+                                                .strokes
+                                                .isNotEmpty,
+                                            removalCount: selected == null
+                                                ? 0
+                                                : _removalsFor(
+                                                    selected.path,
+                                                  ).length,
+                                            removalBusy: _isRunningInpaint,
                                             cropTransform: _cropTransform,
                                             cropAspectRatio: _cropAspectRatio,
                                             guidedModeActive: _guidedModeActive,
@@ -5408,14 +5501,21 @@ class _EditorScreenState extends State<EditorScreen>
                                 (_paramValues[_cloudDenoiseProviderKey] ??
                                         0.0) >
                                     0,
-                            onOpenAiDenoise: selected == null
+                            // The source pipelines and a removal cannot
+                            // see each other (see _otherSourcePipelineActive).
+                            onOpenAiDenoise: selected == null || _removalsActive
                                 ? null
                                 : _openAiDenoiseDialog,
                             colorizeActive:
                                 (_paramValues[_colorizeKey] ?? 0.0) > 0,
-                            onOpenColorize: selected == null
+                            onOpenColorize: selected == null || _removalsActive
                                 ? null
                                 : _openColorizeDialog,
+                            removeActive: _removalsActive,
+                            removeModeActive: _removeModeActive,
+                            onToggleRemove: selected == null
+                                ? null
+                                : _toggleRemoveMode,
                             cropOverlayActive: _cropOverlayActive,
                             onToggleCropOverlay: selected == null
                                 ? null

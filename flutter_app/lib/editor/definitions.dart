@@ -963,6 +963,16 @@ const _colorizeKey = 'Colorize';
 /// [defaultColorizeIntensity] when absent.
 const _colorizeIntensityKey = 'ColorizeIntensity';
 
+/// How many object removals the photo's source carries (2026-09-12), 0 or
+/// absent for none. The strokes themselves live in the store's
+/// `inpaints`; this marker is what says the edit source is their result
+/// and what the edited badge and Reset see.
+const _inpaintKey = 'Inpaint';
+
+/// The id of the brush layer the canvas paints while removal mode is on —
+/// never in the mask stack, so the picker and the history never see it.
+const _removeLayerId = 'removal';
+
 const _wbModeKey = 'WhiteBalanceMode';
 
 /// Every callback [_ControlsPanel] fires, as one object (2026-09-11).
@@ -1023,6 +1033,11 @@ class _ControlsPanelActions {
     required this.onToggleGuidedMode,
     required this.onLensCorrectionChanged,
     required this.onLensCorrectionChangeEnd,
+    required this.onToggleRemoveMode,
+    required this.onRunRemoval,
+    required this.onUndoRemoval,
+    required this.onUndoRemoveStroke,
+    required this.onClearRemoveStrokes,
   });
 
   final void Function(WbMode mode) onWhiteBalanceMode;
@@ -1130,6 +1145,14 @@ class _ControlsPanelActions {
   final VoidCallback onToggleCropOverlay;
 
   final VoidCallback onResetCropTransform;
+
+  /// Object removal (2026-09-12): in and out of the mode, run the model
+  /// over the painted strokes, drop the last removal, and edit the strokes.
+  final VoidCallback onToggleRemoveMode;
+  final VoidCallback onRunRemoval;
+  final VoidCallback onUndoRemoval;
+  final VoidCallback onUndoRemoveStroke;
+  final VoidCallback onClearRemoveStrokes;
 
   /// Fires as the Straighten slider is dragged (true) and once it's
   /// released (false) — lets the crop overlay show a denser guide grid

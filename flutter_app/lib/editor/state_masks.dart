@@ -175,7 +175,12 @@ extension _EditorMasks on _EditorScreenState {
             (_paramValues[_neuralRawDenoiseKey] ?? 0.0) > 0 ||
             (_paramValues[_restoreDetailKey] ?? 0.0) > 0 ||
             (_paramValues[_cloudDenoiseProviderKey] ?? 0.0) > 0 ||
-            (_paramValues[_colorizeKey] ?? 0.0) > 0);
+            (_paramValues[_colorizeKey] ?? 0.0) > 0 ||
+            (_paramValues[_inpaintKey] ?? 0.0) > 0);
+    if (selected != null) {
+      // Removals are an edit too: Reset takes them with the rest.
+      _store.inpaints.remove(selected.path);
+    }
     _rebuild(() {
       _paramValues = _freshParamValues();
       _currentCurves = identityPhotoCurves;

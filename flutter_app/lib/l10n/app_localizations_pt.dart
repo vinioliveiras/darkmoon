@@ -428,6 +428,58 @@ class AppLocalizationsPt extends AppLocalizations {
   String get colorizeFailedStatus => 'Falha ao colorizar';
 
   @override
+  String get removeButton => 'Remover objetos';
+
+  @override
+  String get removeUnavailableMessage =>
+      'Desligue AI Enhance, Cloud AI ou Colorizar antes de remover objetos.';
+
+  @override
+  String get removePanelTitle => 'Remover objetos';
+
+  @override
+  String get removePanelHint =>
+      'Pinte sobre o que deve sair e pressione Remover. A área é preenchida a partir do que está em volta.';
+
+  @override
+  String get removeRunButton => 'Remover';
+
+  @override
+  String get removeClearStrokes => 'Limpar';
+
+  @override
+  String get removeUndoRemoval => 'Desfazer última remoção';
+
+  @override
+  String get removeDoneButton => 'Concluir';
+
+  @override
+  String get removeRunningMessage => 'Removendo…';
+
+  @override
+  String removeRunningProgress(int done, int total) {
+    return 'Removendo… ($done/$total)';
+  }
+
+  @override
+  String get removeFailedMessage =>
+      'Não foi possível calcular a remoção. O arquivo do modelo pode estar faltando.';
+
+  @override
+  String get removeFailedStatus => 'Falha ao remover';
+
+  @override
+  String removeCountLabel(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count remoções aplicadas',
+      one: '1 remoção aplicada',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get colorizeCpuWarning =>
       'Colorização rodando na CPU (nenhuma GPU compatível encontrada) — vai ser mais lento que o normal.';
 

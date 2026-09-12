@@ -22,6 +22,9 @@ class _ViewerToolbar extends StatelessWidget {
     required this.onOpenAiDenoise,
     required this.colorizeActive,
     required this.onOpenColorize,
+    required this.removeActive,
+    required this.removeModeActive,
+    required this.onToggleRemove,
     required this.cropOverlayActive,
     required this.onToggleCropOverlay,
     required this.onExport,
@@ -54,6 +57,12 @@ class _ViewerToolbar extends StatelessWidget {
   /// [aiDenoiseActive].
   final bool colorizeActive;
   final VoidCallback? onOpenColorize;
+
+  /// Object removal (2026-09-12): filled while the photo carries
+  /// removals, and while the mode is open for painting the next one.
+  final bool removeActive;
+  final bool removeModeActive;
+  final VoidCallback? onToggleRemove;
 
   final bool cropOverlayActive;
   final VoidCallback? onToggleCropOverlay;
@@ -250,6 +259,21 @@ class _ViewerToolbar extends StatelessWidget {
                         selected: colorizeActive,
                         onTap: locked ? null : onOpenColorize,
                         tooltip: l10n.colorizeButton,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(width: 6),
+                  _ToolbarPill(
+                    height: _squareButtonSize,
+                    showChrome: false,
+                    children: [
+                      _ToolbarSegment(
+                        icon: CupertinoIcons.bandage,
+                        iconSize: _squareButtonIconSize,
+                        width: _squareButtonSize,
+                        selected: removeActive || removeModeActive,
+                        onTap: locked ? null : onToggleRemove,
+                        tooltip: l10n.removeButton,
                       ),
                     ],
                   ),
