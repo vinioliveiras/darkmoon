@@ -1126,6 +1126,48 @@ abstract class AppLocalizations {
   /// **'Expand'**
   String get removeGrowLabel;
 
+  /// No description provided for @removeAutoRepairLabel.
+  ///
+  /// In en, this message translates to:
+  /// **'Magical repair'**
+  String get removeAutoRepairLabel;
+
+  /// No description provided for @removeAutoRepairHint.
+  ///
+  /// In en, this message translates to:
+  /// **'Finds dust spots and thin scratches on its own and fills them in.'**
+  String get removeAutoRepairHint;
+
+  /// No description provided for @removeAutoRepairSensitivity.
+  ///
+  /// In en, this message translates to:
+  /// **'Sensitivity'**
+  String get removeAutoRepairSensitivity;
+
+  /// No description provided for @removeAutoRepairButton.
+  ///
+  /// In en, this message translates to:
+  /// **'Find and repair'**
+  String get removeAutoRepairButton;
+
+  /// No description provided for @removeAutoRepairName.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{Magical repair (1 spot)} other{Magical repair ({count} spots)}}'**
+  String removeAutoRepairName(int count);
+
+  /// No description provided for @removeAutoRepairNoneMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'No blemishes found at this sensitivity.'**
+  String get removeAutoRepairNoneMessage;
+
+  /// No description provided for @removeAutoRepairDoneMessage.
+  ///
+  /// In en, this message translates to:
+  /// **'{count, plural, =1{1 blemish repaired.} other{{count} blemishes repaired.}}'**
+  String removeAutoRepairDoneMessage(int count);
+
   /// No description provided for @removeWithMaskLabel.
   ///
   /// In en, this message translates to:

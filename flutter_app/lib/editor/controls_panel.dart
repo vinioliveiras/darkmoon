@@ -38,6 +38,7 @@ class _ControlsPanel extends StatefulWidget {
     required this.removeModeActive,
     required this.removeHasStrokes,
     required this.removeGrow,
+    required this.autoRepairSensitivity,
     required this.removeMode,
     required this.removeSourcePicking,
     required this.replaceColorPicking,
@@ -134,6 +135,9 @@ class _ControlsPanel extends StatefulWidget {
   final bool removeModeActive;
   final bool removeHasStrokes;
   final double removeGrow;
+
+  /// Magical Repair's sensitivity, 0..100.
+  final double autoRepairSensitivity;
 
   /// See _ControlsPanelActions.onRemoveModeChanged and friends.
   final RemovalMode removeMode;
@@ -248,6 +252,7 @@ class _ControlsPanelState extends State<_ControlsPanel>
     brushHardness: widget.brushHardness,
     brushErase: widget.brushErase,
     grow: widget.removeGrow,
+    autoRepairSensitivity: widget.autoRepairSensitivity,
     hasStrokes: widget.removeHasStrokes,
     mode: widget.removeMode,
     sourcePicking: widget.removeSourcePicking,

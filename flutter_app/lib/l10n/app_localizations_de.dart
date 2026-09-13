@@ -642,6 +642,45 @@ class AppLocalizationsDe extends AppLocalizations {
   String get removeGrowLabel => 'Erweitern';
 
   @override
+  String get removeAutoRepairLabel => 'Magische Reparatur';
+
+  @override
+  String get removeAutoRepairHint =>
+      'Findet Staubflecken und feine Kratzer selbst und füllt sie.';
+
+  @override
+  String get removeAutoRepairSensitivity => 'Empfindlichkeit';
+
+  @override
+  String get removeAutoRepairButton => 'Finden und reparieren';
+
+  @override
+  String removeAutoRepairName(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Magische Reparatur ($count Flecken)',
+      one: 'Magische Reparatur (1 Fleck)',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get removeAutoRepairNoneMessage =>
+      'Bei dieser Empfindlichkeit wurden keine Flecken gefunden.';
+
+  @override
+  String removeAutoRepairDoneMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count Flecken repariert.',
+      one: '1 Fleck repariert.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get removeWithMaskLabel => 'Oder entfernen, was eine Maske abdeckt';
 
   @override

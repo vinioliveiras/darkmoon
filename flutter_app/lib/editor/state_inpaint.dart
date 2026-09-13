@@ -78,6 +78,88 @@ extension _EditorInpaint on _EditorScreenState {
     _rebuild(() => _removeGrow = value);
   }
 
+  void _setAutoRepairSensitivity(double value) {
+    _rebuild(() => _autoRepairSensitivity = value);
+  }
+
+  /// Magical Repair (2026-09-13, PENDING 48): finds dust spots and thin
+  /// scratches on the preview (render/spot_detect.dart) and adds them as
+  /// one AI-fill removal, the way a painted removal is added.
+  Future<void> _autoRepair() async {
+    final selected = _selectedIndex == null ? null : _files[_selectedIndex!];
+    if (selected == null || _isRunningInpaint) {
+      return;
+    }
+    final path = selected.path;
+    final preview = _editSources[path]?.preview;
+    final l10n = AppLocalizations.of(context)!;
+    if (preview == null) {
+      _notify(
+        detail: l10n.removeMaskNotReadyMessage,
+        status: l10n.removeMaskNotReadyMessage,
+      );
+      return;
+    }
+    final found = await compute(detectBlemishesJob, (
+      rgb: preview.rgbBytes,
+      width: preview.width,
+      height: preview.height,
+      sensitivity: _autoRepairSensitivity / 100.0,
+    ));
+    if (!mounted) {
+      return;
+    }
+    if (found.count == 0) {
+      _notify(
+        detail: l10n.removeAutoRepairNoneMessage,
+        status: l10n.removeAutoRepairNoneMessage,
+      );
+      return;
+    }
+    final previous = _removalsFor(path);
+    final removal = _removalFromAlpha(
+      found.alpha,
+      preview.width,
+      preview.height,
+      l10n.removeAutoRepairName(found.count),
+    );
+    await _setRemovals(path, previous, [...previous, removal]);
+    if (!mounted) {
+      return;
+    }
+    _notify(
+      detail: l10n.removeAutoRepairDoneMessage(found.count),
+      status: l10n.removeAutoRepairDoneMessage(found.count),
+    );
+  }
+
+  /// A ready alpha at the preview's resolution as an AI-fill removal —
+  /// the tail of [_rasterizeRemoval] without the mask and the grow.
+  Removal _removalFromAlpha(
+    Float32List alpha,
+    int width,
+    int height,
+    String name,
+  ) {
+    final longer = math.max(width, height);
+    var storedWidth = width;
+    var storedHeight = height;
+    var stored = alpha;
+    if (longer > removalMaxDimension) {
+      final scale = removalMaxDimension / longer;
+      storedWidth = math.max(1, (width * scale).round());
+      storedHeight = math.max(1, (height * scale).round());
+      stored = resampleAlpha(alpha, width, height, storedWidth, storedHeight);
+    }
+    return Removal(
+      name: name,
+      width: storedWidth,
+      height: storedHeight,
+      alphaPng: encodeAlphaPng(stored, storedWidth, storedHeight),
+      mode: RemovalMode.ai,
+    );
+  }
+
   /// [mask]'s coverage as a removal, rasterised at the preview's
   /// resolution (which is what a colour range or an AI mask needs to be
   /// judged against) and grown by the Expand setting. Null when the

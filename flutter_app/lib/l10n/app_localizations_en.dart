@@ -633,6 +633,45 @@ class AppLocalizationsEn extends AppLocalizations {
   String get removeGrowLabel => 'Expand';
 
   @override
+  String get removeAutoRepairLabel => 'Magical repair';
+
+  @override
+  String get removeAutoRepairHint =>
+      'Finds dust spots and thin scratches on its own and fills them in.';
+
+  @override
+  String get removeAutoRepairSensitivity => 'Sensitivity';
+
+  @override
+  String get removeAutoRepairButton => 'Find and repair';
+
+  @override
+  String removeAutoRepairName(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: 'Magical repair ($count spots)',
+      one: 'Magical repair (1 spot)',
+    );
+    return '$_temp0';
+  }
+
+  @override
+  String get removeAutoRepairNoneMessage =>
+      'No blemishes found at this sensitivity.';
+
+  @override
+  String removeAutoRepairDoneMessage(int count) {
+    String _temp0 = intl.Intl.pluralLogic(
+      count,
+      locale: localeName,
+      other: '$count blemishes repaired.',
+      one: '1 blemish repaired.',
+    );
+    return '$_temp0';
+  }
+
+  @override
   String get removeWithMaskLabel => 'Or remove what a mask covers';
 
   @override

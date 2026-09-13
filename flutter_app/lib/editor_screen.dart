@@ -100,6 +100,7 @@ import 'render/crop_transform.dart';
 import 'render/post_enhance.dart';
 import 'render/render_params.dart';
 import 'render/replace_color.dart';
+import 'render/spot_detect.dart';
 import 'render/tone_curve.dart';
 import 'render/upright.dart';
 import 'render/upright_auto.dart';
@@ -766,6 +767,10 @@ class _EditorScreenState extends State<EditorScreen>
   /// masked, in percent of the photo's width (Solstice's "Grow").
   double _removeGrow = 0.5;
 
+  /// Magical Repair's sensitivity, 0..100 — see state_inpaint.dart's
+  /// _autoRepair.
+  double _autoRepairSensitivity = 50;
+
   /// The Remove panel's fill for the next removal, the Clone/Heal source
   /// point the user picked on the photo (null = beside the patch), whether
   /// the next click on the photo picks it, and the Generative prompt.
@@ -1053,6 +1058,8 @@ class _EditorScreenState extends State<EditorScreen>
     onToggleRemovalVisible: (i) => unawaited(_toggleRemovalVisible(i)),
     onDeleteRemoval: (i) => unawaited(_deleteRemoval(i)),
     onRemoveGrowChanged: _setRemoveGrow,
+    onAutoRepair: () => unawaited(_autoRepair()),
+    onAutoRepairSensitivityChanged: _setAutoRepairSensitivity,
     onUndoRemoveStroke: _undoRemoveStroke,
     onClearRemoveStrokes: _clearRemoveStrokes,
     onRemoveModeChanged: _setRemoveMode,
@@ -5729,6 +5736,8 @@ class _EditorScreenState extends State<EditorScreen>
                                                 .strokes
                                                 .isNotEmpty,
                                             removeGrow: _removeGrow,
+                                            autoRepairSensitivity:
+                                                _autoRepairSensitivity,
                                             removeMode: _removeMode,
                                             removeSourcePicking:
                                                 _removeSourcePicking,

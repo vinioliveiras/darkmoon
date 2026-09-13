@@ -16,6 +16,7 @@ class _RemoveObjectsPanel extends StatelessWidget {
     required this.brushHardness,
     required this.brushErase,
     required this.grow,
+    required this.autoRepairSensitivity,
     required this.hasStrokes,
     required this.mode,
     required this.sourcePicking,
@@ -34,6 +35,9 @@ class _RemoveObjectsPanel extends StatelessWidget {
 
   /// How far the coverage is grown, in percent of the photo's width.
   final double grow;
+
+  /// Magical Repair's sensitivity, 0..100 (see spot_detect.dart).
+  final double autoRepairSensitivity;
 
   /// Whether anything is painted and waiting to be removed.
   final bool hasStrokes;
@@ -261,6 +265,38 @@ class _RemoveObjectsPanel extends StatelessWidget {
               ),
             ),
           ],
+        ),
+        // Magical Repair (2026-09-13): the detector's sensitivity and its
+        // one button — every speck it finds becomes one AI-fill removal.
+        const SizedBox(height: 14),
+        Text(l10n.removeAutoRepairLabel, style: muted),
+        const SizedBox(height: 4),
+        Text(
+          l10n.removeAutoRepairHint,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: DarkmoonColors.textMuted,
+          ),
+        ),
+        const SizedBox(height: 8),
+        SliderRow(
+          name: l10n.removeAutoRepairSensitivity,
+          min: 0,
+          max: 100,
+          value: autoRepairSensitivity,
+          decimals: 0,
+          valueSuffix: '%',
+          defaultValue: 50,
+          onChanged: actions.onAutoRepairSensitivityChanged,
+          onChangeEnd: actions.onAutoRepairSensitivityChanged,
+        ),
+        const SizedBox(height: 6),
+        SizedBox(
+          height: 34,
+          child: OutlinedButton(
+            key: const Key('remove-auto-repair'),
+            onPressed: busy ? null : actions.onAutoRepair,
+            child: Text(l10n.removeAutoRepairButton),
+          ),
         ),
         if (masks.isNotEmpty) ...[
           const SizedBox(height: 10),

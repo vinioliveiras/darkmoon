@@ -1170,6 +1170,8 @@ class _ControlsPanelActions {
     required this.onToggleRemovalVisible,
     required this.onDeleteRemoval,
     required this.onRemoveGrowChanged,
+    required this.onAutoRepair,
+    required this.onAutoRepairSensitivityChanged,
     required this.onUndoRemoveStroke,
     required this.onClearRemoveStrokes,
     required this.onRemoveModeChanged,
@@ -1308,6 +1310,10 @@ class _ControlsPanelActions {
   final ValueChanged<int> onToggleRemovalVisible;
   final ValueChanged<int> onDeleteRemoval;
   final ValueChanged<double> onRemoveGrowChanged;
+
+  /// Magical Repair (see state_inpaint.dart's _autoRepair).
+  final VoidCallback onAutoRepair;
+  final ValueChanged<double> onAutoRepairSensitivityChanged;
   final VoidCallback onUndoRemoveStroke;
   final VoidCallback onClearRemoveStrokes;
 
