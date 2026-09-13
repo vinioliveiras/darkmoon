@@ -11,6 +11,7 @@ import 'package:darkmoon/render/render_params.dart';
 import 'package:darkmoon/render/sharpen.dart';
 import 'package:darkmoon/render/tone_curve.dart';
 import 'package:darkmoon/render/vignette.dart';
+import 'package:darkmoon/render/replace_color.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 // Pins which RenderParams field invalidates which cache boundary. This is
@@ -66,6 +67,9 @@ final Map<String, RenderParams> _betweenBoundaries = {
   'sharpen.masking': const RenderParams(sharpen: SharpenParams(masking: 30)),
   'texture': const RenderParams(texture: 25),
   'clarity': const RenderParams(clarity: 25),
+  'clarityShadows': const RenderParams(clarityShadows: 25),
+  'clarityMidtones': const RenderParams(clarityMidtones: 25),
+  'clarityHighlights': const RenderParams(clarityHighlights: 25),
   'baseContrast': const RenderParams(baseContrast: 0),
   'colorProfileStrength': const RenderParams(colorProfileStrength: 0.4),
   'colorProfile': RenderParams(colorProfile: _profile),
@@ -103,6 +107,9 @@ final Map<String, RenderParams> _afterDehaze = {
   'grain': const RenderParams(grain: GrainParams(amount: 30)),
   'filmLut': RenderParams(filmLut: FilmLut.identity(3)),
   'filmAmount': const RenderParams(filmAmount: 0.8),
+  'replaceColor': const RenderParams(
+    replaceColor: ReplaceColorParams(picked: true, hue: 40),
+  ),
 };
 
 void main() {
@@ -167,7 +174,9 @@ void main() {
   test('every RenderParams field is classified above', () {
     // RenderParams has no reflection; the field count is pinned by hand so
     // a new field trips this test and sends its author to gpu_stage_cache.
-    const fieldsInRenderParams = 31;
+    // 35 since 2026-09-13: replaceColor (after Dehaze) and the three
+    // Selective Clarity amounts (between the boundaries).
+    const fieldsInRenderParams = 35;
     final classified =
         _beforeAiDenoise.length +
         _betweenBoundaries.length +

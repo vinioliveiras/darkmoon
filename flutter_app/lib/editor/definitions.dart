@@ -36,6 +36,12 @@ String _sliderLabel(AppLocalizations l10n, String key) {
       return l10n.sliderTexture;
     case 'Clarity':
       return l10n.sliderClarity;
+    case 'ClarityShadows':
+      return l10n.sliderClarityShadows;
+    case 'ClarityMidtones':
+      return l10n.sliderClarityMidtones;
+    case 'ClarityHighlights':
+      return l10n.sliderClarityHighlights;
     case 'Dehaze':
       return l10n.sliderDehaze;
     case 'CameraColor':
@@ -678,6 +684,11 @@ const _sections = <String, List<_SliderSpec>>{
   'PRESENCE': [
     _SliderSpec('Texture', -100, 100, 0),
     _SliderSpec('Clarity', -100, 100, 0),
+    // Selective Clarity (2026-09-13, PENDING 47): Clarity per tonal band,
+    // on top of the global one — see local_contrast.dart's TonalAmounts.
+    _SliderSpec('ClarityShadows', -100, 100, 0),
+    _SliderSpec('ClarityMidtones', -100, 100, 0),
+    _SliderSpec('ClarityHighlights', -100, 100, 0),
     _SliderSpec('Dehaze', -100, 100, 0),
     // Camera Color (2026-09-12): on a RAW, how much of the camera's own
     // per-hue colour rendering (fitted from its embedded JPEG) the photo

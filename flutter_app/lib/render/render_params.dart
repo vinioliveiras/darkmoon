@@ -4,6 +4,7 @@ import 'color_grading.dart';
 import 'color_mixer.dart';
 import 'color_profile.dart';
 import 'film_lut.dart';
+import 'local_contrast.dart';
 import 'replace_color.dart';
 import 'grain.dart';
 import 'sharpen.dart';
@@ -38,6 +39,9 @@ class RenderParams {
     this.blacks = 0,
     this.texture = 0,
     this.clarity = 0,
+    this.clarityShadows = 0,
+    this.clarityMidtones = 0,
+    this.clarityHighlights = 0,
     this.dehaze = 0,
     this.vibrance = 0,
     this.saturation = 0,
@@ -112,6 +116,10 @@ class RenderParams {
       blacks: values['Blacks'] ?? defaults.blacks,
       texture: values['Texture'] ?? defaults.texture,
       clarity: values['Clarity'] ?? defaults.clarity,
+      clarityShadows: values['ClarityShadows'] ?? defaults.clarityShadows,
+      clarityMidtones: values['ClarityMidtones'] ?? defaults.clarityMidtones,
+      clarityHighlights:
+          values['ClarityHighlights'] ?? defaults.clarityHighlights,
       dehaze: values['Dehaze'] ?? defaults.dehaze,
       vibrance: values['Vibrance'] ?? defaults.vibrance,
       saturation: values['Saturation'] ?? defaults.saturation,
@@ -172,6 +180,27 @@ class RenderParams {
   final double blacks;
   final double texture;
   final double clarity;
+
+  /// Selective Clarity (see `local_contrast.dart`'s TonalAmounts): extra
+  /// Clarity for the shadows, midtones and highlights, -100..100 each.
+  final double clarityShadows;
+  final double clarityMidtones;
+  final double clarityHighlights;
+
+  /// Whether the Clarity pass has anything to do.
+  bool get hasClarity =>
+      clarity != 0 ||
+      clarityShadows != 0 ||
+      clarityMidtones != 0 ||
+      clarityHighlights != 0;
+
+  /// The tonal amounts in the pass's own units, like `clarity *
+  /// calClarityStrength`.
+  TonalAmounts get clarityTonal => TonalAmounts(
+    shadows: clarityShadows * calClarityStrength,
+    midtones: clarityMidtones * calClarityStrength,
+    highlights: clarityHighlights * calClarityStrength,
+  );
   final double dehaze;
   final double vibrance;
   final double saturation;
@@ -253,6 +282,9 @@ class RenderParams {
     blacks: blacks,
     texture: texture,
     clarity: clarity,
+    clarityShadows: clarityShadows,
+    clarityMidtones: clarityMidtones,
+    clarityHighlights: clarityHighlights,
     dehaze: dehaze,
     vibrance: vibrance,
     saturation: saturation,

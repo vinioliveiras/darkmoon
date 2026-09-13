@@ -1692,6 +1692,15 @@ class AppLocalizationsPt extends AppLocalizations {
   String get sliderClarity => 'Claridade';
 
   @override
+  String get sliderClarityShadows => 'Clareza: Sombras';
+
+  @override
+  String get sliderClarityMidtones => 'Clareza: Meios-tons';
+
+  @override
+  String get sliderClarityHighlights => 'Clareza: Altas-luzes';
+
+  @override
   String get sliderDehaze => 'Remoção de Neblina';
 
   @override

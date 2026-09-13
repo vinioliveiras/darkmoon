@@ -1681,6 +1681,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get sliderClarity => 'Clarity';
 
   @override
+  String get sliderClarityShadows => 'Clarity: Shadows';
+
+  @override
+  String get sliderClarityMidtones => 'Clarity: Midtones';
+
+  @override
+  String get sliderClarityHighlights => 'Clarity: Highlights';
+
+  @override
   String get sliderDehaze => 'Dehaze';
 
   @override

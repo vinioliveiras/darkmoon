@@ -60,6 +60,40 @@ void main() {
       }
     });
 
+    test('selective clarity only reaches its own tonal band', () {
+      // A textured dark patch (luma ~40) and a textured bright one (~215).
+      Float32List patch(int base) {
+        final img = Float32List(8 * 8 * 3);
+        for (var p = 0; p < 64; p++) {
+          final v = (base + ((p % 8 + p ~/ 8) % 2 == 0 ? 12 : -12)).toDouble();
+          img[p * 3] = v;
+          img[p * 3 + 1] = v;
+          img[p * 3 + 2] = v;
+        }
+        return img;
+      }
+
+      final darkRef = patch(40), brightRef = patch(215);
+      final dark = patch(40), bright = patch(215);
+      const shadowsOnly = TonalAmounts(shadows: 80);
+      applyLocalContrast(dark, 8, 8, 0, 2, tonal: shadowsOnly);
+      applyLocalContrast(bright, 8, 8, 0, 2, tonal: shadowsOnly);
+      double change(Float32List a, Float32List b) {
+        var s = 0.0;
+        for (var i = 0; i < a.length; i++) {
+          s += (a[i] - b[i]).abs();
+        }
+        return s / a.length;
+      }
+
+      expect(change(dark, darkRef), greaterThan(1.0));
+      expect(change(bright, brightRef), lessThan(1e-6));
+      final (ws, wm, wh) = tonalBandWeights(0.3);
+      expect(ws + wm + wh, closeTo(1.0, 1e-9));
+      expect(ws, greaterThan(wh));
+      expect(tonalBandWeights(0.9).$3, 1.0);
+    });
+
     test('the guided base halos a step edge far less than the Gaussian', () {
       // 60 | 200 step; Clarity at 100 (amount 65 after calClarityStrength)
       // with the Gaussian base overshoots by ~19 levels either side, the

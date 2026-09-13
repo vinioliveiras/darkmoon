@@ -1,6 +1,7 @@
 import 'dart:ui' as ui;
 
 import '../blur.dart' show guidedRadiusForSigma;
+import '../local_contrast.dart' show TonalAmounts;
 import 'gpu_pass.dart';
 
 /// GPU port of `local_contrast.dart`'s `applyLocalContrast` — shared by
@@ -23,8 +24,9 @@ Future<ui.Image> runLocalContrastGpu(
   bool noiseAware = false,
   int noiseRadius = 6,
   double edgeThreshold = 0,
+  TonalAmounts tonal = const TonalAmounts(),
 }) async {
-  if (amount == 0) {
+  if (amount == 0 && tonal.isZero) {
     return source;
   }
 
@@ -78,6 +80,9 @@ Future<ui.Image> runLocalContrastGpu(
       width.toDouble(),
       height.toDouble(),
       amount / 100.0,
+      tonal.shadows / 100.0,
+      tonal.midtones / 100.0,
+      tonal.highlights / 100.0,
       protectMidtones ? 1.0 : 0.0,
       noiseAware ? 1.0 : 0.0,
       gpuResidualSqScale,

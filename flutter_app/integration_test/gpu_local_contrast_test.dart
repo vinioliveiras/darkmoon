@@ -67,6 +67,7 @@ void main() {
     bool protectMidtones = false,
     bool noiseAware = false,
     double edgeThreshold = 0,
+    TonalAmounts tonal = const TonalAmounts(),
   }) {
     testWidgets(label, (tester) async {
       final buffer = Float32List(photo.length);
@@ -82,6 +83,7 @@ void main() {
         protectMidtones: protectMidtones,
         noiseAware: noiseAware,
         edgeThreshold: edgeThreshold,
+        tonal: tonal,
       );
       final cpu = Uint8List(buffer.length);
       for (var i = 0; i < buffer.length; i++) {
@@ -98,6 +100,7 @@ void main() {
         protectMidtones: protectMidtones,
         noiseAware: noiseAware,
         edgeThreshold: edgeThreshold,
+        tonal: tonal,
       );
       final byteData = await gpuImage.toByteData(
         format: ui.ImageByteFormat.rawRgba,
@@ -145,6 +148,24 @@ void main() {
   // Negative amount (reduce local contrast) — legal per Clarity/Texture's
   // slider range, exercises the sign of highFreq*gain.
   runCase('negative amount', -50, 25.0, protectMidtones: true);
+  // Selective Clarity (2026-09-13): per-band gains on top of the global
+  // amount, and on their own with the global amount at 0.
+  runCase(
+    'selective clarity on top of clarity',
+    40,
+    25.0,
+    protectMidtones: true,
+    edgeThreshold: 20.0,
+    tonal: const TonalAmounts(shadows: 60, midtones: -20, highlights: -50),
+  );
+  runCase(
+    'selective clarity alone',
+    0,
+    25.0,
+    protectMidtones: true,
+    edgeThreshold: 20.0,
+    tonal: const TonalAmounts(shadows: 70, highlights: 70),
+  );
 
   testWidgets('amount 0 is a no-op', (tester) async {
     final source = await decodeRgbImage(photo, width, height);

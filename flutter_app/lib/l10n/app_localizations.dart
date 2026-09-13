@@ -2998,6 +2998,24 @@ abstract class AppLocalizations {
   /// **'Clarity'**
   String get sliderClarity;
 
+  /// No description provided for @sliderClarityShadows.
+  ///
+  /// In en, this message translates to:
+  /// **'Clarity: Shadows'**
+  String get sliderClarityShadows;
+
+  /// No description provided for @sliderClarityMidtones.
+  ///
+  /// In en, this message translates to:
+  /// **'Clarity: Midtones'**
+  String get sliderClarityMidtones;
+
+  /// No description provided for @sliderClarityHighlights.
+  ///
+  /// In en, this message translates to:
+  /// **'Clarity: Highlights'**
+  String get sliderClarityHighlights;
+
   /// No description provided for @sliderDehaze.
   ///
   /// In en, this message translates to:

@@ -99,6 +99,9 @@ const Map<String, double> calGlobalAmountCompressionOverrides = {
   'Saturation': 0.8,
   'Dehaze': 0.4,
   'Clarity': 0.5,
+  'ClarityShadows': 0.5,
+  'ClarityMidtones': 0.5,
+  'ClarityHighlights': 0.5,
   // Same gap in PRESENCE: Clarity and Dehaze had entries, Texture did not.
   'Texture': 0.5,
   // ── Shape, not amount (2026-09-09) ──────────────────────────────────

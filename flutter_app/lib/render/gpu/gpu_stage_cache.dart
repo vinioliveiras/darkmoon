@@ -143,6 +143,12 @@ class GpuStageCache {
       ..write(p.texture)
       ..write('|cl=')
       ..write(p.clarity)
+      ..write('|cs=')
+      ..write(p.clarityShadows)
+      ..write('|cm=')
+      ..write(p.clarityMidtones)
+      ..write('|ch=')
+      ..write(p.clarityHighlights)
       // runColorProfileGpu.
       ..write('|bc=')
       ..write(p.baseContrast)

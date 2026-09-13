@@ -180,7 +180,7 @@ int localAdjustmentHaloPx(RenderParams params) {
   if (params.texture != 0) {
     halo += _localContrastHaloPx(calTextureSigma * scale);
   }
-  if (params.clarity != 0) {
+  if (params.hasClarity) {
     halo += _localContrastHaloPx(calClaritySigma * scale);
   }
   if (needsTonalBlur(params)) {
@@ -351,6 +351,7 @@ void applyLocalAdjustmentSteps(
     protectMidtones: true,
     edgeThreshold: calClarityEdgeThreshold,
     rowOffset: rowOffset,
+    tonal: params.clarityTonal,
   );
 }
 

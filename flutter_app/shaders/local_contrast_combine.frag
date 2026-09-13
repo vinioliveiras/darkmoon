@@ -12,6 +12,7 @@
 
 uniform vec2 uSize;
 uniform float uAmount;          // amount / 100
+uniform vec3 uTonal;            // Selective Clarity: shadows/midtones/highlights amounts / 100
 uniform float uProtectMidtones; // 0 or 1
 uniform float uNoiseAware;      // 0 or 1
 // gpuResidualSqScale — uNoiseVar arrives pre-multiplied by it (see
@@ -43,6 +44,11 @@ void main() {
   }
 
   float gain = uAmount;
+  // Selective Clarity — local_contrast.dart's tonalBandWeights.
+  float ws = 1.0 - smoothstep(0.25, 0.5, luminance);
+  float wh = smoothstep(0.5, 0.75, luminance);
+  float wm = clamp(1.0 - ws - wh, 0.0, 1.0);
+  gain += uTonal.x * ws + uTonal.y * wm + uTonal.z * wh;
   if (uNoiseAware > 0.5) {
     float rSq = highFreq * highFreq;
     gain *= rSq / (rSq + noiseVar + kEpsilon);
